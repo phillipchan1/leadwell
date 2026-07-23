@@ -1,69 +1,56 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
-import { hasApiKey } from "../lib/ai";
-import { Modal, buttonGhostCls, buttonPrimaryCls, inputCls } from "./ui";
+import { Modal, buttonGhostCls } from "./ui";
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { anthropicApiKey, setAnthropicApiKey } = useStore();
-  const envFallback = Boolean(import.meta.env.VITE_ANTHROPIC_API_KEY);
-  const [draft, setDraft] = useState(anthropicApiKey ?? "");
-  const [saved, setSaved] = useState(false);
+  const { userEmail, signOut } = useStore();
+  const [busy, setBusy] = useState(false);
 
-  const save = () => {
-    setAnthropicApiKey(draft.trim() || null);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  };
-
-  const clear = () => {
-    setDraft("");
-    setAnthropicApiKey(null);
+  const onSignOut = async () => {
+    setBusy(true);
+    try {
+      await signOut();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <Modal title="Settings" onClose={onClose}>
-      <div className="space-y-4">
+      <div className="space-y-6">
         <section className="space-y-2">
           <h3 className="text-sm font-medium text-stone-800 dark:text-stone-100">
-            Anthropic API key
+            Account
           </h3>
           <p className="text-xs leading-relaxed text-stone-500">
-            Used for AI coach and structuring 1:1 notes from transcripts. Stored
-            only in this browser. Your key never leaves this machine except to
-            call Anthropic.
+            Signed in with Google. Your org data syncs to the cloud and is
+            private to your account.
           </p>
-          <input
-            type="password"
-            className={inputCls}
-            placeholder="sk-ant-…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className={buttonPrimaryCls} onClick={save}>
-              {saved ? "Saved" : "Save key"}
-            </button>
-            <button type="button" className={buttonGhostCls} onClick={clear}>
-              Clear
-            </button>
-            <span className="text-[11px] text-stone-400">
-              {hasApiKey()
-                ? anthropicApiKey
-                  ? "Using saved key"
-                  : envFallback
-                    ? "Using .env key"
-                    : "Key available"
-                : "No key configured"}
+            <span className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-sm text-stone-700 dark:bg-stone-800 dark:text-stone-200">
+              {userEmail ?? "Signed in"}
             </span>
+            <button
+              type="button"
+              className={buttonGhostCls}
+              onClick={onSignOut}
+              disabled={busy}
+            >
+              {busy ? "Signing out…" : "Sign out"}
+            </button>
           </div>
-          {envFallback && !anthropicApiKey && (
-            <p className="text-[11px] text-stone-400">
-              Fallback: <code className="text-stone-500">VITE_ANTHROPIC_API_KEY</code>{" "}
-              from .env.local is available.
-            </p>
-          )}
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium text-stone-800 dark:text-stone-100">
+            AI coach
+          </h3>
+          <p className="text-xs leading-relaxed text-stone-500">
+            The AI coach and 1:1 note structuring run through a secure server
+            function that holds the Anthropic key — nothing sensitive lives in
+            your browser, and there's no key to paste here.
+          </p>
         </section>
       </div>
     </Modal>

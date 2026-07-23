@@ -2,7 +2,6 @@ import { create } from "zustand";
 import type {
   Action,
   ActionColumn,
-  Capacity,
   ChatMessage,
   Domain,
   Goal,
@@ -14,10 +13,12 @@ import type {
   Team,
   TeamAction,
   TeamGoal,
-  TeamNote,
 } from "../types";
 import { storage } from "../lib/storage";
 import { isDescendant } from "../lib/teams";
+import { supabase } from "../lib/supabase";
+import * as repo from "../lib/repo";
+import type { NodePosition, PersistedData } from "../lib/repo";
 import {
   capUp,
   seedActions,
@@ -37,7 +38,10 @@ import {
 
 export type Tab = "overview" | "tree" | "people";
 
-export type NodePosition = { x: number; y: number };
+export type { NodePosition, PersistedData } from "../lib/repo";
+
+/** Auth/loading lifecycle for the whole app. */
+export type Phase = "loading" | "anon" | "ready";
 
 export type ModalState =
   | { kind: "team"; team?: Team; parentId?: string }
@@ -46,25 +50,13 @@ export type ModalState =
   | { kind: "domains" }
   | null;
 
-type PersistedData = {
-  me: Me;
-  capacities: Capacity[];
-  domains: Domain[];
-  managers: Manager[];
-  teams: Team[];
-  people: Person[];
-  actions: Action[];
-  oneOnOnes: OneOnOne[];
-  goals: Goal[];
-  notes: Note[];
-  teamActions: TeamAction[];
-  teamGoals: TeamGoal[];
-  teamNotes: TeamNote[];
-  chats: Record<string, ChatMessage[]>; // keyed by personId, "team:<id>", or "org"
-  nodePositions: Record<string, NodePosition>; // canvas positions; "me", team ids, "mgr:<id>"
-};
-
 type UIState = {
+  /** Auth/loading phase. UI renders the app only when "ready". */
+  phase: Phase;
+  /** Signed-in user id (Supabase auth uid) — the RLS scope for all data. */
+  userId: string | null;
+  /** Signed-in user's email, for the account menu. */
+  userEmail: string | null;
   tab: Tab;
   /** null = show every domain on one canvas; otherwise filter the tree. */
   treeDomainId: string | null;
@@ -155,8 +147,12 @@ type Store = PersistedData &
     // chat
     appendChat: (key: string, msg: ChatMessage) => void;
     clearChat: (key: string) => void;
+    // auth / lifecycle
+    bootstrap: () => Promise<void>;
+    hydrate: (data: PersistedData, userId: string, email: string | null) => void;
+    signOut: () => Promise<void>;
     // data management
-    resetToSeed: () => void;
+    resetToSeed: () => Promise<void>;
   };
 
 const DATA_KEY = "data";
@@ -178,27 +174,8 @@ function migrateOneOnOnes(oneOnOnes: OneOnOne[]): OneOnOne[] {
   }));
 }
 
-function loadInitialData(): PersistedData {
-  const saved = storage.load<PersistedData>(DATA_KEY);
-  if (saved) {
-    return {
-      ...saved,
-      chats: saved.chats ?? {},
-      nodePositions: saved.nodePositions ?? {},
-      // Migrations: fields added after earlier saves default in gracefully.
-      domains: saved.domains ?? seedDomains,
-      managers: saved.managers ?? [],
-      teamActions: saved.teamActions ?? [],
-      teamGoals: saved.teamGoals ?? [],
-      teamNotes: saved.teamNotes ?? [],
-      actions: migrateActions(saved.actions ?? []),
-      oneOnOnes: migrateOneOnOnes(saved.oneOnOnes ?? []),
-      // Data saved before "report up" existed lacks this capacity.
-      capacities: saved.capacities.some((c) => c.id === capUp.id)
-        ? saved.capacities
-        : [...saved.capacities, capUp],
-    };
-  }
+/** Fresh seed document for a brand-new account. */
+function seedData(): PersistedData {
   return {
     me: seedMe,
     capacities: seedCapacities,
@@ -218,8 +195,50 @@ function loadInitialData(): PersistedData {
   };
 }
 
-function loadAnthropicApiKey(): string | null {
-  return storage.load<string>(API_KEY_STORAGE);
+/** Empty placeholder used before the first cloud load resolves (never shown). */
+function blankData(): PersistedData {
+  return {
+    me: { name: "" },
+    capacities: [],
+    domains: [],
+    managers: [],
+    teams: [],
+    people: [],
+    actions: [],
+    oneOnOnes: [],
+    goals: [],
+    notes: [],
+    teamActions: [],
+    teamGoals: [],
+    teamNotes: [],
+    chats: {},
+    nodePositions: {},
+  };
+}
+
+/**
+ * One-time migration: if this browser still holds data from the old
+ * localStorage-only version, adopt it as the new user's starting document so
+ * nothing is lost. Returns null when there's nothing to import.
+ */
+function importLegacyLocalData(): PersistedData | null {
+  const saved = storage.load<PersistedData>(DATA_KEY);
+  if (!saved || !saved.capacities) return null;
+  return {
+    ...saved,
+    chats: saved.chats ?? {},
+    nodePositions: saved.nodePositions ?? {},
+    domains: saved.domains ?? seedDomains,
+    managers: saved.managers ?? [],
+    teamActions: saved.teamActions ?? [],
+    teamGoals: saved.teamGoals ?? [],
+    teamNotes: saved.teamNotes ?? [],
+    actions: migrateActions(saved.actions ?? []),
+    oneOnOnes: migrateOneOnOnes(saved.oneOnOnes ?? []),
+    capacities: saved.capacities.some((c) => c.id === capUp.id)
+      ? saved.capacities
+      : [...saved.capacities, capUp],
+  };
 }
 
 function initialDark(): boolean {
@@ -229,7 +248,10 @@ function initialDark(): boolean {
 }
 
 export const useStore = create<Store>((set, get) => ({
-  ...loadInitialData(),
+  ...blankData(),
+  phase: "loading",
+  userId: null,
+  userEmail: null,
   tab: "tree",
   treeDomainId: null,
   showPeopleOnTree: false,
@@ -239,7 +261,7 @@ export const useStore = create<Store>((set, get) => ({
   dark: initialDark(),
   askAIOpen: false,
   modal: null,
-  anthropicApiKey: loadAnthropicApiKey(),
+  anthropicApiKey: null,
   settingsOpen: false,
 
   setTab: (tab) => set({ tab }),
@@ -568,31 +590,73 @@ export const useStore = create<Store>((set, get) => ({
   clearChat: (key) =>
     set((s) => ({ chats: { ...s.chats, [key]: [] } })),
 
-  resetToSeed: () => {
-    storage.remove(DATA_KEY);
+  // --- auth / lifecycle -----------------------------------------------------
+  /**
+   * Resolve the current session and load (or seed) the user's cloud data.
+   * Called once at startup and again whenever auth state changes.
+   */
+  bootstrap: async () => {
+    const { data } = await supabase.auth.getSession();
+    const session = data.session;
+    if (!session) {
+      repo.clearBaseline(); // clear any prior baseline
+      set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
+      return;
+    }
+    const userId = session.user.id;
+    const email = session.user.email ?? null;
+    // Avoid redundant reloads if we're already ready for this user.
+    if (get().phase === "ready" && get().userId === userId) return;
+    set({ phase: "loading" });
+    try {
+      let doc = await repo.loadAll(userId);
+      if (!doc) {
+        // Brand-new account: adopt legacy local data if present, else seed.
+        doc = importLegacyLocalData() ?? seedData();
+        await repo.writeAll(userId, doc);
+      }
+      get().hydrate(doc, userId, email);
+    } catch (e) {
+      console.error("LeadWell: failed to load cloud data", e);
+      // Surface as anon so the user can retry sign-in rather than a blank app.
+      set({ phase: "anon", userId: null, userEmail: null });
+    }
+  },
+
+  hydrate: (doc, userId, email) => {
+    // Record the loaded doc as the persistence baseline BEFORE it lands in the
+    // store, so the resulting change event is a no-op (same array references).
+    repo.setBaseline(doc);
     set({
-      me: seedMe,
-      capacities: seedCapacities,
-      domains: seedDomains,
-      managers: seedManagers,
-      teams: seedTeams,
-      people: seedPeople,
-      actions: seedActions,
-      oneOnOnes: seedOneOnOnes,
-      goals: seedGoals,
-      notes: seedNotes,
-      teamActions: seedTeamActions,
-      teamGoals: seedTeamGoals,
-      teamNotes: seedTeamNotes,
-      chats: {},
-      nodePositions: {},
+      ...doc,
+      userId,
+      userEmail: email,
+      phase: "ready",
       selectedPersonId: null,
       selectedTeamId: null,
     });
   },
+
+  signOut: async () => {
+    await supabase.auth.signOut();
+    repo.clearBaseline();
+    set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
+  },
+
+  resetToSeed: async () => {
+    const userId = get().userId;
+    if (!userId) return;
+    const doc = seedData();
+    await repo.wipeUser(userId);
+    await repo.writeAll(userId, doc);
+    get().hydrate(doc, userId, get().userEmail);
+  },
 }));
 
-// Persist every data change (UI state stays session-only, except dark mode).
+// Persist data changes to Supabase, debounced. UI state stays session-only
+// (dark mode persists to localStorage in toggleDark). repo.syncData compares
+// each collection by reference against the last baseline and writes only the
+// tables that actually changed.
 const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "me",
   "capacities",
@@ -611,11 +675,45 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "nodePositions",
 ];
 
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+function extractData(state: Store): PersistedData {
+  return Object.fromEntries(
+    PERSISTED_KEYS.map((k) => [k, state[k]])
+  ) as PersistedData;
+}
+
 useStore.subscribe((state, prev) => {
-  if (PERSISTED_KEYS.some((k) => state[k] !== prev[k])) {
-    const data: PersistedData = Object.fromEntries(
-      PERSISTED_KEYS.map((k) => [k, state[k]])
-    ) as PersistedData;
-    storage.save(DATA_KEY, data);
+  if (state.phase !== "ready" || !state.userId) return;
+  if (!repo.hasBaseline()) return;
+  if (!PERSISTED_KEYS.some((k) => state[k] !== prev[k])) return;
+
+  const userId = state.userId;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    const latest = useStore.getState();
+    if (latest.phase !== "ready" || latest.userId !== userId) return;
+    repo.syncData(userId, extractData(latest)).catch((e) => {
+      console.error("LeadWell: cloud sync failed", e);
+    });
+  }, 600);
+});
+
+// Re-run bootstrap on sign-in / sign-out / token refresh from Supabase.
+supabase.auth.onAuthStateChange((event) => {
+  if (event === "SIGNED_OUT") {
+    useStore.setState({
+      phase: "anon",
+      userId: null,
+      userEmail: null,
+      ...blankData(),
+    });
+    return;
+  }
+  if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+    // Defer: calling Supabase inside the auth callback can deadlock the lock
+    // it holds, so hop out of the callback before loading data.
+    setTimeout(() => void useStore.getState().bootstrap(), 0);
   }
 });

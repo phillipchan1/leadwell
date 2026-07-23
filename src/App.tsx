@@ -8,6 +8,7 @@ import { PersonProfile } from "./components/PersonProfile";
 import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
+import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -18,6 +19,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function App() {
   const {
+    phase,
     tab,
     setTab,
     people,
@@ -35,6 +37,16 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  // Auth/loading gate: only the "ready" phase renders the full app.
+  if (phase === "loading") {
+    return (
+      <div className="flex h-full items-center justify-center bg-stone-50 text-sm text-stone-400 dark:bg-stone-950">
+        Loading your org…
+      </div>
+    );
+  }
+  if (phase === "anon") return <Login />;
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
   const selectedTeam = teams.find((t) => t.id === selectedTeamId);

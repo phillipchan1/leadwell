@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage, Person, Team } from "../types";
 import {
   DOMAIN_COLOR,
@@ -8,32 +7,17 @@ import {
 } from "../data/frameworks";
 import { derivedRead } from "./derive";
 import { useStore } from "../store/useStore";
+import { supabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
+import { getAccessToken } from "./auth";
 
-const ENV_API_KEY: string | undefined = import.meta.env
-  .VITE_ANTHROPIC_API_KEY as string | undefined;
-
-/** Resolve Anthropic key: in-app setting first, then env fallback. */
-export function getApiKey(): string | undefined {
-  const stored = useStore.getState().anthropicApiKey;
-  if (stored?.trim()) return stored.trim();
-  return ENV_API_KEY || undefined;
-}
-
+/**
+ * AI is served by a Supabase Edge Function that holds the Anthropic key
+ * server-side, so nothing sensitive lives in the browser. It's "available"
+ * whenever the backend is configured and the user is signed in — the actual
+ * key is never visible to the client.
+ */
 export function hasApiKey(): boolean {
-  return Boolean(getApiKey());
-}
-
-/** @deprecated Prefer getApiKey() — kept for any stray imports. */
-export const API_KEY: string | undefined = ENV_API_KEY;
-
-function client(): Anthropic {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("No Anthropic API key configured.");
-  return new Anthropic({
-    apiKey,
-    // Single-user local app; the key never leaves this machine.
-    dangerouslyAllowBrowser: true,
-  });
+  return supabaseConfigured && Boolean(useStore.getState().userId);
 }
 
 /** Build the full leadership-context system prompt for one person. */
@@ -240,18 +224,46 @@ export async function streamChat(
   history: ChatMessage[],
   onDelta: (text: string) => void
 ): Promise<string> {
-  const stream = client().messages.stream({
-    model: "claude-sonnet-5",
-    max_tokens: 2048,
-    system,
-    messages: history.map((m) => ({ role: m.role, content: m.content })),
+  const token = await getAccessToken();
+  if (!token) throw new Error("You're signed out — sign in again to use AI.");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/anthropic`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      system,
+      messages: history.map((m) => ({ role: m.role, content: m.content })),
+      model: "claude-sonnet-5",
+      max_tokens: 2048,
+    }),
   });
-  stream.on("text", onDelta);
-  const final = await stream.finalMessage();
-  return final.content
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      detail?.trim() ||
+        `AI request failed (${res.status}). Check that the Edge Function is deployed and ANTHROPIC_API_KEY is set.`
+    );
+  }
+
+  // The Edge Function streams plain-text deltas; forward each chunk.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    if (chunk) {
+      full += chunk;
+      onDelta(chunk);
+    }
+  }
+  return full;
 }
 
 const MEETING_STRUCTURE_SYSTEM = `You turn messy 1:1 transcripts and draft notes into clean, leadership-useful meeting notes.
