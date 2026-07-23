@@ -11,6 +11,12 @@ const FIELDS: {
   placeholder: string;
 }[] = [
   {
+    key: "archetype",
+    label: "Leader type / archetype",
+    hint: "The kind of leader you're working with, in a phrase.",
+    placeholder: "e.g. Operator / driver — factory-worker mindset…",
+  },
+  {
     key: "winsLike",
     label: "What “good” looks like to them",
     hint: "Their definition of a strong report.",

@@ -64,6 +64,8 @@ export type Assessments = {
  * they're judged on. Only meaningful for people on an "up" team.
  */
 export type LeadUpProfile = {
+  /** The kind of leader they are — a short archetype read (e.g. "operator / driver"). */
+  archetype?: string;
   /** What "good" looks like to them — their definition of a strong report. */
   winsLike?: string;
   /** What makes them anxious / what quietly erodes their trust in me. */

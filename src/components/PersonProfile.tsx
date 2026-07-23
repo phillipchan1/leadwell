@@ -21,6 +21,7 @@ import { WritingPad } from "./WritingPad";
 import { MarkdownBody } from "./MarkdownBody";
 import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
+import { ProfileFillModal } from "./ProfileFillModal";
 
 type PersonTab = "profile" | "oneOnOnes" | "topics" | "notes";
 
@@ -92,6 +93,7 @@ export function PersonProfile({
   const [tab, setTab] = useState<PersonTab>("profile");
   const [editingAssessments, setEditingAssessments] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
+  const [fillingProfile, setFillingProfile] = useState(false);
   const [newGoal, setNewGoal] = useState("");
   const [openMeetingId, setOpenMeetingId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export function PersonProfile({
     setOpenMeetingId(null);
     setEditingNoteId(null);
     setComposingNote(false);
+    setFillingProfile(false);
   }, [person.id]);
 
   useEffect(() => {
@@ -119,7 +122,8 @@ export function PersonProfile({
         askAIOpen ||
         settingsOpen ||
         editingAssessments ||
-        editingPerson
+        editingPerson ||
+        fillingProfile
       )
         return;
       e.preventDefault();
@@ -133,6 +137,7 @@ export function PersonProfile({
     settingsOpen,
     editingAssessments,
     editingPerson,
+    fillingProfile,
     openMeetingId,
     selectPerson,
   ]);
@@ -146,6 +151,7 @@ export function PersonProfile({
         settingsOpen ||
         editingAssessments ||
         editingPerson ||
+        fillingProfile ||
         openMeetingId
       )
         return;
@@ -175,6 +181,7 @@ export function PersonProfile({
     settingsOpen,
     editingAssessments,
     editingPerson,
+    fillingProfile,
     openMeetingId,
     prevTeammate,
     nextTeammate,
@@ -265,6 +272,9 @@ export function PersonProfile({
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+          <QuickAction onClick={() => setFillingProfile(true)}>
+            ✨ AI fill
+          </QuickAction>
           <QuickAction onClick={startNewOneOnOne}>+ New 1:1</QuickAction>
           <QuickAction
             onClick={() => {
@@ -626,6 +636,12 @@ export function PersonProfile({
       )}
       {editingPerson && (
         <PersonModal person={person} onClose={() => setEditingPerson(false)} />
+      )}
+      {fillingProfile && (
+        <ProfileFillModal
+          person={person}
+          onClose={() => setFillingProfile(false)}
+        />
       )}
     </aside>
   );

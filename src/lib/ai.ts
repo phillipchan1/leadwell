@@ -391,6 +391,169 @@ export async function structureMeetingNotes(opts: {
   return parseStructuredMeeting(full);
 }
 
+// --- Brain dump → structured profile ------------------------------------
+
+export type ProfileFieldTarget = "person" | "leadUp" | "assessments";
+export type ProfileFieldKind = "text" | "list";
+
+export type ProfileFieldDef = {
+  key: string;
+  label: string;
+  kind: ProfileFieldKind;
+  target: ProfileFieldTarget;
+  /** Guidance passed to the model about what belongs in this field. */
+  hint: string;
+};
+
+/** Fields the AI can draft for a person I report to (leading up). */
+const UP_FIELDS: ProfileFieldDef[] = [
+  { key: "archetype", label: "Leader type / archetype", kind: "text", target: "leadUp", hint: "The kind of leader they are, in a phrase (e.g. 'operator / driver', 'visionary', 'consensus-builder'). Name the recognizable leadership style." },
+  { key: "winsLike", label: "What \"good\" looks like to them", kind: "text", target: "leadUp", hint: "Their definition of a strong report — what earns their approval." },
+  { key: "anxieties", label: "What makes them anxious", kind: "text", target: "leadUp", hint: "What erodes their trust or triggers stress." },
+  { key: "currency", label: "Their currency", kind: "text", target: "leadUp", hint: "What earns trust fastest with them: throughput, data, decisiveness, loyalty, optics, etc." },
+  { key: "comms", label: "How they want to hear from me", kind: "text", target: "leadUp", hint: "Preferred cadence, channel, detail level, when to escalate vs. handle." },
+  { key: "theirScorecard", label: "What they're measured on", kind: "text", target: "leadUp", hint: "What their own boss judges them on — the number making them look good upward." },
+];
+
+/** Fields the AI can draft for someone I lead (leading down). */
+const DOWN_FIELDS: ProfileFieldDef[] = [
+  { key: "strengths", label: "Strengths", kind: "list", target: "person", hint: "Concrete behavioral strengths, each a short phrase." },
+  { key: "watchOuts", label: "Watch-outs", kind: "list", target: "person", hint: "Failure modes / things to watch, each a short phrase." },
+  { key: "howToLead", label: "How to lead them", kind: "text", target: "person", hint: "1-3 sentences of practical guidance on leading this specific person." },
+  { key: "enneagram", label: "Enneagram (hypothesis)", kind: "text", target: "assessments", hint: "A likely Enneagram type e.g. '3w2' — a hypothesis inferred from behavior, NOT a real test result. Keep confidence low unless the dump is strongly indicative." },
+  { key: "mbti", label: "MBTI (hypothesis)", kind: "text", target: "assessments", hint: "A likely MBTI type e.g. 'ENTJ' — a hypothesis from behavior, NOT a real test. Keep confidence low unless strongly indicative." },
+];
+
+export function profileFieldsFor(direction: "up" | "down"): ProfileFieldDef[] {
+  return direction === "up" ? UP_FIELDS : DOWN_FIELDS;
+}
+
+export type ProfileSuggestion = {
+  field: string;
+  value: string | string[];
+  confidence: "high" | "medium" | "low";
+  rationale: string;
+};
+
+export type ProfileDraft = {
+  /** One-line headline read of who this person is. */
+  headline: string;
+  suggestions: ProfileSuggestion[];
+};
+
+/**
+ * Turn a free-text brain dump about a person into structured, confidence-scored
+ * field suggestions. The model only proposes a field when the text supports it,
+ * and reports how confident it is so the caller can gate on trust.
+ */
+export async function draftProfileFromBrainDump(
+  personId: string,
+  brainDump: string
+): Promise<ProfileDraft> {
+  const s = useStore.getState();
+  const person = s.people.find((p) => p.id === personId);
+  if (!person) throw new Error("Person not found.");
+  const team = s.teams.find((t) => t.id === person.teamId);
+  const direction: "up" | "down" = team?.direction === "up" ? "up" : "down";
+  const fields = profileFieldsFor(direction);
+  const allowedKeys = new Set(fields.map((f) => f.key));
+
+  const relationship =
+    direction === "up"
+      ? `${person.name} is someone ${s.me.name} REPORTS TO. Build an operating manual for leading up to them.`
+      : `${person.name} is someone ${s.me.name} LEADS. Build a profile for leading them well.`;
+
+  const fieldSpec = fields
+    .map((f) => `- "${f.key}" (${f.kind}): ${f.label}. ${f.hint}`)
+    .join("\n");
+
+  const system = [
+    `You help ${s.me.name} turn what they know about a person into a structured leadership profile.`,
+    relationship,
+    ``,
+    `You will be given a free-text brain dump. Extract and INFER the following fields. Reason like an expert on leadership, CliftonStrengths, Enneagram and MBTI — you may infer a person's likely type/archetype from described behavior.`,
+    ``,
+    `Fields (propose ONLY these keys, omit any the dump doesn't support):`,
+    fieldSpec,
+    ``,
+    `Rules:`,
+    `- Only include a field if the dump gives you something real to say. Do not pad.`,
+    `- Set confidence honestly: "high" = the dump states or strongly implies it; "medium" = a reasonable inference; "low" = a guess worth verifying. Formal test types (Enneagram/MBTI) inferred from behavior should almost never be "high".`,
+    `- rationale: one short clause pointing at what in the dump supports it.`,
+    `- For list fields, value is an array of short phrases. For text fields, value is a string.`,
+    `- headline: one plain-language sentence naming who this person is / how they operate.`,
+  ].join("\n");
+
+  const tool = {
+    name: "profile_draft",
+    description: "Return the structured, confidence-scored profile draft.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        headline: { type: "string" },
+        suggestions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              field: { type: "string", enum: [...allowedKeys] },
+              value: {
+                oneOf: [
+                  { type: "string" },
+                  { type: "array", items: { type: "string" } },
+                ],
+              },
+              confidence: { type: "string", enum: ["high", "medium", "low"] },
+              rationale: { type: "string" },
+            },
+            required: ["field", "value", "confidence", "rationale"],
+          },
+        },
+      },
+      required: ["headline", "suggestions"],
+    },
+  };
+
+  const msg = await client().messages.create({
+    model: "claude-sonnet-5",
+    max_tokens: 2048,
+    system,
+    tools: [tool],
+    tool_choice: { type: "tool", name: "profile_draft" },
+    messages: [
+      {
+        role: "user",
+        content: `Here is everything I know about ${person.name}:\n\n${brainDump.trim()}`,
+      },
+    ],
+  });
+
+  const block = msg.content.find((b) => b.type === "tool_use");
+  if (!block || block.type !== "tool_use") {
+    throw new Error("The model did not return a structured profile.");
+  }
+  const raw = block.input as {
+    headline?: string;
+    suggestions?: ProfileSuggestion[];
+  };
+
+  const suggestions = (raw.suggestions ?? [])
+    .filter((sg) => allowedKeys.has(sg.field))
+    .map((sg) => {
+      const def = fields.find((f) => f.key === sg.field)!;
+      // Coerce value shape to the field's kind.
+      let value = sg.value;
+      if (def.kind === "list" && !Array.isArray(value)) {
+        value = value ? [String(value)] : [];
+      } else if (def.kind === "text" && Array.isArray(value)) {
+        value = value.join(" ");
+      }
+      return { ...sg, value };
+    });
+
+  return { headline: raw.headline ?? "", suggestions };
+}
+
 export function coachPresets(person: Person): { label: string; prompt: string }[] {
   return [
     {
