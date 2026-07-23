@@ -3,7 +3,7 @@ import { useStore } from "../store/useStore";
 import { DOMAINS, DOMAIN_COLOR } from "../data/frameworks";
 import { blindSpots, domainCounts, isAssessed } from "../lib/derive";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
-import { Card, IconSparkle, SectionTitle, buttonPrimaryCls } from "./ui";
+import { Card, DueDate, IconSparkle, SectionTitle, buttonPrimaryCls } from "./ui";
 import { Avatar } from "./Avatar";
 
 export function Overview() {
@@ -33,6 +33,22 @@ export function Overview() {
   const upcoming = oneOnOnes
     .filter((o) => o.nextDate && o.nextDate >= today)
     .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
+
+  // One row per person: their soonest scheduled next 1:1 (incl. overdue ones).
+  const nextByPerson = new Map<string, string>();
+  for (const o of oneOnOnes) {
+    if (!o.nextDate) continue;
+    const cur = nextByPerson.get(o.personId);
+    if (!cur || o.nextDate < cur) nextByPerson.set(o.personId, o.nextDate);
+  }
+  const schedule = [...nextByPerson.entries()]
+    .map(([personId, date]) => ({
+      person: people.find((p) => p.id === personId),
+      date,
+    }))
+    .filter((r) => r.person)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 6);
   const staleThreshold = new Date();
   staleThreshold.setDate(staleThreshold.getDate() - 30);
   const staleCutoff = staleThreshold.toISOString().slice(0, 10);
@@ -161,6 +177,36 @@ export function Overview() {
 
         {/* Who needs attention */}
         <div className="space-y-4">
+          <Card className="p-5">
+            <SectionTitle>Upcoming 1:1s</SectionTitle>
+            <ul className="mt-3 space-y-1">
+              {schedule.length === 0 && (
+                <li className="text-sm text-ink-3">
+                  Nothing scheduled — open someone and set a next 1:1.
+                </li>
+              )}
+              {schedule.map(({ person: p, date }) => (
+                <li key={p!.id}>
+                  <button
+                    className="flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-surface-2"
+                    onClick={() => {
+                      selectPerson(p!.id);
+                      setTab("tree");
+                    }}
+                  >
+                    <Avatar name={p!.name} photo={p!.photo} size={30} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">
+                        {p!.name}
+                      </div>
+                    </div>
+                    <DueDate iso={date} className="shrink-0 text-xs" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
           <Card className="p-5">
             <SectionTitle>Needs attention</SectionTitle>
             <ul className="mt-3 space-y-1">

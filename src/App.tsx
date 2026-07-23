@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore, type Tab } from "./store/useStore";
 import { isAssessed } from "./lib/derive";
 import { OrgTree } from "./components/OrgTree";
@@ -8,19 +8,37 @@ import { PersonProfile } from "./components/PersonProfile";
 import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
+import { ShortcutsHelp } from "./components/ShortcutsHelp";
 import {
   IconGear,
+  IconHelp,
   IconMoon,
   IconSparkle,
   IconSun,
   Modal,
 } from "./components/ui";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "tree", label: "Org tree" },
-  { id: "people", label: "People" },
+const TABS: { id: Tab; label: string; key: string }[] = [
+  { id: "overview", label: "Overview", key: "O" },
+  { id: "tree", label: "Org tree", key: "T" },
+  { id: "people", label: "People", key: "P" },
 ];
+
+/** True while any dialog-like surface is up — global shortcuts stand down. */
+function dialogOpen() {
+  return Boolean(document.querySelector('[role="dialog"], .meeting-journal'));
+}
+
+function isTypingTarget(el: EventTarget | null) {
+  const t = el as HTMLElement | null;
+  return Boolean(
+    t &&
+      (t.tagName === "INPUT" ||
+        t.tagName === "TEXTAREA" ||
+        t.tagName === "SELECT" ||
+        t.isContentEditable)
+  );
+}
 
 export default function App() {
   const {
@@ -38,9 +56,55 @@ export default function App() {
     setSettingsOpen,
   } = useStore();
 
+  const [helpOpen, setHelpOpen] = useState(false);
+
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  // Global shortcuts — letters only, silent while typing or in a dialog.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (e.key === "?") {
+        e.preventDefault();
+        setHelpOpen((v) => !v);
+        return;
+      }
+      if (dialogOpen()) return;
+      switch (e.key) {
+        case "o":
+          setTab("overview");
+          break;
+        case "t":
+          setTab("tree");
+          break;
+        case "p":
+          setTab("people");
+          break;
+        case "a":
+          setAskAIOpen(true);
+          break;
+        case "d":
+          toggleDark();
+          break;
+        case "/":
+          setTab("people");
+          requestAnimationFrame(() =>
+            document
+              .querySelector<HTMLInputElement>("[data-people-search]")
+              ?.focus()
+          );
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [setTab, setAskAIOpen, toggleDark]);
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
   const selectedTeam = teams.find((t) => t.id === selectedTeamId);
@@ -74,6 +138,7 @@ export default function App() {
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? "page" : undefined}
+              title={`${t.label} (${t.key})`}
               className={`rounded-full px-3.5 py-1.5 text-sm transition-colors duration-150 ${
                 tab === t.id
                   ? "bg-surface font-medium text-ink shadow-[0_1px_2px_rgb(35_32_28/0.08)] ring-1 ring-line"
@@ -86,9 +151,21 @@ export default function App() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5">
-          <button onClick={() => setAskAIOpen(true)} className="btn-primary">
+          <button
+            onClick={() => setAskAIOpen(true)}
+            className="btn-primary"
+            title="Ask AI (A)"
+          >
             <IconSparkle size={14} />
             <span className="hidden sm:inline">Ask AI</span>
+          </button>
+          <button
+            onClick={() => setHelpOpen(true)}
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+            className="btn-icon"
+          >
+            <IconHelp />
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
@@ -100,6 +177,7 @@ export default function App() {
           <button
             onClick={toggleDark}
             aria-label="Toggle dark mode"
+            title="Toggle dark mode (D)"
             className="btn-icon"
           >
             {dark ? <IconSun /> : <IconMoon />}
@@ -152,6 +230,7 @@ export default function App() {
         </Modal>
       )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {helpOpen && <ShortcutsHelp onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

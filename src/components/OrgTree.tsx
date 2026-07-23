@@ -18,6 +18,7 @@ import "@xyflow/react/dist/style.css";
 import { useStore, type NodePosition } from "../store/useStore";
 import type { Manager, Person, Team } from "../types";
 import { isAssessed } from "../lib/derive";
+import { fmtDate } from "../lib/oneOnOne";
 import { effectiveParentId } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import {
@@ -622,7 +623,7 @@ function TeamNode({ data }: NodeProps) {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="font-display truncate text-[15px] font-semibold tracking-tight">
+              <div className="font-display truncate text-[15px] font-semibold tracking-tight transition-colors group-hover:text-accent-ink">
                 {team.name}
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -704,7 +705,10 @@ function TeamNode({ data }: NodeProps) {
               {subTeams.length > 0
                 ? ` · ${subTeams.length} sub-team${subTeams.length === 1 ? "" : "s"}`
                 : ""}
-              {team.lastMet ? ` · met ${team.lastMet}` : ""}
+              {team.lastMet ? ` · met ${fmtDate(team.lastMet)}` : ""}
+              <span className="ml-1.5 font-medium text-accent-ink opacity-0 transition-opacity group-hover:opacity-100">
+                Open ›
+              </span>
             </span>
             {!showPeopleOnTree && members.length > 0 && (
               <span className="flex -space-x-1.5">

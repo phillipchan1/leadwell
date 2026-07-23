@@ -3,7 +3,7 @@ import { useStore } from "../store/useStore";
 import { DOMAIN_COLOR } from "../data/frameworks";
 import { isAssessed, topDomain } from "../lib/derive";
 import { Avatar } from "./Avatar";
-import { Badge, Card, inputCls } from "./ui";
+import { Badge, Card, DueDate, inputCls } from "./ui";
 
 type SortKey = "name" | "team" | "coverage" | "nextOneOnOne";
 
@@ -79,9 +79,18 @@ export function PeopleTable() {
         <div className="flex flex-wrap gap-2">
           <input
             className={`${inputCls} max-w-xs`}
-            placeholder="Search people…"
+            placeholder="Search people…  ( / )"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // Esc: clear once, then release focus so shortcuts work again.
+              if (e.key === "Escape") {
+                e.preventDefault();
+                if (query) setQuery("");
+                else (e.target as HTMLInputElement).blur();
+              }
+            }}
+            data-people-search
           />
           <select
             className={`${inputCls} max-w-52`}
@@ -174,7 +183,11 @@ export function PeopleTable() {
                   )}
                 </td>
                 <td className="px-4 py-2.5 tabular-nums text-ink-2">
-                  {next ?? <span className="text-ink-3/60">—</span>}
+                  {next ? (
+                    <DueDate iso={next} />
+                  ) : (
+                    <span className="text-ink-3/60">—</span>
+                  )}
                 </td>
               </tr>
             ))}

@@ -1,7 +1,8 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useStore } from "../store/useStore";
 import type { Team } from "../types";
 import { isAssessed } from "../lib/derive";
+import { fmtDate } from "../lib/oneOnOne";
 import { Avatar } from "./Avatar";
 import {
   Badge,
@@ -92,6 +93,8 @@ export function TeamProfile({
   const [newNote, setNewNote] = useState("");
   const [showDone, setShowDone] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [mandateSaved, setMandateSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
 
   // Keep local fields in sync when switching teams.
   useEffect(() => {
@@ -109,7 +112,13 @@ export function TeamProfile({
     const nextCadence = cadence.trim() || undefined;
     if (nextPurpose === team.purpose && nextCadence === team.cadence) return;
     updateTeam(team.id, { purpose: nextPurpose, cadence: nextCadence });
+    // Blur-to-save is invisible — flash confirmation so edits feel safe.
+    setMandateSaved(true);
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setMandateSaved(false), 1500);
   };
+
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
 
   // Compact rail while a person is drilled in — just enough to switch members / go back.
   if (nested) {
@@ -223,7 +232,10 @@ export function TeamProfile({
           <span>
             {team.lastMet ? (
               <>
-                Met <span className="font-medium text-ink">{team.lastMet}</span>
+                Met{" "}
+                <span className="font-medium text-ink">
+                  {fmtDate(team.lastMet)}
+                </span>
               </>
             ) : (
               "Not met yet"
@@ -269,7 +281,14 @@ export function TeamProfile({
         <div className="flex flex-col gap-8 px-5 py-5">
           {/* Mandate — always editable, blur to save */}
           <section>
-            <SectionTitle>Mandate</SectionTitle>
+            <div className="flex items-baseline justify-between">
+              <SectionTitle>Mandate</SectionTitle>
+              {mandateSaved && (
+                <span className="anim-fade text-[11px] font-medium text-accent-ink">
+                  Saved
+                </span>
+              )}
+            </div>
             <textarea
               className={`${inputCls} mt-2 min-h-[88px] resize-y leading-relaxed`}
               placeholder="What am I responsible to lead this team toward?"

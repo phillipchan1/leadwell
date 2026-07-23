@@ -9,12 +9,16 @@ import {
   THEME_DOMAIN,
 } from "../data/frameworks";
 import { derivedRead } from "../lib/derive";
+import { fmtDate } from "../lib/oneOnOne";
 import { Avatar } from "./Avatar";
 import {
   Badge,
   Chip,
+  DueDate,
   IconChevronLeft,
   IconChevronRight,
+  IconPlus,
+  IconTrash,
   IconX,
   ProgressBar,
   SectionTitle,
@@ -195,6 +199,37 @@ export function PersonProfile({
     setOpenMeetingId(id);
   };
 
+  // N = new 1:1 for the open person (quiet while typing or in a dialog).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "n" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (
+        modal ||
+        askAIOpen ||
+        settingsOpen ||
+        editingAssessments ||
+        editingPerson ||
+        openMeetingId
+      )
+        return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      startNewOneOnOne();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   const wideTab = tab === "oneOnOnes" || tab === "topics";
 
   return (
@@ -258,9 +293,9 @@ export function PersonProfile({
               </div>
             )}
             <div className="mt-1 text-[11px] text-ink-3">
-              {nextOneOnOne && `Next 1:1 ${nextOneOnOne}`}
+              {nextOneOnOne && <DueDate iso={nextOneOnOne} prefix="Next 1:1 " />}
               {nextOneOnOne && lastOneOnOne && " · "}
-              {lastOneOnOne && `Last ${lastOneOnOne.date}`}
+              {lastOneOnOne && `Last ${fmtDate(lastOneOnOne.date)}`}
             </div>
           </div>
           <button
@@ -271,27 +306,37 @@ export function PersonProfile({
             <IconX size={14} />
           </button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-          <QuickAction onClick={startNewOneOnOne}>+ New 1:1</QuickAction>
+        {/* One primary action; quiet secondaries; destructive demoted to an icon at the far edge. */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+          <button
+            onClick={startNewOneOnOne}
+            className="btn-primary !rounded-full !px-3 !py-1 text-xs"
+            title="New 1:1 (N)"
+          >
+            <IconPlus size={11} />
+            New 1:1
+          </button>
           <QuickAction
             onClick={() => {
               setTab("topics");
             }}
           >
-            + Add topic
+            + Topic
           </QuickAction>
           <QuickAction onClick={() => setEditingAssessments(true)}>
             Assessments
           </QuickAction>
           <QuickAction onClick={() => setEditingPerson(true)}>Edit</QuickAction>
-          <QuickAction
-            danger
+          <button
+            className="ml-auto rounded-md p-1.5 text-ink-3/60 transition-colors hover:bg-red-500/10 hover:text-red-500"
+            aria-label={`Remove ${person.name}`}
+            title={`Remove ${person.name}`}
             onClick={() => {
               if (confirm(`Remove ${person.name}?`)) deletePerson(person.id);
             }}
           >
-            Remove
-          </QuickAction>
+            <IconTrash size={13} />
+          </button>
         </div>
       </div>
 

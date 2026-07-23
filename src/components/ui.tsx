@@ -1,4 +1,5 @@
 import { useEffect, type CSSProperties, type ReactNode, type SVGProps } from "react";
+import { dateTone, fmtDate } from "../lib/oneOnOne";
 
 /* ── Icons — inline SVG, stroke-based, inherit currentColor ── */
 
@@ -69,6 +70,47 @@ export const IconMic = icon(
   </>
 );
 export const IconSend = icon(<path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />);
+export const IconHelp = icon(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" />
+  </>
+);
+
+/* ── Keyboard + date primitives ── */
+
+export function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className="kbd">{children}</kbd>;
+}
+
+/**
+ * A next-1:1 (or any upcoming) date with urgency built in:
+ * overdue = amber, today = accent, otherwise quiet.
+ */
+export function DueDate({
+  iso,
+  prefix = "",
+  className = "",
+}: {
+  iso: string;
+  prefix?: string;
+  className?: string;
+}) {
+  const tone = dateTone(iso);
+  const toneCls =
+    tone === "overdue"
+      ? "font-medium text-amber-700 dark:text-amber-400"
+      : tone === "today"
+        ? "font-medium text-accent-ink"
+        : "";
+  return (
+    <span className={`${toneCls} ${className}`}>
+      {prefix}
+      {fmtDate(iso)}
+      {tone === "overdue" ? " · overdue" : tone === "today" ? " · today" : ""}
+    </span>
+  );
+}
 
 /* ── Primitives ── */
 
