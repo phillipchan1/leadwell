@@ -1,27 +1,38 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
-import type { Person } from "../types";
+import type { Person, Team } from "../types";
 import {
   coachPresets,
   hasApiKey,
   orgSystemPrompt,
   personSystemPrompt,
   streamChat,
+  teamCoachPresets,
+  teamSystemPrompt,
 } from "../lib/ai";
 import { inputCls } from "./ui";
 
 /**
- * Chat panel. Scoped to a person when `person` is given, otherwise org-level
- * (the header "Ask AI" button). History persists per person in the store.
+ * Chat panel. Scoped to a person or a team when given, otherwise org-level
+ * (the header "Ask AI" button). History persists per subject in the store.
  */
-export function AICoach({ person }: { person?: Person }) {
-  const chatKey = person?.id ?? "org";
-  const { chats, appendChat, clearChat } = useStore();
+export function AICoach({ person, team }: { person?: Person; team?: Team }) {
+  const chatKey = person?.id ?? (team ? `team:${team.id}` : "org");
+  const { chats, appendChat, clearChat, anthropicApiKey, setSettingsOpen } =
+    useStore();
+  const presets = person
+    ? coachPresets(person)
+    : team
+      ? teamCoachPresets(team)
+      : [];
   const history = chats[chatKey] ?? [];
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const keyed = hasApiKey();
+  // Re-check when stored key changes
+  void anthropicApiKey;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,7 +46,11 @@ export function AICoach({ person }: { person?: Person }) {
     appendChat(chatKey, { role: "user", content: trimmed });
     setStreaming("");
     try {
-      const system = person ? personSystemPrompt(person.id) : orgSystemPrompt();
+      const system = person
+        ? personSystemPrompt(person.id)
+        : team
+          ? teamSystemPrompt(team.id)
+          : orgSystemPrompt();
       const messages = [
         ...(useStore.getState().chats[chatKey] ?? []),
       ];
@@ -52,20 +67,26 @@ export function AICoach({ person }: { person?: Person }) {
     }
   };
 
-  if (!hasApiKey) {
+  if (!keyed) {
     return (
       <div className="rounded-xl border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700">
         <p className="font-medium text-stone-600 dark:text-stone-300">
           Add your API key to enable the AI coach
         </p>
         <p className="mt-1 text-xs leading-relaxed">
-          Create a <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">.env.local</code>{" "}
-          file in the project root with{" "}
+          Open Settings (⚙) and paste your Anthropic key, or add{" "}
           <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">
-            VITE_ANTHROPIC_API_KEY=sk-ant-...
+            VITE_ANTHROPIC_API_KEY
           </code>{" "}
-          and restart the dev server.
+          to <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">.env.local</code>.
         </p>
+        <button
+          type="button"
+          className="mt-3 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700"
+          onClick={() => setSettingsOpen(true)}
+        >
+          Open Settings
+        </button>
       </div>
     );
   }
@@ -73,9 +94,9 @@ export function AICoach({ person }: { person?: Person }) {
   return (
     <div className="flex flex-col gap-3">
       {/* Presets */}
-      {person && (
+      {presets.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {coachPresets(person).map((p) => (
+          {presets.map((p) => (
             <button
               key={p.label}
               onClick={() => send(p.prompt)}
@@ -121,7 +142,11 @@ export function AICoach({ person }: { person?: Person }) {
         <input
           className={inputCls}
           placeholder={
-            person ? `Ask about leading ${person.name.split(" ")[0]}…` : "Ask about your org…"
+            person
+              ? `Ask about leading ${person.name.split(" ")[0]}…`
+              : team
+                ? `Ask about leading ${team.name}…`
+                : "Ask about your org…"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}

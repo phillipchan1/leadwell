@@ -1,16 +1,10 @@
-import { useStore } from "../store/useStore";
+import type { Person } from "../types";
 import { DOMAINS, DOMAIN_COLOR } from "../data/frameworks";
-import {
-  blindSpots,
-  domainCounts,
-  isAssessed,
-  personalityMix,
-} from "../lib/derive";
-import { Card, SectionTitle } from "./ui";
+import { blindSpots, domainCounts, isAssessed, personalityMix } from "../lib/derive";
+import { SectionTitle } from "./ui";
 import { StrengthsDonut } from "./StrengthsDonut";
 
-export function StatsBar() {
-  const { people } = useStore();
+export function StatsBar({ people }: { people: Person[] }) {
   const counts = domainCounts(people);
   const totalThemes = DOMAINS.reduce((sum, d) => sum + counts[d], 0);
   const assessed = people.filter(isAssessed).length;
@@ -18,10 +12,10 @@ export function StatsBar() {
   const spots = blindSpots(people);
 
   return (
-    <Card className="grid grid-cols-1 gap-6 p-5 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-5 rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-950/40 md:grid-cols-3">
       {/* Strengths balance donut */}
       <div className="flex items-center gap-4">
-        <StrengthsDonut counts={counts} size={110} />
+        <StrengthsDonut counts={counts} size={96} />
         <div className="space-y-1">
           <SectionTitle>Strengths balance</SectionTitle>
           {DOMAINS.map((d) => (
@@ -54,7 +48,7 @@ export function StatsBar() {
           </p>
         ) : totalThemes > 0 ? (
           <p className="text-xs text-emerald-600 dark:text-emerald-400">
-            ✓ All four domains represented across the org.
+            ✓ All four domains represented.
           </p>
         ) : (
           <p className="text-xs text-stone-400">
@@ -69,7 +63,7 @@ export function StatsBar() {
         <MixRow label="Enneagram" mix={mix.enneagram} />
         <MixRow label="MBTI" mix={mix.mbti} />
       </div>
-    </Card>
+    </div>
   );
 }
 

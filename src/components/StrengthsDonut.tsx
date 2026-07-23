@@ -1,11 +1,11 @@
-import type { Domain } from "../types";
+import type { StrengthDomain } from "../types";
 import { DOMAINS, DOMAIN_COLOR } from "../data/frameworks";
 
 export function StrengthsDonut({
   counts,
   size = 110,
 }: {
-  counts: Record<Domain, number>;
+  counts: Record<StrengthDomain, number>;
   size?: number;
 }) {
   const total = DOMAINS.reduce((sum, d) => sum + counts[d], 0);

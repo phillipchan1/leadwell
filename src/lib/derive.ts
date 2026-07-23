@@ -1,4 +1,4 @@
-import type { Domain, Person } from "../types";
+import type { StrengthDomain, Person } from "../types";
 import {
   DOMAINS,
   ENNEAGRAM,
@@ -20,9 +20,9 @@ export function teamCoverage(people: Person[]): { assessed: number; total: numbe
 }
 
 /** Count Top-5 theme occurrences per domain across a set of people. */
-export function domainCounts(people: Person[]): Record<Domain, number> {
+export function domainCounts(people: Person[]): Record<StrengthDomain, number> {
   const counts = Object.fromEntries(DOMAINS.map((d) => [d, 0])) as Record<
-    Domain,
+    StrengthDomain,
     number
   >;
   for (const p of people) {
@@ -35,7 +35,7 @@ export function domainCounts(people: Person[]): Record<Domain, number> {
 }
 
 /** Domains with zero representation among people who have Top 5s recorded. */
-export function blindSpots(people: Person[]): Domain[] {
+export function blindSpots(people: Person[]): StrengthDomain[] {
   const withClifton = people.filter((p) => (p.assessments.cliftonTop5 ?? []).length > 0);
   if (withClifton.length === 0) return [];
   const counts = domainCounts(withClifton);
@@ -57,7 +57,7 @@ export function derivedRead(p: Person): { strengths: string[]; watchOuts: string
 }
 
 /** Top domain for a person's Top 5, e.g. for the People table. */
-export function topDomain(p: Person): Domain | null {
+export function topDomain(p: Person): StrengthDomain | null {
   const top5 = p.assessments.cliftonTop5 ?? [];
   if (top5.length === 0) return null;
   const counts = domainCounts([p]);

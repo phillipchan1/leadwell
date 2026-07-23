@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 
 export function Badge({
   color,
@@ -65,12 +65,18 @@ export function ProgressBar({
 export function Card({
   children,
   className = "",
+  onClick,
+  style,
 }: {
   children: ReactNode;
   className?: string;
+  onClick?: () => void;
+  style?: CSSProperties;
 }) {
   return (
     <div
+      onClick={onClick}
+      style={style}
       className={`rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900 ${className}`}
     >
       {children}
@@ -122,10 +128,24 @@ export function Modal({
   onClose: () => void;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
     >
       <div
         className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-xl dark:border-stone-800 dark:bg-stone-900"

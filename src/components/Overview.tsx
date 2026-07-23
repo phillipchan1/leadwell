@@ -11,10 +11,21 @@ import { Card, SectionTitle, buttonPrimaryCls } from "./ui";
 import { Avatar } from "./Avatar";
 
 export function Overview() {
-  const { people, teams, oneOnOnes, actions, selectPerson, setTab } = useStore();
+  const {
+    people,
+    teams,
+    oneOnOnes,
+    actions,
+    selectPerson,
+    setTab,
+    anthropicApiKey,
+    setSettingsOpen,
+  } = useStore();
   const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const keyed = hasApiKey();
+  void anthropicApiKey;
 
   const unassessed = people.filter((p) => !isAssessed(p));
   const spots = blindSpots(people);
@@ -70,7 +81,7 @@ export function Overview() {
       <Card className="p-5 lg:col-span-2">
         <div className="mb-3 flex items-center justify-between">
           <SectionTitle>Executive brief</SectionTitle>
-          {hasApiKey && (
+          {keyed && (
             <button
               className={buttonPrimaryCls}
               onClick={generateBrief}
@@ -122,10 +133,17 @@ export function Overview() {
                 ` · next 1:1 on ${upcoming[0].nextDate}`}
               .
             </p>
-            {!hasApiKey && (
+            {!keyed && (
               <p className="text-xs text-stone-400">
-                Add <code>VITE_ANTHROPIC_API_KEY</code> to .env.local for an
-                AI-generated brief.
+                Add an Anthropic key in{" "}
+                <button
+                  type="button"
+                  className="underline hover:text-teal-600"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  Settings
+                </button>{" "}
+                for an AI-generated brief.
               </p>
             )}
           </div>

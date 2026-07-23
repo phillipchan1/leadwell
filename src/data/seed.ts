@@ -1,15 +1,28 @@
 import type {
   Capacity,
+  Domain,
+  Manager,
   Team,
   Person,
   Action,
   OneOnOne,
   Goal,
   Note,
+  TeamAction,
+  TeamGoal,
+  TeamNote,
   Me,
 } from "../types";
 
 export const seedMe: Me = { name: "Phil Chan", title: "Leader" };
+
+// Life areas / contexts. Teams are color-tagged by the domain they live in.
+export const seedDomains: Domain[] = [
+  { id: "dom-work", name: "Day job", color: "#3B82F6" },
+  { id: "dom-church", name: "Church", color: "#8B5CF6" },
+  { id: "dom-family", name: "Family", color: "#EC4899" },
+  { id: "dom-community", name: "Community", color: "#14B8A6" },
+];
 
 export const capUp: Capacity = {
   id: "cap-up",
@@ -29,30 +42,76 @@ export const seedTeams: Team[] = [
     id: "team-frontier",
     name: "Frontier Staff",
     capacityId: "cap-manager",
+    domainId: "dom-church",
     description: "Church staff team",
+    purpose: "Build a healthy, unified staff that leads the church well.",
+    cadence: "Weekly",
+    lastMet: "2026-07-06",
     order: 0,
+  },
+  {
+    id: "team-ministries",
+    name: "Frontier Ministries",
+    capacityId: "cap-leader",
+    domainId: "dom-church",
+    description: "All ministry teams under my purview",
+    purpose:
+      "Keep Frontier's ministry teams healthy, staffed, and moving the same direction.",
+    cadence: "Monthly leaders huddle",
+    order: 1,
+  },
+  {
+    id: "team-setup",
+    name: "Setup & Breakdown",
+    capacityId: "cap-manager",
+    domainId: "dom-church",
+    parentId: "team-ministries",
+    description: "Weekend environment team I personally lead",
+    purpose:
+      "Run a reliable, hospitable setup/breakdown crew every service weekend.",
+    cadence: "Weekly",
+    lastMet: "2026-07-13",
+    order: 2,
   },
   {
     id: "team-mens",
     name: "Men's Core Team",
     capacityId: "cap-leader",
+    domainId: "dom-church",
     description: "Volunteer ministry team",
-    order: 1,
+    purpose: "Raise up men who lead their families and serve the church.",
+    cadence: "Monthly",
+    order: 3,
   },
   {
     id: "team-product",
     name: "Product Squad",
     capacityId: "cap-influence",
+    domainId: "dom-work",
     description: "Cross-functional squad at work",
-    order: 2,
+    purpose: "Ship the reporting rewrite and keep the squad unblocked.",
+    cadence: "Daily standup",
+    order: 4,
   },
   {
     id: "team-leaders",
     name: "My Leaders",
     capacityId: "cap-up",
+    domainId: "dom-church",
     description: "Who I report to",
-    order: 3,
+    order: 5,
     direction: "up",
+  },
+];
+
+// People I report to, rendered directly above my node. Distinct from "up" teams:
+// a manager is one person I answer to in a given area.
+export const seedManagers: Manager[] = [
+  {
+    id: "mgr-vp",
+    name: "Dana Foster",
+    role: "VP of Product",
+    domainId: "dom-work",
   },
 ];
 
@@ -182,12 +241,28 @@ export const seedActions: Action[] = [
     personId: "p-sarah",
     text: "Ask about volunteer pipeline for fall",
     done: false,
+    column: "this_1on1",
   },
   {
     id: "a-2",
     personId: "p-sarah",
     text: "Follow up on song-selection conflict",
     done: true,
+    column: "done",
+  },
+  {
+    id: "a-5",
+    personId: "p-sarah",
+    text: "Check in on mom's health",
+    done: false,
+    column: "backlog",
+  },
+  {
+    id: "a-6",
+    personId: "p-sarah",
+    text: "Sunday setup handoff plan",
+    done: false,
+    column: "parking",
   },
   {
     id: "a-3",
@@ -195,12 +270,14 @@ export const seedActions: Action[] = [
     text: "Review summer camp budget together",
     done: false,
     dueDate: "2026-07-15",
+    column: "this_1on1",
   },
   {
     id: "a-4",
     personId: "p-priya",
     text: "Share Q3 roadmap draft before planning meeting",
     done: false,
+    column: "backlog",
   },
 ];
 
@@ -209,14 +286,30 @@ export const seedOneOnOnes: OneOnOne[] = [
     id: "o-1",
     personId: "p-sarah",
     date: "2026-06-24",
-    notes: "Feeling stretched; talked about delegating Sunday setup.",
+    notes: `## Summary
+Feeling stretched thin. We talked about delegating Sunday setup so she can focus on leading worship, not logistics.
+
+## Decisions
+- Elena will take Sunday setup starting next month
+- Sarah keeps final call on song selection
+
+## Commitments
+- Phil: Affirm Elena publicly when she takes setup
+- Sarah: Draft a simple setup checklist by next 1:1
+
+## Personal notes
+Energy was lower than usual — mom's health is weighing on her. Lead with care before tasks.
+
+## Follow-ups for next 1:1
+- How is the checklist landing?
+- Volunteer pipeline for fall`,
     nextDate: "2026-07-15",
   },
   {
     id: "o-2",
     personId: "p-marcus",
     date: "2026-06-30",
-    notes: "Camp planning on track. Wants to grow in preaching.",
+    notes: "Camp planning on track. Wants to grow in preaching — pair with a preaching cohort this fall.",
     nextDate: "2026-07-14",
   },
   {
@@ -262,5 +355,48 @@ export const seedNotes: Note[] = [
     personId: "p-priya",
     date: "2026-06-28",
     body: "Frustrated that design reviews keep slipping. Wants clearer decision owners.",
+  },
+];
+
+// --- Team-level records (things I lead at the whole-team level).
+export const seedTeamActions: TeamAction[] = [
+  {
+    id: "ta-1",
+    teamId: "team-frontier",
+    text: "Set the fall calendar together at next staff meeting",
+    done: false,
+  },
+  {
+    id: "ta-2",
+    teamId: "team-mens",
+    text: "Plan the men's retreat theme and dates",
+    done: false,
+    dueDate: "2026-08-01",
+  },
+  {
+    id: "ta-3",
+    teamId: "team-product",
+    text: "Unblock Priya on design-review owners",
+    done: false,
+    dueDate: "2026-07-25",
+  },
+];
+
+export const seedTeamGoals: TeamGoal[] = [
+  {
+    id: "tg-1",
+    teamId: "team-frontier",
+    title: "Every staff member has a clear owned area by Q4",
+    progress: 55,
+    targetDate: "2026-10-01",
+  },
+];
+
+export const seedTeamNotes: TeamNote[] = [
+  {
+    id: "tn-1",
+    teamId: "team-frontier",
+    date: "2026-07-06",
+    body: "Energy is high after the summer push, but a few are running near burnout — protect margin.",
   },
 ];

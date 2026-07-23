@@ -5,7 +5,9 @@ import { OrgTree } from "./components/OrgTree";
 import { PeopleTable } from "./components/PeopleTable";
 import { Overview } from "./components/Overview";
 import { PersonProfile } from "./components/PersonProfile";
+import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
+import { SettingsModal } from "./components/SettingsModal";
 import { Modal } from "./components/ui";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -23,8 +25,11 @@ export default function App() {
     dark,
     toggleDark,
     selectedPersonId,
+    selectedTeamId,
     askAIOpen,
     setAskAIOpen,
+    settingsOpen,
+    setSettingsOpen,
   } = useStore();
 
   useEffect(() => {
@@ -32,8 +37,14 @@ export default function App() {
   }, [dark]);
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
+  const selectedTeam = teams.find((t) => t.id === selectedTeamId);
   const assessed = people.filter(isAssessed).length;
-  const showProfile = tab === "tree" && selectedPerson;
+  const showTeam = tab === "tree" && selectedTeam;
+  const showPerson = tab === "tree" && selectedPerson;
+  // Person drilled in from a team — keep both panels nested.
+  const nested = Boolean(
+    showTeam && showPerson && selectedPerson.teamId === selectedTeam.id
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -53,6 +64,13 @@ export default function App() {
             className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
           >
             ✦ Ask AI
+          </button>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
+          >
+            ⚙
           </button>
           <button
             onClick={toggleDark}
@@ -92,8 +110,28 @@ export default function App() {
           {tab === "tree" && <OrgTree />}
           {tab === "people" && <PeopleTable />}
         </main>
-        {showProfile && (
-          <div className="w-full max-w-md shrink-0">
+
+        {/* Detail column ≥50%. Alone = full team; nested = ~10% team rail + ~90% person. */}
+        {showTeam && (
+          <div className="flex w-1/2 min-w-[50%] shrink-0">
+            <div
+              className={
+                nested
+                  ? "w-[10%] min-w-[4.5rem] max-w-[6rem] shrink-0"
+                  : "min-w-0 flex-1"
+              }
+            >
+              <TeamProfile team={selectedTeam} nested={nested} />
+            </div>
+            {nested && showPerson && (
+              <div className="min-w-0 flex-1 border-l border-stone-200 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.12)] dark:border-stone-800 dark:shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.45)]">
+                <PersonProfile person={selectedPerson} nested />
+              </div>
+            )}
+          </div>
+        )}
+        {showPerson && !nested && (
+          <div className="w-full max-w-xl shrink-0">
             <PersonProfile person={selectedPerson} />
           </div>
         )}
@@ -104,6 +142,9 @@ export default function App() {
         <Modal title="Ask AI about your org" onClose={() => setAskAIOpen(false)}>
           <AICoach />
         </Modal>
+      )}
+      {settingsOpen && (
+        <SettingsModal onClose={() => setSettingsOpen(false)} />
       )}
     </div>
   );

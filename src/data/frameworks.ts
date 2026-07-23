@@ -1,9 +1,9 @@
-import type { Domain } from "../types";
+import type { StrengthDomain } from "../types";
 
 // ---------------------------------------------------------------------------
 // CliftonStrengths: all 34 themes mapped to their Gallup domain.
 // ---------------------------------------------------------------------------
-export const THEME_DOMAIN: Record<string, Domain> = {
+export const THEME_DOMAIN: Record<string, StrengthDomain> = {
   // Executing (9)
   Achiever: "Executing",
   Arranger: "Executing",
@@ -46,14 +46,14 @@ export const THEME_DOMAIN: Record<string, Domain> = {
 
 export const ALL_THEMES = Object.keys(THEME_DOMAIN).sort();
 
-export const DOMAINS: Domain[] = [
+export const DOMAINS: StrengthDomain[] = [
   "Executing",
   "Influencing",
   "Relationship Building",
   "Strategic Thinking",
 ];
 
-export const DOMAIN_COLOR: Record<Domain, string> = {
+export const DOMAIN_COLOR: Record<StrengthDomain, string> = {
   Executing: "#1D9E75",
   Influencing: "#EF9F27",
   "Relationship Building": "#D4537E",
