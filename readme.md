@@ -23,6 +23,15 @@ Restart the dev server. This enables the per-person AI coach, the header **Ask A
 
 > The key is used directly from the browser (`dangerouslyAllowBrowser`) — fine for this single-user local tool, but don't deploy it publicly with your key baked in.
 
+## Deploy to Vercel
+
+This is a static single-page app (Vite build → `dist/`), so it deploys to Vercel with no server. [`vercel.json`](vercel.json) already sets the framework, build command, output directory, and SPA rewrite — Vercel needs no extra configuration.
+
+1. Import the repo at [vercel.com/new](https://vercel.com/new) (or run `vercel` from the CLI).
+2. Deploy. That's it — the app runs with seed data and the in-app **Settings → Anthropic API key** field enabled.
+
+**About the API key:** the AI features call Anthropic directly from the browser, so any key that reaches the browser is visible to whoever loads the page. For a public deployment, **do not** set `VITE_ANTHROPIC_API_KEY` in Vercel — it would be baked into the public JS bundle and exposed. Instead, leave it unset and have each user paste their own key into **Settings** (stored only in their browser's localStorage). Only set `VITE_ANTHROPIC_API_KEY` for a private/local build where you control who can reach it.
+
 ## Stack & structure
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Flow (`@xyflow/react`) · `@anthropic-ai/sdk`.
