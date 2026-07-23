@@ -62,36 +62,46 @@ export function PeopleTable() {
     }
   };
 
-  const arrow = (key: SortKey) =>
-    sortKey === key ? (asc ? " ↑" : " ↓") : "";
+  const arrow = (key: SortKey) => (sortKey === key ? (asc ? " ↑" : " ↓") : "");
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <input
-          className={`${inputCls} max-w-xs`}
-          placeholder="Search people…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select
-          className={`${inputCls} max-w-52`}
-          value={teamFilter}
-          onChange={(e) => setTeamFilter(e.target.value)}
-        >
-          <option value="">All teams</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+    <div className="anim-fade-up mx-auto max-w-6xl space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-semibold tracking-tight">
+            Everyone you lead
+          </h2>
+          <p className="mt-1 text-sm text-ink-2">
+            {rows.length} {rows.length === 1 ? "person" : "people"}
+            {teamFilter || query ? " matching" : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            className={`${inputCls} max-w-xs`}
+            placeholder="Search people…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <select
+            className={`${inputCls} max-w-52`}
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+          >
+            <option value="">All teams</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <Card className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-stone-200 text-left text-xs text-stone-400 dark:border-stone-800">
+            <tr className="border-b border-line text-left">
               <Th onClick={() => sortBy("name")}>Name{arrow("name")}</Th>
               <Th onClick={() => sortBy("team")}>Team{arrow("team")}</Th>
               <Th>Capacity</Th>
@@ -110,7 +120,7 @@ export function PeopleTable() {
             {rows.map(({ p, team, capacity, next, coverage, domain }) => (
               <tr
                 key={p.id}
-                className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 dark:border-stone-800/60 dark:hover:bg-stone-800/40"
+                className="cursor-pointer border-b border-line/60 transition-colors last:border-0 hover:bg-surface-2/60"
                 onClick={() => {
                   selectPerson(p.id);
                   setTab("tree");
@@ -127,20 +137,20 @@ export function PeopleTable() {
                     <div>
                       <div className="font-medium">{p.name}</div>
                       {p.role && (
-                        <div className="text-[11px] text-stone-400">
-                          {p.role}
-                        </div>
+                        <div className="text-[11px] text-ink-3">{p.role}</div>
                       )}
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-stone-500">{team?.name}</td>
+                <td className="px-4 py-2.5 text-ink-2">{team?.name}</td>
                 <td className="px-4 py-2.5">
                   {capacity && (
                     <Badge color={capacity.color}>{capacity.label}</Badge>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-stone-500">{coverage}/3</td>
+                <td className="px-4 py-2.5">
+                  <CoverageDots value={coverage} />
+                </td>
                 <td className="px-4 py-2.5">
                   {domain ? (
                     <span
@@ -150,23 +160,29 @@ export function PeopleTable() {
                       {domain}
                     </span>
                   ) : (
-                    <span className="text-stone-300 dark:text-stone-600">—</span>
+                    <span className="text-ink-3/60">—</span>
                   )}
                 </td>
-                <td className="px-4 py-2.5 text-stone-500">
-                  {p.assessments.enneagram ?? "—"}
+                <td className="px-4 py-2.5 text-ink-2">
+                  {p.assessments.enneagram ?? (
+                    <span className="text-ink-3/60">—</span>
+                  )}
                 </td>
-                <td className="px-4 py-2.5 text-stone-500">
-                  {p.assessments.mbti ?? "—"}
+                <td className="px-4 py-2.5 text-ink-2">
+                  {p.assessments.mbti ?? (
+                    <span className="text-ink-3/60">—</span>
+                  )}
                 </td>
-                <td className="px-4 py-2.5 text-stone-500">{next ?? "—"}</td>
+                <td className="px-4 py-2.5 tabular-nums text-ink-2">
+                  {next ?? <span className="text-ink-3/60">—</span>}
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
                 <td
                   colSpan={8}
-                  className="px-4 py-8 text-center text-sm text-stone-400"
+                  className="px-4 py-10 text-center text-sm text-ink-3"
                 >
                   No people match.
                 </td>
@@ -179,6 +195,22 @@ export function PeopleTable() {
   );
 }
 
+function CoverageDots({ value }: { value: number }) {
+  return (
+    <span className="inline-flex items-center gap-1" title={`${value}/3 assessments`}>
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className={`h-1.5 w-1.5 rounded-full ${
+            i < value ? "bg-accent" : "bg-line-strong"
+          }`}
+        />
+      ))}
+      <span className="ml-1 text-xs tabular-nums text-ink-3">{value}/3</span>
+    </span>
+  );
+}
+
 function Th({
   children,
   onClick,
@@ -188,7 +220,9 @@ function Th({
 }) {
   return (
     <th
-      className={`px-4 py-2.5 font-medium ${onClick ? "cursor-pointer select-none hover:text-stone-600" : ""}`}
+      className={`label-caps px-4 py-3 ${
+        onClick ? "cursor-pointer select-none hover:text-ink-2" : ""
+      }`}
       onClick={onClick}
     >
       {children}

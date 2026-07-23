@@ -75,7 +75,7 @@ export function AssessmentEditor({
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-sm font-medium">CliftonStrengths Top 5</span>
-            <span className="text-xs text-stone-400">
+            <span className="text-xs text-ink-3">
               {top5.length}/5 selected, in rank order
             </span>
           </div>
@@ -95,7 +95,7 @@ export function AssessmentEditor({
               ))}
             </ol>
           )}
-          <div className="flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+          <div className="flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-xl border border-line bg-surface-2/40 p-2">
             {ALL_THEMES.filter((t) => !top5.includes(t)).map((t) => (
               <button
                 key={t}
@@ -116,7 +116,7 @@ export function AssessmentEditor({
         {/* Enneagram */}
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">Enneagram type</span>
+            <span className="mb-1 block text-ink-2">Enneagram type</span>
             <select
               className={inputCls}
               value={enneagramType}
@@ -134,7 +134,7 @@ export function AssessmentEditor({
             </select>
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">Wing</span>
+            <span className="mb-1 block text-ink-2">Wing</span>
             <select
               className={inputCls}
               value={wing}
@@ -153,7 +153,7 @@ export function AssessmentEditor({
 
         {/* MBTI */}
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">MBTI</span>
+          <span className="mb-1 block text-ink-2">MBTI</span>
           <select
             className={inputCls}
             value={mbti}
@@ -170,7 +170,7 @@ export function AssessmentEditor({
 
         {/* Read on them */}
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">
+          <span className="mb-1 block text-ink-2">
             Strengths (one per line)
           </span>
           <textarea
@@ -180,7 +180,7 @@ export function AssessmentEditor({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">
+          <span className="mb-1 block text-ink-2">
             Watch-outs (one per line)
           </span>
           <textarea
@@ -190,7 +190,7 @@ export function AssessmentEditor({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">How to lead them</span>
+          <span className="mb-1 block text-ink-2">How to lead them</span>
           <textarea
             className={`${inputCls} h-20 resize-none`}
             value={howToLead}

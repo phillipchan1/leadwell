@@ -47,8 +47,8 @@ function DomainPicker({
           onClick={() => onChange(undefined)}
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
             !domainId
-              ? "border-stone-400 bg-stone-100 font-medium text-stone-700 dark:border-stone-500 dark:bg-stone-800 dark:text-stone-200"
-              : "border-stone-300 text-stone-500 dark:border-stone-700 dark:text-stone-400"
+              ? "border-line-strong bg-surface-2 font-medium text-ink"
+              : "border-line text-ink-2 hover:border-line-strong"
           }`}
         >
           None
@@ -84,7 +84,7 @@ function DomainPicker({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="rounded-full border border-dashed border-stone-300 px-2.5 py-1 text-xs text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+            className="dashed-cta rounded-full px-2.5 py-1 text-xs"
           >
             + New
           </button>
@@ -107,7 +107,7 @@ function DomainPicker({
           />
           <button
             type="button"
-            className="rounded-lg bg-teal-600 px-3 text-xs font-medium text-white"
+            className="btn-primary text-xs"
             onClick={createDomain}
           >
             Add
@@ -186,7 +186,7 @@ export function TeamModal({
     >
       <div className="space-y-3">
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Name</span>
+          <span className="mb-1 block text-ink-2">Name</span>
           <input
             className={inputCls}
             value={name}
@@ -197,7 +197,7 @@ export function TeamModal({
         </label>
         {parents.length > 0 && (
           <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">
+            <span className="mb-1 block text-ink-2">
               Parent team (optional)
             </span>
             <select
@@ -220,18 +220,18 @@ export function TeamModal({
                 </option>
               ))}
             </select>
-            <span className="mt-1 block text-[11px] text-stone-400">
+            <span className="mt-1 block text-[11px] text-ink-3">
               Nest under a broader team you oversee (e.g. Setup under Frontier
               Ministries).
             </span>
           </label>
         )}
         <div className="block text-sm">
-          <span className="mb-1 block text-stone-500">Domain (life area)</span>
+          <span className="mb-1 block text-ink-2">Domain (life area)</span>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">My capacity</span>
+          <span className="mb-1 block text-ink-2">My capacity</span>
           <div className="flex gap-2">
             {capacities.map((c) => (
               <button
@@ -240,8 +240,8 @@ export function TeamModal({
                 onClick={() => setCapacityId(c.id)}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-sm transition-colors ${
                   capacityId === c.id
-                    ? "border-transparent text-white"
-                    : "border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-300"
+                    ? "border-transparent text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15)]"
+                    : "border-line-strong text-ink-2 hover:border-ink-3"
                 }`}
                 style={
                   capacityId === c.id ? { backgroundColor: c.color } : undefined
@@ -254,7 +254,7 @@ export function TeamModal({
         </label>
         {!nested && (
           <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">
+            <span className="mb-1 block text-ink-2">
               Position in the tree
             </span>
             <div className="flex gap-2">
@@ -270,8 +270,8 @@ export function TeamModal({
                   onClick={() => setDirection(opt.value)}
                   className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
                     direction === opt.value
-                      ? "border-teal-600 bg-teal-50 font-medium text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
-                      : "border-stone-300 text-stone-500 dark:border-stone-700 dark:text-stone-400"
+                      ? "border-accent/60 bg-accent/10 font-medium text-accent-ink"
+                      : "border-line-strong text-ink-2 hover:border-ink-3"
                   }`}
                 >
                   {opt.label}
@@ -281,7 +281,7 @@ export function TeamModal({
           </label>
         )}
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">
+          <span className="mb-1 block text-ink-2">
             Description (optional)
           </span>
           <input
@@ -294,7 +294,7 @@ export function TeamModal({
           {team ? (
             <button
               type="button"
-              className="text-xs text-stone-400 hover:text-red-500"
+              className="text-xs text-ink-3 hover:text-red-500"
               onClick={() => {
                 const extra =
                   childCount > 0
@@ -360,13 +360,13 @@ export function ManagerModal({
   return (
     <Modal title={manager ? "Edit manager" : "Add manager"} onClose={onClose}>
       <div className="space-y-3">
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-ink-2">
           Someone you report to. They'll appear directly above you in the tree.
         </p>
         <div className="flex items-center gap-3">
           <Avatar name={name || "?"} photo={photo} size={56} />
           <div className="flex flex-col gap-1">
-            <label className="cursor-pointer text-sm text-teal-600 hover:underline">
+            <label className="cursor-pointer text-sm text-accent-ink hover:underline">
               Upload photo
               <input
                 type="file"
@@ -380,7 +380,7 @@ export function ManagerModal({
             </label>
             {photo && (
               <button
-                className="text-left text-xs text-stone-400 hover:underline"
+                className="text-left text-xs text-ink-3 hover:underline"
                 onClick={() => setPhoto(undefined)}
               >
                 Remove photo
@@ -389,7 +389,7 @@ export function ManagerModal({
           </div>
         </div>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Name</span>
+          <span className="mb-1 block text-ink-2">Name</span>
           <input
             className={inputCls}
             value={name}
@@ -399,7 +399,7 @@ export function ManagerModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Role (optional)</span>
+          <span className="mb-1 block text-ink-2">Role (optional)</span>
           <input
             className={inputCls}
             value={role}
@@ -408,13 +408,13 @@ export function ManagerModal({
           />
         </label>
         <div className="block text-sm">
-          <span className="mb-1 block text-stone-500">Domain (life area)</span>
+          <span className="mb-1 block text-ink-2">Domain (life area)</span>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
         <div className="flex items-center justify-between pt-2">
           {manager ? (
             <button
-              className="text-xs text-stone-400 hover:text-red-500"
+              className="text-xs text-ink-3 hover:text-red-500"
               onClick={() => {
                 if (confirm(`Remove ${manager.name}?`)) {
                   deleteManager(manager.id);
@@ -479,7 +479,7 @@ export function PersonModal({
         <div className="flex items-center gap-3">
           <Avatar name={name || "?"} photo={photo} size={56} />
           <div className="flex flex-col gap-1">
-            <label className="cursor-pointer text-sm text-teal-600 hover:underline">
+            <label className="cursor-pointer text-sm text-accent-ink hover:underline">
               Upload photo
               <input
                 type="file"
@@ -493,7 +493,7 @@ export function PersonModal({
             </label>
             {photo && (
               <button
-                className="text-left text-xs text-stone-400 hover:underline"
+                className="text-left text-xs text-ink-3 hover:underline"
                 onClick={() => setPhoto(undefined)}
               >
                 Remove photo
@@ -502,7 +502,7 @@ export function PersonModal({
           </div>
         </div>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Name</span>
+          <span className="mb-1 block text-ink-2">Name</span>
           <input
             className={inputCls}
             value={name}
@@ -511,7 +511,7 @@ export function PersonModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Role (optional)</span>
+          <span className="mb-1 block text-ink-2">Role (optional)</span>
           <input
             className={inputCls}
             value={role}
@@ -520,7 +520,7 @@ export function PersonModal({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Team</span>
+          <span className="mb-1 block text-ink-2">Team</span>
           <select
             className={inputCls}
             value={teamId}
@@ -575,7 +575,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Domains" onClose={onClose}>
-      <p className="mb-4 text-xs leading-relaxed text-stone-500">
+      <p className="mb-4 text-xs leading-relaxed text-ink-2">
         Life areas that filter your org tree — e.g. Day job, Church, Family.
         Teams and managers can be tagged with a domain.
       </p>
@@ -586,7 +586,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
           return (
             <li
               key={d.id}
-              className="flex items-center gap-2 rounded-xl border border-stone-200 px-2.5 py-2 dark:border-stone-800"
+              className="flex items-center gap-2 rounded-xl border border-line px-2.5 py-2"
             >
               <input
                 type="color"
@@ -597,16 +597,16 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 aria-label={`Color for ${d.name}`}
               />
               <input
-                className={`${inputCls} flex-1 border-transparent bg-transparent px-1.5 shadow-none focus:border-teal-500 focus:bg-white dark:focus:bg-stone-950`}
+                className={`${inputCls} flex-1 border-transparent bg-transparent px-1.5 shadow-none`}
                 value={d.name}
                 onChange={(e) => updateDomain(d.id, { name: e.target.value })}
                 aria-label="Domain name"
               />
-              <span className="shrink-0 text-[10px] text-stone-400">
+              <span className="shrink-0 text-[10px] text-ink-3">
                 {n === 0 ? "unused" : `${n} tagged`}
               </span>
               <button
-                className="shrink-0 rounded-md px-1.5 py-1 text-xs text-stone-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                className="shrink-0 rounded-md px-1.5 py-1 text-xs text-ink-3 hover:bg-red-500/10 hover:text-red-500"
                 title="Delete domain"
                 onClick={() => {
                   const msg =
@@ -622,14 +622,14 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
           );
         })}
         {domains.length === 0 && (
-          <li className="py-4 text-center text-sm text-stone-400">
+          <li className="py-4 text-center text-sm text-ink-3">
             No domains yet — add your first life area below.
           </li>
         )}
       </ul>
 
-      <div className="mt-4 rounded-xl border border-dashed border-stone-300 p-3 dark:border-stone-700">
-        <div className="mb-2 text-[11px] font-medium tracking-wide text-stone-400 uppercase">
+      <div className="mt-4 rounded-xl border border-dashed border-line-strong p-3">
+        <div className="label-caps mb-2">
           Add domain
         </div>
         <div className="flex items-center gap-2">
@@ -668,7 +668,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={() => setNewColor(c)}
               className={`h-5 w-5 rounded-full ${
-                newColor === c ? "ring-2 ring-stone-400 ring-offset-1 dark:ring-offset-stone-900" : ""
+                newColor === c ? "ring-2 ring-ink-3 ring-offset-1 ring-offset-surface" : ""
               }`}
               style={{ backgroundColor: c }}
               aria-label={`Pick color ${c}`}

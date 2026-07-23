@@ -8,12 +8,18 @@ import { PersonProfile } from "./components/PersonProfile";
 import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
-import { Modal } from "./components/ui";
+import {
+  IconGear,
+  IconMoon,
+  IconSparkle,
+  IconSun,
+  Modal,
+} from "./components/ui";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "tree", label: "Org tree" },
-  { id: "people", label: "People table" },
+  { id: "people", label: "People" },
 ];
 
 export default function App() {
@@ -48,56 +54,58 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-3 dark:border-stone-800 dark:bg-stone-900">
-        <div className="flex items-baseline gap-4">
-          <h1 className="text-lg font-bold tracking-tight">
-            Lead<span className="text-teal-600">Well</span>
+      {/* Header — wordmark · tabs · actions in one bar */}
+      <header className="relative z-10 flex shrink-0 items-center gap-4 border-b border-line bg-surface px-5 py-2.5">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="font-display text-[1.35rem] leading-none font-semibold tracking-tight">
+            Lead<span className="text-accent-ink italic">Well</span>
           </h1>
-          <span className="hidden text-xs text-stone-400 sm:inline">
+          <span className="hidden text-xs whitespace-nowrap text-ink-3 lg:inline">
             {assessed} of {people.length} assessed · {teams.length} teams
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAskAIOpen(true)}
-            className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
-          >
-            ✦ Ask AI
+
+        <nav
+          className="mx-auto flex items-center gap-0.5 rounded-full border border-line bg-paper p-0.5"
+          aria-label="Main"
+        >
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? "page" : undefined}
+              className={`rounded-full px-3.5 py-1.5 text-sm transition-colors duration-150 ${
+                tab === t.id
+                  ? "bg-surface font-medium text-ink shadow-[0_1px_2px_rgb(35_32_28/0.08)] ring-1 ring-line"
+                  : "text-ink-2 hover:text-ink"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button onClick={() => setAskAIOpen(true)} className="btn-primary">
+            <IconSparkle size={14} />
+            <span className="hidden sm:inline">Ask AI</span>
           </button>
           <button
             onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
-            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
+            className="btn-icon"
           >
-            ⚙
+            <IconGear />
           </button>
           <button
             onClick={toggleDark}
             aria-label="Toggle dark mode"
-            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
+            className="btn-icon"
           >
-            {dark ? "☀️" : "🌙"}
+            {dark ? <IconSun /> : <IconMoon />}
           </button>
         </div>
       </header>
-
-      {/* Tabs */}
-      <nav className="flex gap-1 border-b border-stone-200 bg-white px-5 dark:border-stone-800 dark:bg-stone-900">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`border-b-2 px-3 py-2.5 text-sm transition-colors ${
-              tab === t.id
-                ? "border-teal-600 font-medium text-teal-700 dark:text-teal-400"
-                : "border-transparent text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
 
       {/* Main */}
       <div className="flex min-h-0 flex-1">
@@ -113,25 +121,25 @@ export default function App() {
 
         {/* Detail column ≥50%. Alone = full team; nested = ~10% team rail + ~90% person. */}
         {showTeam && (
-          <div className="flex w-1/2 min-w-[50%] shrink-0">
+          <div className="anim-slide-in flex w-1/2 min-w-[50%] shrink-0">
             <div
               className={
                 nested
-                  ? "w-[10%] min-w-[4.5rem] max-w-[6rem] shrink-0"
+                  ? "w-[10%] max-w-[6rem] min-w-[4.5rem] shrink-0"
                   : "min-w-0 flex-1"
               }
             >
               <TeamProfile team={selectedTeam} nested={nested} />
             </div>
             {nested && showPerson && (
-              <div className="min-w-0 flex-1 border-l border-stone-200 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.12)] dark:border-stone-800 dark:shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.45)]">
+              <div className="min-w-0 flex-1 border-l border-line shadow-[-12px_0_32px_-16px_rgb(35_32_28/0.18)] dark:shadow-[-12px_0_32px_-16px_rgb(0_0_0/0.55)]">
                 <PersonProfile person={selectedPerson} nested />
               </div>
             )}
           </div>
         )}
         {showPerson && !nested && (
-          <div className="w-full max-w-xl shrink-0">
+          <div className="anim-slide-in w-full max-w-xl shrink-0">
             <PersonProfile person={selectedPerson} />
           </div>
         )}
@@ -143,9 +151,7 @@ export default function App() {
           <AICoach />
         </Modal>
       )}
-      {settingsOpen && (
-        <SettingsModal onClose={() => setSettingsOpen(false)} />
-      )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

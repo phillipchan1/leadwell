@@ -1,6 +1,11 @@
 import type { Person } from "../types";
 import { DOMAINS, DOMAIN_COLOR } from "../data/frameworks";
-import { blindSpots, domainCounts, isAssessed, personalityMix } from "../lib/derive";
+import {
+  blindSpots,
+  domainCounts,
+  isAssessed,
+  personalityMix,
+} from "../lib/derive";
 import { SectionTitle } from "./ui";
 import { StrengthsDonut } from "./StrengthsDonut";
 
@@ -12,7 +17,7 @@ export function StatsBar({ people }: { people: Person[] }) {
   const spots = blindSpots(people);
 
   return (
-    <div className="grid grid-cols-1 gap-5 rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-950/40 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-5 rounded-2xl border border-line bg-surface-2/60 p-4 md:grid-cols-3">
       {/* Strengths balance donut */}
       <div className="flex items-center gap-4">
         <StrengthsDonut counts={counts} size={96} />
@@ -24,8 +29,8 @@ export function StatsBar({ people }: { people: Person[] }) {
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: DOMAIN_COLOR[d] }}
               />
-              <span className="text-stone-600 dark:text-stone-300">{d}</span>
-              <span className="text-stone-400">
+              <span className="text-ink-2">{d}</span>
+              <span className="tabular-nums text-ink-3">
                 {totalThemes ? Math.round((counts[d] / totalThemes) * 100) : 0}%
               </span>
             </div>
@@ -36,22 +41,22 @@ export function StatsBar({ people }: { people: Person[] }) {
       {/* Coverage */}
       <div className="space-y-2">
         <SectionTitle>Coverage</SectionTitle>
-        <div className="text-3xl font-semibold">
+        <div className="font-display text-3xl font-semibold tracking-tight">
           {assessed}
-          <span className="text-lg font-normal text-stone-400">
+          <span className="text-lg font-normal text-ink-3">
             /{people.length} assessed
           </span>
         </div>
         {spots.length > 0 ? (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            ⚠ Blind spot: no {spots.join(", no ")} strengths in anyone's Top 5.
+          <p className="text-xs text-amber-700 dark:text-amber-400">
+            Blind spot: no {spots.join(", no ")} strengths in anyone's Top 5.
           </p>
         ) : totalThemes > 0 ? (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400">
-            ✓ All four domains represented.
+          <p className="text-xs text-emerald-700 dark:text-emerald-400">
+            All four domains represented.
           </p>
         ) : (
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-ink-3">
             Add CliftonStrengths results to see the balance.
           </p>
         )}
@@ -71,14 +76,12 @@ function MixRow({ label, mix }: { label: string; mix: Record<string, number> }) 
   const entries = Object.entries(mix).sort((a, b) => b[1] - a[1]);
   return (
     <div className="text-xs">
-      <span className="text-stone-400">{label}: </span>
+      <span className="text-ink-3">{label}: </span>
       {entries.length === 0 ? (
-        <span className="text-stone-300 dark:text-stone-600">none recorded</span>
+        <span className="text-ink-3/60">none recorded</span>
       ) : (
-        <span className="text-stone-600 dark:text-stone-300">
-          {entries
-            .map(([k, n]) => (n > 1 ? `${k} ×${n}` : k))
-            .join(" · ")}
+        <span className="text-ink-2">
+          {entries.map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(" · ")}
         </span>
       )}
     </div>

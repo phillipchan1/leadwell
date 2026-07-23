@@ -69,20 +69,20 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
 
   if (!keyed) {
     return (
-      <div className="rounded-xl border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700">
-        <p className="font-medium text-stone-600 dark:text-stone-300">
+      <div className="rounded-xl border border-dashed border-line-strong p-4 text-sm text-ink-2">
+        <p className="font-medium text-ink">
           Add your API key to enable the AI coach
         </p>
         <p className="mt-1 text-xs leading-relaxed">
           Open Settings (⚙) and paste your Anthropic key, or add{" "}
-          <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">
+          <code className="rounded bg-surface-2 px-1">
             VITE_ANTHROPIC_API_KEY
           </code>{" "}
-          to <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">.env.local</code>.
+          to <code className="rounded bg-surface-2 px-1">.env.local</code>.
         </p>
         <button
           type="button"
-          className="mt-3 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700"
+          className="btn-primary mt-3 text-xs"
           onClick={() => setSettingsOpen(true)}
         >
           Open Settings
@@ -101,7 +101,7 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
               key={p.label}
               onClick={() => send(p.prompt)}
               disabled={streaming !== null}
-              className="rounded-full border border-stone-300 px-2.5 py-1 text-xs text-stone-600 hover:border-teal-500 hover:text-teal-600 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300"
+              className="cursor-pointer rounded-full border border-line-strong bg-surface px-2.5 py-1 text-xs text-ink-2 transition-colors hover:border-accent/50 hover:text-accent-ink disabled:opacity-50"
             >
               {p.label}
             </button>
@@ -111,7 +111,7 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
 
       {/* Messages */}
       {(history.length > 0 || streaming !== null) && (
-        <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
+        <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-surface-2/60 p-3 ring-1 ring-line ring-inset">
           {history.map((m, i) => (
             <MessageBubble key={i} role={m.role} content={m.content} />
           ))}
@@ -154,14 +154,14 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
         <button
           type="submit"
           disabled={!input.trim() || streaming !== null}
-          className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+          className="btn-primary"
         >
           {streaming !== null ? "…" : "Send"}
         </button>
       </form>
       {history.length > 0 && (
         <button
-          className="self-start text-[11px] text-stone-400 hover:underline"
+          className="self-start text-[11px] text-ink-3 hover:underline"
           onClick={() => clearChat(chatKey)}
         >
           Clear conversation
@@ -183,8 +183,8 @@ function MessageBubble({
       <div
         className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
           role === "user"
-            ? "bg-teal-600 text-white"
-            : "border border-stone-200 bg-white text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-200"
+            ? "bg-accent text-white"
+            : "border border-line bg-surface text-ink-2 shadow-[0_1px_2px_rgb(35_32_28/0.05)]"
         }`}
       >
         {content}

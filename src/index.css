@@ -2,13 +2,94 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ─────────────────────────────────────────────────────────────
+   LeadWell design tokens — "warm editorial calm"
+   Warm paper neutrals · serif display voice · evergreen accent
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --lw-paper: #f4f2ee; /* app background — warm paper */
+  --lw-surface: #fdfcfb; /* cards */
+  --lw-surface-2: #efece6; /* sunken wells */
+  --lw-overlay: rgb(252 251 250 / 0.85);
+
+  /* Lines */
+  --lw-line: #e5e0d8;
+  --lw-line-strong: #d2ccc2;
+
+  /* Ink */
+  --lw-ink: #23201c;
+  --lw-ink-2: #5d574e;
+  --lw-ink-3: #a49d92;
+
+  /* Accent — grounded evergreen */
+  --lw-accent: #10756a; /* interactive fills (white text) */
+  --lw-accent-strong: #0b5d54;
+  --lw-accent-ink: #0c6559; /* accent-colored text on paper */
+
+  /* Shadows */
+  --lw-shadow-card:
+    0 1px 2px rgb(35 32 28 / 0.04), 0 8px 24px -16px rgb(35 32 28 / 0.16);
+  --lw-shadow-card-hover:
+    0 1px 2px rgb(35 32 28 / 0.05), 0 12px 32px -14px rgb(35 32 28 / 0.22);
+  --lw-shadow-pop:
+    0 2px 6px rgb(35 32 28 / 0.07), 0 24px 64px -24px rgb(35 32 28 / 0.35);
+}
+
+.dark {
+  --lw-paper: #131110;
+  --lw-surface: #1d1a18;
+  --lw-surface-2: #262220;
+  --lw-overlay: rgb(29 26 24 / 0.85);
+
+  --lw-line: #2d2926;
+  --lw-line-strong: #403a35;
+
+  --lw-ink: #f0ede8;
+  --lw-ink-2: #b3aca2;
+  --lw-ink-3: #766f66;
+
+  --lw-accent: #128677;
+  --lw-accent-strong: #17a08e;
+  --lw-accent-ink: #4cc7b4;
+
+  --lw-shadow-card:
+    0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -16px rgb(0 0 0 / 0.5);
+  --lw-shadow-card-hover:
+    0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px -14px rgb(0 0 0 / 0.6);
+  --lw-shadow-pop: 0 2px 6px rgb(0 0 0 / 0.4), 0 24px 64px -24px rgb(0 0 0 / 0.7);
+}
+
+@theme inline {
+  /* Semantic colors → utilities like bg-surface, text-ink-2, border-line */
+  --color-paper: var(--lw-paper);
+  --color-surface: var(--lw-surface);
+  --color-surface-2: var(--lw-surface-2);
+  --color-line: var(--lw-line);
+  --color-line-strong: var(--lw-line-strong);
+  --color-ink: var(--lw-ink);
+  --color-ink-2: var(--lw-ink-2);
+  --color-ink-3: var(--lw-ink-3);
+  --color-accent: var(--lw-accent);
+  --color-accent-strong: var(--lw-accent-strong);
+  --color-accent-ink: var(--lw-accent-ink);
+}
+
 @theme {
+  /* CliftonStrengths domains (data colors — unchanged) */
   --color-exec: #1d9e75;
   --color-infl: #ef9f27;
   --color-rel: #d4537e;
   --color-strat: #7f77dd;
-  --font-journal: "Source Serif 4", "Iowan Old Style", "Palatino Linotype",
-    Palatino, Georgia, serif;
+
+  /* Serif display voice — no webfont download, warm system serifs */
+  --font-display:
+    "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino,
+    Georgia, serif;
+  --font-journal:
+    "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino,
+    Georgia, serif;
 }
 
 html,
@@ -18,7 +99,207 @@ body,
 }
 
 body {
-  @apply bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+  @apply bg-paper text-ink antialiased;
+  font-feature-settings: "ss01", "cv05";
+}
+
+::selection {
+  background: color-mix(in srgb, var(--lw-accent) 22%, transparent);
+}
+
+/* Quiet, thin scrollbars everywhere */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lw-line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--lw-line-strong);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Consistent focus treatment */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--lw-accent) 60%, transparent);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* ── Motion ── */
+
+@keyframes lw-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lw-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lw-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes lw-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.anim-fade-up {
+  animation: lw-fade-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-pop {
+  animation: lw-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-slide-in {
+  animation: lw-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.anim-fade {
+  animation: lw-fade 0.2s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-up,
+  .anim-pop,
+  .anim-slide-in,
+  .anim-fade {
+    animation: none;
+  }
+}
+
+/* ── Shared component classes ── */
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-line bg-surface;
+    box-shadow: var(--lw-shadow-card);
+  }
+  .card-hover {
+    transition:
+      box-shadow 0.18s ease,
+      border-color 0.18s ease,
+      transform 0.18s ease;
+  }
+  .card-hover:hover {
+    box-shadow: var(--lw-shadow-card-hover);
+  }
+
+  .btn,
+  .btn-primary,
+  .btn-ghost,
+  .btn-soft {
+    @apply inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-150 disabled:cursor-default disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply bg-accent text-white;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.16),
+      0 1px 2px rgb(35 32 28 / 0.12);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--lw-accent-strong);
+  }
+  .btn-ghost {
+    @apply border border-line-strong bg-transparent font-normal text-ink-2 hover:bg-surface-2 hover:text-ink;
+  }
+  .btn-soft {
+    @apply border border-line bg-surface font-normal text-ink-2 hover:border-line-strong hover:text-ink;
+    box-shadow: 0 1px 2px rgb(35 32 28 / 0.05);
+  }
+  .btn-icon {
+    @apply inline-flex cursor-pointer items-center justify-center rounded-lg p-1.5 text-ink-3 transition-colors duration-150 hover:bg-surface-2 hover:text-ink;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-line-strong bg-surface px-3 py-1.5 text-sm text-ink transition-[border-color,box-shadow] duration-150 outline-none placeholder:text-ink-3;
+  }
+  .input:focus {
+    border-color: var(--lw-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--lw-accent) 15%, transparent);
+  }
+
+  .label-caps {
+    @apply text-[10px] font-semibold tracking-[0.14em] text-ink-3 uppercase;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .dashed-cta {
+    @apply cursor-pointer rounded-xl border border-dashed border-line-strong text-sm text-ink-3 transition-colors duration-150;
+  }
+  .dashed-cta:hover {
+    border-color: color-mix(in srgb, var(--lw-accent) 55%, transparent);
+    color: var(--lw-accent-ink);
+  }
+}
+
+/* ── React Flow chrome — match the system ── */
+
+.react-flow__controls {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--lw-line);
+  box-shadow: var(--lw-shadow-card);
+}
+.react-flow__controls-button {
+  background: var(--lw-surface);
+  border-bottom: 1px solid var(--lw-line);
+  color: var(--lw-ink-2);
+  width: 28px;
+  height: 28px;
+}
+.react-flow__controls-button:hover {
+  background: var(--lw-surface-2);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+.react-flow__minimap {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--lw-line);
+  box-shadow: var(--lw-shadow-card);
+}
+.react-flow__minimap-mask {
+  fill: color-mix(in srgb, var(--lw-paper) 72%, transparent);
+}
+.react-flow__attribution {
+  background: transparent;
+  color: var(--lw-ink-3);
+  font-size: 9px;
+}
+.react-flow__attribution a {
+  color: inherit;
 }
 
 /* ── Journal writing surface (Day One–inspired) ── */
@@ -84,11 +365,12 @@ body {
   font-style: italic;
   font-size: 1.0625rem;
   line-height: 1.75;
-  @apply text-stone-400 dark:text-stone-600;
+  @apply text-ink-3;
 }
 
 .journal-hint {
-  @apply mt-4 block text-[10px] font-medium tracking-[0.14em] text-stone-400/80 uppercase dark:text-stone-600;
+  @apply mt-4 block text-[10px] font-medium tracking-[0.14em] uppercase;
+  color: var(--lw-ink-3);
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -178,14 +460,14 @@ body {
 }
 
 .journal-prose a {
-  color: rgb(13 148 136);
+  color: var(--lw-accent-ink);
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
 }
 
 .journal-prose a:hover {
-  color: rgb(15 118 110);
+  color: var(--lw-accent-strong);
 }
 
 .journal-prose ul,
@@ -218,13 +500,13 @@ body {
 .journal-prose blockquote {
   margin: 1.1em 0;
   padding: 0.15em 0 0.15em 1em;
-  border-left: 2.5px solid rgb(13 148 136 / 0.55);
+  border-left: 2.5px solid color-mix(in srgb, var(--lw-accent) 55%, transparent);
   color: rgb(87 83 78);
   font-style: italic;
 }
 
 .dark .journal-prose blockquote {
-  border-left-color: rgb(45 212 191 / 0.45);
+  border-left-color: color-mix(in srgb, var(--lw-accent-ink) 45%, transparent);
   color: rgb(214 211 209);
 }
 
@@ -319,7 +601,7 @@ body {
 
 .journal-prose input[type="checkbox"] {
   margin-right: 0.45em;
-  accent-color: rgb(13 148 136);
+  accent-color: var(--lw-accent);
 }
 
 /* Meeting journal shell */
@@ -331,7 +613,7 @@ body {
       rgb(245 242 237 / 0.9),
       transparent 55%
     ),
-    rgb(255 255 255);
+    var(--lw-surface);
 }
 
 .dark .meeting-journal {
@@ -341,7 +623,7 @@ body {
       rgb(41 37 36 / 0.65),
       transparent 55%
     ),
-    rgb(28 25 23);
+    var(--lw-surface);
 }
 
 .meeting-date {

@@ -10,7 +10,16 @@ import {
 } from "../data/frameworks";
 import { derivedRead } from "../lib/derive";
 import { Avatar } from "./Avatar";
-import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
+import {
+  Badge,
+  Chip,
+  IconChevronLeft,
+  IconChevronRight,
+  IconX,
+  ProgressBar,
+  SectionTitle,
+  inputCls,
+} from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
@@ -190,53 +199,55 @@ export function PersonProfile({
 
   return (
     <aside
-      className={`relative flex h-full flex-col overflow-hidden border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900 ${
+      className={`relative flex h-full flex-col overflow-hidden border-l border-line bg-surface ${
         wideTab ? "min-w-0" : ""
       }`}
       data-person-tab={tab}
     >
       {/* Nesting chrome: back to team + teammate pager */}
       {nested && team && (
-        <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-800 dark:bg-stone-950/60">
+        <div className="flex shrink-0 items-center gap-1 border-b border-line bg-surface-2/70 px-3 py-2">
           <button
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-stone-600 hover:bg-white hover:text-teal-700 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-teal-300"
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-ink-2 transition-colors hover:bg-surface hover:text-accent-ink"
             onClick={() => selectPerson(null)}
             title="Back to team"
           >
-            <span aria-hidden>←</span>
+            <IconChevronLeft size={12} />
             <span className="truncate">{team.name}</span>
           </button>
-          <span className="shrink-0 text-[10px] tabular-nums text-stone-400">
+          <span className="shrink-0 text-[10px] tabular-nums text-ink-3">
             {teammateIndex + 1}/{teammates.length}
           </span>
           <button
-            className="rounded-md px-2 py-1 text-sm text-stone-400 enabled:hover:bg-white enabled:hover:text-stone-700 disabled:opacity-30 dark:enabled:hover:bg-stone-800"
+            className="rounded-md px-1.5 py-1 text-ink-3 transition-colors enabled:hover:bg-surface enabled:hover:text-ink disabled:opacity-30"
             disabled={!prevTeammate}
             onClick={() => prevTeammate && selectPerson(prevTeammate.id)}
             aria-label="Previous teammate"
             title={prevTeammate ? prevTeammate.name : undefined}
           >
-            ‹
+            <IconChevronLeft size={14} />
           </button>
           <button
-            className="rounded-md px-2 py-1 text-sm text-stone-400 enabled:hover:bg-white enabled:hover:text-stone-700 disabled:opacity-30 dark:enabled:hover:bg-stone-800"
+            className="rounded-md px-1.5 py-1 text-ink-3 transition-colors enabled:hover:bg-surface enabled:hover:text-ink disabled:opacity-30"
             disabled={!nextTeammate}
             onClick={() => nextTeammate && selectPerson(nextTeammate.id)}
             aria-label="Next teammate"
             title={nextTeammate ? nextTeammate.name : undefined}
           >
-            ›
+            <IconChevronRight size={14} />
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="shrink-0 border-b border-stone-200 bg-white/90 p-4 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90">
+      <div className="shrink-0 border-b border-line p-4">
         <div className="flex items-start gap-3">
           <Avatar name={person.name} photo={person.photo} size={52} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold">{person.name}</h2>
-            <div className="text-xs text-stone-500">
+            <h2 className="font-display truncate text-lg font-semibold tracking-tight">
+              {person.name}
+            </h2>
+            <div className="text-xs text-ink-2">
               {[person.role, !nested ? team?.name : null]
                 .filter(Boolean)
                 .join(" · ")}
@@ -246,18 +257,18 @@ export function PersonProfile({
                 <Badge color={capacity.color}>{capacity.label}</Badge>
               </div>
             )}
-            <div className="mt-1 text-[11px] text-stone-400">
+            <div className="mt-1 text-[11px] text-ink-3">
               {nextOneOnOne && `Next 1:1 ${nextOneOnOne}`}
               {nextOneOnOne && lastOneOnOne && " · "}
               {lastOneOnOne && `Last ${lastOneOnOne.date}`}
             </div>
           </div>
           <button
-            className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
+            className="btn-icon"
             aria-label={nested ? "Back to team" : "Close profile"}
             onClick={() => selectPerson(null)}
           >
-            ✕
+            <IconX size={14} />
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
@@ -285,7 +296,7 @@ export function PersonProfile({
       </div>
 
       {/* Internal tabs */}
-      <nav className="flex shrink-0 gap-0.5 border-b border-stone-200 px-3 dark:border-stone-800">
+      <nav className="flex shrink-0 gap-0.5 border-b border-line px-3">
         {PERSON_TABS.map((t) => (
           <button
             key={t.id}
@@ -293,18 +304,18 @@ export function PersonProfile({
             onClick={() => setTab(t.id)}
             className={`border-b-2 px-2.5 py-2 text-xs transition-colors ${
               tab === t.id
-                ? "border-teal-600 font-medium text-teal-700 dark:text-teal-400"
-                : "border-transparent text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
+                ? "border-accent font-medium text-accent-ink"
+                : "border-transparent text-ink-2 hover:text-ink"
             }`}
           >
             {t.label}
             {t.id === "oneOnOnes" && myOneOnOnes.length > 0 && (
-              <span className="ml-1 text-[10px] text-stone-400">
+              <span className="ml-1 text-[10px] text-ink-3">
                 {myOneOnOnes.length}
               </span>
             )}
             {t.id === "notes" && myNotes.length > 0 && (
-              <span className="ml-1 text-[10px] text-stone-400">
+              <span className="ml-1 text-[10px] text-ink-3">
                 {myNotes.length}
               </span>
             )}
@@ -320,7 +331,7 @@ export function PersonProfile({
               {!hasAssessments ? (
                 <button
                   onClick={() => setEditingAssessments(true)}
-                  className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                  className="dashed-cta w-full py-6"
                 >
                   + Add assessments
                   <div className="mt-1 text-xs">
@@ -348,7 +359,7 @@ export function PersonProfile({
                         {DOMAINS.map((d) => (
                           <span
                             key={d}
-                            className="flex items-center gap-1 text-[10px] text-stone-400"
+                            className="flex items-center gap-1 text-[10px] text-ink-3"
                           >
                             <span
                               className="h-1.5 w-1.5 rounded-full"
@@ -362,23 +373,23 @@ export function PersonProfile({
                   )}
                   <div className="grid grid-cols-2 gap-2">
                     {enn && (
-                      <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                        <div className="text-[10px] tracking-wider text-stone-400 uppercase">
+                      <div className="rounded-xl bg-surface-2/70 p-3 ring-1 ring-line ring-inset">
+                        <div className="label-caps">
                           Enneagram
                         </div>
                         <div className="text-sm font-semibold">
                           {person.assessments.enneagram}
                         </div>
-                        <div className="text-xs text-stone-500">{enn.name}</div>
+                        <div className="text-xs text-ink-2">{enn.name}</div>
                       </div>
                     )}
                     {mbtiKey && MBTI[mbtiKey] && (
-                      <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                        <div className="text-[10px] tracking-wider text-stone-400 uppercase">
+                      <div className="rounded-xl bg-surface-2/70 p-3 ring-1 ring-line ring-inset">
+                        <div className="label-caps">
                           MBTI
                         </div>
                         <div className="text-sm font-semibold">{mbtiKey}</div>
-                        <div className="text-xs text-stone-500">
+                        <div className="text-xs text-ink-2">
                           {MBTI[mbtiKey].split("—")[0].trim()}
                         </div>
                       </div>
@@ -407,8 +418,8 @@ export function PersonProfile({
                     </div>
                   )}
                   {person.howToLead && (
-                    <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-300">
-                      <span className="font-medium text-teal-700 dark:text-teal-400">
+                    <div className="rounded-xl border-l-2 border-accent bg-accent/[0.07] p-3 text-xs leading-relaxed text-ink-2">
+                      <span className="font-medium text-accent-ink">
                         How to lead:{" "}
                       </span>
                       {person.howToLead}
@@ -425,11 +436,11 @@ export function PersonProfile({
                   <div key={g.id} className="group">
                     <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                       <span className="flex-1">{g.title}</span>
-                      <span className="text-xs text-stone-400">
+                      <span className="text-xs tabular-nums text-ink-3">
                         {Math.round(g.progress)}%
                       </span>
                       <button
-                        className="text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+                        className="text-ink-3/70 opacity-0 group-hover:opacity-100 hover:text-red-500"
                         aria-label="Delete goal"
                         onClick={() => deleteGoal(g.id)}
                       >
@@ -444,8 +455,8 @@ export function PersonProfile({
                       onChange={(e) =>
                         updateGoal(g.id, { progress: Number(e.target.value) })
                       }
-                      className="mb-0.5 w-full accent-teal-600"
-                      style={{ height: 4 }}
+                      className="mb-0.5 w-full"
+                      style={{ height: 4, accentColor: "var(--lw-accent)" }}
                     />
                     <ProgressBar value={g.progress} />
                   </div>
@@ -491,7 +502,7 @@ export function PersonProfile({
 
         {tab === "topics" && (
           <div className="space-y-3 p-4">
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-ink-2">
               Park topics to talk about. Drag cards between columns — pull into
               This 1:1 before you meet.
             </p>
@@ -508,7 +519,7 @@ export function PersonProfile({
                   setComposingNote(true);
                   setNewNoteBody("");
                 }}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                className="dashed-cta w-full py-3"
               >
                 + New note
               </button>
@@ -526,14 +537,14 @@ export function PersonProfile({
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    className="text-xs text-stone-400 hover:underline"
+                    className="text-xs text-ink-3 hover:underline"
                     onClick={() => setComposingNote(false)}
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-medium text-white"
+                    className="btn-primary !py-1 text-xs"
                     onClick={() => {
                       if (!newNoteBody.trim()) return;
                       addNote(person.id, newNoteBody.trim());
@@ -547,14 +558,14 @@ export function PersonProfile({
               </div>
             )}
             {myNotes.length === 0 && !composingNote && (
-              <p className="text-center text-xs text-stone-400">
+              <p className="text-center text-xs text-ink-3">
                 No notes yet.
               </p>
             )}
             <ul className="space-y-3">
               {myNotes.map((n) => (
                 <li key={n.id} className="group space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-stone-400">
+                  <div className="flex items-center justify-between text-[11px] text-ink-3">
                     <span>{n.date}</span>
                     <button
                       type="button"
@@ -628,10 +639,10 @@ function QuickAction({
   return (
     <button
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 transition-colors ${
+      className={`cursor-pointer rounded-full border px-2.5 py-1 transition-colors duration-150 ${
         danger
-          ? "border-stone-200 text-stone-400 hover:border-red-300 hover:text-red-500 dark:border-stone-700"
-          : "border-stone-200 text-stone-600 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-300"
+          ? "border-line text-ink-3 hover:border-red-400/60 hover:text-red-500"
+          : "border-line text-ink-2 hover:border-accent/50 hover:text-accent-ink"
       }`}
     >
       {children}

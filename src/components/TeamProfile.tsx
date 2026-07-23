@@ -3,7 +3,14 @@ import { useStore } from "../store/useStore";
 import type { Team } from "../types";
 import { isAssessed } from "../lib/derive";
 import { Avatar } from "./Avatar";
-import { Badge, ProgressBar, SectionTitle, inputCls } from "./ui";
+import {
+  Badge,
+  IconChevronLeft,
+  IconX,
+  ProgressBar,
+  SectionTitle,
+  inputCls,
+} from "./ui";
 import { AICoach } from "./AICoach";
 import { StatsBar } from "./StatsBar";
 
@@ -108,17 +115,17 @@ export function TeamProfile({
   if (nested) {
     return (
       <aside
-        className="flex h-full flex-col border-l border-stone-200 bg-stone-50 dark:border-stone-800 dark:bg-stone-950/80"
+        className="flex h-full flex-col border-l border-line bg-surface-2/60"
         style={{ borderTop: `3px solid ${accent}` }}
       >
         <button
-          className="flex flex-col items-center gap-2 border-b border-stone-200 px-1.5 py-3 text-center hover:bg-white dark:border-stone-800 dark:hover:bg-stone-900"
+          className="flex flex-col items-center gap-2 border-b border-line px-1.5 py-3 text-center transition-colors hover:bg-surface"
           onClick={() => selectPerson(null)}
           title={`Back to ${team.name}`}
         >
-          <span className="text-sm text-stone-400">←</span>
+          <IconChevronLeft size={14} className="text-ink-3" />
           <span
-            className="max-h-28 overflow-hidden text-[11px] font-semibold leading-tight text-stone-700 dark:text-stone-200"
+            className="max-h-28 overflow-hidden text-[11px] leading-tight font-semibold text-ink-2"
             style={{
               writingMode: "vertical-rl",
               transform: "rotate(180deg)",
@@ -136,7 +143,9 @@ export function TeamProfile({
                 onClick={() => selectPerson(p.id)}
                 title={p.name}
                 className={`rounded-full transition-transform ${
-                  active ? "scale-110 ring-2 ring-offset-1 dark:ring-offset-stone-950" : "opacity-70 hover:opacity-100"
+                  active
+                    ? "scale-110 ring-2 ring-offset-1 ring-offset-paper"
+                    : "opacity-70 hover:opacity-100"
                 }`}
                 style={
                   active
@@ -156,40 +165,40 @@ export function TeamProfile({
           })}
         </div>
         <button
-          className="border-t border-stone-200 py-2 text-xs text-stone-400 hover:bg-white hover:text-stone-700 dark:border-stone-800 dark:hover:bg-stone-900"
+          className="flex items-center justify-center border-t border-line py-2.5 text-ink-3 transition-colors hover:bg-surface hover:text-ink"
           onClick={() => selectTeam(null)}
           aria-label="Close"
           title="Close"
         >
-          ✕
+          <IconX size={13} />
         </button>
       </aside>
     );
   }
 
   return (
-    <aside className="flex h-full flex-col border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+    <aside className="flex h-full flex-col border-l border-line bg-surface">
       {/* Header — identity only */}
       <header
-        className="shrink-0 border-b border-stone-200 px-5 py-4 dark:border-stone-800"
+        className="shrink-0 border-b border-line px-5 py-4"
         style={{ borderTop: `3px solid ${accent}` }}
       >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold tracking-tight">
+            <h2 className="font-display truncate text-xl font-semibold tracking-tight">
               {team.name}
             </h2>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {domain && <Badge color={domain.color}>{domain.name}</Badge>}
               {capacity && <Badge color={capacity.color}>{capacity.label}</Badge>}
               {team.direction === "up" && (
-                <span className="text-[11px] text-stone-400">Reports up</span>
+                <span className="text-[11px] text-ink-3">Reports up</span>
               )}
             </div>
             {parent && (
               <button
                 type="button"
-                className="mt-2 text-left text-xs text-stone-400 hover:text-teal-600"
+                className="mt-2 text-left text-xs text-ink-3 hover:text-accent-ink"
                 onClick={() => selectTeam(parent.id)}
               >
                 Under {parent.name}
@@ -197,27 +206,24 @@ export function TeamProfile({
             )}
           </div>
           <button
-            className="rounded-md p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
+            className="btn-icon"
             aria-label="Close team"
             onClick={() => selectTeam(null)}
           >
-            ✕
+            <IconX size={14} />
           </button>
         </div>
 
         {/* Pulse strip */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-2">
           <span>
             {members.length} {members.length === 1 ? "person" : "people"}
           </span>
-          <span className="text-stone-300 dark:text-stone-600">·</span>
+          <span className="text-ink-3/60">·</span>
           <span>
             {team.lastMet ? (
               <>
-                Met{" "}
-                <span className="font-medium text-stone-700 dark:text-stone-300">
-                  {team.lastMet}
-                </span>
+                Met <span className="font-medium text-ink">{team.lastMet}</span>
               </>
             ) : (
               "Not met yet"
@@ -225,21 +231,21 @@ export function TeamProfile({
           </span>
           <button
             type="button"
-            className="font-medium text-teal-600 hover:text-teal-700"
+            className="font-medium text-accent-ink hover:underline"
             onClick={() => updateTeam(team.id, { lastMet: today() })}
           >
             Mark met today
           </button>
           <button
             type="button"
-            className="ml-auto text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+            className="ml-auto text-ink-3 hover:text-ink"
             onClick={() => openModal({ kind: "team", team })}
           >
             Settings
           </button>
           <button
             type="button"
-            className="text-stone-400 hover:text-red-500"
+            className="text-ink-3 hover:text-red-500"
             onClick={() => {
               const extra =
                 subTeams.length > 0
@@ -265,14 +271,14 @@ export function TeamProfile({
           <section>
             <SectionTitle>Mandate</SectionTitle>
             <textarea
-              className={`${inputCls} mt-2 min-h-[88px] resize-y border-stone-200 bg-stone-50/80 leading-relaxed dark:border-stone-800 dark:bg-stone-950/50`}
+              className={`${inputCls} mt-2 min-h-[88px] resize-y leading-relaxed`}
               placeholder="What am I responsible to lead this team toward?"
               value={mandate}
               onChange={(e) => setMandate(e.target.value)}
               onBlur={saveMandate}
             />
             <input
-              className={`${inputCls} mt-2 border-stone-200 bg-transparent text-xs text-stone-500 dark:border-stone-800`}
+              className={`${inputCls} mt-2 bg-transparent text-xs text-ink-2`}
               placeholder="Cadence — e.g. Weekly Tuesdays"
               value={cadence}
               onChange={(e) => setCadence(e.target.value)}
@@ -288,7 +294,7 @@ export function TeamProfile({
                 {team.direction !== "up" && (
                   <button
                     type="button"
-                    className="text-[11px] font-medium text-teal-600 hover:text-teal-700"
+                    className="text-[11px] font-medium text-accent-ink hover:underline"
                     onClick={() =>
                       openModal({ kind: "team", parentId: team.id })
                     }
@@ -298,7 +304,7 @@ export function TeamProfile({
                 )}
               </div>
               {subTeams.length === 0 ? (
-                <p className="text-xs italic text-stone-400">
+                <p className="text-xs text-ink-3 italic">
                   No sub-teams — nest a team you specifically lead under this
                   broader purview.
                 </p>
@@ -312,10 +318,10 @@ export function TeamProfile({
                         <button
                           type="button"
                           onClick={() => selectTeam(st.id)}
-                          className="flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:border-teal-400 dark:border-stone-800"
+                          className="flex w-full items-center justify-between rounded-xl border border-line px-3 py-2 text-left text-sm transition-colors hover:border-accent/50 hover:bg-surface-2/50"
                         >
                           <span className="truncate font-medium">{st.name}</span>
-                          <span className="shrink-0 text-[11px] text-stone-400">
+                          <span className="shrink-0 text-[11px] text-ink-3">
                             {stCap?.label}
                             {stMembers.length
                               ? ` · ${stMembers.length}`
@@ -336,7 +342,7 @@ export function TeamProfile({
               <SectionTitle>Next steps</SectionTitle>
               {doneActions.length > 0 && (
                 <button
-                  className="text-[11px] text-stone-400 hover:text-stone-600"
+                  className="text-[11px] text-ink-3 hover:text-ink"
                   onClick={() => setShowDone((v) => !v)}
                 >
                   {showDone ? "Hide done" : `${doneActions.length} done`}
@@ -397,16 +403,16 @@ export function TeamProfile({
             <div className="mb-2 flex items-baseline justify-between">
               <SectionTitle>People</SectionTitle>
               <button
-                className="text-[11px] font-medium text-teal-600 hover:text-teal-700"
+                className="text-[11px] font-medium text-accent-ink hover:underline"
                 onClick={() => openModal({ kind: "person", teamId: team.id })}
               >
                 + Add
               </button>
             </div>
             {members.length === 0 ? (
-              <p className="text-sm text-stone-400">No one on this team yet.</p>
+              <p className="text-sm text-ink-3">No one on this team yet.</p>
             ) : (
-              <ul className="divide-y divide-stone-100 dark:divide-stone-800">
+              <ul className="divide-y divide-line/60">
                 {members.map((p) => {
                   const active = p.id === selectedPersonId;
                   return (
@@ -414,8 +420,8 @@ export function TeamProfile({
                       <button
                         className={`flex w-full items-center gap-3 py-2.5 text-left transition-colors ${
                           active
-                            ? "bg-teal-50 dark:bg-teal-950/40"
-                            : "hover:bg-stone-50 dark:hover:bg-stone-800/40"
+                            ? "bg-accent/[0.08]"
+                            : "hover:bg-surface-2/60"
                         }`}
                         onClick={() => selectPerson(p.id)}
                         aria-current={active ? "true" : undefined}
@@ -430,13 +436,13 @@ export function TeamProfile({
                         <div className="min-w-0 flex-1">
                           <div
                             className={`truncate text-sm font-medium ${
-                              active ? "text-teal-800 dark:text-teal-200" : ""
+                              active ? "text-accent-ink" : ""
                             }`}
                           >
                             {p.name}
                           </div>
                           {p.role && (
-                            <div className="truncate text-[11px] text-stone-400">
+                            <div className="truncate text-[11px] text-ink-3">
                               {p.role}
                             </div>
                           )}
@@ -444,8 +450,8 @@ export function TeamProfile({
                         <span
                           className={
                             active
-                              ? "text-teal-600 dark:text-teal-400"
-                              : "text-stone-300"
+                              ? "text-accent-ink"
+                              : "text-ink-3/60"
                           }
                         >
                           ›
@@ -482,14 +488,14 @@ export function TeamProfile({
                 {myNotes.map((n) => (
                   <li
                     key={n.id}
-                    className="group flex items-start gap-2 text-sm text-stone-600 dark:text-stone-300"
+                    className="group flex items-start gap-2 text-sm text-ink-2"
                   >
-                    <span className="shrink-0 pt-0.5 text-[11px] text-stone-400">
+                    <span className="shrink-0 pt-0.5 text-[11px] tabular-nums text-ink-3">
                       {n.date}
                     </span>
                     <span className="flex-1 leading-relaxed">{n.body}</span>
                     <button
-                      className="text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+                      className="text-ink-3/70 opacity-0 group-hover:opacity-100 hover:text-red-500"
                       aria-label="Delete note"
                       onClick={() => deleteTeamNote(n.id)}
                     >
@@ -504,13 +510,13 @@ export function TeamProfile({
           {/* Secondary — goals, strengths, AI */}
           <section>
             <button
-              className="flex w-full items-center justify-between rounded-xl border border-stone-200 px-3 py-2.5 text-left text-sm dark:border-stone-800"
+              className="flex w-full items-center justify-between rounded-xl border border-line px-3 py-2.5 text-left text-sm transition-colors hover:bg-surface-2/50"
               onClick={() => setShowMore((v) => !v)}
             >
-              <span className="font-medium text-stone-600 dark:text-stone-300">
+              <span className="font-medium text-ink-2">
                 Goals, strengths & AI
               </span>
-              <span className="text-stone-400">{showMore ? "▴" : "▾"}</span>
+              <span className="text-ink-3">{showMore ? "▴" : "▾"}</span>
             </button>
             {showMore && (
               <div className="mt-4 space-y-6">
@@ -521,11 +527,11 @@ export function TeamProfile({
                       <div key={g.id} className="group">
                         <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                           <span className="flex-1">{g.title}</span>
-                          <span className="text-xs text-stone-400">
+                          <span className="text-xs tabular-nums text-ink-3">
                             {Math.round(g.progress)}%
                           </span>
                           <button
-                            className="text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+                            className="text-ink-3/70 opacity-0 group-hover:opacity-100 hover:text-red-500"
                             aria-label="Delete goal"
                             onClick={() => deleteTeamGoal(g.id)}
                           >
@@ -542,8 +548,8 @@ export function TeamProfile({
                               progress: Number(e.target.value),
                             })
                           }
-                          className="mb-0.5 w-full accent-teal-600"
-                          style={{ height: 4 }}
+                          className="mb-0.5 w-full"
+                          style={{ height: 4, accentColor: "var(--lw-accent)" }}
                         />
                         <ProgressBar value={g.progress} />
                       </div>
@@ -603,18 +609,19 @@ function ActionRow({
   useEffect(() => setValue(text), [text]);
 
   return (
-    <li className="group flex items-start gap-2 rounded-lg px-1 py-1 hover:bg-stone-50 dark:hover:bg-stone-800/40">
+    <li className="group flex items-start gap-2 rounded-lg px-1 py-1 hover:bg-surface-2/60">
       <input
         type="checkbox"
         checked={done}
         onChange={onToggle}
-        className="mt-2 accent-teal-600"
+        className="mt-2"
+        style={{ accentColor: "var(--lw-accent)" }}
       />
       <div className="min-w-0 flex-1">
         <textarea
           rows={1}
           className={`w-full resize-none bg-transparent py-1.5 text-sm outline-none ${
-            done ? "text-stone-400 line-through" : "text-stone-700 dark:text-stone-200"
+            done ? "text-ink-3 line-through" : "text-ink"
           }`}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -627,11 +634,11 @@ function ActionRow({
           }}
         />
         {dueDate && (
-          <div className="pb-1 text-[10px] text-stone-400">due {dueDate}</div>
+          <div className="pb-1 text-[10px] text-ink-3">due {dueDate}</div>
         )}
       </div>
       <button
-        className="mt-1.5 text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+        className="mt-1.5 text-ink-3/70 opacity-0 group-hover:opacity-100 hover:text-red-500"
         aria-label="Delete"
         onClick={onDelete}
       >

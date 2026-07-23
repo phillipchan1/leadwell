@@ -38,10 +38,10 @@ export function OneOnOneTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
+    <div className="overflow-hidden rounded-xl border border-line bg-surface">
       <table className="w-full table-fixed border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-stone-200 bg-stone-50 text-[11px] tracking-wide text-stone-400 uppercase dark:border-stone-800 dark:bg-stone-950/60">
+          <tr className="border-b border-line bg-surface-2/70 text-[11px] tracking-wide text-ink-3 uppercase">
             <th className="w-[22%] px-2.5 py-2 font-medium">Date</th>
             <th className="w-[22%] px-2.5 py-2 font-medium">Next</th>
             <th className="w-[22%] px-2.5 py-2 font-medium">Status</th>
@@ -65,7 +65,7 @@ export function OneOnOneTable({
       <button
         type="button"
         onClick={createNew}
-        className="flex w-full items-center gap-2 border-t border-dashed border-stone-200 px-3 py-2.5 text-left text-sm text-stone-400 transition-colors hover:bg-teal-50/60 hover:text-teal-700 dark:border-stone-800 dark:hover:bg-teal-950/30 dark:hover:text-teal-300"
+        className="flex w-full items-center gap-2 border-t border-dashed border-line px-3 py-2.5 text-left text-sm text-ink-3 transition-colors hover:bg-accent/[0.07] hover:text-accent-ink"
       >
         <span className="text-base leading-none">+</span>
         New
@@ -90,13 +90,13 @@ function OneOnOneRow({
 
   return (
     <tr
-      className="group cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50/80 dark:border-stone-800/80 dark:hover:bg-stone-950/40"
+      className="group cursor-pointer border-b border-line/60 transition-colors last:border-0 hover:bg-surface-2/60"
       onClick={onOpen}
     >
       <td className="px-1.5 py-1" onClick={(e) => e.stopPropagation()}>
         <input
           type="date"
-          className="w-full rounded-md border-0 bg-transparent px-1 py-1.5 text-sm tabular-nums outline-none focus:ring-1 focus:ring-teal-500"
+          className="w-full rounded-md border-0 bg-transparent px-1 py-1.5 text-sm tabular-nums outline-none focus:ring-1 focus:ring-accent"
           value={row.date}
           onChange={(e) => onPatch({ date: e.target.value })}
         />
@@ -104,7 +104,7 @@ function OneOnOneRow({
       <td className="px-1.5 py-1" onClick={(e) => e.stopPropagation()}>
         <input
           type="date"
-          className="w-full rounded-md border-0 bg-transparent px-1 py-1.5 text-sm tabular-nums text-stone-500 outline-none focus:ring-1 focus:ring-teal-500"
+          className="w-full rounded-md border-0 bg-transparent px-1 py-1.5 text-sm tabular-nums text-ink-2 outline-none focus:ring-1 focus:ring-accent"
           value={row.nextDate ?? ""}
           onChange={(e) =>
             onPatch({ nextDate: e.target.value || undefined })
@@ -122,15 +122,15 @@ function OneOnOneRow({
         <span
           className={`block truncate ${
             summary
-              ? "text-stone-600 dark:text-stone-300"
-              : "italic text-stone-400"
+              ? "text-ink-2"
+              : "text-ink-3 italic"
           }`}
         >
           {summary || "Empty — click to write"}
         </span>
         <button
           type="button"
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-stone-300 opacity-0 hover:text-red-500 group-hover:opacity-100"
+          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-ink-3/70 opacity-0 hover:text-red-500 group-hover:opacity-100"
           aria-label="Delete 1:1"
           onClick={(e) => {
             e.stopPropagation();

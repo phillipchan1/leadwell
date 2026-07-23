@@ -20,7 +20,14 @@ import type { Manager, Person, Team } from "../types";
 import { isAssessed } from "../lib/derive";
 import { effectiveParentId } from "../lib/teams";
 import { Avatar } from "./Avatar";
-import { Badge, Card, IconButton } from "./ui";
+import {
+  Badge,
+  Card,
+  IconBranch,
+  IconButton,
+  IconPencil,
+  IconPlus,
+} from "./ui";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
 
 const NODE_W = 320; // matches w-80 on team cards
@@ -293,14 +300,17 @@ export function OrgTree() {
         <button
           type="button"
           onClick={() => openModal({ kind: "domains" })}
-          className="rounded-lg border border-dashed border-stone-300 px-2.5 py-1.5 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:hover:border-teal-600"
+          className="dashed-cta px-2.5 py-1.5"
           title="Add or edit domains"
         >
           Manage domains
         </button>
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <div
+        className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-surface"
+        style={{ boxShadow: "var(--lw-shadow-card)" }}
+      >
         <ReactFlow
           key={treeDomainId ?? "all"}
           nodes={nodes}
@@ -340,20 +350,22 @@ export function OrgTree() {
           <Panel position="top-left" className="flex flex-wrap gap-2">
             <button
               onClick={() => openModal({ kind: "team" })}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-600 shadow-sm hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+              className="btn-soft"
             >
-              + Add team
+              <IconPlus size={13} />
+              Add team
             </button>
             <button
               onClick={() => openModal({ kind: "manager" })}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-600 shadow-sm hover:border-blue-500 hover:text-blue-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+              className="btn-soft"
             >
-              + Manager
+              <IconPlus size={13} />
+              Manager
             </button>
             <ShowPeopleToggle />
             <button
               onClick={resetLayout}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-500 shadow-sm hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 dark:hover:bg-stone-800"
+              className="btn-soft"
               title="Snap all nodes back to the automatic layout"
             >
               Reset layout
@@ -362,15 +374,16 @@ export function OrgTree() {
           {/* Legend: domains (in All) + capacities */}
           <Panel
             position="bottom-left"
-            className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white/90 px-2.5 py-1.5 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90"
+            className="flex flex-col gap-1 rounded-xl border border-line px-2.5 py-1.5 backdrop-blur"
+            style={{ background: "var(--lw-overlay)" }}
           >
             {!treeDomainId && domains.length > 0 && (
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                <span className="text-[10px] font-medium text-stone-400">Domains</span>
+                <span className="text-[10px] font-medium text-ink-3">Domains</span>
                 {domains.map((d) => (
                   <span
                     key={d.id}
-                    className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                    className="flex items-center gap-1 text-[10px] text-ink-2"
                   >
                     <span
                       className="h-1.5 w-1.5 rounded-full"
@@ -382,11 +395,11 @@ export function OrgTree() {
               </div>
             )}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
-              <span className="text-[10px] font-medium text-stone-400">Capacity</span>
+              <span className="text-[10px] font-medium text-ink-3">Capacity</span>
               {capacities.map((c) => (
                 <span
                   key={c.id}
-                  className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                  className="flex items-center gap-1 text-[10px] text-ink-2"
                 >
                   <span
                     className="h-1.5 w-1.5 rounded-full"
@@ -442,14 +455,14 @@ function DomainTab({
       aria-selected={active}
       onClick={onClick}
       title={shortcut ? `Filter (${shortcut})` : undefined}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-all duration-150 ${
         active
-          ? "border-transparent font-medium text-white"
-          : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-500"
+          ? "border-transparent font-medium text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.15),0_1px_2px_rgb(35_32_28/0.15)]"
+          : "border-line-strong bg-surface text-ink-2 hover:border-ink-3 hover:text-ink"
       }`}
       style={
         active
-          ? { backgroundColor: color ?? "#0D9488" }
+          ? { backgroundColor: color ?? "var(--lw-accent)" }
           : undefined
       }
     >
@@ -463,7 +476,7 @@ function DomainTab({
       {shortcut && (
         <kbd
           className={`ml-0.5 hidden rounded px-1 font-mono text-[10px] sm:inline ${
-            active ? "bg-white/20 text-white/90" : "bg-stone-100 text-stone-400 dark:bg-stone-800"
+            active ? "bg-white/20 text-white/90" : "bg-surface-2 text-ink-3"
           }`}
         >
           {shortcut}
@@ -479,11 +492,11 @@ function ShowPeopleToggle() {
   return (
     <button
       onClick={() => setShowPeopleOnTree(!showPeopleOnTree)}
-      className={`rounded-lg border px-3 py-1.5 text-sm shadow-sm ${
+      className={
         showPeopleOnTree
-          ? "border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-          : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
-      }`}
+          ? "btn border border-accent/40 bg-accent/10 font-normal text-accent-ink"
+          : "btn-soft"
+      }
       title={
         showPeopleOnTree
           ? "Hide people — focus on team mandate & next steps"
@@ -501,11 +514,13 @@ function MeNode() {
   return (
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <Card className="flex w-64 items-center gap-3 px-5 py-3 shadow-sm">
+      <Card className="flex w-64 items-center gap-3 px-5 py-3.5 ring-1 ring-accent/25">
         <Avatar name={me.name} photo={me.photo} size={44} />
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{me.name}</div>
-          <div className="text-xs text-stone-500">
+          <div className="font-display truncate text-[15px] font-semibold tracking-tight">
+            {me.name}
+          </div>
+          <div className="text-xs text-ink-2">
             {me.title ?? "Leader"} · {teams.length} teams · {assessed}/
             {people.length} assessed
           </div>
@@ -526,13 +541,13 @@ function ManagerNode({ data }: NodeProps) {
   return (
     <>
       <Card
-        className="group flex w-52 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-blue-400"
+        className="group card-hover flex w-52 cursor-pointer items-center gap-2.5 px-3 py-2"
         onClick={() => openModal({ kind: "manager", manager })}
       >
         <Avatar name={manager.name} photo={manager.photo} size={34} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold">{manager.name}</div>
-          <div className="truncate text-[10px] text-stone-400">
+          <div className="truncate text-[10px] text-ink-3">
             {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
               "I report to"}
           </div>
@@ -585,8 +600,8 @@ function TeamNode({ data }: NodeProps) {
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
       <Card
-        className={`group w-80 overflow-hidden p-0 shadow-sm transition-shadow hover:shadow-md ${
-          selected ? "ring-2 ring-offset-1 dark:ring-offset-stone-900" : ""
+        className={`group card-hover w-80 overflow-hidden p-0 ${
+          selected ? "ring-2 ring-offset-2 ring-offset-paper" : ""
         }`}
         style={
           selected
@@ -595,17 +610,24 @@ function TeamNode({ data }: NodeProps) {
         }
       >
         {/* Domain accent stripe */}
-        <div className="h-1 w-full" style={{ backgroundColor: accent }} />
+        <div
+          className="h-1 w-full"
+          style={{
+            background: `linear-gradient(90deg, ${accent}, ${accent}99)`,
+          }}
+        />
         <div
           className="cursor-pointer p-4 pb-2"
           onClick={() => selectTeam(team.id)}
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{team.name}</div>
+              <div className="font-display truncate text-[15px] font-semibold tracking-tight">
+                {team.name}
+              </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {parent && (
-                  <span className="text-[10px] text-stone-400">
+                  <span className="text-[10px] text-ink-3">
                     under {parent.name}
                   </span>
                 )}
@@ -626,20 +648,20 @@ function TeamNode({ data }: NodeProps) {
                     openModal({ kind: "team", parentId: team.id })
                   }
                 >
-                  ↳
+                  <IconBranch size={13} />
                 </IconButton>
               )}
               <IconButton
                 label="Add person"
                 onClick={() => openModal({ kind: "person", teamId: team.id })}
               >
-                +
+                <IconPlus size={13} />
               </IconButton>
               <IconButton
                 label="Edit team"
                 onClick={() => openModal({ kind: "team", team })}
               >
-                ✎
+                <IconPencil size={12} />
               </IconButton>
             </div>
           </div>
@@ -647,9 +669,7 @@ function TeamNode({ data }: NodeProps) {
           {/* Mandate */}
           <p
             className={`mt-3 line-clamp-2 text-xs leading-relaxed ${
-              team.purpose
-                ? "text-stone-600 dark:text-stone-300"
-                : "italic text-stone-400"
+              team.purpose ? "text-ink-2" : "text-ink-3 italic"
             }`}
           >
             {team.purpose ?? "No mandate set — click to add"}
@@ -675,10 +695,10 @@ function TeamNode({ data }: NodeProps) {
 
         {/* People footer */}
         <div
-          className="cursor-pointer border-t border-stone-100 px-4 py-2.5 dark:border-stone-800"
+          className="cursor-pointer border-t border-line/70 px-4 py-2.5"
           onClick={() => selectTeam(team.id)}
         >
-          <div className="flex items-center justify-between text-[11px] text-stone-400">
+          <div className="flex items-center justify-between text-[11px] text-ink-3">
             <span>
               {members.length} {members.length === 1 ? "person" : "people"}
               {subTeams.length > 0
@@ -698,7 +718,7 @@ function TeamNode({ data }: NodeProps) {
                   />
                 ))}
                 {members.length > 4 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-[9px] dark:bg-stone-700">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[9px] ring-1 ring-line">
                     +{members.length - 4}
                   </span>
                 )}
@@ -723,7 +743,7 @@ function TeamNode({ data }: NodeProps) {
               ))}
               {members.length === 0 && (
                 <button
-                  className="rounded-lg border border-dashed border-stone-300 py-2 text-xs text-stone-400 hover:border-stone-400 hover:text-stone-500 dark:border-stone-700"
+                  className="dashed-cta py-2 text-xs"
                   onClick={() => openModal({ kind: "person", teamId: team.id })}
                 >
                   + Add first person
@@ -769,15 +789,15 @@ function CardNextStep({
 
   return (
     <div
-      className={`rounded-lg px-2 py-1.5 transition-colors ${
+      className={`rounded-xl px-2.5 py-2 transition-colors ${
         focused
-          ? "bg-teal-50 ring-1 ring-teal-400 dark:bg-teal-950/50 dark:ring-teal-600"
+          ? "bg-accent/10 ring-1 ring-accent/50"
           : action
-            ? "bg-teal-50/80 dark:bg-teal-950/30"
-            : "bg-stone-50 dark:bg-stone-950/60"
+            ? "bg-accent/[0.07]"
+            : "bg-surface-2/70"
       }`}
     >
-      <div className="text-[10px] font-medium tracking-wide text-teal-700/70 uppercase dark:text-teal-300/70">
+      <div className="text-[10px] font-semibold tracking-[0.12em] text-accent-ink/75 uppercase">
         Next step
       </div>
       <div className="mt-0.5 flex items-start gap-1.5">
@@ -786,14 +806,15 @@ function CardNextStep({
             type="checkbox"
             checked={false}
             onChange={() => onToggle(action.id)}
-            className="mt-1.5 shrink-0 accent-teal-600"
+            className="mt-1.5 shrink-0"
+            style={{ accentColor: "var(--lw-accent)" }}
             title="Mark done"
             aria-label="Mark next step done"
           />
         )}
         <textarea
           rows={2}
-          className="w-full resize-none bg-transparent text-xs font-medium leading-relaxed text-teal-900 outline-none placeholder:font-normal placeholder:text-stone-400 dark:text-teal-100"
+          className="w-full resize-none bg-transparent text-xs leading-relaxed font-medium text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
           placeholder="What's the next move for this team?"
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -813,7 +834,7 @@ function CardNextStep({
         />
       </div>
       {action?.dueDate && !focused && (
-        <div className="mt-0.5 pl-5 text-[10px] text-teal-700/60 dark:text-teal-300/60">
+        <div className="mt-0.5 pl-5 text-[10px] text-accent-ink/60">
           due {action.dueDate}
         </div>
       )}
@@ -838,9 +859,7 @@ function PersonRow({
   return (
     <div
       className={`group/person flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors ${
-        selected
-          ? "bg-stone-100 dark:bg-stone-800"
-          : "hover:bg-stone-50 dark:hover:bg-stone-800/50"
+        selected ? "bg-surface-2" : "hover:bg-surface-2/60"
       }`}
       onClick={onSelect}
     >
@@ -853,32 +872,28 @@ function PersonRow({
       />
       <div className="min-w-0 flex-1">
         <div
-          className={`truncate text-sm ${
-            assessed ? "" : "text-stone-400 dark:text-stone-500"
-          }`}
+          className={`truncate text-sm ${assessed ? "" : "text-ink-3"}`}
         >
           {person.name}
         </div>
         {person.role && (
-          <div className="truncate text-[11px] text-stone-400">
+          <div className="truncate text-[11px] text-ink-3">
             {person.role}
           </div>
         )}
       </div>
       {!assessed && (
-        <span className="text-[10px] text-stone-300 dark:text-stone-600">
-          unassessed
-        </span>
+        <span className="text-[10px] text-ink-3/70">unassessed</span>
       )}
       <button
-        className="rounded-md p-1 text-stone-300 opacity-0 transition-opacity group-hover/person:opacity-100 hover:text-stone-600"
+        className="rounded-md p-1 text-ink-3 opacity-0 transition-opacity group-hover/person:opacity-100 hover:text-ink"
         aria-label={`Edit ${person.name}`}
         onClick={(e) => {
           e.stopPropagation();
           onEdit();
         }}
       >
-        ✎
+        <IconPencil size={12} />
       </button>
     </div>
   );

@@ -27,6 +27,8 @@ Restart the dev server. This enables the per-person AI coach, the header **Ask A
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Flow (`@xyflow/react`) · `@anthropic-ai/sdk`.
 
+**Design language** — "warm editorial calm": warm paper neutrals, a serif display voice (system serif stack, no webfont download), an evergreen accent, hairline borders with soft layered shadows, and inline SVG icons. All colors flow from semantic tokens in [src/index.css](src/index.css) (`--lw-paper`, `--lw-surface`, `--lw-ink`, `--lw-accent`, …) exposed as Tailwind utilities (`bg-surface`, `text-ink-2`, `border-line`, `text-accent-ink`) via `@theme inline` — dark mode is a token flip, not per-class overrides. Shared component classes (`.card`, `.btn-primary`, `.btn-soft`, `.input`, `.label-caps`, `.dashed-cta`) live there too.
+
 The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 
 ```

@@ -233,7 +233,7 @@ export function MeetingEditor({
       <div className="flex shrink-0 items-center gap-2 px-4 pt-3 pb-1">
         <button
           type="button"
-          className="rounded-md px-2 py-1 text-sm text-stone-400 transition-colors hover:bg-stone-100/80 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+          className="rounded-md px-2 py-1 text-sm text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
           onClick={onClose}
         >
           ← Back
@@ -241,7 +241,7 @@ export function MeetingEditor({
         <div className="flex-1" />
         <button
           type="button"
-          className="rounded-md p-1.5 text-stone-300 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-stone-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+          className="rounded-md p-1.5 text-ink-3/70 transition-colors hover:bg-red-500/10 hover:text-red-500"
           aria-label="Delete 1:1"
           onClick={() => {
             if (confirm("Delete this 1:1?")) {
@@ -261,7 +261,7 @@ export function MeetingEditor({
             {editingMeta ? (
               <div className="mx-auto grid max-w-sm grid-cols-2 gap-3 text-left">
                 <label className="block text-xs">
-                  <span className="mb-1 block text-stone-400">Date</span>
+                  <span className="mb-1 block text-ink-3">Date</span>
                   <input
                     type="date"
                     className={inputCls}
@@ -275,7 +275,7 @@ export function MeetingEditor({
                   />
                 </label>
                 <label className="block text-xs">
-                  <span className="mb-1 block text-stone-400">Next 1:1</span>
+                  <span className="mb-1 block text-ink-3">Next 1:1</span>
                   <input
                     type="date"
                     className={inputCls}
@@ -297,13 +297,13 @@ export function MeetingEditor({
                 onClick={() => setEditingMeta(true)}
                 title="Edit dates"
               >
-                <h1 className="meeting-date text-[1.65rem] text-stone-800 transition-colors group-hover:text-teal-800 sm:text-[1.85rem] dark:text-stone-100 dark:group-hover:text-teal-300">
+                <h1 className="meeting-date text-[1.65rem] text-ink transition-colors group-hover:text-accent-ink sm:text-[1.85rem]">
                   {formatEntryDate(date)}
                 </h1>
-                <p className="mt-2 text-[13px] tracking-wide text-stone-400 dark:text-stone-500">
+                <p className="mt-2 text-[13px] tracking-wide text-ink-3">
                   1:1 with {person.name}
                   {nextDate ? (
-                    <span className="text-stone-300 dark:text-stone-600">
+                    <span className="text-ink-3/60">
                       {" "}
                       · Next {formatEntryDate(nextDate).replace(/^[^,]+, /, "")}
                     </span>
@@ -320,7 +320,7 @@ export function MeetingEditor({
               className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
                 listening
                   ? "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400"
-                  : "text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                  : "text-ink-3 hover:bg-surface-2 hover:text-ink"
               }`}
               onClick={toggleListen}
             >
@@ -330,8 +330,8 @@ export function MeetingEditor({
               type="button"
               className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
                 showCapture
-                  ? "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200"
-                  : "text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                  ? "bg-surface-2 text-ink"
+                  : "text-ink-3 hover:bg-surface-2 hover:text-ink"
               }`}
               onClick={() => setShowCapture((v) => !v)}
             >
@@ -339,7 +339,7 @@ export function MeetingEditor({
             </button>
             <button
               type="button"
-              className="rounded-full bg-teal-600/90 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-60"
+              className="btn-primary rounded-full !px-3 !py-1.5 text-xs disabled:opacity-60"
               disabled={structuring}
               onClick={runStructure}
             >
@@ -355,7 +355,7 @@ export function MeetingEditor({
 
           {showCapture && (
             <div className="mb-6 space-y-2">
-              <div className="text-center text-[10px] font-medium tracking-[0.16em] text-stone-400 uppercase">
+              <div className="text-center text-[10px] font-medium tracking-[0.16em] text-ink-3 uppercase">
                 Capture
               </div>
               <textarea
@@ -369,7 +369,7 @@ export function MeetingEditor({
 
           {preview !== null ? (
             <div className="space-y-4">
-              <div className="text-center text-[10px] font-medium tracking-[0.16em] text-teal-600 uppercase dark:text-teal-400">
+              <div className="text-center text-[10px] font-medium tracking-[0.16em] text-accent-ink uppercase">
                 {structuring ? "Writing draft…" : "AI draft — review"}
               </div>
               <WritingPad
@@ -388,10 +388,10 @@ export function MeetingEditor({
               {parsed && !structuring && (
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
                   {parsed.commitments.length > 0 && (
-                    <label className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                    <label className="flex items-center gap-2 text-xs text-ink-2">
                       <input
                         type="checkbox"
-                        className="accent-teal-600"
+                        style={{ accentColor: "var(--lw-accent)" }}
                         checked={createTopics}
                         onChange={(e) => setCreateTopics(e.target.checked)}
                       />

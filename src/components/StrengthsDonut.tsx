@@ -37,7 +37,7 @@ export function StrengthsDonut({
           r={r}
           fill="none"
           strokeWidth={stroke}
-          className="stroke-stone-200 dark:stroke-stone-800"
+          style={{ stroke: "var(--lw-surface-2)" }}
         />
         {segments.map(
           (s) =>
@@ -62,7 +62,8 @@ export function StrengthsDonut({
         y="50%"
         dominantBaseline="central"
         textAnchor="middle"
-        className="fill-stone-700 text-lg font-semibold dark:fill-stone-200"
+        className="text-lg font-semibold"
+        style={{ fill: "var(--lw-ink)" }}
       >
         {total}
       </text>
@@ -70,7 +71,8 @@ export function StrengthsDonut({
         x="50%"
         y="66%"
         textAnchor="middle"
-        className="fill-stone-400 text-[9px]"
+        className="text-[9px]"
+        style={{ fill: "var(--lw-ink-3)" }}
       >
         themes
       </text>

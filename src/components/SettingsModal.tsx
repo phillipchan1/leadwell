@@ -24,10 +24,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     <Modal title="Settings" onClose={onClose}>
       <div className="space-y-4">
         <section className="space-y-2">
-          <h3 className="text-sm font-medium text-stone-800 dark:text-stone-100">
+          <h3 className="text-sm font-medium text-ink">
             Anthropic API key
           </h3>
-          <p className="text-xs leading-relaxed text-stone-500">
+          <p className="text-xs leading-relaxed text-ink-2">
             Used for AI coach and structuring 1:1 notes from transcripts. Stored
             only in this browser. Your key never leaves this machine except to
             call Anthropic.
@@ -48,7 +48,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <button type="button" className={buttonGhostCls} onClick={clear}>
               Clear
             </button>
-            <span className="text-[11px] text-stone-400">
+            <span className="text-[11px] text-ink-3">
               {hasApiKey()
                 ? anthropicApiKey
                   ? "Using saved key"
@@ -59,8 +59,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           {envFallback && !anthropicApiKey && (
-            <p className="text-[11px] text-stone-400">
-              Fallback: <code className="text-stone-500">VITE_ANTHROPIC_API_KEY</code>{" "}
+            <p className="text-[11px] text-ink-3">
+              Fallback: <code className="text-ink-2">VITE_ANTHROPIC_API_KEY</code>{" "}
               from .env.local is available.
             </p>
           )}

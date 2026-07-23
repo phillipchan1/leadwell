@@ -37,7 +37,7 @@ export function TopicKanban({ personId }: { personId: string }) {
         return (
           <div
             key={col.id}
-            className="flex w-[11.5rem] shrink-0 flex-col rounded-xl border border-stone-200 bg-stone-50/60 dark:border-stone-800 dark:bg-stone-950/40"
+            className="flex w-[11.5rem] shrink-0 flex-col rounded-xl border border-line bg-surface-2/50"
             onDragOver={(e) => {
               e.preventDefault();
               e.dataTransfer.dropEffect = "move";
@@ -50,10 +50,10 @@ export function TopicKanban({ personId }: { personId: string }) {
             }}
           >
             <div className="flex items-baseline justify-between px-2.5 pt-2 pb-1">
-              <span className="text-[11px] font-semibold tracking-wide text-stone-500 uppercase">
+              <span className="label-caps">
                 {col.label}
               </span>
-              <span className="text-[10px] tabular-nums text-stone-400">
+              <span className="text-[10px] tabular-nums text-ink-3">
                 {items.length}
               </span>
             </div>
@@ -71,7 +71,7 @@ export function TopicKanban({ personId }: { personId: string }) {
             </ul>
             {canQuickAdd && (
               <form
-                className="border-t border-stone-200 p-2 dark:border-stone-800"
+                className="border-t border-line p-2"
                 onSubmit={(e) => {
                   e.preventDefault();
                   submit(col.id);
@@ -116,11 +116,11 @@ function TopicCard({
         onDragStart();
       }}
       onDragEnd={onDragEnd}
-      className="group relative cursor-grab rounded-lg border border-stone-200 bg-white px-2 py-1.5 active:cursor-grabbing dark:border-stone-700 dark:bg-stone-900"
+      className="group relative cursor-grab rounded-lg border border-line bg-surface px-2 py-1.5 shadow-[0_1px_2px_rgb(35_32_28/0.06)] active:cursor-grabbing"
     >
       <textarea
         className={`w-full resize-none border-0 bg-transparent p-0 text-xs leading-snug outline-none ${
-          action.done ? "text-stone-400 line-through" : "text-stone-700 dark:text-stone-200"
+          action.done ? "text-ink-3 line-through" : "text-ink"
         }`}
         rows={2}
         value={action.text}
@@ -128,7 +128,7 @@ function TopicCard({
       />
       <button
         type="button"
-        className="absolute top-1 right-1 rounded p-0.5 text-[10px] text-stone-300 opacity-0 hover:text-red-500 group-hover:opacity-100"
+        className="absolute top-1 right-1 rounded p-0.5 text-[10px] text-ink-3/70 opacity-0 hover:text-red-500 group-hover:opacity-100"
         aria-label="Delete topic"
         onClick={onDelete}
       >
