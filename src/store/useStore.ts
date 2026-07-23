@@ -15,6 +15,8 @@ import type {
   TeamAction,
   TeamGoal,
   TeamNote,
+  LeadUpProfile,
+  Win,
 } from "../types";
 import { storage } from "../lib/storage";
 import { isDescendant } from "../lib/teams";
@@ -33,6 +35,7 @@ import {
   seedTeamGoals,
   seedTeamNotes,
   seedTeams,
+  seedWins,
 } from "../data/seed";
 
 export type Tab = "overview" | "tree" | "people";
@@ -57,6 +60,7 @@ type PersistedData = {
   oneOnOnes: OneOnOne[];
   goals: Goal[];
   notes: Note[];
+  wins: Win[];
   teamActions: TeamAction[];
   teamGoals: TeamGoal[];
   teamNotes: TeamNote[];
@@ -121,6 +125,8 @@ type Store = PersistedData &
     // people
     addPerson: (person: Omit<Person, "id" | "assessments" | "strengths" | "watchOuts"> & Partial<Person>) => string;
     updatePerson: (id: string, patch: Partial<Person>) => void;
+    /** Merge a patch into a person's leading-up operating manual. */
+    updateLeadUp: (personId: string, patch: Partial<LeadUpProfile>) => void;
     deletePerson: (id: string) => void;
     /** Reorg seam: move a person to another team (future drag-and-drop calls this). */
     movePerson: (personId: string, teamId: string) => void;
@@ -147,6 +153,10 @@ type Store = PersistedData &
     addNote: (personId: string, body: string) => string;
     updateNote: (id: string, patch: Partial<Pick<Note, "body" | "date">>) => void;
     deleteNote: (id: string) => void;
+    // wins (leading up: value banked with a person I report to)
+    addWin: (win: Omit<Win, "id" | "date"> & Partial<Pick<Win, "date">>) => void;
+    updateWin: (id: string, patch: Partial<Pick<Win, "text" | "impact" | "date">>) => void;
+    deleteWin: (id: string) => void;
     // settings (persisted separately from org data)
     anthropicApiKey: string | null;
     setAnthropicApiKey: (key: string | null) => void;
@@ -188,6 +198,7 @@ function loadInitialData(): PersistedData {
       // Migrations: fields added after earlier saves default in gracefully.
       domains: saved.domains ?? seedDomains,
       managers: saved.managers ?? [],
+      wins: saved.wins ?? [],
       teamActions: saved.teamActions ?? [],
       teamGoals: saved.teamGoals ?? [],
       teamNotes: saved.teamNotes ?? [],
@@ -210,6 +221,7 @@ function loadInitialData(): PersistedData {
     oneOnOnes: seedOneOnOnes,
     goals: seedGoals,
     notes: seedNotes,
+    wins: seedWins,
     teamActions: seedTeamActions,
     teamGoals: seedTeamGoals,
     teamNotes: seedTeamNotes,
@@ -381,6 +393,7 @@ export const useStore = create<Store>((set, get) => ({
         oneOnOnes: s.oneOnOnes.filter((o) => !peopleIds.has(o.personId)),
         goals: s.goals.filter((g) => !peopleIds.has(g.personId)),
         notes: s.notes.filter((n) => !peopleIds.has(n.personId)),
+        wins: s.wins.filter((w) => !peopleIds.has(w.personId)),
         teamActions: s.teamActions.filter((a) => a.teamId !== id),
         teamGoals: s.teamGoals.filter((g) => g.teamId !== id),
         teamNotes: s.teamNotes.filter((n) => n.teamId !== id),
@@ -457,6 +470,12 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({
       people: s.people.map((p) => (p.id === id ? { ...p, ...patch } : p)),
     })),
+  updateLeadUp: (personId, patch) =>
+    set((s) => ({
+      people: s.people.map((p) =>
+        p.id === personId ? { ...p, leadUp: { ...p.leadUp, ...patch } } : p
+      ),
+    })),
   deletePerson: (id) =>
     set((s) => ({
       people: s.people.filter((p) => p.id !== id),
@@ -464,6 +483,7 @@ export const useStore = create<Store>((set, get) => ({
       oneOnOnes: s.oneOnOnes.filter((o) => o.personId !== id),
       goals: s.goals.filter((g) => g.personId !== id),
       notes: s.notes.filter((n) => n.personId !== id),
+      wins: s.wins.filter((w) => w.personId !== id),
       selectedPersonId: s.selectedPersonId === id ? null : s.selectedPersonId,
     })),
   movePerson: (personId, teamId) =>
@@ -561,6 +581,24 @@ export const useStore = create<Store>((set, get) => ({
   deleteNote: (id) =>
     set((s) => ({ notes: s.notes.filter((n) => n.id !== id) })),
 
+  addWin: (win) =>
+    set((s) => ({
+      wins: [
+        ...s.wins,
+        {
+          ...win,
+          id: uid(),
+          date: win.date ?? new Date().toISOString().slice(0, 10),
+        },
+      ],
+    })),
+  updateWin: (id, patch) =>
+    set((s) => ({
+      wins: s.wins.map((w) => (w.id === id ? { ...w, ...patch } : w)),
+    })),
+  deleteWin: (id) =>
+    set((s) => ({ wins: s.wins.filter((w) => w.id !== id) })),
+
   appendChat: (key, msg) =>
     set((s) => ({
       chats: { ...s.chats, [key]: [...(s.chats[key] ?? []), msg] },
@@ -581,6 +619,7 @@ export const useStore = create<Store>((set, get) => ({
       oneOnOnes: seedOneOnOnes,
       goals: seedGoals,
       notes: seedNotes,
+      wins: seedWins,
       teamActions: seedTeamActions,
       teamGoals: seedTeamGoals,
       teamNotes: seedTeamNotes,
@@ -604,6 +643,7 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "oneOnOnes",
   "goals",
   "notes",
+  "wins",
   "teamActions",
   "teamGoals",
   "teamNotes",

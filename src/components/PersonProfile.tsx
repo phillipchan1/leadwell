@@ -19,6 +19,8 @@ import { MeetingEditor } from "./MeetingEditor";
 import { TopicKanban } from "./TopicKanban";
 import { WritingPad } from "./WritingPad";
 import { MarkdownBody } from "./MarkdownBody";
+import { LeadUpManual } from "./LeadUpManual";
+import { WinsLedger } from "./WinsLedger";
 
 type PersonTab = "profile" | "oneOnOnes" | "topics" | "notes";
 
@@ -60,6 +62,8 @@ export function PersonProfile({
 
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);
+  // People on an "up" team are those I report to — leading up, not down.
+  const isLeadUp = team?.direction === "up";
   const read = derivedRead(person);
   const enn = parseEnneagram(person.assessments.enneagram);
   const top5 = person.assessments.cliftonTop5 ?? [];
@@ -313,7 +317,18 @@ export function PersonProfile({
       </nav>
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
-        {tab === "profile" && (
+        {tab === "profile" && isLeadUp && (
+          <div className="flex flex-col gap-6 p-4">
+            <LeadUpManual key={person.id} person={person} />
+            <WinsLedger person={person} />
+            <section className="space-y-2">
+              <SectionTitle>AI coach</SectionTitle>
+              <AICoach person={person} />
+            </section>
+          </div>
+        )}
+
+        {tab === "profile" && !isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
             <section className="space-y-3">
               <SectionTitle>Assessment profile</SectionTitle>

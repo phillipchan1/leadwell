@@ -57,6 +57,25 @@ export function personSystemPrompt(personId: string): string {
   const actions = s.actions.filter(
     (a) => a.personId === person.id && !a.done
   );
+  const isLeadUp = team?.direction === "up";
+  const lu = person.leadUp;
+  const wins = s.wins
+    .filter((w) => w.personId === person.id)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 6);
+
+  const manualLines = isLeadUp && lu
+    ? [
+        lu.winsLike && `- What "good" looks like to them: ${lu.winsLike}`,
+        lu.anxieties && `- What makes them anxious: ${lu.anxieties}`,
+        lu.currency && `- Their currency (what earns trust): ${lu.currency}`,
+        lu.comms && `- How they want to hear from me: ${lu.comms}`,
+        lu.theirScorecard &&
+          `- What they're measured on by their boss: ${lu.theirScorecard}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
 
   const top5 = (person.assessments.cliftonTop5 ?? [])
     .map((t, i) => `${i + 1}. ${t} (${THEME_DOMAIN[t] ?? "?"})`)
@@ -101,6 +120,13 @@ export function personSystemPrompt(personId: string): string {
     read.watchOuts.length &&
       `## Watch-outs\n${read.watchOuts.map((x) => `- ${x}`).join("\n")}`,
     person.howToLead && `## How to lead them\n${person.howToLead}`,
+    manualLines &&
+      `## Operating manual (how to succeed with them)\nThis is their wiring as ${s.me.name}'s manager — reward, anxieties, currency, and scorecard. Anchor leading-up advice on this, especially their currency and what their own boss measures them on.\n${manualLines}`,
+    isLeadUp &&
+      wins.length &&
+      `## Wins banked with them\nValue ${s.me.name} has delivered, in their currency — usable as evidence at reviews or before an ask:\n${wins
+        .map((w) => `- ${w.date}: ${w.text}${w.impact ? ` — ${w.impact}` : ""}`)
+        .join("\n")}`,
     goals.length &&
       `## Current goals\n${goals
         .map((g) => `- ${g.title} (${Math.round(g.progress)}%)`)
