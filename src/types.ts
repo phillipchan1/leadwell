@@ -57,6 +57,27 @@ export type Assessments = {
   mbti?: string; // e.g. "ENFJ"
 };
 
+/**
+ * Leading-up profile: how to succeed with a person I report to.
+ * This is NOT their personality (that's Assessments) — it's their operating
+ * manual as *my manager*: what they reward, what makes them anxious, and what
+ * they're judged on. Only meaningful for people on an "up" team.
+ */
+export type LeadUpProfile = {
+  /** The kind of leader they are — a short archetype read (e.g. "operator / driver"). */
+  archetype?: string;
+  /** What "good" looks like to them — their definition of a strong report. */
+  winsLike?: string;
+  /** What makes them anxious / what quietly erodes their trust in me. */
+  anxieties?: string;
+  /** Their currency — what earns trust and buys credibility fastest. */
+  currency?: string;
+  /** How they want to hear from me — cadence, channel, detail, when to escalate. */
+  comms?: string;
+  /** What their own boss measures them on — making this look good is the real job. */
+  theirScorecard?: string;
+};
+
 export type Person = {
   id: string;
   teamId: string;
@@ -68,6 +89,8 @@ export type Person = {
   strengths: string[];
   watchOuts: string[];
   howToLead?: string;
+  /** Operating manual for a person I report to (up-team members only). */
+  leadUp?: LeadUpProfile;
 };
 
 /** Kanban column for 1:1 talk-about topics (Actions). */
@@ -106,6 +129,21 @@ export type Note = {
   personId: string;
   date: string;
   body: string;
+};
+
+/**
+ * A delivered win banked against a person I report to, phrased in *their*
+ * currency — recallable evidence to surface at reviews, asks, and comp talks.
+ * Leading down I track others' growth; leading up I track my own value.
+ */
+export type Win = {
+  id: string;
+  /** The boss (up-team person) this win is banked with. */
+  personId: string;
+  date: string;
+  text: string;
+  /** Optional impact framed in their language / metric. */
+  impact?: string;
 };
 
 // --- Team-level records: the same tools as per-person, scoped to a whole team.

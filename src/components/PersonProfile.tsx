@@ -19,6 +19,9 @@ import { MeetingEditor } from "./MeetingEditor";
 import { TopicKanban } from "./TopicKanban";
 import { WritingPad } from "./WritingPad";
 import { MarkdownBody } from "./MarkdownBody";
+import { LeadUpManual } from "./LeadUpManual";
+import { WinsLedger } from "./WinsLedger";
+import { ProfileFillModal } from "./ProfileFillModal";
 
 type PersonTab = "profile" | "oneOnOnes" | "topics" | "notes";
 
@@ -60,6 +63,8 @@ export function PersonProfile({
 
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);
+  // People on an "up" team are those I report to — leading up, not down.
+  const isLeadUp = team?.direction === "up";
   const read = derivedRead(person);
   const enn = parseEnneagram(person.assessments.enneagram);
   const top5 = person.assessments.cliftonTop5 ?? [];
@@ -88,6 +93,7 @@ export function PersonProfile({
   const [tab, setTab] = useState<PersonTab>("profile");
   const [editingAssessments, setEditingAssessments] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
+  const [fillingProfile, setFillingProfile] = useState(false);
   const [newGoal, setNewGoal] = useState("");
   const [openMeetingId, setOpenMeetingId] = useState<string | null>(null);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -100,6 +106,7 @@ export function PersonProfile({
     setOpenMeetingId(null);
     setEditingNoteId(null);
     setComposingNote(false);
+    setFillingProfile(false);
   }, [person.id]);
 
   useEffect(() => {
@@ -115,7 +122,8 @@ export function PersonProfile({
         askAIOpen ||
         settingsOpen ||
         editingAssessments ||
-        editingPerson
+        editingPerson ||
+        fillingProfile
       )
         return;
       e.preventDefault();
@@ -129,6 +137,7 @@ export function PersonProfile({
     settingsOpen,
     editingAssessments,
     editingPerson,
+    fillingProfile,
     openMeetingId,
     selectPerson,
   ]);
@@ -142,6 +151,7 @@ export function PersonProfile({
         settingsOpen ||
         editingAssessments ||
         editingPerson ||
+        fillingProfile ||
         openMeetingId
       )
         return;
@@ -171,6 +181,7 @@ export function PersonProfile({
     settingsOpen,
     editingAssessments,
     editingPerson,
+    fillingProfile,
     openMeetingId,
     prevTeammate,
     nextTeammate,
@@ -261,6 +272,9 @@ export function PersonProfile({
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+          <QuickAction onClick={() => setFillingProfile(true)}>
+            ✨ AI fill
+          </QuickAction>
           <QuickAction onClick={startNewOneOnOne}>+ New 1:1</QuickAction>
           <QuickAction
             onClick={() => {
@@ -313,7 +327,18 @@ export function PersonProfile({
       </nav>
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
-        {tab === "profile" && (
+        {tab === "profile" && isLeadUp && (
+          <div className="flex flex-col gap-6 p-4">
+            <LeadUpManual key={person.id} person={person} />
+            <WinsLedger person={person} />
+            <section className="space-y-2">
+              <SectionTitle>AI coach</SectionTitle>
+              <AICoach person={person} />
+            </section>
+          </div>
+        )}
+
+        {tab === "profile" && !isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
             <section className="space-y-3">
               <SectionTitle>Assessment profile</SectionTitle>
@@ -611,6 +636,12 @@ export function PersonProfile({
       )}
       {editingPerson && (
         <PersonModal person={person} onClose={() => setEditingPerson(false)} />
+      )}
+      {fillingProfile && (
+        <ProfileFillModal
+          person={person}
+          onClose={() => setFillingProfile(false)}
+        />
       )}
     </aside>
   );

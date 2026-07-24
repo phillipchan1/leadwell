@@ -24,6 +24,7 @@ import type {
   ChatMessage,
   Domain,
   Goal,
+  LeadUpProfile,
   Manager,
   Me,
   Note,
@@ -33,6 +34,7 @@ import type {
   TeamAction,
   TeamGoal,
   TeamNote,
+  Win,
 } from "../types";
 
 export type NodePosition = { x: number; y: number };
@@ -49,6 +51,7 @@ export type PersistedData = {
   oneOnOnes: OneOnOne[];
   goals: Goal[];
   notes: Note[];
+  wins: Win[];
   teamActions: TeamAction[];
   teamGoals: TeamGoal[];
   teamNotes: TeamNote[];
@@ -181,11 +184,13 @@ const map = {
       strengths: p.strengths ?? [],
       watch_outs: p.watchOuts ?? [],
       how_to_lead: nn(p.howToLead),
+      lead_up: nn(p.leadUp ?? null),
     }),
     fromRow: (r: Row): Person => {
       const top5 = (r.clifton_top5 as string[]) ?? [];
       const enneagram = opt(r.enneagram as string | null);
       const mbti = opt(r.mbti as string | null);
+      const leadUp = opt(r.lead_up as LeadUpProfile | null);
       return {
         id: r.id as string,
         teamId: r.team_id as string,
@@ -201,6 +206,7 @@ const map = {
         strengths: (r.strengths as string[]) ?? [],
         watchOuts: (r.watch_outs as string[]) ?? [],
         howToLead: opt(r.how_to_lead as string | null),
+        ...(leadUp ? { leadUp } : {}),
       };
     },
   },
@@ -276,6 +282,24 @@ const map = {
       personId: r.person_id as string,
       date: r.date as string,
       body: r.body as string,
+    }),
+  },
+  wins: {
+    table: "wins",
+    toRow: (u: string, w: Win): Row => ({
+      user_id: u,
+      id: w.id,
+      person_id: w.personId,
+      date: w.date,
+      text: w.text,
+      impact: nn(w.impact),
+    }),
+    fromRow: (r: Row): Win => ({
+      id: r.id as string,
+      personId: r.person_id as string,
+      date: r.date as string,
+      text: r.text as string,
+      impact: opt(r.impact as string | null),
     }),
   },
   teamActions: {
@@ -405,6 +429,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     oneOnOnes,
     goals,
     notes,
+    wins,
     teamActions,
     teamGoals,
     teamNotes,
@@ -420,6 +445,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     grab("one_on_ones"),
     grab("goals"),
     grab("notes"),
+    grab("wins"),
     grab("team_actions"),
     grab("team_goals"),
     grab("team_notes"),
@@ -442,6 +468,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     oneOnOnes: oneOnOnes.map(map.oneOnOnes.fromRow),
     goals: goals.map(map.goals.fromRow),
     notes: notes.map(map.notes.fromRow),
+    wins: wins.map(map.wins.fromRow),
     teamActions: teamActions.map(map.teamActions.fromRow),
     teamGoals: teamGoals.map(map.teamGoals.fromRow),
     teamNotes: teamNotes.map(map.teamNotes.fromRow),

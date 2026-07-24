@@ -8,6 +8,7 @@ import type {
   OneOnOne,
   Goal,
   Note,
+  Win,
   TeamAction,
   TeamGoal,
   TeamNote,
@@ -100,6 +101,15 @@ export const seedTeams: Team[] = [
     domainId: "dom-church",
     description: "Who I report to",
     order: 5,
+    direction: "up",
+  },
+  {
+    id: "team-work-leaders",
+    name: "Work Leadership",
+    capacityId: "cap-up",
+    domainId: "dom-work",
+    description: "Who I report to at the day job",
+    order: 6,
     direction: "up",
   },
 ];
@@ -232,6 +242,40 @@ export const seedPeople: Person[] = [
     watchOuts: ["Impatient with long process discussions", "Can read pushback as disloyalty"],
     howToLead:
       "Leading up: bring solutions with a recommendation, not open-ended problems. Be direct — he respects challenge delivered straight, in private.",
+    leadUp: {
+      winsLike:
+        "A report who shows up with a recommendation already formed, moves fast, and owns the outcome.",
+      anxieties:
+        "Slow, open-ended process. Reads hesitation or pushback in public as disloyalty.",
+      currency:
+        "Decisiveness and forward motion. Trust is earned by making the call and standing behind it.",
+      comms:
+        "Short and direct, in private for anything hard. Lead with the ask and the recommendation, details on request.",
+      theirScorecard:
+        "Judged by the elders on church growth and vision momentum. Anything that visibly advances the vision makes him look good upward.",
+    },
+  },
+  {
+    id: "p-sce",
+    teamId: "team-work-leaders",
+    // Placeholder name — rename to your actual SCE job manager.
+    name: "Ray Delgado",
+    role: "Job Manager · SCE",
+    assessments: {},
+    strengths: [],
+    watchOuts: [],
+    leadUp: {
+      winsLike:
+        "Sees me visibly busy with a full backlog. A stacked, groomed queue reads as a strong report; idle capacity reads as a problem.",
+      anxieties:
+        "Idle time and gaps in the schedule. Messy or half-finished artifacts. Surprises he has to explain up the chain.",
+      currency:
+        "Visible throughput + pristine artifacts. Polish and volume buy more trust with him than clever ideas do — he's a factory-worker mindset: keep the line moving.",
+      comms:
+        "Frequent, concrete status. Show the queue and what's moving through it. Never hand him a rough draft — only review-clean work.",
+      theirScorecard:
+        "Judged upward on his crew's utilization and on artifacts passing review the first time. Making those two numbers look good is making him look good.",
+    },
   },
 ];
 
@@ -398,5 +442,23 @@ export const seedTeamNotes: TeamNote[] = [
     teamId: "team-frontier",
     date: "2026-07-06",
     body: "Energy is high after the summer push, but a few are running near burnout — protect margin.",
+  },
+];
+
+// --- Wins banked against people I report to (leading up), in their currency.
+export const seedWins: Win[] = [
+  {
+    id: "w-1",
+    personId: "p-sce",
+    date: "2026-07-10",
+    text: "Cleared the inspection backlog two weeks early",
+    impact: "Queue stayed full and groomed the whole sprint — zero idle days",
+  },
+  {
+    id: "w-2",
+    personId: "p-sce",
+    date: "2026-07-18",
+    text: "Every artifact passed review first-pass this cycle",
+    impact: "No rework, nothing bounced back up the chain",
   },
 ];
