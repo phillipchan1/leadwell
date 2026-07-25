@@ -71,12 +71,25 @@ never consented, and will never see it. As a personal tool this is very likely
 covered by the personal/household exemption in most privacy law. **Sold as a
 product — especially one used at work — that exemption goes away.**
 
+> **Deferred as a group (2026-07-25, Phil).** While LeadWell is a personal tool
+> — one leader documenting the people they lead, in order to lead them better —
+> this sits comfortably inside the personal/household use exemption, and the
+> dignity principle (#6) already does the substantive work. Revisit rather than
+> resolve now.
+>
+> **Tripwire — the deferral ends the moment a second person's workspace lands on
+> our servers.** That is the event that converts this from a personal-use
+> question into a controller-with-obligations question, and it happens on the
+> *first external signup*, not at some later scale. Whoever ships that signup
+> should reopen Q25–Q27 first. This is recorded so the deferral is a decision
+> with an end condition, not a thing we forgot.
+
 | # | Question | Status | Notes |
 |---|---|---|---|
-| Q25 | **What rights do the people in the workspace have?** Under GDPR/UK GDPR they are data subjects with rights of access and erasure, and they don't know the data exists. | 🔴 | Foundational. The honest answer may constrain the product's shape, not just its paperwork. Needs real legal advice, not a template privacy policy. |
-| Q26 | **Who is the controller — us or the user?** Determines whether we're a processor with a DPA or a controller with direct obligations. | 🔴 | Changes the entire compliance posture. Answer before writing any policy. |
-| Q27 | **Are these notes discoverable?** In an employment dispute, a leader's private notes about a report can be subpoenaed. | 🟡 | We should tell users this plainly. Note that principle #6 (dignity / read-aloud test) is already the correct mitigation — a real argument for enforcing it harder, not softening it. |
-| Q28 | **Does the employer have a claim** to notes a leader keeps about their reports on personal software? | 🟡 | Affects the "your data is yours" promise in the StoryBrand agreement plan. |
+| Q25 | **What rights do the people in the workspace have?** Under GDPR/UK GDPR they'd be data subjects with rights of access and erasure, and they don't know the data exists. | ⏸️ | Deferred — see above. Personal-use exemption plausibly covers today's single-player tool. The honest answer may constrain the product's shape, not just its paperwork, so it needs real legal advice before external users, not a template privacy policy. |
+| Q26 | **Who is the controller — us or the user?** Determines whether we're a processor with a DPA or a controller with direct obligations. | ⏸️ | Deferred. Moot while Phil is the only user; decisive the day he isn't. |
+| Q27 | **Are these notes discoverable?** In an employment dispute, a leader's private notes about a report can be subpoenaed. | ⏸️ | Deferred as a product question, but note it's *already* true of the personal instance. Principle #6 (the read-aloud test) is the correct mitigation and is another argument for enforcing it harder rather than softening it. |
+| Q28 | **Does the employer have a claim** to notes a leader keeps about their reports on personal software? | ⏸️ | Deferred. Affects the "your data is yours" promise in the StoryBrand agreement plan. |
 | Q29 | **Hosting jurisdiction and data residency** | 🟢 | Supabase region choice. Cheap now, expensive after users exist. |
 
 ## Business shape
@@ -84,9 +97,43 @@ product — especially one used at work — that exemption goes away.**
 | # | Question | Status | Notes |
 |---|---|---|---|
 | Q30 | **Indie/lifestyle or venture-scale?** | 🔴 | Determines pricing, scope, support burden, whether the volunteer-leader segment (near-zero budget) is viable, and how much the proof gap matters. Blocks Q5. |
-| Q31 | **Unit economics — what does an active user cost in AI?** A leader with 40 people doing brain-dumps, meeting structuring, and coach chats is real COGS. | 🔴 | Unmodeled. Prompts are large (full profile + history) and the coach is the main value, so usage correlates with the exact users you most want. Model before pricing. |
-| Q32 | **Free tier shape**, given P2 has almost no budget and is the segment that clusters socially | 🟡 | Blocked on Q30. |
+| Q31 | ~~Unit economics — what does an active user cost in AI?~~ | ✅ | **We swallow the cost (Phil, 2026-07-25).** Modeled below: roughly **$1–3 per heavy active leader per month** on `claude-sonnet-5`. Inconsequential against any plausible paid price. See the model and its two tripwires below. |
+| Q32 | **Free tier shape**, given P2 has almost no budget and is the segment that clusters socially | 🟡 | Blocked on Q30 — and this is where Q31's cost actually bites, since a free tier means paying $1–3/month per user with no offsetting revenue. |
 | Q33 | **Does the personal instance stay ahead of the product, or converge?** One codebase with flags, or a fork? | 🟡 | Converge is the right default; recording it because forks happen by accident. |
+
+### The AI cost model (Q31, resolved)
+
+`claude-sonnet-5` at **$3.00 / $15.00 per million input/output tokens**
+(introductory $2.00 / $10.00 through 2026-08-31 — costs rise ~50% when that
+ends, which is still immaterial at this scale).
+
+Per-interaction estimates, using the prompt shapes actually built in
+[`src/lib/ai.ts`](../../src/lib/ai.ts):
+
+| Interaction | Rough cost |
+|---|---|
+| Coach conversation (~5 turns, full person context) | ~$0.09 |
+| Meeting-note structuring (transcript in, structure out) | ~$0.02 |
+| Brain-dump profile fill | ~$0.02 |
+| Overview brief | ~$0.03 |
+
+A heavy month — 20 coach conversations, 20 briefs, 10 meetings structured,
+5 brain-dumps — lands around **$2.75**. Gross margin at a $10–15/mo price is
+roughly 80%, which is unremarkable-to-good for a software business. **Costs are
+not a constraint on this product.**
+
+**Two tripwires that would reopen this:**
+
+1. **A free tier** (Q32). $1–3/month per user is trivial against revenue and
+   material against zero. This is the real cost question, and it's the one that
+   makes the P2 volunteer-leader segment expensive to serve.
+2. **Pricing below ~$5/mo**, at which point AI COGS stops being a rounding
+   error and starts being a line item worth managing.
+
+Note the shape of the cost: it scales with *engaged* users, since the coach is
+both the main value and the main expense. That's the healthy direction — but it
+means a free tier's cost concentrates in exactly the users who like the product
+most.
 
 ## Go-to-market
 
@@ -112,3 +159,4 @@ product — especially one used at work — that exemption goes away.**
 | # | Question | Decision |
 |---|---|---|
 | Q1 | Product or personal tool? | **Both — dogfood-first productization.** [ADR 0002](../decisions/0002-dogfood-first-productization.md) |
+| Q31 | What does an active user cost in AI? | **~$1–3/month per heavy leader. We swallow it.** Model and tripwires above. |
