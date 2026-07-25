@@ -148,9 +148,6 @@ type Store = PersistedData &
     addWin: (win: Omit<Win, "id" | "date"> & Partial<Pick<Win, "date">>) => void;
     updateWin: (id: string, patch: Partial<Pick<Win, "text" | "impact" | "date">>) => void;
     deleteWin: (id: string) => void;
-    // settings (persisted separately from org data)
-    anthropicApiKey: string | null;
-    setAnthropicApiKey: (key: string | null) => void;
     settingsOpen: boolean;
     setSettingsOpen: (open: boolean) => void;
     // chat
@@ -165,7 +162,6 @@ type Store = PersistedData &
   };
 
 const DATA_KEY = "data";
-const API_KEY_STORAGE = "anthropicApiKey";
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 function migrateActions(actions: Action[]): Action[] {
@@ -273,7 +269,6 @@ export const useStore = create<Store>((set, get) => ({
   dark: initialDark(),
   askAIOpen: false,
   modal: null,
-  anthropicApiKey: null,
   settingsOpen: false,
 
   setTab: (tab) => set({ tab }),
@@ -319,12 +314,6 @@ export const useStore = create<Store>((set, get) => ({
   setAskAIOpen: (open) => set({ askAIOpen: open }),
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
-  setAnthropicApiKey: (key) => {
-    const trimmed = key?.trim() || null;
-    if (trimmed) storage.save(API_KEY_STORAGE, trimmed);
-    else storage.remove(API_KEY_STORAGE);
-    set({ anthropicApiKey: trimmed });
-  },
   setSettingsOpen: (open) => set({ settingsOpen: open }),
 
   setNodePosition: (id, pos) =>
@@ -676,6 +665,9 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   signOut: async () => {
+    // Flush any pending debounced write first — otherwise a delete/edit in the
+    // last ~600ms is lost when we clear the session.
+    await flushPendingSync();
     await supabase.auth.signOut();
     repo.clearBaseline();
     set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
@@ -715,6 +707,7 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
 ];
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let syncInFlight: Promise<void> | null = null;
 
 function extractData(state: Store): PersistedData {
   return Object.fromEntries(
@@ -722,22 +715,61 @@ function extractData(state: Store): PersistedData {
   ) as PersistedData;
 }
 
+function runSync(userId: string): Promise<void> {
+  const latest = useStore.getState();
+  if (latest.phase !== "ready" || latest.userId !== userId || !repo.hasBaseline()) {
+    return Promise.resolve();
+  }
+  const job = repo
+    .syncData(userId, extractData(latest))
+    .catch((e) => {
+      console.error("LeadWell: cloud sync failed", e);
+    })
+    .finally(() => {
+      if (syncInFlight === job) syncInFlight = null;
+    });
+  syncInFlight = job;
+  return job;
+}
+
+/** Write the current store to Supabase immediately (cancels a pending debounce). */
+async function flushPendingSync(): Promise<void> {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  if (syncInFlight) await syncInFlight;
+  const latest = useStore.getState();
+  if (latest.phase !== "ready" || !latest.userId || !repo.hasBaseline()) return;
+  await runSync(latest.userId);
+}
+
+function scheduleSync(userId: string): void {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    void runSync(userId);
+  }, 600);
+}
+
 useStore.subscribe((state, prev) => {
   if (state.phase !== "ready" || !state.userId) return;
   if (!repo.hasBaseline()) return;
   if (!PERSISTED_KEYS.some((k) => state[k] !== prev[k])) return;
-
-  const userId = state.userId;
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    syncTimer = null;
-    const latest = useStore.getState();
-    if (latest.phase !== "ready" || latest.userId !== userId) return;
-    repo.syncData(userId, extractData(latest)).catch((e) => {
-      console.error("LeadWell: cloud sync failed", e);
-    });
-  }, 600);
+  scheduleSync(state.userId);
 });
+
+// Flush pending cloud writes when the tab is backgrounded or closed so a
+// quick refresh / OAuth redirect doesn't drop the last edit.
+if (typeof window !== "undefined") {
+  const flush = () => {
+    void flushPendingSync();
+  };
+  window.addEventListener("pagehide", flush);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flush();
+  });
+}
 
 // Re-run bootstrap on sign-in / sign-out / token refresh from Supabase.
 supabase.auth.onAuthStateChange((event) => {

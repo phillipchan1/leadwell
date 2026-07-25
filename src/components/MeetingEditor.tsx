@@ -62,7 +62,6 @@ export function MeetingEditor({
     updateOneOnOne,
     deleteOneOnOne,
     addAction,
-    setSettingsOpen,
   } = useStore();
   const meeting = oneOnOnes.find((o) => o.id === oneOnOneId);
   const person = people.find((p) => p.id === meeting?.personId);
@@ -183,7 +182,7 @@ export function MeetingEditor({
 
   const runStructure = async () => {
     if (!hasApiKey()) {
-      setSettingsOpen(true);
+      setError("AI structuring needs a signed-in session and the server AI function.");
       return;
     }
     setError(null);

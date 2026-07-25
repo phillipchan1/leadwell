@@ -26,6 +26,7 @@ export default function App() {
     teams,
     dark,
     toggleDark,
+    userEmail,
     selectedPersonId,
     selectedTeamId,
     askAIOpen,
@@ -80,9 +81,10 @@ export default function App() {
           <button
             onClick={() => setSettingsOpen(true)}
             aria-label="Settings"
-            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
+            title={userEmail ?? "Settings"}
+            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
           >
-            ⚙
+            Settings
           </button>
           <button
             onClick={toggleDark}

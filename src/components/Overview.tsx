@@ -18,14 +18,11 @@ export function Overview() {
     actions,
     selectPerson,
     setTab,
-    anthropicApiKey,
-    setSettingsOpen,
   } = useStore();
   const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyed = hasApiKey();
-  void anthropicApiKey;
 
   const unassessed = people.filter((p) => !isAssessed(p));
   const spots = blindSpots(people);
@@ -135,15 +132,7 @@ export function Overview() {
             </p>
             {!keyed && (
               <p className="text-xs text-stone-400">
-                Add an Anthropic key in{" "}
-                <button
-                  type="button"
-                  className="underline hover:text-teal-600"
-                  onClick={() => setSettingsOpen(true)}
-                >
-                  Settings
-                </button>{" "}
-                for an AI-generated brief.
+                AI brief needs a signed-in session and the server AI function.
               </p>
             )}
           </div>

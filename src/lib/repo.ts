@@ -80,14 +80,28 @@ async function pushRows(
     const { error } = await supabase.from(table).upsert(rows);
     if (error) throw new Error(`${table} upsert: ${error.message}`);
   }
-  const keys = rows.map((r) => r[keyField] as string);
-  let del = supabase.from(table).delete().eq("user_id", userId);
-  if (keys.length) {
-    // ids/keys never contain a double-quote, so this quoting is safe.
-    del = del.not(keyField, "in", `(${keys.map((k) => `"${k}"`).join(",")})`);
-  }
-  const { error } = await del;
-  if (error) throw new Error(`${table} delete-missing: ${error.message}`);
+
+  // Delete rows that are no longer in the client collection. Prefer an
+  // explicit id list over `.not(...).in(...)` string filters (those have been
+  // flaky with some PostgREST versions and can silently leave orphans).
+  const { data: existing, error: readErr } = await supabase
+    .from(table)
+    .select(keyField)
+    .eq("user_id", userId);
+  if (readErr) throw new Error(`${table} list: ${readErr.message}`);
+
+  const keep = new Set(rows.map((r) => r[keyField] as string));
+  const toDelete = ((existing ?? []) as unknown as Row[])
+    .map((r) => r[keyField] as string)
+    .filter((k) => Boolean(k) && !keep.has(k));
+  if (!toDelete.length) return;
+
+  const { error: delErr } = await supabase
+    .from(table)
+    .delete()
+    .eq("user_id", userId)
+    .in(keyField, toDelete);
+  if (delErr) throw new Error(`${table} delete-missing: ${delErr.message}`);
 }
 
 // --- mappers: app type ⇄ db row ---------------------------------------------

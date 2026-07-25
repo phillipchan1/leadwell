@@ -3,8 +3,6 @@
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
-  /** Legacy: browser-side Anthropic key. Superseded by the Edge Function proxy. */
-  readonly VITE_ANTHROPIC_API_KEY?: string;
 }
 
 interface ImportMeta {

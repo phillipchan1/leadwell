@@ -18,8 +18,7 @@ import { inputCls } from "./ui";
  */
 export function AICoach({ person, team }: { person?: Person; team?: Team }) {
   const chatKey = person?.id ?? (team ? `team:${team.id}` : "org");
-  const { chats, appendChat, clearChat, anthropicApiKey, setSettingsOpen } =
-    useStore();
+  const { chats, appendChat, clearChat } = useStore();
   const presets = person
     ? coachPresets(person)
     : team
@@ -31,8 +30,6 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const keyed = hasApiKey();
-  // Re-check when stored key changes
-  void anthropicApiKey;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,22 +68,12 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
     return (
       <div className="rounded-xl border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700">
         <p className="font-medium text-stone-600 dark:text-stone-300">
-          Add your API key to enable the AI coach
+          AI coach unavailable
         </p>
         <p className="mt-1 text-xs leading-relaxed">
-          Open Settings (⚙) and paste your Anthropic key, or add{" "}
-          <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">
-            VITE_ANTHROPIC_API_KEY
-          </code>{" "}
-          to <code className="rounded bg-stone-100 px-1 dark:bg-stone-800">.env.local</code>.
+          Sign in and make sure the server AI function is deployed. There is no
+          API key to paste in the browser.
         </p>
-        <button
-          type="button"
-          className="mt-3 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700"
-          onClick={() => setSettingsOpen(true)}
-        >
-          Open Settings
-        </button>
       </div>
     );
   }
