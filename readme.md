@@ -5,6 +5,11 @@ with an assessment-based profile (CliftonStrengths, Enneagram, MBTI) and an AI
 coach for each person. **Cloud-backed** by Supabase with **Google sign-in**, so
 your data syncs across every device.
 
+**Product docs** — who this is for, what we believe, and what we've decided —
+live in [`docs/`](docs/README.md). Start with
+[the product overview](docs/product/overview.md). This README covers the
+technical side only.
+
 ## Setup
 
 This app needs a Supabase project (free tier is plenty) and Google OAuth. The
