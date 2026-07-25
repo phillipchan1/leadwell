@@ -13,6 +13,10 @@ without formal authority.*
 
 ## P1 — The Portfolio Leader (primary)
 
+> **This is the persona we optimize for** —
+> [ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md). When P1
+> and P2 needs conflict, P1 wins.
+
 **The one-line read:** leads meaningful numbers of people in two or more
 unrelated life contexts, in different capacities, and reports up in most of
 them.
@@ -98,6 +102,18 @@ by someone inside this world, which is a real authority asset.
 
 **Product gap:** everything about load, motivation, and bench is unmodeled
 today.
+
+> **Not the persona we optimize for**
+> ([ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md)). The
+> deciding factor: most lay leaders in a church network *also have day jobs*,
+> which makes them P1 by our own segmentation — so we reach the cluster without
+> taking on the segment's economics. Pure P2 (full-time ministry staff, single
+> context, no budget) is the narrower and poorer slice.
+>
+> P2 still earns its place here: their needs inform the model, and unprompted
+> P2 adoption is one of the conditions that would reopen ADR 0003. But volunteer
+> load, motivation, and bench are deprioritized to the roadmap's Later tier —
+> a deprioritization, not a claim that the need isn't real.
 
 ---
 

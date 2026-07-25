@@ -1,6 +1,11 @@
 # Roadmap
 
 > **Status:** DRAFT — proposed, not agreed. Sequencing is Phil's call.
+>
+> **Scoped to P1, the Portfolio Leader**
+> ([ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md)). The Now
+> tier is confirmed — all three items serve P1 directly. Item 5 (volunteer load
+> & bench) moved to Later as a consequence.
 
 Every item is stated as a **bet**: what we believe, what we'd build, and what
 would prove us wrong. An item without a falsifier is a wish, not a bet.
@@ -70,21 +75,7 @@ unlocks it.
 **Falsified if:** leaders find it too heavyweight for the transient nature of
 peer initiatives.
 
-### 5. Volunteer load & bench (Mode 2)
-
-**Bet:** the thing that actually breaks volunteer teams is load concentration
-and the absence of a bench, and we model neither.
-
-- Who is carrying disproportionately; who has capacity
-- Why this person serves (motivation capture — operationally critical when
-  unpaid)
-- Bench depth per role: who could step up
-- Jobs: J7 + new · Modes: 2 · Persona: P2
-
-**Falsified if:** volunteer leaders say load is obvious to them and the problem
-is actually recruitment, not distribution.
-
-### 6. Capture anywhere
+### 5. Capture anywhere
 
 **Bet:** principle #8 is under-delivered. Capture still requires opening a
 desktop app and navigating to a person. If the notes app is faster, we lose.
@@ -102,6 +93,7 @@ routing misfires often enough to be annoying.
 
 | Bet | Believe | Risk |
 |---|---|---|
+| **Volunteer load & bench (Mode 2)** | What actually breaks volunteer teams is load concentration and no bench — who's carrying disproportionately, why each person serves, who could step up. We model none of it. | Deprioritized from Next by [ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md) — it primarily serves P2. Still a real Mode-2 gap; promote it if P2 adoption happens unprompted |
 | **Person on multiple teams** | The model's biggest structural limitation. Real people appear in more than one context. | Data-model surgery; every derived metric changes |
 | **Assessment import** | Removing typing from J2 raises activation | Vendor exports vary; may not be worth it |
 | **Rhythm nudges** | The system should reach out, not wait to be opened | Guilt risk; a nagging leadership tool is a deleted leadership tool |
@@ -128,15 +120,20 @@ routing misfires often enough to be annoying.
 **Now** finishes the story we're already telling — drift is our villain and we
 can't see it. Cheapest path to the product feeling *true*.
 
-**Next** widens from the well-served Mode 1 into the modes that are actually
-unserved, which is also where the competitive moat is (nobody else does peer
-influence or volunteer load).
+**Next** widens from the well-served Mode 1 into Mode 3 (peer influence) —
+unserved today, present in every P1's day job, and where the competitive moat
+is, since essentially nothing on the market models decision power among peers.
+Capture-anywhere sits alongside it because principle #8 is under-delivered and
+it lifts every other item.
 
-**Later** items are mostly structural or risky and should wait for real usage
-evidence.
+**Later** items are mostly structural, risky, or scoped to a persona we chose
+not to optimize for — they should wait for real usage evidence.
 
 **The thing that isn't on this roadmap and probably should outrank all of it:**
-real leader interviews. Every doc in this folder is marked DRAFT. Six
-conversations would either confirm this sequencing or rewrite it — and that's
-worth more than any single feature here. See
-[`../research/README.md`](../research/README.md).
+real leader interviews. Every doc in this folder is marked DRAFT — including the
+personas that [ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md)
+just chose between. Six conversations would either confirm this sequencing or
+rewrite it, and that's worth more than any single feature here. Weight the round
+toward leaders carrying two or more contexts, but keep one pure-P2 leader in it
+— a strong disconfirming signal there is exactly what should reopen ADR 0003.
+See [`../research/README.md`](../research/README.md).

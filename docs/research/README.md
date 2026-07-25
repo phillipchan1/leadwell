@@ -28,20 +28,22 @@ highest-value gap in the whole documentation set (Q19 in
 Six interviews would either confirm the persona and mode work or rewrite it —
 and that is worth more than any feature currently on the roadmap.
 
-**Targets for the first round:**
+**Targets for the first round** — weighted toward P1 since
+[ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md) chose it,
+with one pure-P2 leader kept in deliberately as the disconfirming case:
 
 | # | Who | Why |
 |---|---|---|
-| 1–2 | P1 Portfolio Leaders — day job + something outside it | The primary persona, entirely unvalidated |
-| 3–4 | P2 Volunteer-org leaders — church/nonprofit, mostly Modes 2 & 4 | Most acute pain; tests whether P2 should be primary (Q2) |
-| 5 | Someone who leads mainly by peer influence (Mode 3) | The mode we serve worst and understand least |
+| 1–3 | P1 Portfolio Leaders — day job + something outside it | The persona we optimize for, entirely unvalidated |
+| 4 | A pure P2 — full-time ministry/nonprofit staff, single context | The disconfirming case. Strong pull here is a condition for reopening ADR 0003 |
+| 5 | Someone who leads mainly by peer influence (Mode 3) | The mode we serve worst and understand least — and the next thing on the roadmap |
 | 6 | Someone who has been surprised by a resignation | Direct test of the drift villain |
 
 **What would falsify our current thinking:**
 
 - Leaders don't experience their contexts as one portfolio — they genuinely
-  compartmentalize and don't want them on one canvas → kills principle #4 and
-  most of the positioning
+  compartmentalize and don't want them on one canvas → kills principle #4, most
+  of the positioning, **and the reasoning behind ADR 0003**
 - Nobody thinks about their boss in "currency" terms → weakens the leading-up
   wedge (Q3)
 - Assessment results aren't sitting unused; leaders either don't have them or

@@ -16,8 +16,8 @@ Status: 🔴 blocking · 🟡 needs a call soon · 🟢 parked deliberately
 | # | Question | Status | Notes |
 |---|---|---|---|
 | Q1 | ~~Is this a product or a personal tool?~~ | ✅ | **Both.** Dogfood-first productization — see [ADR 0002](../decisions/0002-dogfood-first-productization.md). Opened Q21–Q38. |
-| Q2 | **Which persona do we optimize for — P1 Portfolio Leader or P2 Volunteer-Org Leader?** | 🔴 | Escalated by Q1. P1 has money, P2 has acute pain and clusters socially. Current build leans P1; the origin story leans P2. Now a commercial decision with real cost. |
-| Q3 | **Is leading up the wedge, or leading down?** | 🟡 | `positioning.md` argues leading up: most differentiated, zero buy-in needed. Not agreed. |
+| Q2 | ~~Which persona do we optimize for?~~ | ✅ | **P1, the Portfolio Leader** — see [ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md). P2 stays a documented secondary persona but doesn't set the roadmap. |
+| Q3 | **Is leading up the wedge, or leading down?** | 🟡 | `positioning.md` argues leading up: most differentiated, zero buy-in needed. **Strengthened by Q2** — P1 has a boss at the day job by definition, so Mode 4 is universal in this persona. Still not formally agreed. |
 | Q4 | **Does sharing ever exist?** | 🟢 | Parked. Principle #5 says no by default. If it ever happens it must be per-item and leader-initiated. Needs a decision record before any work. |
 | Q5 | **Pricing and willingness to pay** | 🟡 | Unblocked by Q1, now blocked on Q30 (business shape) and Q31 (unit economics). Note P2 has near-zero budget. |
 
@@ -98,7 +98,7 @@ product — especially one used at work — that exemption goes away.**
 |---|---|---|---|
 | Q30 | **Indie/lifestyle or venture-scale?** | 🔴 | Determines pricing, scope, support burden, whether the volunteer-leader segment (near-zero budget) is viable, and how much the proof gap matters. Blocks Q5. |
 | Q31 | ~~Unit economics — what does an active user cost in AI?~~ | ✅ | **We swallow the cost (Phil, 2026-07-25).** Modeled below: roughly **$1–3 per heavy active leader per month** on `claude-sonnet-5`. Inconsequential against any plausible paid price. See the model and its two tripwires below. |
-| Q32 | **Free tier shape**, given P2 has almost no budget and is the segment that clusters socially | 🟡 | Blocked on Q30 — and this is where Q31's cost actually bites, since a free tier means paying $1–3/month per user with no offsetting revenue. |
+| Q32 | **Free tier shape** | 🟢 | Downgraded by [ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md): a free tier was mandatory under P2 and is now a choice, since P1 can pay. Still where Q31's $1–3/user/month would bite if we build one. Blocked on Q30. |
 | Q33 | **Does the personal instance stay ahead of the product, or converge?** One codebase with flags, or a fork? | 🟡 | Converge is the right default; recording it because forks happen by accident. |
 
 ### The AI cost model (Q31, resolved)
@@ -159,4 +159,5 @@ most.
 | # | Question | Decision |
 |---|---|---|
 | Q1 | Product or personal tool? | **Both — dogfood-first productization.** [ADR 0002](../decisions/0002-dogfood-first-productization.md) |
+| Q2 | Which persona do we optimize for? | **P1, the Portfolio Leader.** [ADR 0003](../decisions/0003-optimize-for-the-portfolio-leader.md) |
 | Q31 | What does an active user cost in AI? | **~$1–3/month per heavy leader. We swallow it.** Model and tripwires above. |
