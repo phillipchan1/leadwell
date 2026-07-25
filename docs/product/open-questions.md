@@ -15,11 +15,11 @@ Status: 🔴 blocking · 🟡 needs a call soon · 🟢 parked deliberately
 
 | # | Question | Status | Notes |
 |---|---|---|---|
-| Q1 | **Is this a product or a personal tool?** Everything downstream — pricing, multiplayer, onboarding polish, whether the proof gap matters — hangs on this. | 🔴 | The docs are written as if it's a product. If it's a personal tool, most of `positioning.md` and `metrics.md` are theater. |
-| Q2 | **Which persona do we optimize for — P1 Portfolio Leader or P2 Volunteer-Org Leader?** | 🟡 | P1 has money, P2 has acute pain and clusters socially. Current build leans P1; the origin story leans P2. |
+| Q1 | ~~Is this a product or a personal tool?~~ | ✅ | **Both.** Dogfood-first productization — see [ADR 0002](../decisions/0002-dogfood-first-productization.md). Opened Q21–Q38. |
+| Q2 | **Which persona do we optimize for — P1 Portfolio Leader or P2 Volunteer-Org Leader?** | 🔴 | Escalated by Q1. P1 has money, P2 has acute pain and clusters socially. Current build leans P1; the origin story leans P2. Now a commercial decision with real cost. |
 | Q3 | **Is leading up the wedge, or leading down?** | 🟡 | `positioning.md` argues leading up: most differentiated, zero buy-in needed. Not agreed. |
 | Q4 | **Does sharing ever exist?** | 🟢 | Parked. Principle #5 says no by default. If it ever happens it must be per-item and leader-initiated. Needs a decision record before any work. |
-| Q5 | **Pricing and willingness to pay** | 🟢 | Blocked on Q1. Note P2 has near-zero budget. |
+| Q5 | **Pricing and willingness to pay** | 🟡 | Unblocked by Q1, now blocked on Q30 (business shape) and Q31 (unit economics). Note P2 has near-zero budget. |
 
 ## Model & structure
 
@@ -58,6 +58,57 @@ Status: 🔴 blocking · 🟡 needs a call soon · 🟢 parked deliberately
 
 ---
 
+# Productization
+
+Opened by [ADR 0002](../decisions/0002-dogfood-first-productization.md). These
+did not exist while LeadWell was a personal tool. Several are genuinely
+foundational — Q25 in particular could reshape the product.
+
+## Consent & liability — *the sharpest new area*
+
+LeadWell stores detailed personal information about people who have no account,
+never consented, and will never see it. As a personal tool this is very likely
+covered by the personal/household exemption in most privacy law. **Sold as a
+product — especially one used at work — that exemption goes away.**
+
+| # | Question | Status | Notes |
+|---|---|---|---|
+| Q25 | **What rights do the people in the workspace have?** Under GDPR/UK GDPR they are data subjects with rights of access and erasure, and they don't know the data exists. | 🔴 | Foundational. The honest answer may constrain the product's shape, not just its paperwork. Needs real legal advice, not a template privacy policy. |
+| Q26 | **Who is the controller — us or the user?** Determines whether we're a processor with a DPA or a controller with direct obligations. | 🔴 | Changes the entire compliance posture. Answer before writing any policy. |
+| Q27 | **Are these notes discoverable?** In an employment dispute, a leader's private notes about a report can be subpoenaed. | 🟡 | We should tell users this plainly. Note that principle #6 (dignity / read-aloud test) is already the correct mitigation — a real argument for enforcing it harder, not softening it. |
+| Q28 | **Does the employer have a claim** to notes a leader keeps about their reports on personal software? | 🟡 | Affects the "your data is yours" promise in the StoryBrand agreement plan. |
+| Q29 | **Hosting jurisdiction and data residency** | 🟢 | Supabase region choice. Cheap now, expensive after users exist. |
+
+## Business shape
+
+| # | Question | Status | Notes |
+|---|---|---|---|
+| Q30 | **Indie/lifestyle or venture-scale?** | 🔴 | Determines pricing, scope, support burden, whether the volunteer-leader segment (near-zero budget) is viable, and how much the proof gap matters. Blocks Q5. |
+| Q31 | **Unit economics — what does an active user cost in AI?** A leader with 40 people doing brain-dumps, meeting structuring, and coach chats is real COGS. | 🔴 | Unmodeled. Prompts are large (full profile + history) and the coach is the main value, so usage correlates with the exact users you most want. Model before pricing. |
+| Q32 | **Free tier shape**, given P2 has almost no budget and is the segment that clusters socially | 🟡 | Blocked on Q30. |
+| Q33 | **Does the personal instance stay ahead of the product, or converge?** One codebase with flags, or a fork? | 🟡 | Converge is the right default; recording it because forks happen by accident. |
+
+## Go-to-market
+
+| # | Question | Status | Notes |
+|---|---|---|---|
+| Q34 | **Where do the first 10 non-Phil users come from?** | 🟡 | Church/ministry leader network is the obvious cluster and matches P2. Also the fastest route to Q19's interviews. |
+| Q35 | **What's the transitional CTA?** [`storybrand.md`](storybrand.md) flags this as missing. Candidates: "The Leading-Up Manual", "The Drift Audit". | 🟡 | Both are useful standalone and teach our worldview. Cheap. |
+| Q36 | **Build in public?** It's the strongest available fix for the empty authority slot in the StoryBrand guide role. | 🟡 | Real tension: building a privacy-first product in public is coherent, but only if the demos never use real people. Needs a rule. |
+| Q37 | **Name, domain, trademark** — is "LeadWell" clear? | 🟡 | Check before any public use. Cheap now; a rename after launch is not. |
+
+## Product readiness
+
+| # | Question | Status | Notes |
+|---|---|---|---|
+| Q38 | **First-run for a stranger is undefined.** `seed.ts` seeds every new account with Phil's actual org — `seedMe` is "Phil Chan", teams are Frontier Staff, Men's Core Team, Setup & Breakdown. | 🔴 | Correct for a personal tool, unshippable for a product. Concrete blocker, cheap to fix, and it forces the real question: what does an empty workspace do to reach activation (see [`metrics.md`](metrics.md)) in one session? |
+| Q39 | **What's the minimum to let a stranger use this without embarrassment?** Error states, empty states, billing, ToS, support channel, a way to recover from mistakes. | 🟡 | Write the list before productizing, not during. |
+| Q40 | **What's the n=1 test in practice?** ADR 0002 defines it; it hasn't been used yet. | 🟡 | Apply it to the current roadmap as the first exercise — some items may fail it. |
+
+---
+
 ## Resolved
 
-*(none yet — first entries go here with links to their decision records)*
+| # | Question | Decision |
+|---|---|---|
+| Q1 | Product or personal tool? | **Both — dogfood-first productization.** [ADR 0002](../decisions/0002-dogfood-first-productization.md) |

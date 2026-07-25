@@ -26,6 +26,7 @@
 | **Principle it serves** | # and how |
 | **Principle it strains** | # and how — **every real feature strains something.** If you can't name one, look harder |
 | **Related open question** | Q# if it touches one, or "none" |
+| **n=1 check** | personal / product / both — and which of the three graduation tests it passes ([ADR 0002](../decisions/0002-dogfood-first-productization.md)) |
 
 ## 2. The moment
 
