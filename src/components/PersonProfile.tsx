@@ -46,6 +46,7 @@ export function PersonProfile({
     people,
     selectPerson,
     deletePerson,
+    updateLeadUp,
     modal,
     askAIOpen,
     settingsOpen,
@@ -331,8 +332,12 @@ export function PersonProfile({
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         {tab === "profile" && isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
-            <LeadUpManual key={person.id} person={person} />
-            <WinsLedger person={person} />
+            <LeadUpManual
+              key={person.id}
+              subject={person}
+              onChange={(patch) => updateLeadUp(person.id, patch)}
+            />
+            <WinsLedger subjectId={person.id} />
             <section className="space-y-2">
               <SectionTitle>AI coach</SectionTitle>
               <AICoach person={person} />
