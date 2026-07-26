@@ -26,7 +26,6 @@ export function Overview() {
     sessions,
     actions,
     selectPerson,
-    setTab,
   } = useStore();
   const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -171,7 +170,6 @@ export function Overview() {
                   className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
                   onClick={() => {
                     selectPerson(p.id);
-                    setTab("tree");
                   }}
                 >
                   <Avatar name={p.name} photo={p.photo} size={30} />
@@ -205,7 +203,6 @@ export function Overview() {
                   className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
                   onClick={() => {
                     selectPerson(p.id);
-                    setTab("tree");
                   }}
                 >
                   <Avatar name={p.name} photo={p.photo} size={30} dimmed />

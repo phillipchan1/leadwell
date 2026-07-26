@@ -11,6 +11,7 @@ import {
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { Avatar } from "./Avatar";
+import type { Density } from "./EntitySurface";
 import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { PersonModal } from "./forms";
@@ -34,18 +35,27 @@ const PERSON_TABS: { id: PersonTab; label: string }[] = [
   { id: "notes", label: "Notes" },
 ];
 
+function isPersonTab(value: string | null): value is PersonTab {
+  return PERSON_TABS.some((t) => t.id === value);
+}
+
+/**
+ * Person panel. Its tabs are sub-pages in the URL, so a teammate's 1:1 history
+ * is a link you can send someone. Breadcrumb, teammate pager, close and the
+ * promotion to focus live in EntityChrome.
+ */
 export function PersonProfile({
   person,
-  nested = false,
+  density = "peek",
 }: {
   person: Person;
-  /** True when opened from a team — show back + teammate prev/next. */
-  nested?: boolean;
+  density?: Density;
 }) {
   const {
     teams,
     capacities,
-    people,
+    section,
+    setSection,
     selectPerson,
     deletePerson,
     updateLeadUp,
@@ -78,14 +88,6 @@ export function PersonProfile({
   const customMods = person.customModalities ?? [];
   const hasRead = hasLeadershipRead(person);
 
-  const teammates = people.filter((p) => p.teamId === person.teamId);
-  const teammateIndex = teammates.findIndex((p) => p.id === person.id);
-  const prevTeammate = teammateIndex > 0 ? teammates[teammateIndex - 1] : null;
-  const nextTeammate =
-    teammateIndex >= 0 && teammateIndex < teammates.length - 1
-      ? teammates[teammateIndex + 1]
-      : null;
-
   const meeting = meetingFor(meetings, "person", person.id);
   const mySessions = sessions
     .filter((o) => meeting && o.meetingId === meeting.id)
@@ -98,7 +100,12 @@ export function PersonProfile({
   const lastSession = mySessions.find((o) => o.notes?.trim());
   const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
-  const [tab, setTab] = useState<PersonTab>("profile");
+  // The active tab is a URL sub-page, not local state — that's what makes it
+  // linkable. An unknown section falls back to the profile.
+  const tab: PersonTab = isPersonTab(section) ? section : "profile";
+  const setTab = (next: PersonTab) =>
+    setSection(next === "profile" ? null : next);
+
   const [editingAssessments, setEditingAssessments] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
   const [fillingProfile, setFillingProfile] = useState(false);
@@ -108,9 +115,8 @@ export function PersonProfile({
   const [composingNote, setComposingNote] = useState(false);
   const [newNoteBody, setNewNoteBody] = useState("");
 
-  // Reset tab/editor when switching people
+  // Editors are per-person; the tab resets itself via the route.
   useEffect(() => {
-    setTab("profile");
     setOpenMeetingId(null);
     setEditingNoteId(null);
     setComposingNote(false);
@@ -150,52 +156,6 @@ export function PersonProfile({
     selectPerson,
   ]);
 
-  useEffect(() => {
-    if (!nested) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (
-        modal ||
-        askAIOpen ||
-        settingsOpen ||
-        editingAssessments ||
-        editingPerson ||
-        fillingProfile ||
-        openMeetingId
-      )
-        return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      if (e.key === "ArrowLeft" && prevTeammate) {
-        e.preventDefault();
-        selectPerson(prevTeammate.id);
-      } else if (e.key === "ArrowRight" && nextTeammate) {
-        e.preventDefault();
-        selectPerson(nextTeammate.id);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    nested,
-    modal,
-    askAIOpen,
-    settingsOpen,
-    editingAssessments,
-    editingPerson,
-    fillingProfile,
-    openMeetingId,
-    prevTeammate,
-    nextTeammate,
-    selectPerson,
-  ]);
-
   /**
    * Logging a 1:1 for someone untracked starts tracking it as-needed rather
    * than refusing: you get the history without being measured, and setting a
@@ -226,61 +186,22 @@ export function PersonProfile({
     setTab("topics");
   };
 
-  const wideTab = tab === "sessions" || tab === "topics";
+  const pad = density === "focus" ? "p-6" : "p-4";
 
   return (
     <aside
-      className={`relative flex h-full flex-col overflow-hidden border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900 ${
-        wideTab ? "min-w-0" : ""
-      }`}
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900"
       data-person-tab={tab}
     >
-      {/* Nesting chrome: back to team + teammate pager */}
-      {nested && team && (
-        <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-50 px-3 py-2 dark:border-stone-800 dark:bg-stone-950/60">
-          <button
-            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium text-stone-600 hover:bg-white hover:text-teal-700 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-teal-300"
-            onClick={() => selectPerson(null)}
-            title="Back to team"
-          >
-            <span aria-hidden>←</span>
-            <span className="truncate">{team.name}</span>
-          </button>
-          <span className="shrink-0 text-[10px] tabular-nums text-stone-400">
-            {teammateIndex + 1}/{teammates.length}
-          </span>
-          <button
-            className="rounded-md px-2 py-1 text-sm text-stone-400 enabled:hover:bg-white enabled:hover:text-stone-700 disabled:opacity-30 dark:enabled:hover:bg-stone-800"
-            disabled={!prevTeammate}
-            onClick={() => prevTeammate && selectPerson(prevTeammate.id)}
-            aria-label="Previous teammate"
-            title={prevTeammate ? prevTeammate.name : undefined}
-          >
-            ‹
-          </button>
-          <button
-            className="rounded-md px-2 py-1 text-sm text-stone-400 enabled:hover:bg-white enabled:hover:text-stone-700 disabled:opacity-30 dark:enabled:hover:bg-stone-800"
-            disabled={!nextTeammate}
-            onClick={() => nextTeammate && selectPerson(nextTeammate.id)}
-            aria-label="Next teammate"
-            title={nextTeammate ? nextTeammate.name : undefined}
-          >
-            ›
-          </button>
-        </div>
-      )}
-
       {/* Header */}
-      <div className="shrink-0 border-b border-stone-200 bg-white/90 p-4 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90">
+      <div
+        className={`shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
+      >
         <div className="flex items-start gap-3">
           <Avatar name={person.name} photo={person.photo} size={52} />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-semibold">{person.name}</h2>
-            <div className="text-xs text-stone-500">
-              {[person.role, !nested ? team?.name : null]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
+            <div className="text-xs text-stone-500">{person.role}</div>
             {capacity && (
               <div className="mt-1">
                 <Badge color={capacity.color}>{capacity.label}</Badge>
@@ -292,13 +213,6 @@ export function PersonProfile({
               {lastSession && `Last ${lastSession.date}`}
             </div>
           </div>
-          <button
-            className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
-            aria-label={nested ? "Back to team" : "Close profile"}
-            onClick={() => selectPerson(null)}
-          >
-            ✕
-          </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
           <QuickAction onClick={() => setFillingProfile(true)}>

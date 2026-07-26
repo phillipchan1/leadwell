@@ -15,7 +15,12 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useStore, type NodePosition, type TreeLayer } from "../store/useStore";
+import {
+  useStore,
+  useActiveTeamId,
+  type NodePosition,
+  type TreeLayer,
+} from "../store/useStore";
 import type { Manager, Person, Team } from "../types";
 import { domainCounts, hasLeadershipRead, topDomain } from "../lib/derive";
 import {
@@ -948,11 +953,12 @@ function TeamNode({ data }: NodeProps) {
     deleteTeamAction,
     selectedPersonId,
     selectPerson,
-    selectedTeamId,
     selectTeam,
     treeLayers,
     openModal,
   } = useStore();
+  // Highlight the card while one of its members is open, not just the team.
+  const activeTeamId = useActiveTeamId();
 
   const team = teams.find((t) => t.id === teamId);
   if (!team) return null;
@@ -962,7 +968,7 @@ function TeamNode({ data }: NodeProps) {
   const members = people.filter((p) => p.teamId === team.id);
   const subTeams = teams.filter((t) => t.parentId === team.id);
   const nextAction = teamActions.find((a) => a.teamId === team.id && !a.done);
-  const selected = selectedTeamId === team.id;
+  const selected = activeTeamId === team.id;
   const accent = domain?.color ?? capacity?.color ?? "#0D9488";
   const {
     people: showPeople,

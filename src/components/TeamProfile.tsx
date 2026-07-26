@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
 import { hasApiKey, refineTeamMandate } from "../lib/ai";
 import { Avatar } from "./Avatar";
+import type { Density } from "./EntitySurface";
 import { Badge, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AICoach } from "./AICoach";
 import { StatsBar } from "./StatsBar";
@@ -17,16 +18,18 @@ function today() {
 }
 
 /**
- * Team side panel — optimized for the leadership audit loop:
+ * Team panel — optimized for the leadership audit loop:
  * mandate → next steps → people → supporting detail.
+ *
+ * Renders at both densities. Breadcrumb, sibling pager, close and the
+ * promotion to focus all live in EntityChrome, so this owns content only.
  */
 export function TeamProfile({
   team,
-  nested = false,
+  density = "peek",
 }: {
   team: Team;
-  /** True when a person panel is stacked on top of this team. */
-  nested?: boolean;
+  density?: Density;
 }) {
   const {
     capacities,
@@ -58,21 +61,19 @@ export function TeamProfile({
     deleteTeamNote,
   } = useStore();
 
-  // Esc closes the team only when no person is drilled in (person pops first).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (modal || askAIOpen || selectedPersonId) return;
+      if (modal || askAIOpen) return;
       e.preventDefault();
       selectTeam(null);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modal, askAIOpen, selectedPersonId, selectTeam]);
+  }, [modal, askAIOpen, selectTeam]);
 
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);
-  const parent = teams.find((t) => t.id === team.parentId);
   const subTeams = teams
     .filter((t) => t.parentId === team.id)
     .sort((a, b) => a.order - b.order);
@@ -173,74 +174,13 @@ export function TeamProfile({
     }
   };
 
-  // Compact rail while a person is drilled in — just enough to switch members / go back.
-  if (nested) {
-    return (
-      <aside
-        className="flex h-full flex-col border-l border-stone-200 bg-stone-50 dark:border-stone-800 dark:bg-stone-950/80"
-        style={{ borderTop: `3px solid ${accent}` }}
-      >
-        <button
-          className="flex flex-col items-center gap-2 border-b border-stone-200 px-1.5 py-3 text-center hover:bg-white dark:border-stone-800 dark:hover:bg-stone-900"
-          onClick={() => selectPerson(null)}
-          title={`Back to ${team.name}`}
-        >
-          <span className="text-sm text-stone-400">←</span>
-          <span
-            className="max-h-28 overflow-hidden text-[11px] font-semibold leading-tight text-stone-700 dark:text-stone-200"
-            style={{
-              writingMode: "vertical-rl",
-              transform: "rotate(180deg)",
-            }}
-          >
-            {team.name}
-          </span>
-        </button>
-        <div className="flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto px-1.5 py-3">
-          {members.map((p) => {
-            const active = p.id === selectedPersonId;
-            return (
-              <button
-                key={p.id}
-                onClick={() => selectPerson(p.id)}
-                title={p.name}
-                className={`rounded-full transition-transform ${
-                  active ? "scale-110 ring-2 ring-offset-1 dark:ring-offset-stone-950" : "opacity-70 hover:opacity-100"
-                }`}
-                style={
-                  active
-                    ? ({ ["--tw-ring-color"]: accent } as CSSProperties)
-                    : undefined
-                }
-                aria-current={active ? "true" : undefined}
-              >
-                <Avatar
-                  name={p.name}
-                  photo={p.photo}
-                  size={32}
-                  dimmed={!hasLeadershipRead(p)}
-                />
-              </button>
-            );
-          })}
-        </div>
-        <button
-          className="border-t border-stone-200 py-2 text-xs text-stone-400 hover:bg-white hover:text-stone-700 dark:border-stone-800 dark:hover:bg-stone-900"
-          onClick={() => selectTeam(null)}
-          aria-label="Close"
-          title="Close"
-        >
-          ✕
-        </button>
-      </aside>
-    );
-  }
-
   return (
-    <aside className="flex h-full flex-col border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+    <aside className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
       {/* Header — identity only */}
       <header
-        className="shrink-0 border-b border-stone-200 px-5 py-4 dark:border-stone-800"
+        className={`shrink-0 border-b border-stone-200 py-4 dark:border-stone-800 ${
+          density === "focus" ? "px-8" : "px-5"
+        }`}
         style={{ borderTop: `3px solid ${accent}` }}
       >
         <div className="flex items-start gap-3">
@@ -269,23 +209,7 @@ export function TeamProfile({
                 <span className="text-[11px] text-stone-400">Reports up</span>
               )}
             </div>
-            {parent && (
-              <button
-                type="button"
-                className="mt-2 text-left text-xs text-stone-400 hover:text-teal-600"
-                onClick={() => selectTeam(parent.id)}
-              >
-                Under {parent.name}
-              </button>
-            )}
           </div>
-          <button
-            className="rounded-md p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
-            aria-label="Close team"
-            onClick={() => selectTeam(null)}
-          >
-            ✕
-          </button>
         </div>
 
         {/* Pulse strip */}
@@ -350,7 +274,11 @@ export function TeamProfile({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-8 px-5 py-5">
+        <div
+          className={`flex flex-col gap-8 py-5 ${
+            density === "focus" ? "px-8" : "px-5"
+          }`}
+        >
           {/* Readiness for this team's own standing meeting — separate from
               the 1:1s with its members, which live on each person. */}
           <PrepPanel
