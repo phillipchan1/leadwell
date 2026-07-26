@@ -647,16 +647,24 @@ function MeNode() {
 
 function ManagerNode({ data }: NodeProps) {
   const managerId = (data as { managerId: string }).managerId;
-  const { managers, domains, openModal } = useStore();
+  const { managers, domains, openModal, selectManager, selectedManagerId } =
+    useStore();
   const manager = managers.find((m) => m.id === managerId);
   if (!manager) return null;
   const domain = domains.find((d) => d.id === manager.domainId);
+  const selected = selectedManagerId === manager.id;
+  // How much of the operating manual is filled — the reason to open this node.
+  const filled = Object.values(manager.leadUp ?? {}).filter(
+    (v) => typeof v === "string" && v.trim()
+  ).length;
 
   return (
     <>
       <Card
-        className="group flex w-52 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-blue-400"
-        onClick={() => openModal({ kind: "manager", manager })}
+        className={`group flex w-52 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-blue-400 ${
+          selected ? "border-blue-500 ring-1 ring-blue-500/30" : ""
+        }`}
+        onClick={() => selectManager(manager.id)}
       >
         <Avatar name={manager.name} photo={manager.photo} size={34} />
         <div className="min-w-0 flex-1">
@@ -664,6 +672,15 @@ function ManagerNode({ data }: NodeProps) {
           <div className="truncate text-[10px] text-stone-400">
             {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
               "I report to"}
+          </div>
+          <div className="text-[10px] text-stone-400">
+            {filled > 0 ? (
+              <span className="text-blue-500 dark:text-blue-400">
+                manual {filled}/6
+              </span>
+            ) : (
+              "no manual yet"
+            )}
           </div>
         </div>
         {domain && (
@@ -673,6 +690,17 @@ function ManagerNode({ data }: NodeProps) {
             title={domain.name}
           />
         )}
+        <div
+          className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <IconButton
+            label="Edit manager"
+            onClick={() => openModal({ kind: "manager", manager })}
+          >
+            ✎
+          </IconButton>
+        </div>
       </Card>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>

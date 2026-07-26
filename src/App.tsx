@@ -6,6 +6,7 @@ import { PeopleTable } from "./components/PeopleTable";
 import { Overview } from "./components/Overview";
 import { PersonProfile } from "./components/PersonProfile";
 import { MeProfile } from "./components/MeProfile";
+import { ManagerProfile } from "./components/ManagerProfile";
 import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
@@ -25,11 +26,13 @@ export default function App() {
     setTab,
     people,
     teams,
+    managers,
     dark,
     toggleDark,
     userEmail,
     selectedPersonId,
     selectedTeamId,
+    selectedManagerId,
     selectedMe,
     askAIOpen,
     setAskAIOpen,
@@ -53,9 +56,11 @@ export default function App() {
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
   const selectedTeam = teams.find((t) => t.id === selectedTeamId);
+  const selectedManager = managers.find((m) => m.id === selectedManagerId);
   const assessed = people.filter(hasLeadershipRead).length;
   const showTeam = tab === "tree" && selectedTeam;
   const showPerson = tab === "tree" && selectedPerson;
+  const showManager = tab === "tree" && selectedManager;
   const showMe = tab === "tree" && selectedMe;
   // Person drilled in from a team — keep both panels nested.
   const nested = Boolean(
@@ -150,6 +155,11 @@ export default function App() {
         {showPerson && !nested && (
           <div className="w-full max-w-xl shrink-0">
             <PersonProfile person={selectedPerson} />
+          </div>
+        )}
+        {showManager && (
+          <div className="w-full max-w-xl shrink-0">
+            <ManagerProfile manager={selectedManager} />
           </div>
         )}
         {showMe && (

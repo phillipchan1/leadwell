@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import { SectionTitle, inputCls, inputSmCls } from "./ui";
 
@@ -8,10 +8,16 @@ import { SectionTitle, inputCls, inputSmCls } from "./ui";
  * it serves both up-team people and manager nodes.
  */
 export function WinsLedger({ subjectId }: { subjectId: string }) {
-  const wins = useStore((s) =>
-    s.wins
-      .filter((w) => w.personId === subjectId)
-      .sort((a, b) => b.date.localeCompare(a.date))
+  // Select the stable slice and derive here — filtering inside the selector
+  // hands zustand a fresh array every render, which it treats as a changed
+  // snapshot and loops on.
+  const allWins = useStore((s) => s.wins);
+  const wins = useMemo(
+    () =>
+      allWins
+        .filter((w) => w.personId === subjectId)
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [allWins, subjectId]
   );
   const addWin = useStore((s) => s.addWin);
   const deleteWin = useStore((s) => s.deleteWin);

@@ -1,4 +1,4 @@
-import type { ChatMessage, Person, Team } from "../types";
+import type { ChatMessage, LeadUpProfile, Manager, Person, Team } from "../types";
 import {
   DOMAIN_COLOR,
   MBTI,
@@ -19,6 +19,22 @@ import { getAccessToken } from "./auth";
  */
 export function hasApiKey(): boolean {
   return supabaseConfigured && Boolean(useStore.getState().userId);
+}
+
+/** Operating-manual bullets, shared by the person and manager prompts. */
+function leadUpManualLines(lu: LeadUpProfile | undefined): string {
+  if (!lu) return "";
+  return [
+    lu.archetype && `- Leader type: ${lu.archetype}`,
+    lu.winsLike && `- What "good" looks like to them: ${lu.winsLike}`,
+    lu.anxieties && `- What makes them anxious: ${lu.anxieties}`,
+    lu.currency && `- Their currency (what earns trust): ${lu.currency}`,
+    lu.comms && `- How they want to hear from me: ${lu.comms}`,
+    lu.theirScorecard &&
+      `- What they're measured on by their boss: ${lu.theirScorecard}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** Build the full leadership-context system prompt for one person. */
@@ -49,18 +65,7 @@ export function personSystemPrompt(personId: string): string {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 6);
 
-  const manualLines = isLeadUp && lu
-    ? [
-        lu.winsLike && `- What "good" looks like to them: ${lu.winsLike}`,
-        lu.anxieties && `- What makes them anxious: ${lu.anxieties}`,
-        lu.currency && `- Their currency (what earns trust): ${lu.currency}`,
-        lu.comms && `- How they want to hear from me: ${lu.comms}`,
-        lu.theirScorecard &&
-          `- What they're measured on by their boss: ${lu.theirScorecard}`,
-      ]
-        .filter(Boolean)
-        .join("\n")
-    : "";
+  const manualLines = isLeadUp ? leadUpManualLines(lu) : "";
 
   const top5 = (person.assessments.cliftonTop5 ?? [])
     .map((t, i) => `${i + 1}. ${t} (${THEME_DOMAIN[t] ?? "?"})`)
@@ -132,6 +137,45 @@ export function personSystemPrompt(personId: string): string {
       `## Recent notes\n${notes.map((n) => `- ${n.date}: ${n.body}`).join("\n")}`,
     !hasLeadershipRead(person)
       ? `\nNo leadership read recorded yet — suggest a free-text brain dump (AI fill) or CliftonStrengths / Enneagram / MBTI / other modalities, but still give practical general coaching.`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/**
+ * Build the leading-up system prompt for a manager node. Managers carry no
+ * assessments or 1:1 history — the whole read is the operating manual plus the
+ * wins banked with them.
+ */
+export function managerSystemPrompt(managerId: string): string {
+  const s = useStore.getState();
+  const manager = s.managers.find((m) => m.id === managerId);
+  if (!manager) return orgSystemPrompt();
+
+  const domain = s.domains.find((d) => d.id === manager.domainId);
+  const manualLines = leadUpManualLines(manager.leadUp);
+  const wins = s.wins
+    .filter((w) => w.personId === manager.id)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 6);
+
+  return [
+    `You are a leadership coach helping ${s.me.name} lead UP to one specific leader they report to. Coaching here is about managing this relationship well — communicating in their language, building trust, bringing solutions, and making them successful upward — not about directing them. Be practical and specific.`,
+    ``,
+    `## Leader: ${manager.name}`,
+    manager.role && `Role: ${manager.role}`,
+    domain && `Life area: ${domain.name}`,
+    `Relationship: ${s.me.name} REPORTS TO ${manager.name}.`,
+    ``,
+    manualLines &&
+      `## Operating manual (how to succeed with them)\nThis is their wiring as ${s.me.name}'s manager — reward, anxieties, currency, and scorecard. Anchor advice on this, especially their currency and what their own boss measures them on.\n${manualLines}`,
+    wins.length &&
+      `## Wins banked with them\nValue ${s.me.name} has delivered, in their currency — usable as evidence at reviews or before an ask:\n${wins
+        .map((w) => `- ${w.date}: ${w.text}${w.impact ? ` — ${w.impact}` : ""}`)
+        .join("\n")}`,
+    !manualLines
+      ? `\nThe operating manual is still empty. Ask sharp questions that would fill it in — what they reward, what makes them anxious, their currency, how they want to hear from ${s.me.name}, and what their own boss measures them on — while still giving practical general leading-up advice.`
       : "",
   ]
     .filter(Boolean)
@@ -945,6 +989,30 @@ export function coachPresets(person: Person): { label: string; prompt: string }[
     {
       label: "Draft a check-in message",
       prompt: `Draft a short, warm check-in message I could send ${person.name} today. Match the tone to their personality.`,
+    },
+  ];
+}
+
+/** Presets for a manager node — all leading-up, no 1:1 or development framing. */
+export function managerCoachPresets(
+  manager: Manager
+): { label: string; prompt: string }[] {
+  return [
+    {
+      label: "How do I win with them?",
+      prompt: `Based on ${manager.name}'s operating manual, how do I win with them over the next month? Be specific about what to do more of and less of.`,
+    },
+    {
+      label: "Fill in their manual",
+      prompt: `Interview me to fill in ${manager.name}'s operating manual — what they reward, what makes them anxious, their currency, how they want to hear from me, and what their own boss measures them on. Ask a few questions at a time, then summarize what I should record in each field.`,
+    },
+    {
+      label: "Frame my next ask",
+      prompt: `I need to ask ${manager.name} for something. Using their currency and what their boss measures them on, help me frame the ask and pick which banked wins to lead with.`,
+    },
+    {
+      label: "Draft a status update",
+      prompt: `Draft a status update for ${manager.name} in the cadence and detail level they prefer. Match their language, not mine.`,
     },
   ];
 }

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
-import type { Person, Team } from "../types";
+import type { Manager, Person, Team } from "../types";
 import {
   coachPresets,
   hasApiKey,
+  managerCoachPresets,
+  managerSystemPrompt,
   orgSystemPrompt,
   personSystemPrompt,
   streamChat,
@@ -13,17 +15,29 @@ import {
 import { buttonPrimaryCls, inputCls } from "./ui";
 
 /**
- * Chat panel. Scoped to a person or a team when given, otherwise org-level
- * (the header "Ask AI" button). History persists per subject in the store.
+ * Chat panel. Scoped to a person, a manager, or a team when given, otherwise
+ * org-level (the header "Ask AI" button). History persists per subject.
  */
-export function AICoach({ person, team }: { person?: Person; team?: Team }) {
-  const chatKey = person?.id ?? (team ? `team:${team.id}` : "org");
+export function AICoach({
+  person,
+  manager,
+  team,
+}: {
+  person?: Person;
+  manager?: Manager;
+  team?: Team;
+}) {
+  const chatKey =
+    person?.id ??
+    (manager ? `mgr:${manager.id}` : team ? `team:${team.id}` : "org");
   const { chats, appendChat, clearChat } = useStore();
   const presets = person
     ? coachPresets(person)
-    : team
-      ? teamCoachPresets(team)
-      : [];
+    : manager
+      ? managerCoachPresets(manager)
+      : team
+        ? teamCoachPresets(team)
+        : [];
   const history = chats[chatKey] ?? [];
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -45,9 +59,11 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
     try {
       const system = person
         ? personSystemPrompt(person.id)
-        : team
-          ? teamSystemPrompt(team.id)
-          : orgSystemPrompt();
+        : manager
+          ? managerSystemPrompt(manager.id)
+          : team
+            ? teamSystemPrompt(team.id)
+            : orgSystemPrompt();
       const messages = [
         ...(useStore.getState().chats[chatKey] ?? []),
       ];
