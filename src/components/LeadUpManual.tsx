@@ -1,7 +1,16 @@
 import { useState } from "react";
-import { useStore } from "../store/useStore";
-import type { LeadUpProfile, Person } from "../types";
+import type { LeadUpProfile } from "../types";
 import { SectionTitle } from "./ui";
+
+/**
+ * Anyone I lead up to. Both up-team people and manager nodes carry the same
+ * operating manual, so the editor works off this shape rather than Person.
+ */
+export type LeadUpSubject = {
+  id: string;
+  name: string;
+  leadUp?: LeadUpProfile;
+};
 
 /** The fields of the operating manual, in the order they're most useful to fill. */
 const FIELDS: {
@@ -48,19 +57,31 @@ const FIELDS: {
   },
 ];
 
-export function LeadUpManual({ person }: { person: Person }) {
+export function LeadUpManual({
+  subject,
+  onChange,
+}: {
+  subject: LeadUpSubject;
+  /** Merge a patch into the subject's manual (person vs. manager store action). */
+  onChange: (patch: Partial<LeadUpProfile>) => void;
+}) {
   return (
     <section className="space-y-3">
       <div>
         <SectionTitle>Operating manual</SectionTitle>
         <p className="mt-1 text-[11px] text-stone-400">
-          How to win with {person.name.split(" ")[0]} — not their personality,
+          How to win with {subject.name.split(" ")[0]} — not their personality,
           their wiring as your manager.
         </p>
       </div>
       <div className="space-y-3">
         {FIELDS.map((f) => (
-          <ManualField key={f.key} person={person} field={f} />
+          <ManualField
+            key={f.key}
+            subject={subject}
+            field={f}
+            onChange={onChange}
+          />
         ))}
       </div>
     </section>
@@ -68,20 +89,21 @@ export function LeadUpManual({ person }: { person: Person }) {
 }
 
 function ManualField({
-  person,
+  subject,
   field,
+  onChange,
 }: {
-  person: Person;
+  subject: LeadUpSubject;
   field: (typeof FIELDS)[number];
+  onChange: (patch: Partial<LeadUpProfile>) => void;
 }) {
-  const updateLeadUp = useStore((s) => s.updateLeadUp);
-  const saved = person.leadUp?.[field.key] ?? "";
+  const saved = subject.leadUp?.[field.key] ?? "";
   const [value, setValue] = useState(saved);
 
   const commit = () => {
     const trimmed = value.trim();
     if (trimmed !== (saved ?? "")) {
-      updateLeadUp(person.id, { [field.key]: trimmed || undefined });
+      onChange({ [field.key]: trimmed || undefined });
     }
   };
 

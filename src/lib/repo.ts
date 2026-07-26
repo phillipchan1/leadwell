@@ -208,6 +208,7 @@ const map = {
       role: nn(m.role),
       domain_id: nn(m.domainId),
       photo: nn(m.photo),
+      lead_up: nn(m.leadUp ?? null),
     }),
     fromRow: (r: Row): Manager => ({
       id: r.id as string,
@@ -215,6 +216,7 @@ const map = {
       role: opt(r.role as string | null),
       domainId: opt(r.domain_id as string | null),
       photo: opt(r.photo as string | null),
+      leadUp: opt(r.lead_up as LeadUpProfile | null),
     }),
   },
   teams: {

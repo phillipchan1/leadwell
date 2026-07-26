@@ -40,6 +40,8 @@ export type Manager = {
   role?: string;
   domainId?: string;
   photo?: string; // base64 data URL
+  /** Operating manual for leading up to them — same shape as up-team people. */
+  leadUp?: LeadUpProfile;
 };
 
 export type StrengthTheme = string;

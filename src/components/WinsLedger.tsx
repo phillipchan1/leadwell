@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
-import type { Person } from "../types";
 import { SectionTitle, inputCls, inputSmCls } from "./ui";
 
 /**
- * Value banked with a person I report to, in *their* currency — recallable
- * evidence for reviews, asks, and comp conversations.
+ * Value banked with someone I report to, in *their* currency — recallable
+ * evidence for reviews, asks, and comp conversations. Keyed by subject id, so
+ * it serves both up-team people and manager nodes.
  */
-export function WinsLedger({ person }: { person: Person }) {
+export function WinsLedger({ subjectId }: { subjectId: string }) {
   const wins = useStore((s) =>
     s.wins
-      .filter((w) => w.personId === person.id)
+      .filter((w) => w.personId === subjectId)
       .sort((a, b) => b.date.localeCompare(a.date))
   );
   const addWin = useStore((s) => s.addWin);
@@ -23,7 +23,7 @@ export function WinsLedger({ person }: { person: Person }) {
     e.preventDefault();
     if (!text.trim()) return;
     addWin({
-      personId: person.id,
+      personId: subjectId,
       text: text.trim(),
       impact: impact.trim() || undefined,
     });

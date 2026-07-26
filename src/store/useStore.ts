@@ -72,6 +72,8 @@ type UIState = {
   treeLayers: TreeLayers;
   selectedPersonId: string | null;
   selectedTeamId: string | null;
+  /** Side panel open for a manager I report to (leading-up profile). */
+  selectedManagerId: string | null;
   /** Side panel open for the signed-in leader's own profile. */
   selectedMe: boolean;
   collapsedTeams: string[];
@@ -89,6 +91,7 @@ type Store = PersistedData &
     toggleTreeLayer: (layer: TreeLayer) => void;
     selectPerson: (id: string | null) => void;
     selectTeam: (id: string | null) => void;
+    selectManager: (id: string | null) => void;
     selectMe: (open: boolean) => void;
     toggleTeamCollapsed: (teamId: string) => void;
     toggleDark: () => void;
@@ -107,6 +110,8 @@ type Store = PersistedData &
     // managers (people I report to, above me)
     addManager: (manager: Omit<Manager, "id">) => void;
     updateManager: (id: string, patch: Partial<Manager>) => void;
+    /** Merge a patch into a manager's leading-up operating manual. */
+    updateManagerLeadUp: (id: string, patch: Partial<LeadUpProfile>) => void;
     deleteManager: (id: string) => void;
     // teams
     addTeam: (team: Omit<Team, "id" | "order">) => void;
@@ -289,6 +294,7 @@ export const useStore = create<Store>((set, get) => ({
   },
   selectedPersonId: null,
   selectedTeamId: null,
+  selectedManagerId: null,
   selectedMe: false,
   collapsedTeams: [],
   dark: initialDark(),
@@ -304,13 +310,22 @@ export const useStore = create<Store>((set, get) => ({
         if (!teamId) return false;
         return s.teams.find((t) => t.id === teamId)?.domainId === id;
       };
-      let { selectedTeamId, selectedPersonId } = s;
+      let { selectedTeamId, selectedPersonId, selectedManagerId } = s;
       if (selectedTeamId && !teamInDomain(selectedTeamId)) selectedTeamId = null;
       if (selectedPersonId) {
         const person = s.people.find((p) => p.id === selectedPersonId);
         if (!teamInDomain(person?.teamId)) selectedPersonId = null;
       }
-      return { treeDomainId: id, selectedTeamId, selectedPersonId };
+      if (selectedManagerId) {
+        const manager = s.managers.find((m) => m.id === selectedManagerId);
+        if (manager?.domainId !== id) selectedManagerId = null;
+      }
+      return {
+        treeDomainId: id,
+        selectedTeamId,
+        selectedPersonId,
+        selectedManagerId,
+      };
     }),
   toggleTreeLayer: (layer) =>
     set((s) => ({
@@ -324,12 +339,31 @@ export const useStore = create<Store>((set, get) => ({
       return {
         selectedPersonId: id,
         selectedTeamId: person?.teamId ?? s.selectedTeamId,
+        selectedManagerId: null,
         selectedMe: false,
       };
     }),
-  // Opening a team clears any drilled-in person / me panel.
+  // Opening a team clears any drilled-in person / manager / me panel.
   selectTeam: (id) =>
-    set({ selectedTeamId: id, selectedPersonId: null, selectedMe: false }),
+    set({
+      selectedTeamId: id,
+      selectedPersonId: null,
+      selectedManagerId: null,
+      selectedMe: false,
+    }),
+  // A manager panel stands alone above me — nothing nests inside it.
+  selectManager: (id) =>
+    set(
+      id
+        ? {
+            selectedManagerId: id,
+            selectedPersonId: null,
+            selectedTeamId: null,
+            selectedMe: false,
+            tab: "tree",
+          }
+        : { selectedManagerId: null }
+    ),
   selectMe: (open) =>
     set(
       open
@@ -337,6 +371,7 @@ export const useStore = create<Store>((set, get) => ({
             selectedMe: true,
             selectedPersonId: null,
             selectedTeamId: null,
+            selectedManagerId: null,
             tab: "tree",
           }
         : { selectedMe: false }
@@ -401,12 +436,22 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({
       managers: s.managers.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     })),
+  updateManagerLeadUp: (id, patch) =>
+    set((s) => ({
+      managers: s.managers.map((m) =>
+        m.id === id ? { ...m, leadUp: { ...m.leadUp, ...patch } } : m
+      ),
+    })),
   deleteManager: (id) =>
     set((s) => {
       const { [`mgr:${id}`]: _pos, ...nodePositions } = s.nodePositions;
       return {
         managers: s.managers.filter((m) => m.id !== id),
+        // Wins are keyed by subject id, managers included.
+        wins: s.wins.filter((w) => w.personId !== id),
         nodePositions,
+        selectedManagerId:
+          s.selectedManagerId === id ? null : s.selectedManagerId,
       };
     }),
 
@@ -713,6 +758,7 @@ export const useStore = create<Store>((set, get) => ({
       phase: "ready",
       selectedPersonId: null,
       selectedTeamId: null,
+      selectedManagerId: null,
       selectedMe: false,
     });
   },
