@@ -1,0 +1,916 @@
+<title>Readiness — LeadWell design study</title>
+
+<style>
+  :root {
+    --ground: #faf9f7;
+    --surface: #ffffff;
+    --surface-2: #f5f4f2;
+    --ink: #1c1917;
+    --ink-soft: #57534e;
+    --muted: #78716c;
+    --faint: #a8a29e;
+    --hairline: #e7e5e4;
+    --hairline-soft: #efedeb;
+    --accent: #0d9488;
+    --on-accent: #ffffff;
+    --dot: #d6d3d1;
+
+    --rest: #a8a29e;
+    --ready: #0e9f6e;
+    --prep: #dd8f11;
+    --late: #cf4f45;
+
+    --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --col: 40rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0c0a09;
+      --surface: #1c1917;
+      --surface-2: #171412;
+      --ink: #f5f5f4;
+      --ink-soft: #d6d3d1;
+      --muted: #a8a29e;
+      --faint: #78716c;
+      --hairline: #292524;
+      --hairline-soft: #221f1d;
+      --accent: #2dd4bf;
+      --on-accent: #0c0a09;
+      --dot: #292524;
+
+      --rest: #78716c;
+      --ready: #34b98a;
+      --prep: #e5a336;
+      --late: #e0655b;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0c0a09;
+    --surface: #1c1917;
+    --surface-2: #171412;
+    --ink: #f5f5f4;
+    --ink-soft: #d6d3d1;
+    --muted: #a8a29e;
+    --faint: #78716c;
+    --hairline: #292524;
+    --hairline-soft: #221f1d;
+    --accent: #2dd4bf;
+    --on-accent: #0c0a09;
+    --dot: #292524;
+    --rest: #78716c;
+    --ready: #34b98a;
+    --prep: #e5a336;
+    --late: #e0655b;
+  }
+
+  :root[data-theme="light"] {
+    --ground: #faf9f7;
+    --surface: #ffffff;
+    --surface-2: #f5f4f2;
+    --ink: #1c1917;
+    --ink-soft: #57534e;
+    --muted: #78716c;
+    --faint: #a8a29e;
+    --hairline: #e7e5e4;
+    --hairline-soft: #efedeb;
+    --accent: #0d9488;
+    --on-accent: #ffffff;
+    --dot: #d6d3d1;
+    --rest: #a8a29e;
+    --ready: #0e9f6e;
+    --prep: #dd8f11;
+    --late: #cf4f45;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { display: flex; flex-direction: column; gap: 4.5rem; padding: 0 0 6rem; }
+  .col {
+    width: min(var(--col), calc(100% - 2.5rem));
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+  .col--wide { width: min(58rem, calc(100% - 2.5rem)); }
+
+  /* ── Type ─────────────────────────────────────────── */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2rem, 5.5vw, 3rem);
+    line-height: 1.08;
+    letter-spacing: -0.022em;
+    font-weight: 500;
+    text-wrap: balance;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.5rem;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+  h3 {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+  }
+  p { color: var(--ink-soft); }
+  .lede { font-size: 1.0625rem; color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 620; }
+  em { font-style: italic; }
+  .pull {
+    font-family: var(--serif);
+    font-size: 1.375rem;
+    line-height: 1.35;
+    letter-spacing: -0.012em;
+    color: var(--ink);
+    border-left: 2px solid var(--accent);
+    padding-left: 1.1rem;
+    text-wrap: pretty;
+  }
+  .note { font-size: 0.8125rem; color: var(--muted); }
+  code {
+    font-family: var(--mono);
+    font-size: 0.85em;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 0.3em;
+    padding: 0.05em 0.35em;
+  }
+
+  .rule { height: 1px; background: var(--hairline); border: 0; }
+
+  /* ── Header ───────────────────────────────────────── */
+  .masthead { padding-top: 4rem; }
+  .masthead .meta {
+    display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem;
+    font-size: 0.75rem; color: var(--faint);
+  }
+
+  /* ── Split: depth vs prep ─────────────────────────── */
+  .split { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .split { grid-template-columns: 1fr 1fr; } }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 1rem;
+    padding: 1.25rem 1.35rem;
+    display: flex; flex-direction: column; gap: 0.6rem;
+  }
+  .panel__k { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+  .panel h3 { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; letter-spacing: -0.01em; }
+  .panel p { font-size: 0.9rem; margin: 0; }
+  .panel dl { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 0.85rem; font-size: 0.8125rem; margin: 0; }
+  .panel dt { color: var(--faint); }
+  .panel dd { margin: 0; color: var(--ink-soft); }
+
+  /* ── State ladder ─────────────────────────────────── */
+  .ladder { display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--hairline); }
+  .ladder__row {
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    gap: 0.35rem 1.25rem;
+    align-items: baseline;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  @media (max-width: 34rem) { .ladder__row { grid-template-columns: 1fr; } }
+  .ladder__row p { margin: 0; font-size: 0.875rem; }
+  .ladder__move { font-size: 0.8125rem; color: var(--muted); }
+  .ladder__move b { color: var(--ink-soft); font-weight: 600; }
+
+  .state {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-size: 0.8125rem; font-weight: 600; color: var(--s);
+    white-space: nowrap;
+  }
+  .state::before {
+    content: ""; width: 0.5rem; height: 0.5rem; border-radius: 999px;
+    background: var(--s); flex: none;
+  }
+  .state--hollow::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--s); }
+  .s-rest { --s: var(--rest); }
+  .s-ready { --s: var(--ready); }
+  .s-prep { --s: var(--prep); }
+  .s-late { --s: var(--late); }
+
+  /* ── Canvas band ──────────────────────────────────── */
+  .canvas {
+    position: relative;
+    border-block: 1px solid var(--hairline);
+    background:
+      radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 0) 0 0 / 26px 26px,
+      var(--surface-2);
+    padding: 2.25rem 0 2.5rem;
+    overflow-x: auto;
+  }
+  .canvas__inner {
+    width: min(58rem, calc(100% - 2.5rem));
+    margin-inline: auto;
+    display: flex; flex-direction: column; gap: 1.35rem;
+  }
+  .canvas__bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+    justify-content: space-between;
+  }
+  .layers { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .layer {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 0.6rem;
+    padding: 0.3rem 0.6rem;
+    font: inherit; font-size: 0.75rem;
+    cursor: default;
+  }
+  .layer kbd {
+    font-family: var(--mono); font-size: 0.625rem;
+    background: var(--surface-2); border-radius: 0.2rem; padding: 0 0.25rem;
+    color: var(--faint);
+  }
+  button.layer { cursor: pointer; transition: border-color 140ms ease, color 140ms ease, background 140ms ease; }
+  button.layer:hover { border-color: var(--accent); color: var(--ink); }
+  button.layer:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.layer[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    font-weight: 600;
+  }
+  button.layer[aria-pressed="true"] kbd { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+
+  .headline-strip {
+    display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 0.7rem;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.8125rem;
+    color: var(--ink-soft);
+  }
+  .headline-strip b { font-weight: 650; color: var(--ink); }
+  .headline-strip .sep { color: var(--hairline); }
+
+  .cards { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+
+  /* ── Team card (mirrors the real 320px canvas node) ── */
+  .card {
+    --accent-team: var(--accent);
+    --state: var(--rest);
+    position: relative;
+    width: 20rem; flex: none;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 1rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgb(28 25 23 / 0.05);
+  }
+  .card__stripe { height: 4px; background: var(--accent-team); }
+  .card__rail {
+    position: absolute; left: 0; top: 4px; bottom: 0; width: 3px;
+    background: var(--state);
+    opacity: 0; transition: opacity 220ms ease;
+  }
+  .card__body { padding: 0.9rem 1rem 0.7rem; display: flex; flex-direction: column; gap: 0.55rem; }
+  .card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.6rem; }
+  .card__name { font-size: 0.875rem; font-weight: 650; letter-spacing: -0.005em; }
+  .card__tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+  .tag {
+    font-size: 0.6875rem; font-weight: 500;
+    border-radius: 999px; padding: 0.1rem 0.45rem;
+    background: color-mix(in srgb, var(--tag) 14%, transparent);
+    color: var(--tag);
+  }
+  .card__foot {
+    border-top: 1px solid var(--hairline-soft);
+    padding: 0.6rem 1rem 0.7rem;
+    display: flex; flex-direction: column; gap: 0.15rem;
+  }
+  .card__count { font-size: 0.6875rem; color: var(--faint); }
+
+  /* countdown chip */
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 0.6875rem; letter-spacing: 0.01em;
+    border-radius: 0.4rem; padding: 0.15rem 0.4rem;
+    background: var(--surface-2); color: var(--faint);
+    border: 1px solid transparent;
+    white-space: nowrap;
+    transition: color 220ms ease, background 220ms ease, border-color 220ms ease;
+  }
+  .on .chip {
+    color: var(--state);
+    background: color-mix(in srgb, var(--state) 12%, transparent);
+    border-color: color-mix(in srgb, var(--state) 26%, transparent);
+  }
+  .on .card__rail { opacity: 1; }
+
+  /* distribution bar */
+  .dist { display: flex; height: 3px; border-radius: 999px; overflow: hidden; background: var(--hairline); margin-top: 0.15rem; }
+  .dist span { height: 100%; display: block; background: var(--seg); opacity: 0; transition: opacity 220ms ease; }
+  .on .dist span { opacity: 1; }
+
+  /* person rows */
+  .rows { display: flex; flex-direction: column; gap: 0.1rem; margin-top: 0.4rem; }
+  .row {
+    position: relative;
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.3rem 0.4rem 0.3rem 0.55rem;
+    border-radius: 0.6rem;
+  }
+  .row__bar {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 1.5rem; border-radius: 999px;
+    background: var(--cap, var(--accent-team));
+    transition: background 220ms ease;
+  }
+  .on .row__bar { background: var(--state); }
+  .av {
+    width: 1.75rem; height: 1.75rem; border-radius: 999px; flex: none;
+    display: grid; place-items: center;
+    font-size: 0.625rem; font-weight: 600; color: #fff;
+    background: var(--av, #78716c);
+  }
+  .row--unread .av { opacity: 0.45; }
+  .row--unread .row__who { color: var(--faint); }
+  .row__who { font-size: 0.8125rem; }
+  .row__meta {
+    margin-left: auto;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 0.625rem; color: var(--faint);
+    transition: color 220ms ease;
+  }
+  .on .row__meta { color: var(--state); }
+  .row__sub { font-size: 0.6875rem; color: var(--faint); }
+
+  .caption { font-size: 0.75rem; color: var(--muted); }
+  .caption b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ── Window timeline ──────────────────────────────── */
+  .timeline {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 1rem; padding: 1.35rem 1.35rem 1.1rem;
+    display: flex; flex-direction: column; gap: 0.9rem;
+  }
+  .track { position: relative; height: 2.75rem; }
+  .track__line {
+    position: absolute; left: 0; right: 0; top: 1.25rem; height: 2px;
+    background: var(--hairline); border-radius: 999px;
+  }
+  .track__seg {
+    position: absolute; top: 1.25rem; height: 2px; border-radius: 999px;
+    background: var(--seg);
+  }
+  .track__mark {
+    position: absolute; top: 0; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+    font-size: 0.6875rem; color: var(--muted); white-space: nowrap;
+  }
+  .track__mark i {
+    width: 0.5rem; height: 0.5rem; border-radius: 999px; background: var(--m, var(--faint));
+    margin-top: 1rem; order: 2;
+  }
+  .track__mark span { order: 1; }
+  .track__band {
+    position: absolute; top: 0.55rem; height: 1.4rem; border-radius: 0.3rem;
+    background: color-mix(in srgb, var(--prep) 12%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--prep) 45%, transparent);
+  }
+  .track__band em {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-style: normal; font-size: 0.625rem; font-weight: 600; color: var(--prep);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+
+  /* ── Prep drawer ──────────────────────────────────── */
+  .drawer {
+    width: min(26rem, 100%);
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 1rem; overflow: hidden;
+    box-shadow: 0 12px 28px -18px rgb(28 25 23 / 0.35);
+  }
+  .drawer__head {
+    padding: 0.95rem 1.1rem;
+    border-bottom: 1px solid var(--hairline-soft);
+    display: flex; align-items: center; gap: 0.7rem;
+  }
+  .drawer__head .av { width: 2.25rem; height: 2.25rem; font-size: 0.75rem; }
+  .drawer__title { font-size: 0.9375rem; font-weight: 650; }
+  .drawer__sub { font-size: 0.6875rem; color: var(--faint); }
+  .check { display: flex; flex-direction: column; }
+  .check li {
+    display: flex; align-items: flex-start; gap: 0.6rem;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.8125rem;
+    border-bottom: 1px solid var(--hairline-soft);
+    color: var(--ink-soft);
+  }
+  .check li:last-child { border-bottom: 0; }
+  .check .mark {
+    width: 1rem; height: 1rem; border-radius: 999px; flex: none; margin-top: 0.15rem;
+    display: grid; place-items: center;
+    font-size: 0.5625rem; font-weight: 700; color: #fff;
+  }
+  .check .done .mark { background: var(--ready); }
+  .check .todo .mark { background: transparent; box-shadow: inset 0 0 0 1.5px var(--prep); }
+  .check .todo { color: var(--ink); }
+  .check .fix {
+    margin-left: auto; font-size: 0.6875rem; font-weight: 600;
+    color: var(--accent); white-space: nowrap;
+  }
+  .drawer__cta {
+    padding: 0.85rem 1.1rem 1rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
+  }
+  .btn {
+    border: 0; border-radius: 0.7rem;
+    background: var(--accent); color: var(--on-accent);
+    font: inherit; font-size: 0.8125rem; font-weight: 600;
+    padding: 0.6rem 0.9rem; text-align: center;
+    cursor: pointer;
+  }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .side { display: grid; gap: 1.25rem; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 50rem) { .side { grid-template-columns: 26rem 1fr; } }
+
+  /* ── Phases ───────────────────────────────────────── */
+  .phases { display: grid; gap: 0.9rem; grid-template-columns: 1fr; }
+  @media (min-width: 44rem) { .phases { grid-template-columns: repeat(3, 1fr); } }
+  .phase {
+    border: 1px solid var(--hairline); border-radius: 1rem;
+    background: var(--surface); padding: 1.1rem 1.15rem;
+    display: flex; flex-direction: column; gap: 0.4rem;
+  }
+  .phase__n {
+    font-family: var(--mono); font-size: 0.6875rem; color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+  .phase h3 { font-family: var(--serif); font-size: 1.0625rem; font-weight: 600; }
+  .phase p { font-size: 0.8125rem; margin: 0; }
+
+  ul.plain { list-style: none; display: flex; flex-direction: column; gap: 0.45rem; }
+  ul.plain li { display: flex; gap: 0.6rem; font-size: 0.9rem; color: var(--ink-soft); }
+  ul.plain li::before { content: "—"; color: var(--faint); flex: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="col masthead">
+    <div class="eyebrow">LeadWell · design study</div>
+    <h1>Readiness</h1>
+    <p class="lede">
+      Knowing whether I'm behind — before I sit down, not four minutes into the
+      meeting.
+    </p>
+    <div class="meta">
+      <span>Proposal, nothing built yet</span>
+      <span>Companion to <code>docs/readiness.md</code></span>
+    </div>
+  </header>
+
+  <section class="col">
+    <div class="eyebrow">The gap</div>
+    <p>
+      LeadWell answers <strong>“who do I know?”</strong> — coverage, blind spots,
+      domain mix. That's a library metric. It's backward-looking, and it reads the
+      same on Tuesday as it does on Wednesday.
+    </p>
+    <p>
+      It cannot tell you that tomorrow's 9am has no agenda and last week's never
+      got written up. Coverage says the shelf is stocked. It says nothing about
+      whether you're ready to pull from it.
+    </p>
+    <p class="pull">
+      Behind isn't a score. Behind is: the prep window is open and the checklist
+      isn't done.
+    </p>
+  </section>
+
+  <section class="col">
+    <div class="eyebrow">The split</div>
+    <h2>Two kinds of behind, two opposite fixes</h2>
+    <p>
+      <em>Groomed</em> is the right idea aimed at the wrong half. A backlog is
+      groomed when the next sprint's items are ready to pull — not when the
+      backlog is well documented. Grooming is about the next pull, and it decays.
+      So the concept splits in two, and the split is the whole design.
+    </p>
+    <div class="split">
+      <div class="panel">
+        <div class="panel__k">Slow · months</div>
+        <h3>Depth</h3>
+        <p>Do I actually know this person?</p>
+        <dl>
+          <dt>Built from</dt><dd>Profile, how-to-lead, mandate, lead-up manual</dd>
+          <dt>Fails as</dt><dd>Leading a stranger</dd>
+          <dt>Fixed by</dt><dd>One 20-minute sit-down</dd>
+        </dl>
+      </div>
+      <div class="panel">
+        <div class="panel__k">Fast · resets every meeting</div>
+        <h3>Prep</h3>
+        <p>Am I ready for the next time we meet?</p>
+        <dl>
+          <dt>Built from</dt><dd>Agenda, last notes, open commitments, a date</dd>
+          <dt>Fails as</dt><dd>The four-minutes-out panic</dd>
+          <dt>Fixed by</dt><dd>Ten minutes, that morning</dd>
+        </dl>
+      </div>
+    </div>
+    <p class="note">
+      You can be full Depth and zero Prep — you know Marcus cold and you'll still
+      walk in naked. Blend them into one “groomed %” and you lose which kind of
+      behind you are.
+    </p>
+  </section>
+
+  <section class="col">
+    <div class="eyebrow">The ladder</div>
+    <h2>Five states, named — not a percentage</h2>
+    <p>
+      A number on a canvas card is dashboard sludge. A state is a decision. Order
+      matters: <strong>not having seen a human outranks not having filed the
+      notes.</strong> That precedence is the leadership opinion baked into the
+      code.
+    </p>
+    <div class="ladder">
+      <div class="ladder__row">
+        <span class="state s-rest">Resting</span>
+        <div>
+          <p>Met recently. The window hasn't opened.</p>
+          <p class="ladder__move"><b>Do nothing.</b> Zero prep right after a 1:1 is correct, not a failure.</p>
+        </div>
+      </div>
+      <div class="ladder__row">
+        <span class="state s-ready">Ready</span>
+        <div>
+          <p>Window open, checklist done.</p>
+          <p class="ladder__move"><b>Show up.</b></p>
+        </div>
+      </div>
+      <div class="ladder__row">
+        <span class="state s-prep">Prep due</span>
+        <div>
+          <p>Window open, something's missing.</p>
+          <p class="ladder__move"><b>Ten minutes of grooming.</b> The drawer tells you which ten.</p>
+        </div>
+      </div>
+      <div class="ladder__row">
+        <span class="state s-late">Loose end</span>
+        <div>
+          <p>The meeting happened and never got written up, or a commitment of mine is overdue.</p>
+          <p class="ladder__move"><b>Close the loop.</b> Paperwork debt.</p>
+        </div>
+      </div>
+      <div class="ladder__row">
+        <span class="state s-late state--hollow">Drifting</span>
+        <div>
+          <p>Past cadence with nothing on the calendar.</p>
+          <p class="ladder__move"><b>Book it.</b> Relationship debt — always sorted above paperwork.</p>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      Two modifiers, not states: <strong>Unread</strong> (no leadership read —
+      already shown by avatar dimming) and <strong>Paused</strong> (people you
+      don't run 1:1s with, excluded entirely). Paused is load-bearing: without
+      it a volunteer team sits permanently red and you learn to ignore the whole
+      layer.
+    </p>
+  </section>
+
+  <section class="canvas">
+    <div class="canvas__inner">
+      <div class="canvas__bar">
+        <div class="layers">
+          <span class="layer">People <kbd>P</kbd></span>
+          <span class="layer">Action <kbd>A</kbd></span>
+          <span class="layer">Mandate <kbd>M</kbd></span>
+          <span class="layer">Gift <kbd>G</kbd></span>
+          <button class="layer" id="rToggle" type="button" aria-pressed="true">Readiness <kbd>R</kbd></button>
+        </div>
+        <div class="headline-strip">
+          <span><b>4 of 7</b> ready this week</span>
+          <span class="sep">·</span>
+          <span><b>2</b> need prep today</span>
+          <span class="sep">·</span>
+          <span>Marcus, <b>6 weeks</b></span>
+        </div>
+      </div>
+
+      <div class="cards on" id="cards">
+
+        <!-- Staff team — one drifting member drags the whole card -->
+        <article class="card" style="--accent-team:#0d9488; --state:var(--late);">
+          <div class="card__stripe"></div>
+          <div class="card__rail"></div>
+          <div class="card__body">
+            <div class="card__top">
+              <div>
+                <div class="card__name">Staff Team</div>
+                <div class="card__tags">
+                  <span class="tag" style="--tag:#0d9488;">Day job</span>
+                  <span class="tag" style="--tag:#7f77dd;">Leader</span>
+                </div>
+              </div>
+              <span class="chip">Thu · 2d</span>
+            </div>
+            <div class="dist" aria-hidden="true">
+              <span style="--seg:var(--ready); width:50%"></span>
+              <span style="--seg:var(--prep); width:25%"></span>
+              <span style="--seg:var(--late); width:25%"></span>
+            </div>
+          </div>
+          <div class="card__foot">
+            <div class="card__count">4 people · met Jul 9</div>
+            <div class="rows">
+              <div class="row" style="--cap:#0d9488; --state:var(--late);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#d4537e;">MR</span>
+                <span class="row__who">Marcus Reed</span>
+                <span class="row__meta">6w</span>
+              </div>
+              <div class="row" style="--cap:#0d9488; --state:var(--prep);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#7f77dd;">JL</span>
+                <span class="row__who">Jenna Lowe</span>
+                <span class="row__meta">Thu · 2d</span>
+              </div>
+              <div class="row" style="--cap:#0d9488; --state:var(--ready);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#1d9e75;">AO</span>
+                <span class="row__who">Andre Okafor</span>
+                <span class="row__meta">Wed · 1d</span>
+              </div>
+              <div class="row" style="--cap:#0d9488; --state:var(--ready);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#ef9f27;">SK</span>
+                <span class="row__who">Sara Kim</span>
+                <span class="row__meta">Fri · 3d</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Men's team — mostly paused, one real 1:1 relationship -->
+        <article class="card" style="--accent-team:#ef9f27; --state:var(--prep);">
+          <div class="card__stripe"></div>
+          <div class="card__rail"></div>
+          <div class="card__body">
+            <div class="card__top">
+              <div>
+                <div class="card__name">Men's Team</div>
+                <div class="card__tags">
+                  <span class="tag" style="--tag:#ef9f27;">Church</span>
+                  <span class="tag" style="--tag:#0d9488;">Manager</span>
+                </div>
+              </div>
+              <span class="chip">Tue · 6d</span>
+            </div>
+            <div class="dist" aria-hidden="true">
+              <span style="--seg:var(--prep); width:34%"></span>
+              <span style="--seg:var(--rest); width:66%"></span>
+            </div>
+          </div>
+          <div class="card__foot">
+            <div class="card__count">9 people · 6 paused · met Jul 15</div>
+            <div class="rows">
+              <div class="row" style="--cap:#ef9f27; --state:var(--prep);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#7f77dd;">DT</span>
+                <span class="row__who">Danny Tran</span>
+                <span class="row__meta">Tue · 6d</span>
+              </div>
+              <div class="row row--unread" style="--cap:#ef9f27; --state:var(--rest);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#78716c;">PB</span>
+                <div>
+                  <div class="row__who">Paul Bennett</div>
+                  <div class="row__sub">no read yet</div>
+                </div>
+                <span class="row__meta">paused</span>
+              </div>
+              <div class="row" style="--cap:#ef9f27; --state:var(--rest);">
+                <span class="row__bar"></span>
+                <span class="av" style="--av:#1d9e75;">GH</span>
+                <span class="row__who">Greg Halloway</span>
+                <span class="row__meta">paused</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Manager node — leading up -->
+        <article class="card" style="--accent-team:#3b82f6; --state:var(--prep); width:15rem;">
+          <div class="card__stripe"></div>
+          <div class="card__rail"></div>
+          <div class="card__body">
+            <div class="card__top">
+              <div>
+                <div class="card__name">Pastor Ray</div>
+                <div class="row__sub">I report to · Church</div>
+              </div>
+              <span class="chip">Mon · 4d</span>
+            </div>
+            <div class="dist" aria-hidden="true">
+              <span style="--seg:var(--ready); width:66%"></span>
+              <span style="--seg:var(--prep); width:34%"></span>
+            </div>
+            <div class="card__count">manual 4/6 · no win banked in 38d</div>
+          </div>
+        </article>
+
+      </div>
+
+      <p class="caption">
+        <b>Layer R.</b> The canvas already toggles layers by keystroke — readiness
+        joins as <code>R</code>, so “readiness across Church only” is two keys.
+        Off, cards read exactly as they do today. On, the left rail takes the
+        worst member's state, the chip counts down to the next meeting, and every
+        person row's accent bar recolors. Toggle it above.
+      </p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="eyebrow">The clock</div>
+    <h2>Prep is measured against a window, not a calendar</h2>
+    <p>
+      An empty agenda twelve days out is fine. An empty agenda tomorrow is an
+      emergency. Score prep without the clock and it's either permanently red or
+      meaningless. The window opens at
+      <code>max(2 days, 25% of cadence)</code> — about two days out on a weekly
+      1:1, a week out on a monthly team.
+    </p>
+    <div class="timeline">
+      <div class="track">
+        <div class="track__line"></div>
+        <div class="track__seg" style="--seg:var(--rest); left:0; width:62%"></div>
+        <div class="track__seg" style="--seg:var(--prep); left:62%; width:38%"></div>
+        <div class="track__band" style="left:62%; right:0;"><em>prep window</em></div>
+        <div class="track__mark" style="left:0; --m:var(--rest); align-items:flex-start; transform:none;">
+          <span>last 1:1</span><i></i>
+        </div>
+        <div class="track__mark" style="left:62%; --m:var(--prep);">
+          <span>window opens</span><i></i>
+        </div>
+        <div class="track__mark" style="left:100%; --m:var(--ready); align-items:flex-end; transform:translateX(-100%);">
+          <span>next 1:1</span><i></i>
+        </div>
+      </div>
+      <p class="note" style="margin:0">
+        Before the window: <span class="state s-rest">Resting</span> — nothing is
+        owed. Inside it, an incomplete checklist becomes
+        <span class="state s-prep">Prep due</span>. Green has to be reachable, and
+        it has to be reachable <em>most of the time</em>, or the one real alarm
+        gets ignored along with the noise.
+      </p>
+    </div>
+  </section>
+
+  <section class="col col--wide">
+    <div class="eyebrow">The fix</div>
+    <h2>Every red comes with one next action</h2>
+    <div class="side">
+      <div class="drawer">
+        <div class="drawer__head">
+          <span class="av" style="--av:#7f77dd;">JL</span>
+          <div>
+            <div class="drawer__title">Jenna Lowe</div>
+            <div class="drawer__sub">Next 1:1 — Thu, 2 days · <span style="color:var(--prep); font-weight:600;">Prep due</span></div>
+          </div>
+        </div>
+        <ul class="check">
+          <li class="done"><span class="mark">✓</span> Next 1:1 dated — Thu 30 Jul</li>
+          <li class="done"><span class="mark">✓</span> Leadership read on file</li>
+          <li class="done"><span class="mark">✓</span> 2 active goals</li>
+          <li class="todo"><span class="mark"></span> No topics in <em>This 1:1</em><span class="fix">Add topic</span></li>
+          <li class="todo"><span class="mark"></span> Last 1:1 has no notes<span class="fix">Write up</span></li>
+          <li class="todo"><span class="mark"></span> “Send comp band” overdue 5d<span class="fix">Reschedule</span></li>
+        </ul>
+        <div class="drawer__cta">
+          <button class="btn" type="button">✦ Prep me</button>
+          <span class="note" style="text-align:center">
+            Drafts the agenda from open actions, last notes, goals, and her profile
+          </span>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:1rem;">
+        <p>
+          The checklist is the score. No hidden weights, no mystery number — six
+          named things, each one click from fixed. A score you can't act on is
+          just guilt with a progress bar.
+        </p>
+        <p>
+          <strong>✦ Prep me</strong> is the 8:59am moment. The AI seam already
+          exists; this points it at the one question that matters right now —
+          <em>what is this meeting for?</em> — with her open actions, last
+          write-up, goals, and read as context. Ninety seconds, and you're not
+          naked.
+        </p>
+        <div class="rule"></div>
+        <h3>The ritual matters more than the meter</h3>
+        <p>
+          Grooming works in agile because it's a <em>scheduled ceremony</em>, not
+          an ambient guilt gauge. The <strong>Prep Sweep</strong> is a
+          worst-first list of everything whose window opens this week, with
+          inline agenda fields. Twenty minutes on Monday and the canvas goes
+          green.
+        </p>
+        <p class="note">
+          The score tells you that you're behind. The sweep is what stops you
+          being behind. Ship both or ship neither.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col col--wide">
+    <div class="eyebrow">Getting there</div>
+    <h2>Three phases, and the first one stands alone</h2>
+    <div class="phases">
+      <div class="phase">
+        <span class="phase__n">PHASE 1</span>
+        <h3>The read</h3>
+        <p>
+          Derive readiness from data already in the store, plus
+          <code>nextMeeting</code> and a numeric cadence. Layer R, rail,
+          countdown chip, header line.
+        </p>
+        <p class="note">Answers “am I behind” without changing how anything is entered.</p>
+      </div>
+      <div class="phase">
+        <span class="phase__n">PHASE 2</span>
+        <h3>The fix</h3>
+        <p>
+          Prep drawer with the live checklist. Per-person cadence,
+          <code>paused</code>, and ✦ Prep me.
+        </p>
+        <p class="note">This is what makes it stick.</p>
+      </div>
+      <div class="phase">
+        <span class="phase__n">PHASE 3</span>
+        <h3>The rhythm</h3>
+        <p>
+          Prep Sweep view. Depth goes stale after twelve months and asks to be
+          re-verified. Manager check-in dates and Wins-ledger recency.
+        </p>
+        <p class="note">Leading up gets the same discipline as leading down.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="eyebrow">Principles</div>
+    <ul class="plain">
+      <li>Only measure what you'd act on. Everything else is guilt generation.</li>
+      <li>Green must be reachable, or the one real alarm gets ignored with the noise.</li>
+      <li>Decay, don't punish. Resting is a good state.</li>
+      <li>Relationship debt outranks paperwork debt. Always.</li>
+      <li>Depth is three coarse tiers, never a percentage of fields filled — a percentage teaches you to fill boxes to turn something green.</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById("rToggle");
+    var cards = document.getElementById("cards");
+    btn.addEventListener("click", function () {
+      var on = btn.getAttribute("aria-pressed") === "true";
+      btn.setAttribute("aria-pressed", String(!on));
+      cards.classList.toggle("on", !on);
+    });
+  })();
+</script>
