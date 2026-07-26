@@ -9,9 +9,9 @@
 per-person prep panel. Cadence *projects* the next 1:1 from the last one, so
 nothing has to be booked for the signal to work.
 
-**Not built:** team-meeting and lead-up readiness, ✦ Prep me, the Prep Sweep,
-Depth staleness. The engine's shape (states → checks → roll-up) is what those
-plug into.
+**Not built:** everything else. Note that **The simplification: a tracked
+meeting is the unit** (below) supersedes the per-entity approach described in
+the earlier sections — read those for the reasoning, that one for the model.
 
 ## The problem, stated precisely
 
@@ -261,35 +261,111 @@ one on Thursday with no agenda, and that it's been two months.
 That flip is the point: for irregular things the app stops being a metronome and
 becomes a tripwire.
 
-### Data model for gatherings
+## The simplification: a tracked meeting is the unit
 
-Teams already carry `purpose`, `cadence` (free text) and `lastMet`, but there is
-no record of *a team meeting* — no notes, no dates, no per-session point. That's
-the missing plumbing:
+Everything above describes three parallel systems — person cadence, team
+gathering, manager check-in — each with its own fields and its own checklist.
+That's a mistake, and the fix collapses it:
+
+> **Every one of these relationships has a meeting. Track the meeting.**
+
+One entity, opted into per subject. Not a property of a person or a team — a
+thing in its own right, that happens to point at one.
 
 ```ts
-type TeamMeeting = {
-  id: string; teamId: string; date: string;
-  point?: string;      // why we're meeting THIS time
-  notes?: string;
-  nextDate?: string;
-  transcript?: string;
+type TrackedMeeting = {
+  id: string;
+  subjectKind: "person" | "team" | "manager";
+  subjectId: string;
+  /** "Practice meeting", "Staff meeting" — defaults to the subject's name. */
+  name?: string;
+  rhythm: Cadence | "as_needed";
+  floorDays?: number;          // as_needed only — the tolerance
+  nextDate?: string;           // an explicit booking always wins
+  role?: "convene" | "attend"; // drives the extra checks
 };
 ```
 
-This mirrors `OneOnOne` exactly — which is the right call, because the codebase
-already pairs person records with team records (`Action`/`TeamAction`,
-`Goal`/`TeamGoal`, `Note`/`TeamNote`). Following that grain costs no migration of
-existing rows. The tidier refactor — one `Meeting` with a
-`{ subjectKind, subjectId }` — is worth doing later, once gatherings have earned
-their keep.
+### The four checks are already universal
 
-Agenda items reuse `TeamAction` with a column, the same way 1:1 topics use
-`ActionColumn`.
+Working through every case — 1:1, staff meeting, practice session, lead-up
+check-in, core-team night — the same four questions apply to all of them:
 
-**Scope note:** one gathering per team. Every current case fits — staff meeting,
-practice session, core-team night. When a team needs two standing meetings,
-`TeamMeeting` grows a `seriesId` and the model splits then, not now.
+1. **On the books** — a next occurrence exists (booked, projected, or inside the floor)
+2. **Last one written up**
+3. **Agenda has something queued**
+4. **No overdue commitments**
+
+That's exactly the checklist already shipped for 1:1s. It was never a 1:1
+checklist; it was the meeting checklist wearing a 1:1 costume. Everything else
+is a small, kind-specific *extra*:
+
+| Extra | When |
+|---|---|
+| This session has a point | group meeting you convene |
+| Nothing needs pre-wiring | group meeting you convene |
+| A win banked recently | leading up |
+
+Four universal checks plus three conditional extras replaces three separate
+checklists. The engine barely changes — it stops taking a `Person` and starts
+taking a `TrackedMeeting` plus its subject.
+
+**The one constraint that makes this work:** checks must be able to read the
+*subject*, not just the meeting. "A win banked in the last 30 days" is prep for
+the check-in but the data lives on the manager. Pass both, and nothing is lost.
+
+### What it buys beyond tidiness
+
+- **Two meetings with the same people stop colliding.** Staff meeting and 1:1s
+  with the same team are separate tracked meetings with separate prep. Under
+  the old model, team readiness rolled up from members and had nowhere to put
+  the meeting itself.
+- **The `seriesId` problem disappears.** A team with two standing meetings is
+  just two tracked meetings. No special case.
+- **The Prep Sweep comes free.** Sorting one collection by next occurrence *is*
+  the sweep. Under three parallel systems it was a union of three queries.
+- **Opt-in becomes an explicit act** — "Track this meeting" — rather than an
+  implicit side effect of setting a cadence.
+
+### What it costs — the one real hazard
+
+Opt-in cures alarm fatigue, and introduces its own failure:
+
+> **You can be all-green because you opted out of the hard things.**
+
+Track the staff meeting, skip the 1:1s, and the app cheerfully reports Ready
+while you haven't spoken to anyone individually in two months. That's worse than
+noise, because it's *reassuring* and wrong.
+
+The fix is a visible denominator, never a nag: a quiet `3 of 9 tracked` next to
+the ready count. Not a state, not red, not a prompt — just a number you can't
+un-see. If it stays at 3 of 9, that's information about how you're leading, and
+it's yours to act on or ignore.
+
+Two smaller costs, both acceptable:
+
+- **Depth stays on the Person**, outside meeting prep. Already the design — a
+  leadership read isn't prep for a specific meeting.
+- **"Deliberately no 1:1s" and "haven't decided" collapse into the same
+  untracked state.** The denominator above covers the case that mattered.
+
+### Migration
+
+`OneOnOne` is already a meeting occurrence — it just hardcodes its subject. So:
+
+```ts
+type Session = {           // was OneOnOne
+  id: string; meetingId: string; date: string;
+  point?: string;          // why we're meeting THIS time
+  notes?: string; transcript?: string; nextDate?: string;
+};
+```
+
+Backfill is one pass: every person with 1:1 history (or a `cadence`) gets a
+`TrackedMeeting`, and their `oneOnOnes` rows get its `meetingId`. Real data
+moves, but it's a handful of rows and it is strictly cheaper now than after
+gatherings pile on. Agenda items keep reusing `Action`/`TeamAction` with a
+column, exactly as 1:1 topics do today.
 
 ## Roll-up: worst-of, never average
 
@@ -358,8 +434,7 @@ Small additions — most of the signal is already sitting in the store.
 | Field | Why | Status |
 |---|---|---|
 | `Person.cadence?: Cadence` | 1:1 rhythm varies per person; also carries `"none"` for people you deliberately don't 1:1 with, so one field covers both cadence and paused. | **shipped** (migration `0006`) |
-| `TeamMeeting` | Teams have no meeting record at all — no notes, no dates, no per-session point. The main gap. | gatherings |
-| `Team.meetingCadence` / `meetingFloorDays` / `nextMeeting` / `meetingRole` | Rhythm, tolerance, booking, and whether I convene or attend. | gatherings |
+| `TrackedMeeting` + `Session` (was `OneOnOne`) | One opted-into entity replaces person cadence, team gathering config and manager check-in. See **The simplification** above — supersedes the per-entity fields this table used to list. | next |
 | `Manager.nextCheckIn?: string` | Leading-up has no dates at all today. | later |
 | `Person.readUpdatedAt?: string` | See below. | later |
 
@@ -395,9 +470,9 @@ plus per-person cadence. Layer `R`, rail, countdown chip, distribution bar,
 summary line, and the prep checklist with one-click fixes into the meeting
 write-up and topic board.
 
-**Phase 2 — gatherings.** `TeamMeeting`, convener/participant checks,
-as-needed + floor, the same layer `R` reading team cards from their own meeting
-rather than only from their members. Then **✦ Prep me** and the pre-wire check.
+**Phase 2 — tracked meetings.** `TrackedMeeting` + `Session`, opt-in per
+subject, as-needed + floor, convener extras. Layer `R` reads tracked meetings
+instead of people. Then **✦ Prep me** and the pre-wire check.
 
 **Phase 3 — the rhythm.** Prep Sweep view, depth staleness and re-read prompts,
 manager check-in dates and Wins-ledger recency.
