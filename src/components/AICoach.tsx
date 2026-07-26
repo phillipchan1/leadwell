@@ -10,7 +10,7 @@ import {
   teamCoachPresets,
   teamSystemPrompt,
 } from "../lib/ai";
-import { inputCls } from "./ui";
+import { buttonPrimaryCls, inputCls } from "./ui";
 
 /**
  * Chat panel. Scoped to a person or a team when given, otherwise org-level
@@ -141,7 +141,7 @@ export function AICoach({ person, team }: { person?: Person; team?: Team }) {
         <button
           type="submit"
           disabled={!input.trim() || streaming !== null}
-          className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+          className={buttonPrimaryCls}
         >
           {streaming !== null ? "…" : "Send"}
         </button>

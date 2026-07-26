@@ -1,20 +1,25 @@
 // LeadWell AI proxy (Supabase Edge Function).
 //
 // Holds the Anthropic API key server-side (never exposed to the browser) and
-// streams Claude's response back as plain-text deltas. Supabase verifies the
-// caller's JWT before this runs (verify_jwt = true, the default), so only
-// signed-in users can reach it.
+// streams Claude's response back as plain-text deltas.
+//
+// Auth: verify_jwt is OFF at the gateway so browser CORS preflight (OPTIONS)
+// can succeed — OPTIONS has no Authorization header. We verify the caller's
+// user JWT inside the function before calling Anthropic.
 //
 // Deploy:   supabase functions deploy anthropic
 // Secret:   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+// Config:   supabase/config.toml → [functions.anthropic] verify_jwt = false
 //
 // Request body: { system?: string, messages: {role, content}[], model?, max_tokens? }
 // Response:     a text/plain stream of the assistant's output.
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-supabase-api-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -24,9 +29,37 @@ const textResponse = (body: string, status: number) =>
     headers: { ...CORS, "Content-Type": "text/plain; charset=utf-8" },
   });
 
+async function requireUser(req: Request): Promise<Response | null> {
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return textResponse("Sign in to use AI.", 401);
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !anonKey) {
+    return textResponse("Server misconfigured (missing Supabase env).", 500);
+  }
+
+  const supabase = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    return textResponse("Session expired — sign in again.", 401);
+  }
+  return null;
+}
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  // Must succeed without JWT — browsers don't send Authorization on preflight.
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: CORS });
+  }
   if (req.method !== "POST") return textResponse("Method not allowed", 405);
+
+  const authError = await requireUser(req);
+  if (authError) return authError;
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {

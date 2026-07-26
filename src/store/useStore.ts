@@ -21,6 +21,7 @@ import { isDescendant } from "../lib/teams";
 import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
 import type { NodePosition, PersistedData } from "../lib/repo";
+import { emptyMe } from "../lib/repo";
 import {
   capUp,
   seedActions,
@@ -40,6 +41,10 @@ import {
 } from "../data/seed";
 
 export type Tab = "overview" | "tree" | "people";
+
+/** Independent show/hide layers on org-tree team cards. */
+export type TreeLayer = "people" | "mandate" | "action" | "giftMix" | "detail";
+export type TreeLayers = Record<TreeLayer, boolean>;
 
 export type { NodePosition, PersistedData } from "../lib/repo";
 
@@ -63,14 +68,17 @@ type UIState = {
   tab: Tab;
   /** null = show every domain on one canvas; otherwise filter the tree. */
   treeDomainId: string | null;
-  /** When false, team cards hide member lists — team mandate/next step first. */
-  showPeopleOnTree: boolean;
+  /** Canvas card layers — toggle what each team card surfaces. */
+  treeLayers: TreeLayers;
   selectedPersonId: string | null;
   selectedTeamId: string | null;
+  /** Side panel open for the signed-in leader's own profile. */
+  selectedMe: boolean;
   collapsedTeams: string[];
   dark: boolean;
   askAIOpen: boolean;
   modal: ModalState;
+  settingsOpen: boolean;
 };
 
 type Store = PersistedData &
@@ -78,9 +86,10 @@ type Store = PersistedData &
     // ui
     setTab: (tab: Tab) => void;
     setTreeDomainId: (id: string | null) => void;
-    setShowPeopleOnTree: (show: boolean) => void;
+    toggleTreeLayer: (layer: TreeLayer) => void;
     selectPerson: (id: string | null) => void;
     selectTeam: (id: string | null) => void;
+    selectMe: (open: boolean) => void;
     toggleTeamCollapsed: (teamId: string) => void;
     toggleDark: () => void;
     setAskAIOpen: (open: boolean) => void;
@@ -148,7 +157,6 @@ type Store = PersistedData &
     addWin: (win: Omit<Win, "id" | "date"> & Partial<Pick<Win, "date">>) => void;
     updateWin: (id: string, patch: Partial<Pick<Win, "text" | "impact" | "date">>) => void;
     deleteWin: (id: string) => void;
-    settingsOpen: boolean;
     setSettingsOpen: (open: boolean) => void;
     // chat
     appendChat: (key: string, msg: ChatMessage) => void;
@@ -204,7 +212,7 @@ function seedData(): PersistedData {
 /** Empty placeholder used before the first cloud load resolves (never shown). */
 function blankData(): PersistedData {
   return {
-    me: { name: "" },
+    me: { name: "", assessments: {}, strengths: [], watchOuts: [] },
     capacities: [],
     domains: [],
     managers: [],
@@ -233,6 +241,16 @@ function importLegacyLocalData(): PersistedData | null {
   if (!saved || !saved.capacities) return null;
   return {
     ...saved,
+    me: emptyMe({
+      name: saved.me?.name ?? "",
+      title: saved.me?.title,
+      photo: saved.me?.photo,
+      assessments: saved.me?.assessments,
+      strengths: saved.me?.strengths,
+      watchOuts: saved.me?.watchOuts,
+      howToLead: saved.me?.howToLead,
+      customModalities: saved.me?.customModalities,
+    }),
     chats: saved.chats ?? {},
     nodePositions: saved.nodePositions ?? {},
     domains: saved.domains ?? seedDomains,
@@ -262,9 +280,16 @@ export const useStore = create<Store>((set, get) => ({
   userEmail: null,
   tab: "tree",
   treeDomainId: null,
-  showPeopleOnTree: false,
+  treeLayers: {
+    people: false,
+    mandate: true,
+    action: true,
+    giftMix: false,
+    detail: false,
+  },
   selectedPersonId: null,
   selectedTeamId: null,
+  selectedMe: false,
   collapsedTeams: [],
   dark: initialDark(),
   askAIOpen: false,
@@ -287,7 +312,10 @@ export const useStore = create<Store>((set, get) => ({
       }
       return { treeDomainId: id, selectedTeamId, selectedPersonId };
     }),
-  setShowPeopleOnTree: (show) => set({ showPeopleOnTree: show }),
+  toggleTreeLayer: (layer) =>
+    set((s) => ({
+      treeLayers: { ...s.treeLayers, [layer]: !s.treeLayers[layer] },
+    })),
   // Selecting a person keeps (or opens) their team so sidebars can nest.
   selectPerson: (id) =>
     set((s) => {
@@ -296,10 +324,23 @@ export const useStore = create<Store>((set, get) => ({
       return {
         selectedPersonId: id,
         selectedTeamId: person?.teamId ?? s.selectedTeamId,
+        selectedMe: false,
       };
     }),
-  // Opening a team clears any drilled-in person.
-  selectTeam: (id) => set({ selectedTeamId: id, selectedPersonId: null }),
+  // Opening a team clears any drilled-in person / me panel.
+  selectTeam: (id) =>
+    set({ selectedTeamId: id, selectedPersonId: null, selectedMe: false }),
+  selectMe: (open) =>
+    set(
+      open
+        ? {
+            selectedMe: true,
+            selectedPersonId: null,
+            selectedTeamId: null,
+            tab: "tree",
+          }
+        : { selectedMe: false }
+    ),
   toggleTeamCollapsed: (teamId) =>
     set((s) => ({
       collapsedTeams: s.collapsedTeams.includes(teamId)
@@ -320,7 +361,17 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({ nodePositions: { ...s.nodePositions, [id]: pos } })),
   resetLayout: () => set({ nodePositions: {} }),
 
-  updateMe: (patch) => set((s) => ({ me: { ...s.me, ...patch } })),
+  updateMe: (patch) =>
+    set((s) => ({
+      me: {
+        ...s.me,
+        ...patch,
+        assessments:
+          patch.assessments !== undefined
+            ? patch.assessments
+            : s.me.assessments,
+      },
+    })),
 
   addDomain: (domain) => {
     const id = uid();
@@ -470,6 +521,7 @@ export const useStore = create<Store>((set, get) => ({
           assessments: {},
           strengths: [],
           watchOuts: [],
+          customModalities: [],
           ...person,
           id,
         },
@@ -661,6 +713,7 @@ export const useStore = create<Store>((set, get) => ({
       phase: "ready",
       selectedPersonId: null,
       selectedTeamId: null,
+      selectedMe: false,
     });
   },
 
@@ -708,6 +761,8 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncInFlight: Promise<void> | null = null;
+/** More edits arrived while a sync was writing — coalesce another pass. */
+let syncQueued = false;
 
 function extractData(state: Store): PersistedData {
   return Object.fromEntries(
@@ -715,19 +770,38 @@ function extractData(state: Store): PersistedData {
   ) as PersistedData;
 }
 
+/**
+ * Persist the latest store to Supabase. Overlapping syncs are serialized and
+ * coalesced so a slow earlier write cannot upsert a stale people list after a
+ * delete/move (which was resurrecting removed pod members on reload).
+ */
 function runSync(userId: string): Promise<void> {
-  const latest = useStore.getState();
-  if (latest.phase !== "ready" || latest.userId !== userId || !repo.hasBaseline()) {
-    return Promise.resolve();
+  if (syncInFlight) {
+    syncQueued = true;
+    return syncInFlight;
   }
-  const job = repo
-    .syncData(userId, extractData(latest))
-    .catch((e) => {
-      console.error("LeadWell: cloud sync failed", e);
-    })
-    .finally(() => {
-      if (syncInFlight === job) syncInFlight = null;
-    });
+
+  const job = (async () => {
+    do {
+      syncQueued = false;
+      const latest = useStore.getState();
+      if (
+        latest.phase !== "ready" ||
+        latest.userId !== userId ||
+        !repo.hasBaseline()
+      ) {
+        return;
+      }
+      try {
+        await repo.syncData(userId, extractData(latest));
+      } catch (e) {
+        console.error("LeadWell: cloud sync failed", e);
+      }
+    } while (syncQueued);
+  })().finally(() => {
+    if (syncInFlight === job) syncInFlight = null;
+  });
+
   syncInFlight = job;
   return job;
 }
@@ -738,9 +812,13 @@ async function flushPendingSync(): Promise<void> {
     clearTimeout(syncTimer);
     syncTimer = null;
   }
-  if (syncInFlight) await syncInFlight;
   const latest = useStore.getState();
-  if (latest.phase !== "ready" || !latest.userId || !repo.hasBaseline()) return;
+  if (latest.phase !== "ready" || !latest.userId || !repo.hasBaseline()) {
+    if (syncInFlight) await syncInFlight;
+    return;
+  }
+  // Mark dirty so an in-flight sync loops with the latest snapshot instead of
+  // racing a second parallel upsert.
   await runSync(latest.userId);
 }
 

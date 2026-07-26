@@ -6,7 +6,7 @@ import {
   type StructuredMeeting,
 } from "../lib/ai";
 import { WritingPad } from "./WritingPad";
-import { buttonGhostCls, buttonPrimaryCls, inputCls } from "./ui";
+import { buttonGhostCls, buttonPrimaryCls, fieldLabelCls, inputCls } from "./ui";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -259,8 +259,8 @@ export function MeetingEditor({
           <header className="pt-4 pb-6 text-center sm:pt-8 sm:pb-8">
             {editingMeta ? (
               <div className="mx-auto grid max-w-sm grid-cols-2 gap-3 text-left">
-                <label className="block text-xs">
-                  <span className="mb-1 block text-stone-400">Date</span>
+                <label className="block">
+                  <span className={fieldLabelCls}>Date</span>
                   <input
                     type="date"
                     className={inputCls}
@@ -273,8 +273,8 @@ export function MeetingEditor({
                     onBlur={() => setEditingMeta(false)}
                   />
                 </label>
-                <label className="block text-xs">
-                  <span className="mb-1 block text-stone-400">Next 1:1</span>
+                <label className="block">
+                  <span className={fieldLabelCls}>Next 1:1</span>
                   <input
                     type="date"
                     className={inputCls}

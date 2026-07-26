@@ -15,13 +15,22 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useStore, type NodePosition } from "../store/useStore";
+import { useStore, type NodePosition, type TreeLayer } from "../store/useStore";
 import type { Manager, Person, Team } from "../types";
-import { isAssessed } from "../lib/derive";
+import { domainCounts, hasLeadershipRead, topDomain } from "../lib/derive";
+import { DOMAINS, DOMAIN_COLOR, THEME_DOMAIN } from "../data/frameworks";
 import { effectiveParentId } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import { Badge, Card, IconButton } from "./ui";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
+
+const LAYER_KEYS: Record<string, TreeLayer> = {
+  p: "people",
+  a: "action",
+  m: "mandate",
+  g: "giftMix",
+  d: "detail",
+};
 
 const NODE_W = 320; // matches w-80 on team cards
 const SPACING_X = NODE_W + 48;
@@ -118,6 +127,7 @@ export function OrgTree() {
     domains,
     treeDomainId,
     setTreeDomainId,
+    toggleTreeLayer,
     modal,
     openModal,
     closeModal,
@@ -125,7 +135,7 @@ export function OrgTree() {
     settingsOpen,
   } = useStore();
 
-  // 1 = All, 2/3/… = domains in tab order
+  // 1–9 = domains; P/A/M/G/D = card layers
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (modal || askAIOpen || settingsOpen) return;
@@ -140,6 +150,12 @@ export function OrgTree() {
       ) {
         return;
       }
+      const layer = LAYER_KEYS[e.key.toLowerCase()];
+      if (layer) {
+        e.preventDefault();
+        toggleTreeLayer(layer);
+        return;
+      }
       const n = Number(e.key);
       if (!Number.isInteger(n) || n < 1 || n > 9) return;
       const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
@@ -150,7 +166,7 @@ export function OrgTree() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [domains, modal, askAIOpen, settingsOpen, setTreeDomainId]);
+  }, [domains, modal, askAIOpen, settingsOpen, setTreeDomainId, toggleTreeLayer]);
 
   const visibleTeams = useMemo(
     () =>
@@ -337,23 +353,33 @@ export function OrgTree() {
             position="top-right"
             className="!h-24 !w-36"
           />
-          <Panel position="top-left" className="flex flex-wrap gap-2">
-            <button
-              onClick={() => openModal({ kind: "team" })}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-600 shadow-sm hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
-            >
-              + Add team
-            </button>
-            <button
-              onClick={() => openModal({ kind: "manager" })}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-600 shadow-sm hover:border-blue-500 hover:text-blue-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
-            >
-              + Manager
-            </button>
-            <ShowPeopleToggle />
+          <Panel position="top-left" className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Add">
+              <button
+                onClick={() => openModal({ kind: "team" })}
+                className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
+              >
+                + Add team
+              </button>
+              <button
+                onClick={() => openModal({ kind: "manager" })}
+                className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 shadow-sm hover:border-blue-500 hover:text-blue-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:border-blue-500"
+              >
+                + Manager
+              </button>
+            </div>
+            <span
+              className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
+              aria-hidden
+            />
+            <ViewLayers />
+            <span
+              className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
+              aria-hidden
+            />
             <button
               onClick={resetLayout}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-500 shadow-sm hover:bg-stone-100 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 dark:hover:bg-stone-800"
+              className="rounded-lg px-2.5 py-1.5 text-sm text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200"
               title="Snap all nodes back to the automatic layout"
             >
               Reset layout
@@ -473,41 +499,144 @@ function DomainTab({
   );
 }
 
-function ShowPeopleToggle() {
-  const showPeopleOnTree = useStore((s) => s.showPeopleOnTree);
-  const setShowPeopleOnTree = useStore((s) => s.setShowPeopleOnTree);
+const VIEW_LAYERS: {
+  id: TreeLayer;
+  label: string;
+  shortcut: string;
+  title: string;
+}[] = [
+  { id: "people", label: "People", shortcut: "P", title: "Member list on cards" },
+  { id: "action", label: "Action", shortcut: "A", title: "Next step on cards" },
+  { id: "mandate", label: "Mandate", shortcut: "M", title: "Team mandate text" },
+  { id: "giftMix", label: "Gift", shortcut: "G", title: "Clifton domain mix bar" },
+  { id: "detail", label: "Detail", shortcut: "D", title: "Per-person strength dots" },
+];
+
+function ViewLayers() {
+  const treeLayers = useStore((s) => s.treeLayers);
+  const toggleTreeLayer = useStore((s) => s.toggleTreeLayer);
   return (
-    <button
-      onClick={() => setShowPeopleOnTree(!showPeopleOnTree)}
-      className={`rounded-lg border px-3 py-1.5 text-sm shadow-sm ${
-        showPeopleOnTree
-          ? "border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-          : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
-      }`}
-      title={
-        showPeopleOnTree
-          ? "Hide people — focus on team mandate & next steps"
-          : "Show people on team cards"
-      }
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Card layers">
+      {VIEW_LAYERS.map((layer) => {
+        const on = treeLayers[layer.id];
+        return (
+          <button
+            key={layer.id}
+            type="button"
+            onClick={() => toggleTreeLayer(layer.id)}
+            aria-pressed={on}
+            title={`${layer.title} (${layer.shortcut})`}
+            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm shadow-sm ${
+              on
+                ? "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
+                : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+            }`}
+          >
+            {layer.label}
+            <kbd
+              className={`rounded px-1 font-mono text-[10px] ${
+                on
+                  ? "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
+                  : "bg-stone-100 text-stone-400 dark:bg-stone-800"
+              }`}
+            >
+              {layer.shortcut}
+            </kbd>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Proportional Clifton domain bar — color only, labels in the title. */
+function GiftMixBar({ people }: { people: Person[] }) {
+  const counts = domainCounts(people);
+  const total = DOMAINS.reduce((sum, d) => sum + counts[d], 0);
+  const title =
+    total === 0
+      ? "No Clifton Top 5 on this team yet"
+      : DOMAINS.map((d) => `${d}: ${counts[d]}`).join(" · ");
+
+  return (
+    <div
+      className="flex h-2 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800"
+      title={title}
+      role="img"
+      aria-label={title}
     >
-      {showPeopleOnTree ? "Hide people" : "Show people"}
-    </button>
+      {total === 0
+        ? null
+        : DOMAINS.map((d) =>
+            counts[d] > 0 ? (
+              <span
+                key={d}
+                className="h-full"
+                style={{
+                  width: `${(counts[d] / total) * 100}%`,
+                  backgroundColor: DOMAIN_COLOR[d],
+                }}
+              />
+            ) : null
+          )}
+    </div>
+  );
+}
+
+/** Tiny visual read: Top-5 domain dots + optional Enneagram type. */
+function PersonGiftDots({ person }: { person: Person }) {
+  const themes = person.assessments.cliftonTop5 ?? [];
+  const enn = person.assessments.enneagram?.replace(/w\d+$/i, "") ?? null;
+  if (themes.length === 0 && !enn) return null;
+
+  return (
+    <div className="mt-0.5 flex items-center gap-1.5">
+      {themes.length > 0 && (
+        <span className="flex items-center gap-0.5" aria-hidden>
+          {themes.map((theme, i) => {
+            const d = THEME_DOMAIN[theme];
+            return (
+              <span
+                key={`${theme}-${i}`}
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: d ? DOMAIN_COLOR[d] : "#a8a29e" }}
+                title={theme}
+              />
+            );
+          })}
+        </span>
+      )}
+      {enn && (
+        <span
+          className="rounded bg-stone-100 px-1 font-mono text-[9px] leading-4 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+          title={`Enneagram ${person.assessments.enneagram}`}
+        >
+          {enn}
+        </span>
+      )}
+    </div>
   );
 }
 
 function MeNode() {
-  const { me, teams, people } = useStore();
-  const assessed = people.filter(isAssessed).length;
+  const { me, teams, people, selectMe, selectedMe } = useStore();
+  const assessed = people.filter(hasLeadershipRead).length;
+  const selfRead = hasLeadershipRead(me);
   return (
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
-      <Card className="flex w-64 items-center gap-3 px-5 py-3 shadow-sm">
-        <Avatar name={me.name} photo={me.photo} size={44} />
+      <Card
+        className={`flex w-64 cursor-pointer items-center gap-3 px-5 py-3 shadow-sm hover:border-teal-400 ${
+          selectedMe ? "border-teal-500 ring-1 ring-teal-500/30" : ""
+        }`}
+        onClick={() => selectMe(true)}
+      >
+        <Avatar name={me.name} photo={me.photo} size={44} dimmed={!selfRead} />
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{me.name}</div>
           <div className="text-xs text-stone-500">
             {me.title ?? "Leader"} · {teams.length} teams · {assessed}/
-            {people.length} assessed
+            {people.length} with a read
           </div>
         </div>
       </Card>
@@ -566,7 +695,7 @@ function TeamNode({ data }: NodeProps) {
     selectPerson,
     selectedTeamId,
     selectTeam,
-    showPeopleOnTree,
+    treeLayers,
     openModal,
   } = useStore();
 
@@ -580,22 +709,31 @@ function TeamNode({ data }: NodeProps) {
   const nextAction = teamActions.find((a) => a.teamId === team.id && !a.done);
   const selected = selectedTeamId === team.id;
   const accent = domain?.color ?? capacity?.color ?? "#0D9488";
+  const { people: showPeople, mandate, action, giftMix, detail } = treeLayers;
 
   return (
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
       <Card
-        className={`group w-80 overflow-hidden p-0 shadow-sm transition-shadow hover:shadow-md ${
-          selected ? "ring-2 ring-offset-1 dark:ring-offset-stone-900" : ""
+        className={`team-card group w-80 overflow-hidden p-0 shadow-sm ${
+          selected
+            ? "is-selected ring-2 ring-offset-1 dark:ring-offset-stone-900"
+            : ""
         }`}
         style={
-          selected
-            ? ({ ["--tw-ring-color"]: accent } as CSSProperties)
-            : undefined
+          {
+            ["--team-accent"]: accent,
+            ...(selected
+              ? { ["--tw-ring-color"]: accent }
+              : undefined),
+          } as CSSProperties
         }
       >
         {/* Domain accent stripe */}
-        <div className="h-1 w-full" style={{ backgroundColor: accent }} />
+        <div
+          className="team-card__stripe h-1 w-full"
+          style={{ backgroundColor: accent }}
+        />
         <div
           className="cursor-pointer p-4 pb-2"
           onClick={() => selectTeam(team.id)}
@@ -619,16 +757,6 @@ function TeamNode({ data }: NodeProps) {
               className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
-              {team.direction !== "up" && (
-                <IconButton
-                  label="Add sub-team"
-                  onClick={() =>
-                    openModal({ kind: "team", parentId: team.id })
-                  }
-                >
-                  ↳
-                </IconButton>
-              )}
               <IconButton
                 label="Add person"
                 onClick={() => openModal({ kind: "person", teamId: team.id })}
@@ -644,34 +772,42 @@ function TeamNode({ data }: NodeProps) {
             </div>
           </div>
 
-          {/* Mandate */}
-          <p
-            className={`mt-3 line-clamp-2 text-xs leading-relaxed ${
-              team.purpose
-                ? "text-stone-600 dark:text-stone-300"
-                : "italic text-stone-400"
-            }`}
-          >
-            {team.purpose ?? "No mandate set — click to add"}
-          </p>
+          {mandate && (
+            <p
+              className={`mt-3 line-clamp-2 text-xs leading-relaxed ${
+                team.purpose
+                  ? "text-stone-600 dark:text-stone-300"
+                  : "italic text-stone-400"
+              }`}
+            >
+              {team.purpose ?? "No mandate set — click to add"}
+            </p>
+          )}
+
+          {giftMix && members.length > 0 && (
+            <div className="mt-3">
+              <GiftMixBar people={members} />
+            </div>
+          )}
         </div>
 
-        {/* Next step — editable in place for fast team sweeps */}
-        <div
-          className="nodrag px-4 pb-3"
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <CardNextStep
-            action={nextAction}
-            onAdd={(text) => addTeamAction(team.id, text)}
-            onUpdate={(id, text) => {
-              if (!text) deleteTeamAction(id);
-              else updateTeamAction(id, { text });
-            }}
-            onToggle={(id) => toggleTeamAction(id)}
-          />
-        </div>
+        {action && (
+          <div
+            className="nodrag px-4 pb-3"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <CardNextStep
+              action={nextAction}
+              onAdd={(text) => addTeamAction(team.id, text)}
+              onUpdate={(id, text) => {
+                if (!text) deleteTeamAction(id);
+                else updateTeamAction(id, { text });
+              }}
+              onToggle={(id) => toggleTeamAction(id)}
+            />
+          </div>
+        )}
 
         {/* People footer */}
         <div
@@ -686,7 +822,7 @@ function TeamNode({ data }: NodeProps) {
                 : ""}
               {team.lastMet ? ` · met ${team.lastMet}` : ""}
             </span>
-            {!showPeopleOnTree && members.length > 0 && (
+            {!showPeople && members.length > 0 && (
               <span className="flex -space-x-1.5">
                 {members.slice(0, 4).map((p) => (
                   <Avatar
@@ -694,7 +830,7 @@ function TeamNode({ data }: NodeProps) {
                     name={p.name}
                     photo={p.photo}
                     size={20}
-                    dimmed={!isAssessed(p)}
+                    dimmed={!hasLeadershipRead(p)}
                   />
                 ))}
                 {members.length > 4 && (
@@ -706,7 +842,7 @@ function TeamNode({ data }: NodeProps) {
             )}
           </div>
 
-          {showPeopleOnTree && (
+          {showPeople && (
             <div
               className="nodrag mt-2 flex flex-col gap-1"
               onClick={(e) => e.stopPropagation()}
@@ -717,6 +853,7 @@ function TeamNode({ data }: NodeProps) {
                   person={p}
                   selected={p.id === selectedPersonId}
                   capacityColor={capacity?.color ?? "#0D9488"}
+                  showDetail={detail}
                   onSelect={() => selectPerson(p.id)}
                   onEdit={() => openModal({ kind: "person", person: p })}
                 />
@@ -825,45 +962,64 @@ function PersonRow({
   person,
   selected,
   capacityColor,
+  showDetail,
   onSelect,
   onEdit,
 }: {
   person: Person;
   selected: boolean;
   capacityColor: string;
+  showDetail: boolean;
   onSelect: () => void;
   onEdit: () => void;
 }) {
-  const assessed = isAssessed(person);
+  const assessed = hasLeadershipRead(person);
+  const dominant = topDomain(person);
   return (
     <div
-      className={`group/person flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors ${
-        selected
-          ? "bg-stone-100 dark:bg-stone-800"
-          : "hover:bg-stone-50 dark:hover:bg-stone-800/50"
+      className={`person-row group/person relative flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 ${
+        selected ? "is-selected" : ""
       }`}
+      style={{ ["--person-accent"]: capacityColor } as CSSProperties}
       onClick={onSelect}
     >
-      <Avatar
-        name={person.name}
-        photo={person.photo}
-        size={34}
-        dimmed={!assessed}
-        ring={selected ? capacityColor : undefined}
+      <span
+        className="person-row__bar absolute top-1/2 left-0 h-7 w-[3px] origin-center -translate-y-1/2 rounded-full"
+        style={{
+          backgroundColor: showDetail && dominant ? DOMAIN_COLOR[dominant] : capacityColor,
+        }}
+        aria-hidden
       />
+      <div className="person-row__avatar">
+        <Avatar
+          name={person.name}
+          photo={person.photo}
+          size={34}
+          dimmed={!assessed}
+          ring={selected ? capacityColor : undefined}
+        />
+      </div>
       <div className="min-w-0 flex-1">
         <div
-          className={`truncate text-sm ${
-            assessed ? "" : "text-stone-400 dark:text-stone-500"
+          className={`truncate text-sm transition-colors ${
+            selected
+              ? "font-medium"
+              : assessed
+                ? ""
+                : "text-stone-400 dark:text-stone-500"
           }`}
         >
           {person.name}
         </div>
-        {person.role && (
-          <div className="truncate text-[11px] text-stone-400">
-            {person.role}
-          </div>
-        )}
+        {showDetail ? (
+          <PersonGiftDots person={person} />
+        ) : null}
+        {(!showDetail || !(person.assessments.cliftonTop5?.length || person.assessments.enneagram)) &&
+          person.role && (
+            <div className="truncate text-[11px] text-stone-400">
+              {person.role}
+            </div>
+          )}
       </div>
       {!assessed && (
         <span className="text-[10px] text-stone-300 dark:text-stone-600">

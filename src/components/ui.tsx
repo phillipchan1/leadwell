@@ -148,15 +148,15 @@ export function Modal({
       aria-label={title}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-stone-200 bg-white p-5 shadow-xl dark:border-stone-800 dark:bg-stone-900"
+        className="max-h-[min(90vh,720px)] w-full max-w-md overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-xl dark:border-stone-800 dark:bg-stone-900"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold">{title}</h2>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
+            className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
           >
             ✕
           </button>
@@ -167,11 +167,19 @@ export function Modal({
   );
 }
 
-export const inputCls =
-  "w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-stone-700 dark:bg-stone-950";
+/** Default form control — soft fill, teal focus glow (see `.field-input` in CSS). */
+export const inputCls = "field-input";
+
+/** Dense filters / inline editors. */
+export const inputSmCls = "field-input field-input--sm";
+
+/** Borderless table / inline cells. */
+export const inputGhostCls = "field-input field-input--ghost";
+
+export const fieldLabelCls = "field-label";
 
 export const buttonPrimaryCls =
-  "rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50";
+  "rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-teal-600/20 transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-700 hover:shadow-md hover:shadow-teal-600/25 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none disabled:active:scale-100";
 
 export const buttonGhostCls =
-  "rounded-lg border border-stone-300 px-3 py-1.5 text-sm text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800";
+  "rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-medium text-stone-600 transition-[transform,background-color,border-color] duration-150 ease-out hover:border-stone-400 hover:bg-stone-100 active:scale-[0.98] dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-600 dark:hover:bg-stone-800 disabled:opacity-50 disabled:active:scale-100";

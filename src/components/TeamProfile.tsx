@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useStore } from "../store/useStore";
 import type { Team } from "../types";
-import { isAssessed } from "../lib/derive";
+import { hasLeadershipRead } from "../lib/derive";
+import { hasApiKey, refineTeamMandate } from "../lib/ai";
 import { Avatar } from "./Avatar";
 import { Badge, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AICoach } from "./AICoach";
@@ -78,8 +79,10 @@ export function TeamProfile({
     .filter((n) => n.teamId === team.id)
     .sort((a, b) => b.date.localeCompare(a.date));
 
+  const [name, setName] = useState(team.name);
   const [mandate, setMandate] = useState(team.purpose ?? "");
-  const [cadence, setCadence] = useState(team.cadence ?? "");
+  const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState<string | null>(null);
   const [newAction, setNewAction] = useState("");
   const [newGoal, setNewGoal] = useState("");
   const [newNote, setNewNote] = useState("");
@@ -88,20 +91,56 @@ export function TeamProfile({
 
   // Keep local fields in sync when switching teams.
   useEffect(() => {
+    setName(team.name);
     setMandate(team.purpose ?? "");
-    setCadence(team.cadence ?? "");
+    setRefining(false);
+    setRefineError(null);
     setNewAction("");
     setNewGoal("");
     setNewNote("");
     setShowDone(false);
     setShowMore(false);
-  }, [team.id, team.purpose, team.cadence]);
+  }, [team.id, team.name, team.purpose]);
+
+  const saveName = () => {
+    const next = name.trim();
+    if (!next) {
+      setName(team.name);
+      return;
+    }
+    if (next === team.name) return;
+    updateTeam(team.id, { name: next });
+  };
 
   const saveMandate = () => {
+    if (refining) return;
     const nextPurpose = mandate.trim() || undefined;
-    const nextCadence = cadence.trim() || undefined;
-    if (nextPurpose === team.purpose && nextCadence === team.cadence) return;
-    updateTeam(team.id, { purpose: nextPurpose, cadence: nextCadence });
+    if (nextPurpose === team.purpose) return;
+    updateTeam(team.id, { purpose: nextPurpose });
+  };
+
+  const runRefineMandate = async () => {
+    if (!hasApiKey()) {
+      setRefineError("Sign in to refine with AI.");
+      return;
+    }
+    setRefineError(null);
+    setRefining(true);
+    try {
+      const result = await refineTeamMandate({
+        teamId: team.id,
+        purpose: mandate,
+        onDelta: (text) => setMandate(text),
+      });
+      setMandate(result);
+      updateTeam(team.id, { purpose: result || undefined });
+    } catch (e) {
+      setRefineError(
+        e instanceof Error ? e.message : "Could not refine the mandate."
+      );
+    } finally {
+      setRefining(false);
+    }
   };
 
   // Compact rail while a person is drilled in — just enough to switch members / go back.
@@ -149,7 +188,7 @@ export function TeamProfile({
                   name={p.name}
                   photo={p.photo}
                   size={32}
-                  dimmed={!isAssessed(p)}
+                  dimmed={!hasLeadershipRead(p)}
                 />
               </button>
             );
@@ -176,9 +215,23 @@ export function TeamProfile({
       >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold tracking-tight">
-              {team.name}
-            </h2>
+            <input
+              className="w-full rounded-xl bg-stone-50 px-3 py-2 text-2xl font-semibold tracking-tight text-stone-900 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-stone-100/90 focus:bg-stone-50 focus:shadow-[inset_0_0_0_1.5px_rgb(13_148_136/0.35)] dark:bg-stone-950/60 dark:text-stone-100 dark:hover:bg-stone-950 dark:focus:bg-stone-950/80"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  (e.target as HTMLInputElement).blur();
+                }
+                if (e.key === "Escape") {
+                  setName(team.name);
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              aria-label="Team name"
+            />
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {domain && <Badge color={domain.color}>{domain.name}</Badge>}
               {capacity && <Badge color={capacity.color}>{capacity.label}</Badge>}
@@ -263,21 +316,30 @@ export function TeamProfile({
         <div className="flex flex-col gap-8 px-5 py-5">
           {/* Mandate — always editable, blur to save */}
           <section>
-            <SectionTitle>Mandate</SectionTitle>
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <SectionTitle>Mandate</SectionTitle>
+              <button
+                type="button"
+                className="text-[11px] font-medium text-teal-600 hover:text-teal-700 disabled:opacity-50"
+                onClick={runRefineMandate}
+                disabled={refining}
+              >
+                {refining ? "Refining…" : "✦ Refine"}
+              </button>
+            </div>
             <textarea
-              className={`${inputCls} mt-2 min-h-[88px] resize-y border-stone-200 bg-stone-50/80 leading-relaxed dark:border-stone-800 dark:bg-stone-950/50`}
+              className={`${inputCls} min-h-[88px] resize-y leading-relaxed ${
+                refining ? "opacity-80" : ""
+              }`}
               placeholder="What am I responsible to lead this team toward?"
               value={mandate}
               onChange={(e) => setMandate(e.target.value)}
               onBlur={saveMandate}
+              readOnly={refining}
             />
-            <input
-              className={`${inputCls} mt-2 border-stone-200 bg-transparent text-xs text-stone-500 dark:border-stone-800`}
-              placeholder="Cadence — e.g. Weekly Tuesdays"
-              value={cadence}
-              onChange={(e) => setCadence(e.target.value)}
-              onBlur={saveMandate}
-            />
+            {refineError && (
+              <p className="mt-1.5 text-[11px] text-red-500">{refineError}</p>
+            )}
           </section>
 
           {/* Sub-teams — broader purview → specific teams I lead */}
@@ -343,7 +405,7 @@ export function TeamProfile({
                 </button>
               )}
             </div>
-            <ul className="space-y-1">
+            <ul className="space-y-2">
               {openActions.map((a) => (
                 <ActionRow
                   key={a.id}
@@ -383,12 +445,18 @@ export function TeamProfile({
                 setNewAction("");
               }}
             >
-              <input
-                className={`${inputCls} border-dashed`}
-                placeholder="Add a next step…"
-                value={newAction}
-                onChange={(e) => setNewAction(e.target.value)}
-              />
+              <div className="flex items-center gap-3 rounded-xl border border-dashed border-stone-300 bg-stone-50/40 px-3 py-2.5 dark:border-stone-700 dark:bg-stone-950/30">
+                <span
+                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-dashed border-stone-300 dark:border-stone-600"
+                  aria-hidden
+                />
+                <input
+                  className="min-w-0 flex-1 bg-transparent text-[0.95rem] leading-snug text-stone-700 outline-none placeholder:text-stone-400 dark:text-stone-200"
+                  placeholder="Add a to-do…"
+                  value={newAction}
+                  onChange={(e) => setNewAction(e.target.value)}
+                />
+              </div>
             </form>
           </section>
 
@@ -424,7 +492,7 @@ export function TeamProfile({
                           name={p.name}
                           photo={p.photo}
                           size={32}
-                          dimmed={!isAssessed(p)}
+                          dimmed={!hasLeadershipRead(p)}
                           ring={active ? accent : undefined}
                         />
                         <div className="min-w-0 flex-1">
@@ -603,18 +671,47 @@ function ActionRow({
   useEffect(() => setValue(text), [text]);
 
   return (
-    <li className="group flex items-start gap-2 rounded-lg px-1 py-1 hover:bg-stone-50 dark:hover:bg-stone-800/40">
-      <input
-        type="checkbox"
-        checked={done}
-        onChange={onToggle}
-        className="mt-2 accent-teal-600"
-      />
+    <li
+      className={`group flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+        done
+          ? "border-stone-200/80 bg-stone-50/60 dark:border-stone-800 dark:bg-stone-950/40"
+          : "border-stone-200 bg-white shadow-sm shadow-stone-900/3 hover:border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:shadow-none dark:hover:border-stone-600"
+      }`}
+    >
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={done}
+        aria-label={done ? "Mark incomplete" : "Mark done"}
+        onClick={onToggle}
+        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
+          done
+            ? "border-teal-600 bg-teal-600 text-white"
+            : "border-stone-300 bg-white hover:border-teal-500 dark:border-stone-600 dark:bg-stone-950 dark:hover:border-teal-500"
+        }`}
+      >
+        {done && (
+          <svg
+            viewBox="0 0 12 12"
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M2.5 6.5 5 9l4.5-6" />
+          </svg>
+        )}
+      </button>
       <div className="min-w-0 flex-1">
         <textarea
           rows={1}
-          className={`w-full resize-none bg-transparent py-1.5 text-sm outline-none ${
-            done ? "text-stone-400 line-through" : "text-stone-700 dark:text-stone-200"
+          className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none ${
+            done
+              ? "text-stone-400 line-through decoration-stone-300"
+              : "text-stone-800 dark:text-stone-100"
           }`}
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -627,11 +724,11 @@ function ActionRow({
           }}
         />
         {dueDate && (
-          <div className="pb-1 text-[10px] text-stone-400">due {dueDate}</div>
+          <div className="pt-0.5 text-[11px] text-stone-400">Due {dueDate}</div>
         )}
       </div>
       <button
-        className="mt-1.5 text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
+        className="mt-0.5 rounded-md px-1.5 py-0.5 text-sm text-stone-300 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40"
         aria-label="Delete"
         onClick={onDelete}
       >

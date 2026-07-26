@@ -92,7 +92,7 @@ function ManualField({
       </div>
       <div className="mt-0.5 text-[10px] text-stone-400">{field.hint}</div>
       <textarea
-        className="mt-2 w-full resize-none rounded-lg border border-transparent bg-white px-2.5 py-1.5 text-[0.8rem] leading-relaxed text-stone-700 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:bg-stone-900 dark:text-stone-200"
+        className="field-input field-input--sm mt-2 resize-none"
         rows={2}
         value={value}
         placeholder={field.placeholder}

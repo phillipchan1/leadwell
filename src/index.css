@@ -350,3 +350,486 @@ body {
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
+
+/* ── Form fields — larger, soft, accent-lit ── */
+
+.field-input {
+  --field-accent: #0d9488;
+  width: 100%;
+  appearance: none;
+  border-radius: 0.875rem;
+  border: 1.5px solid rgb(231 229 228);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.92) 0%, rgb(250 250 249) 100%);
+  padding: 0.7rem 0.95rem;
+  font-size: 0.975rem;
+  line-height: 1.45;
+  color: rgb(28 25 23);
+  outline: none;
+  caret-color: var(--field-accent);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 1px 2px rgb(28 25 23 / 0.03);
+  transition:
+    border-color 160ms ease,
+    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 160ms ease,
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 120ms ease;
+}
+
+.field-input::placeholder {
+  color: rgb(168 162 158);
+  transition: color 160ms ease, opacity 160ms ease;
+}
+
+.field-input:hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--field-accent) 28%, rgb(214 211 209));
+  background:
+    linear-gradient(180deg, rgb(255 255 255) 0%, rgb(250 250 249) 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 2px 6px rgb(28 25 23 / 0.045);
+}
+
+.field-input:focus {
+  border-color: color-mix(in srgb, var(--field-accent) 72%, rgb(214 211 209));
+  background: rgb(255 255 255);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255),
+    0 0 0 3.5px color-mix(in srgb, var(--field-accent) 18%, transparent),
+    0 8px 20px -8px color-mix(in srgb, var(--field-accent) 35%, transparent),
+    0 2px 6px rgb(28 25 23 / 0.04);
+}
+
+.field-input:focus::placeholder {
+  color: rgb(214 211 209);
+  opacity: 0.7;
+}
+
+.field-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+textarea.field-input {
+  resize: vertical;
+  line-height: 1.55;
+}
+
+select.field-input {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgb(120 113 108) 50%),
+    linear-gradient(135deg, rgb(120 113 108) 50%, transparent 50%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.92) 0%, rgb(250 250 249) 100%);
+  background-position:
+    calc(100% - 1.15rem) calc(50% - 0.15rem),
+    calc(100% - 0.75rem) calc(50% - 0.15rem),
+    0 0;
+  background-size:
+    5px 5px,
+    5px 5px,
+    100% 100%;
+  background-repeat: no-repeat;
+  padding-right: 2.25rem;
+  cursor: pointer;
+}
+
+select.field-input:hover:not(:disabled):not(:focus) {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgb(120 113 108) 50%),
+    linear-gradient(135deg, rgb(120 113 108) 50%, transparent 50%),
+    linear-gradient(180deg, rgb(255 255 255) 0%, rgb(250 250 249) 100%);
+}
+
+select.field-input:focus {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--field-accent) 50%),
+    linear-gradient(135deg, var(--field-accent) 50%, transparent 50%),
+    linear-gradient(rgb(255 255 255), rgb(255 255 255));
+  background-position:
+    calc(100% - 1.15rem) calc(50% - 0.15rem),
+    calc(100% - 0.75rem) calc(50% - 0.15rem),
+    0 0;
+  background-size:
+    5px 5px,
+    5px 5px,
+    100% 100%;
+  background-repeat: no-repeat;
+}
+
+.field-input--sm {
+  border-radius: 0.7rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.field-input--sm:focus {
+  transform: none;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255),
+    0 0 0 2.5px color-mix(in srgb, var(--field-accent) 16%, transparent),
+    0 4px 12px -6px color-mix(in srgb, var(--field-accent) 30%, transparent);
+}
+
+.field-input--ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.field-input--ghost:hover:not(:disabled):not(:focus) {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--field-accent) 5%, transparent);
+  box-shadow: none;
+}
+
+.field-input--ghost:focus {
+  border-color: color-mix(in srgb, var(--field-accent) 55%, transparent);
+  background: rgb(255 255 255);
+  transform: none;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgb(120 113 108);
+  transition: color 140ms ease;
+}
+
+label:focus-within > .field-label,
+.field:focus-within > .field-label {
+  color: var(--field-accent, #0d9488);
+}
+
+.dark .field-input {
+  border-color: rgb(68 64 60);
+  background:
+    linear-gradient(180deg, rgb(28 25 23 / 0.9) 0%, rgb(12 10 9 / 0.95) 100%);
+  color: rgb(245 245 244);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.03),
+    0 1px 2px rgb(0 0 0 / 0.2);
+}
+
+.dark .field-input::placeholder {
+  color: rgb(87 83 78);
+}
+
+.dark .field-input:hover:not(:disabled):not(:focus) {
+  border-color: color-mix(in srgb, var(--field-accent) 35%, rgb(68 64 60));
+  background:
+    linear-gradient(180deg, rgb(41 37 36) 0%, rgb(28 25 23) 100%);
+}
+
+.dark .field-input:focus {
+  border-color: color-mix(in srgb, var(--field-accent) 65%, rgb(68 64 60));
+  background: rgb(12 10 9);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.04),
+    0 0 0 3.5px color-mix(in srgb, var(--field-accent) 22%, transparent),
+    0 10px 24px -10px color-mix(in srgb, var(--field-accent) 40%, transparent);
+}
+
+.dark select.field-input {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgb(168 162 158) 50%),
+    linear-gradient(135deg, rgb(168 162 158) 50%, transparent 50%),
+    linear-gradient(180deg, rgb(28 25 23 / 0.9) 0%, rgb(12 10 9 / 0.95) 100%);
+}
+
+.dark select.field-input:hover:not(:disabled):not(:focus) {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgb(168 162 158) 50%),
+    linear-gradient(135deg, rgb(168 162 158) 50%, transparent 50%),
+    linear-gradient(180deg, rgb(41 37 36) 0%, rgb(28 25 23) 100%);
+}
+
+.dark select.field-input:focus {
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--field-accent) 50%),
+    linear-gradient(135deg, var(--field-accent) 50%, transparent 50%),
+    linear-gradient(rgb(12 10 9), rgb(12 10 9));
+}
+
+.dark .field-input--ghost:focus {
+  background: rgb(12 10 9);
+}
+
+.dark .field-label {
+  color: rgb(168 162 158);
+}
+
+.dark label:focus-within > .field-label,
+.dark .field:focus-within > .field-label {
+  color: color-mix(in srgb, var(--field-accent, #0d9488) 85%, white);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field-input,
+  .field-input:hover:not(:disabled):not(:focus),
+  .field-input:focus {
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+    transform: none;
+  }
+}
+
+/* Org tree — snappy team / person selection */
+
+.team-card {
+  --team-accent: #0d9488;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 140ms ease;
+  will-change: transform;
+}
+
+.team-card:hover {
+  transform: translateY(-5px);
+  border-color: color-mix(in srgb, var(--team-accent) 55%, rgb(231 229 228));
+  box-shadow:
+    0 14px 28px -10px color-mix(in srgb, var(--team-accent) 38%, transparent),
+    0 6px 12px -6px rgb(28 25 23 / 0.1);
+}
+
+.team-card.is-selected {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--team-accent) 70%, rgb(231 229 228));
+  box-shadow:
+    0 12px 24px -10px color-mix(in srgb, var(--team-accent) 45%, transparent),
+    0 4px 10px -4px rgb(28 25 23 / 0.08);
+}
+
+.team-card.is-selected:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 16px 30px -10px color-mix(in srgb, var(--team-accent) 48%, transparent),
+    0 6px 12px -6px rgb(28 25 23 / 0.1);
+}
+
+.team-card:active,
+.team-card.is-selected:active {
+  transform: translateY(-1px) scale(0.985);
+  transition-duration: 70ms;
+}
+
+.team-card__stripe {
+  transition: height 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.team-card:hover .team-card__stripe,
+.team-card.is-selected .team-card__stripe {
+  height: 0.35rem;
+}
+
+.dark .team-card:hover {
+  border-color: color-mix(in srgb, var(--team-accent) 50%, rgb(68 64 60));
+}
+
+.dark .team-card.is-selected {
+  border-color: color-mix(in srgb, var(--team-accent) 65%, rgb(68 64 60));
+}
+
+.person-row {
+  --person-accent: #0d9488;
+  transition:
+    background-color 120ms ease,
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 120ms ease;
+}
+
+.person-row:hover {
+  transform: translateX(3px);
+  background-color: color-mix(in srgb, var(--person-accent) 9%, transparent);
+}
+
+.person-row.is-selected {
+  transform: translateX(4px);
+  background-color: color-mix(in srgb, var(--person-accent) 14%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--person-accent);
+}
+
+.person-row.is-selected:hover {
+  transform: translateX(5px);
+  background-color: color-mix(in srgb, var(--person-accent) 18%, transparent);
+}
+
+.person-row__bar {
+  transform: scaleY(0);
+  transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.person-row:hover .person-row__bar {
+  transform: scaleY(1);
+}
+
+.person-row.is-selected .person-row__bar {
+  transform: scaleY(0);
+}
+
+.person-row__avatar {
+  transition: transform 140ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.person-row:hover .person-row__avatar {
+  transform: scale(1.08);
+}
+
+.person-row.is-selected .person-row__avatar {
+  transform: scale(1.1);
+}
+
+.person-row:active {
+  transform: translateX(2px) scale(0.99);
+  transition-duration: 60ms;
+}
+
+/* ── Live profile build canvas (Fantastical-style) ── */
+
+.profile-build {
+  background:
+    linear-gradient(
+      155deg,
+      rgb(240 253 250 / 0.55) 0%,
+      rgb(250 250 249 / 0.95) 42%,
+      rgb(245 245 244 / 0.9) 100%
+    );
+  border: 1px solid rgb(231 229 228);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7);
+}
+
+.dark .profile-build {
+  background:
+    linear-gradient(
+      155deg,
+      rgb(19 78 74 / 0.22) 0%,
+      rgb(28 25 23 / 0.75) 45%,
+      rgb(12 10 9 / 0.9) 100%
+    );
+  border-color: rgb(41 37 36);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+
+.profile-build__glow {
+  pointer-events: none;
+  position: absolute;
+  inset: -20% -10% auto;
+  height: 55%;
+  background: radial-gradient(
+    ellipse at 30% 0%,
+    rgb(13 148 136 / 0.12),
+    transparent 65%
+  );
+}
+
+.dark .profile-build__glow {
+  background: radial-gradient(
+    ellipse at 30% 0%,
+    rgb(45 212 191 / 0.08),
+    transparent 65%
+  );
+}
+
+.profile-build--parsing .profile-build__glow {
+  animation: profile-build-breathe 2.2s ease-in-out infinite;
+}
+
+@keyframes profile-build-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.profile-build__bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(231 229 228);
+}
+
+.dark .profile-build__bar {
+  background: rgb(41 37 36);
+}
+
+.profile-build__bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0f766e, #14b8a6);
+  transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-build__domain-bar {
+  transition:
+    height 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 280ms ease;
+}
+
+.profile-build__chip--enter {
+  animation: profile-chip-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes profile-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.profile-build__headline {
+  transition: opacity 200ms ease;
+}
+
+.profile-build__pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #0d9488;
+  animation: profile-pulse-dot 1.6s ease-in-out infinite;
+}
+
+@keyframes profile-pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+    box-shadow: 0 0 0 0 rgb(13 148 136 / 0.35);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgb(13 148 136 / 0);
+  }
+}
+
+.profile-fill-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 720px) {
+  .profile-fill-split {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+    min-height: 22rem;
+  }
+}

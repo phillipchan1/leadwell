@@ -96,7 +96,7 @@ function OneOnOneRow({
       <td className="px-1.5 py-1" onClick={(e) => e.stopPropagation()}>
         <input
           type="date"
-          className="w-full rounded-md border-0 bg-transparent px-1 py-1.5 text-sm tabular-nums outline-none focus:ring-1 focus:ring-teal-500"
+          className="field-input field-input--ghost field-input--sm tabular-nums"
           value={row.date}
           onChange={(e) => onPatch({ date: e.target.value })}
         />
@@ -104,7 +104,7 @@ function OneOnOneRow({
       <td className="px-1.5 py-1" onClick={(e) => e.stopPropagation()}>
         <input
           type="date"
-          className="w-full rounded-md border-0 bg-transparent px-1 py-1.5 text-sm tabular-nums text-stone-500 outline-none focus:ring-1 focus:ring-teal-500"
+          className="field-input field-input--ghost field-input--sm tabular-nums text-stone-500"
           value={row.nextDate ?? ""}
           onChange={(e) =>
             onPatch({ nextDate: e.target.value || undefined })

@@ -1,13 +1,14 @@
 import type { Person } from "../types";
 import { DOMAINS, DOMAIN_COLOR } from "../data/frameworks";
-import { blindSpots, domainCounts, isAssessed, personalityMix } from "../lib/derive";
+import { blindSpots, domainCounts, hasLeadershipRead, isAssessed, personalityMix } from "../lib/derive";
 import { SectionTitle } from "./ui";
 import { StrengthsDonut } from "./StrengthsDonut";
 
 export function StatsBar({ people }: { people: Person[] }) {
   const counts = domainCounts(people);
   const totalThemes = DOMAINS.reduce((sum, d) => sum + counts[d], 0);
-  const assessed = people.filter(isAssessed).length;
+  const withRead = people.filter(hasLeadershipRead).length;
+  const formallyAssessed = people.filter(isAssessed).length;
   const mix = personalityMix(people);
   const spots = blindSpots(people);
 
@@ -37,11 +38,14 @@ export function StatsBar({ people }: { people: Person[] }) {
       <div className="space-y-2">
         <SectionTitle>Coverage</SectionTitle>
         <div className="text-3xl font-semibold">
-          {assessed}
+          {withRead}
           <span className="text-lg font-normal text-stone-400">
-            /{people.length} assessed
+            /{people.length} with a read
           </span>
         </div>
+        <p className="text-xs text-stone-400">
+          {formallyAssessed} with Clifton / Enneagram / MBTI
+        </p>
         {spots.length > 0 ? (
           <p className="text-xs text-amber-600 dark:text-amber-400">
             ⚠ Blind spot: no {spots.join(", no ")} strengths in anyone's Top 5.

@@ -15,7 +15,13 @@ import type {
   Me,
 } from "../types";
 
-export const seedMe: Me = { name: "Phil Chan", title: "Leader" };
+export const seedMe: Me = {
+  name: "Phil Chan",
+  title: "Leader",
+  assessments: {},
+  strengths: [],
+  watchOuts: [],
+};
 
 // Life areas / contexts. Teams are color-tagged by the domain they live in.
 export const seedDomains: Domain[] = [
@@ -91,7 +97,6 @@ export const seedTeams: Team[] = [
     domainId: "dom-work",
     description: "Cross-functional squad at work",
     purpose: "Ship the reporting rewrite and keep the squad unblocked.",
-    cadence: "Daily standup",
     order: 4,
   },
   {

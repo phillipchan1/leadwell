@@ -4,7 +4,7 @@ import { DOMAINS } from "../data/frameworks";
 import {
   blindSpots,
   domainCounts,
-  isAssessed,
+  hasLeadershipRead,
 } from "../lib/derive";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
 import { Card, SectionTitle, buttonPrimaryCls } from "./ui";
@@ -24,7 +24,7 @@ export function Overview() {
   const [error, setError] = useState<string | null>(null);
   const keyed = hasApiKey();
 
-  const unassessed = people.filter((p) => !isAssessed(p));
+  const unassessed = people.filter((p) => !hasLeadershipRead(p));
   const spots = blindSpots(people);
   const counts = domainCounts(people);
   const openActions = actions.filter((a) => !a.done);
@@ -100,8 +100,8 @@ export function Overview() {
               You lead <strong>{people.length} people</strong> across{" "}
               <strong>{teams.length} teams</strong>.{" "}
               {unassessed.length === 0
-                ? "Everyone is assessed."
-                : `${unassessed.length} still need assessments: ${unassessed
+                ? "Everyone has a leadership read."
+                : `${unassessed.length} still need a profile read: ${unassessed
                     .map((p) => p.name)
                     .join(", ")}.`}
             </p>
@@ -175,7 +175,7 @@ export function Overview() {
           <SectionTitle>Coverage gaps</SectionTitle>
           <ul className="mt-3 space-y-2">
             {unassessed.length === 0 && (
-              <li className="text-sm text-stone-400">Fully assessed. ✓</li>
+              <li className="text-sm text-stone-400">Everyone has a read. ✓</li>
             )}
             {unassessed.map((p) => (
               <li key={p.id}>
@@ -190,7 +190,7 @@ export function Overview() {
                   <div>
                     <div className="text-sm">{p.name}</div>
                     <div className="text-[11px] text-stone-400">
-                      No assessments yet
+                      No profile read yet
                     </div>
                   </div>
                 </button>

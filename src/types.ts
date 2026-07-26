@@ -58,6 +58,20 @@ export type Assessments = {
 };
 
 /**
+ * An open / custom assessment modality — Working Genius, DISC, pastoral style,
+ * or any named framework that isn't Clifton / Enneagram / MBTI.
+ */
+export type CustomModality = {
+  id: string;
+  name: string;
+  /** Free-text or shorthand result, e.g. "G+E", "creative + relational". */
+  result: string;
+  source: "test" | "inferred" | "self-report";
+  confidence?: "high" | "medium" | "low";
+  notes?: string;
+};
+
+/**
  * Leading-up profile: how to succeed with a person I report to.
  * This is NOT their personality (that's Assessments) — it's their operating
  * manual as *my manager*: what they reward, what makes them anxious, and what
@@ -89,6 +103,8 @@ export type Person = {
   strengths: string[];
   watchOuts: string[];
   howToLead?: string;
+  /** Open modalities beyond Clifton / Enneagram / MBTI. */
+  customModalities?: CustomModality[];
   /** Operating manual for a person I report to (up-team members only). */
   leadUp?: LeadUpProfile;
 };
@@ -170,6 +186,17 @@ export type TeamNote = {
   body: string;
 };
 
-export type Me = { name: string; title?: string; photo?: string };
+export type Me = {
+  name: string;
+  title?: string;
+  photo?: string;
+  /** Self-assessment — same frameworks as people I lead. */
+  assessments: Assessments;
+  strengths: string[];
+  watchOuts: string[];
+  /** How I work best / how others should lead me. */
+  howToLead?: string;
+  customModalities?: CustomModality[];
+};
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };

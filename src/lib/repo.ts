@@ -22,6 +22,7 @@ import type {
   Action,
   Capacity,
   ChatMessage,
+  CustomModality,
   Domain,
   Goal,
   LeadUpProfile,
@@ -65,6 +66,70 @@ const opt = <T>(v: T | null | undefined): T | undefined =>
   v === null || v === undefined ? undefined : v;
 
 type Row = Record<string, unknown>;
+
+/** Map a profiles row (or partial legacy me) into a full Me. */
+export function meFromRow(r: {
+  name?: string | null;
+  title?: string | null;
+  photo?: string | null;
+  clifton_top5?: string[] | null;
+  enneagram?: string | null;
+  mbti?: string | null;
+  strengths?: string[] | null;
+  watch_outs?: string[] | null;
+  how_to_lead?: string | null;
+  custom_modalities?: CustomModality[] | null;
+}): Me {
+  const top5 = r.clifton_top5 ?? [];
+  const enneagram = opt(r.enneagram);
+  const mbti = opt(r.mbti);
+  const customModalities = r.custom_modalities ?? [];
+  return {
+    name: r.name ?? "",
+    title: opt(r.title),
+    photo: opt(r.photo),
+    assessments: {
+      ...(top5.length ? { cliftonTop5: top5 } : {}),
+      ...(enneagram ? { enneagram } : {}),
+      ...(mbti ? { mbti } : {}),
+    },
+    strengths: r.strengths ?? [],
+    watchOuts: r.watch_outs ?? [],
+    howToLead: opt(r.how_to_lead),
+    ...(customModalities.length ? { customModalities } : {}),
+  };
+}
+
+function meToRow(userId: string, me: Me): Row {
+  return {
+    user_id: userId,
+    name: me.name,
+    title: nn(me.title),
+    photo: nn(me.photo),
+    clifton_top5: me.assessments.cliftonTop5 ?? [],
+    enneagram: nn(me.assessments.enneagram),
+    mbti: nn(me.assessments.mbti),
+    strengths: me.strengths ?? [],
+    watch_outs: me.watchOuts ?? [],
+    how_to_lead: nn(me.howToLead),
+    custom_modalities: me.customModalities ?? [],
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/** Empty Me used for blank/seed defaults before assessment fields are filled. */
+export function emptyMe(partial: Partial<Me> & { name: string }): Me {
+  return {
+    name: partial.name,
+    title: partial.title,
+    photo: partial.photo,
+    assessments: partial.assessments ?? {},
+    strengths: partial.strengths ?? [],
+    watchOuts: partial.watchOuts ?? [],
+    howToLead: partial.howToLead,
+    customModalities: partial.customModalities,
+  };
+}
 
 /**
  * Persist an id-keyed collection: upsert every current row, then delete rows
@@ -198,6 +263,7 @@ const map = {
       strengths: p.strengths ?? [],
       watch_outs: p.watchOuts ?? [],
       how_to_lead: nn(p.howToLead),
+      custom_modalities: p.customModalities ?? [],
       lead_up: nn(p.leadUp ?? null),
     }),
     fromRow: (r: Row): Person => {
@@ -205,6 +271,7 @@ const map = {
       const enneagram = opt(r.enneagram as string | null);
       const mbti = opt(r.mbti as string | null);
       const leadUp = opt(r.lead_up as LeadUpProfile | null);
+      const customModalities = (r.custom_modalities as CustomModality[] | null) ?? [];
       return {
         id: r.id as string,
         teamId: r.team_id as string,
@@ -220,6 +287,7 @@ const map = {
         strengths: (r.strengths as string[]) ?? [],
         watchOuts: (r.watch_outs as string[]) ?? [],
         howToLead: opt(r.how_to_lead as string | null),
+        ...(customModalities.length ? { customModalities } : {}),
         ...(leadUp ? { leadUp } : {}),
       };
     },
@@ -468,11 +536,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
   ]);
 
   const data: PersistedData = {
-    me: {
-      name: (prof.name as string) ?? "",
-      title: opt(prof.title as string | null),
-      photo: opt(prof.photo as string | null),
-    },
+    me: meFromRow(prof as Parameters<typeof meFromRow>[0]),
     capacities: capacities.map(map.capacities.fromRow),
     domains: domains.map(map.domains.fromRow),
     managers: managers.map(map.managers.fromRow),
@@ -501,13 +565,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
 
 /** Insert a full document for a user (first-time seed or import). */
 export async function writeAll(userId: string, d: PersistedData): Promise<void> {
-  const { error } = await supabase.from("profiles").upsert({
-    user_id: userId,
-    name: d.me.name,
-    title: nn(d.me.title),
-    photo: nn(d.me.photo),
-    updated_at: new Date().toISOString(),
-  });
+  const { error } = await supabase.from("profiles").upsert(meToRow(userId, d.me));
   if (error) throw new Error(`profiles upsert: ${error.message}`);
 
   await Promise.all([
@@ -537,13 +595,9 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
   if (!base || base.me !== d.me) {
     jobs.push(
       (async () => {
-        const { error } = await supabase.from("profiles").upsert({
-          user_id: userId,
-          name: d.me.name,
-          title: nn(d.me.title),
-          photo: nn(d.me.photo),
-          updated_at: new Date().toISOString(),
-        });
+        const { error } = await supabase
+          .from("profiles")
+          .upsert(meToRow(userId, d.me));
         if (error) throw new Error(`profiles upsert: ${error.message}`);
       })()
     );

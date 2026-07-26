@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { useStore, type Tab } from "./store/useStore";
-import { isAssessed } from "./lib/derive";
+import { hasLeadershipRead } from "./lib/derive";
 import { OrgTree } from "./components/OrgTree";
 import { PeopleTable } from "./components/PeopleTable";
 import { Overview } from "./components/Overview";
 import { PersonProfile } from "./components/PersonProfile";
+import { MeProfile } from "./components/MeProfile";
 import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
@@ -29,6 +30,7 @@ export default function App() {
     userEmail,
     selectedPersonId,
     selectedTeamId,
+    selectedMe,
     askAIOpen,
     setAskAIOpen,
     settingsOpen,
@@ -51,9 +53,10 @@ export default function App() {
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId);
   const selectedTeam = teams.find((t) => t.id === selectedTeamId);
-  const assessed = people.filter(isAssessed).length;
+  const assessed = people.filter(hasLeadershipRead).length;
   const showTeam = tab === "tree" && selectedTeam;
   const showPerson = tab === "tree" && selectedPerson;
+  const showMe = tab === "tree" && selectedMe;
   // Person drilled in from a team — keep both panels nested.
   const nested = Boolean(
     showTeam && showPerson && selectedPerson.teamId === selectedTeam.id
@@ -68,7 +71,7 @@ export default function App() {
             Lead<span className="text-teal-600">Well</span>
           </h1>
           <span className="hidden text-xs text-stone-400 sm:inline">
-            {assessed} of {people.length} assessed · {teams.length} teams
+            {assessed} of {people.length} with a read · {teams.length} teams
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -125,9 +128,9 @@ export default function App() {
           {tab === "people" && <PeopleTable />}
         </main>
 
-        {/* Detail column ≥50%. Alone = full team; nested = ~10% team rail + ~90% person. */}
+        {/* Detail column ~60%. Alone = full team; nested = ~10% team rail + ~90% person. */}
         {showTeam && (
-          <div className="flex w-1/2 min-w-[50%] shrink-0">
+          <div className="flex w-[60%] min-w-[55%] shrink-0">
             <div
               className={
                 nested
@@ -147,6 +150,11 @@ export default function App() {
         {showPerson && !nested && (
           <div className="w-full max-w-xl shrink-0">
             <PersonProfile person={selectedPerson} />
+          </div>
+        )}
+        {showMe && (
+          <div className="w-full max-w-xl shrink-0">
+            <MeProfile />
           </div>
         )}
       </div>

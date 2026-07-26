@@ -2,8 +2,14 @@ import { useState } from "react";
 import { useStore } from "../store/useStore";
 import type { Manager, Person, Team } from "../types";
 import { eligibleParents } from "../lib/teams";
-import { Modal, inputCls, buttonPrimaryCls, buttonGhostCls } from "./ui";
-import { Avatar, fileToDataUrl } from "./Avatar";
+import {
+  Modal,
+  inputCls,
+  fieldLabelCls,
+  buttonPrimaryCls,
+  buttonGhostCls,
+} from "./ui";
+import { PhotoPicker } from "./PhotoPicker";
 
 // A palette for auto-coloring newly created domains.
 const DOMAIN_PALETTE = [
@@ -107,7 +113,7 @@ function DomainPicker({
           />
           <button
             type="button"
-            className="rounded-lg bg-teal-600 px-3 text-xs font-medium text-white"
+            className={`${buttonPrimaryCls} px-3 py-2 text-xs`}
             onClick={createDomain}
           >
             Add
@@ -184,9 +190,9 @@ export function TeamModal({
       }
       onClose={onClose}
     >
-      <div className="space-y-3">
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Name</span>
+      <div className="space-y-4">
+        <label className="block">
+          <span className={fieldLabelCls}>Name</span>
           <input
             className={inputCls}
             value={name}
@@ -196,8 +202,8 @@ export function TeamModal({
           />
         </label>
         {parents.length > 0 && (
-          <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">
+          <label className="block">
+            <span className={fieldLabelCls}>
               Parent team (optional)
             </span>
             <select
@@ -226,12 +232,12 @@ export function TeamModal({
             </span>
           </label>
         )}
-        <div className="block text-sm">
-          <span className="mb-1 block text-stone-500">Domain (life area)</span>
+        <div className="block">
+          <span className={fieldLabelCls}>Domain (life area)</span>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">My capacity</span>
+        <label className="block">
+          <span className={fieldLabelCls}>My capacity</span>
           <div className="flex gap-2">
             {capacities.map((c) => (
               <button
@@ -253,8 +259,8 @@ export function TeamModal({
           </div>
         </label>
         {!nested && (
-          <label className="block text-sm">
-            <span className="mb-1 block text-stone-500">
+          <label className="block">
+            <span className={fieldLabelCls}>
               Position in the tree
             </span>
             <div className="flex gap-2">
@@ -280,8 +286,8 @@ export function TeamModal({
             </div>
           </label>
         )}
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">
+        <label className="block">
+          <span className={fieldLabelCls}>
             Description (optional)
           </span>
           <input
@@ -359,37 +365,13 @@ export function ManagerModal({
 
   return (
     <Modal title={manager ? "Edit manager" : "Add manager"} onClose={onClose}>
-      <div className="space-y-3">
+      <div className="space-y-4">
         <p className="text-xs text-stone-500">
           Someone you report to. They'll appear directly above you in the tree.
         </p>
-        <div className="flex items-center gap-3">
-          <Avatar name={name || "?"} photo={photo} size={56} />
-          <div className="flex flex-col gap-1">
-            <label className="cursor-pointer text-sm text-teal-600 hover:underline">
-              Upload photo
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (f) setPhoto(await fileToDataUrl(f));
-                }}
-              />
-            </label>
-            {photo && (
-              <button
-                className="text-left text-xs text-stone-400 hover:underline"
-                onClick={() => setPhoto(undefined)}
-              >
-                Remove photo
-              </button>
-            )}
-          </div>
-        </div>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Name</span>
+        <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
+        <label className="block">
+          <span className={fieldLabelCls}>Name</span>
           <input
             className={inputCls}
             value={name}
@@ -398,8 +380,8 @@ export function ManagerModal({
             autoFocus
           />
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Role (optional)</span>
+        <label className="block">
+          <span className={fieldLabelCls}>Role (optional)</span>
           <input
             className={inputCls}
             value={role}
@@ -407,8 +389,8 @@ export function ManagerModal({
             placeholder="e.g. VP of Product, Lead Pastor"
           />
         </label>
-        <div className="block text-sm">
-          <span className="mb-1 block text-stone-500">Domain (life area)</span>
+        <div className="block">
+          <span className={fieldLabelCls}>Domain (life area)</span>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
         <div className="flex items-center justify-between pt-2">
@@ -445,6 +427,62 @@ export function ManagerModal({
   );
 }
 
+/** Edit the signed-in leader's identity (name, title, photo). */
+export function MeModal({ onClose }: { onClose: () => void }) {
+  const { me, updateMe } = useStore();
+  const [name, setName] = useState(me.name);
+  const [title, setTitle] = useState(me.title ?? "");
+  const [photo, setPhoto] = useState<string | undefined>(me.photo);
+
+  const save = () => {
+    if (!name.trim()) return;
+    updateMe({
+      name: name.trim(),
+      title: title.trim() || undefined,
+      photo,
+    });
+    onClose();
+  };
+
+  return (
+    <Modal title="Edit my profile" onClose={onClose}>
+      <div className="space-y-4">
+        <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
+        <label className="block">
+          <span className={fieldLabelCls}>Name</span>
+          <input
+            className={inputCls}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        </label>
+        <label className="block">
+          <span className={fieldLabelCls}>Title (optional)</span>
+          <input
+            className={inputCls}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Leader, Pastor, Engineering Manager"
+          />
+        </label>
+        <div className="flex justify-end gap-2 pt-2">
+          <button className={buttonGhostCls} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className={buttonPrimaryCls}
+            onClick={save}
+            disabled={!name.trim()}
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function PersonModal({
   person,
   defaultTeamId,
@@ -475,34 +513,22 @@ export function PersonModal({
 
   return (
     <Modal title={person ? "Edit person" : "Add person"} onClose={onClose}>
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <Avatar name={name || "?"} photo={photo} size={56} />
-          <div className="flex flex-col gap-1">
-            <label className="cursor-pointer text-sm text-teal-600 hover:underline">
-              Upload photo
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0];
-                  if (f) setPhoto(await fileToDataUrl(f));
-                }}
-              />
-            </label>
-            {photo && (
-              <button
-                className="text-left text-xs text-stone-400 hover:underline"
-                onClick={() => setPhoto(undefined)}
-              >
-                Remove photo
-              </button>
-            )}
-          </div>
-        </div>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Name</span>
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            save();
+          }
+        }}
+      >
+        <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
+        <label className="block">
+          <span className={fieldLabelCls}>Name</span>
           <input
             className={inputCls}
             value={name}
@@ -510,8 +536,8 @@ export function PersonModal({
             autoFocus
           />
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Role (optional)</span>
+        <label className="block">
+          <span className={fieldLabelCls}>Role (optional)</span>
           <input
             className={inputCls}
             value={role}
@@ -519,8 +545,8 @@ export function PersonModal({
             placeholder="e.g. Worship Director"
           />
         </label>
-        <label className="block text-sm">
-          <span className="mb-1 block text-stone-500">Team</span>
+        <label className="block">
+          <span className={fieldLabelCls}>Team</span>
           <select
             className={inputCls}
             value={teamId}
@@ -534,18 +560,22 @@ export function PersonModal({
           </select>
         </label>
         <div className="flex justify-end gap-2 pt-2">
-          <button className={buttonGhostCls} onClick={onClose}>
+          <button type="button" className={buttonGhostCls} onClick={onClose}>
             Cancel
           </button>
           <button
-            className={buttonPrimaryCls}
-            onClick={save}
+            type="submit"
+            className={`${buttonPrimaryCls} inline-flex items-center gap-1.5`}
             disabled={!name.trim() || !teamId}
+            title="Enter or ⌘Enter"
           >
             {person ? "Save" : "Add person"}
+            <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
+              ↵
+            </kbd>
           </button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
@@ -597,7 +627,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 aria-label={`Color for ${d.name}`}
               />
               <input
-                className={`${inputCls} flex-1 border-transparent bg-transparent px-1.5 shadow-none focus:border-teal-500 focus:bg-white dark:focus:bg-stone-950`}
+                className={`${inputCls} field-input--ghost flex-1`}
                 value={d.name}
                 onChange={(e) => updateDomain(d.id, { name: e.target.value })}
                 aria-label="Domain name"

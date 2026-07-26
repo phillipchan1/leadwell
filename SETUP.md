@@ -92,6 +92,10 @@ supabase functions deploy anthropic
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
 
+`supabase/config.toml` sets `verify_jwt = false` for this function so browser
+CORS preflight works; the function still requires a signed-in user JWT before
+calling Anthropic.
+
 Get a key at <https://console.anthropic.com>. If you skip this step the app
 works fully — only the AI coach / 1:1 structuring will show an error until it's
 deployed.

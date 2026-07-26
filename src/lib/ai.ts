@@ -4,8 +4,9 @@ import {
   MBTI,
   parseEnneagram,
   THEME_DOMAIN,
+  ALL_THEMES,
 } from "../data/frameworks";
-import { derivedRead } from "./derive";
+import { derivedRead, hasLeadershipRead } from "./derive";
 import { useStore } from "../store/useStore";
 import { supabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import { getAccessToken } from "./auth";
@@ -104,6 +105,13 @@ export function personSystemPrompt(personId: string): string {
     read.watchOuts.length &&
       `## Watch-outs\n${read.watchOuts.map((x) => `- ${x}`).join("\n")}`,
     person.howToLead && `## How to lead them\n${person.howToLead}`,
+    (person.customModalities?.length ?? 0) > 0 &&
+      `## Other modalities\n${person.customModalities!
+        .map(
+          (m) =>
+            `- ${m.name}: ${m.result}${m.notes ? ` (${m.notes})` : ""} [${m.source}${m.confidence ? `, ${m.confidence}` : ""}]`
+        )
+        .join("\n")}`,
     manualLines &&
       `## Operating manual (how to succeed with them)\nThis is their wiring as ${s.me.name}'s manager — reward, anxieties, currency, and scorecard. Anchor leading-up advice on this, especially their currency and what their own boss measures them on.\n${manualLines}`,
     isLeadUp &&
@@ -122,8 +130,8 @@ export function personSystemPrompt(personId: string): string {
         .join("\n")}`,
     notes.length &&
       `## Recent notes\n${notes.map((n) => `- ${n.date}: ${n.body}`).join("\n")}`,
-    !top5 && !enn && !person.assessments.mbti
-      ? `\nNo assessments recorded yet — suggest getting CliftonStrengths, Enneagram, or MBTI results, but still give practical general coaching.`
+    !hasLeadershipRead(person)
+      ? `\nNo leadership read recorded yet — suggest a free-text brain dump (AI fill) or CliftonStrengths / Enneagram / MBTI / other modalities, but still give practical general coaching.`
       : "",
   ]
     .filter(Boolean)
@@ -150,13 +158,18 @@ export function teamSystemPrompt(teamId: string): string {
   const memberLines = members
     .map((p) => {
       const a = p.assessments;
+      const modalities = (p.customModalities ?? [])
+        .map((m) => `${m.name}: ${m.result}`)
+        .join("; ");
       const bits = [
         p.role,
         a.cliftonTop5?.length
           ? `Top5: ${a.cliftonTop5.join(", ")}`
-          : "unassessed",
+          : null,
         a.enneagram && `Enneagram ${a.enneagram}`,
         a.mbti,
+        modalities || null,
+        !hasLeadershipRead(p) && "no read yet",
       ]
         .filter(Boolean)
         .join(" · ");
@@ -233,12 +246,34 @@ export function orgSystemPrompt(): string {
     }]\n${memberLines}${kidLines ? `\n${kidLines}` : ""}`;
   };
   const lines = roots.map((t) => formatTeam(t, ""));
+  const me = s.me;
+  const meTop5 = (me.assessments.cliftonTop5 ?? []).join(", ");
+  const meMods = (me.customModalities ?? [])
+    .map((m) => `${m.name}: ${m.result}`)
+    .join("; ");
+  const meBits = [
+    me.title,
+    meTop5 && `Top5: ${meTop5}`,
+    me.assessments.enneagram && `Enneagram ${me.assessments.enneagram}`,
+    me.assessments.mbti,
+    me.strengths.length && `strengths: ${me.strengths.join(", ")}`,
+    meMods,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return [
     `You are a leadership coach for ${s.me.name}, who leads multiple teams in different capacities (Manager = formal authority, Leader = leads without authority, Influence = leads peers). Be concise, practical, and specific. Use the org data below. Nested teams are sub-teams under a broader purview.`,
     ``,
+    `## ${s.me.name} (self)`,
+    meBits || "(no self-assessment yet)",
+    me.howToLead && `How they work best: ${me.howToLead}`,
+    ``,
     `## Org`,
     ...lines,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 /**
@@ -413,31 +448,169 @@ export type ProfileFieldDef = {
   label: string;
   kind: ProfileFieldKind;
   target: ProfileFieldTarget;
+  /** Grouping for the review UI. */
+  group: "traits" | "known" | "leadUp";
   /** Guidance passed to the model about what belongs in this field. */
   hint: string;
 };
 
+const TRAIT_FIELDS: ProfileFieldDef[] = [
+  {
+    key: "strengths",
+    label: "Strengths",
+    kind: "list",
+    target: "person",
+    group: "traits",
+    hint: "Concrete behavioral strengths as short phrases. Prefer this for observations like 'creative', 'relational', 'presence over process'.",
+  },
+  {
+    key: "watchOuts",
+    label: "Watch-outs",
+    kind: "list",
+    target: "person",
+    group: "traits",
+    hint: "Failure modes / things to watch, each a short phrase.",
+  },
+  {
+    key: "howToLead",
+    label: "How to lead them",
+    kind: "text",
+    target: "person",
+    group: "traits",
+    hint: "1-3 sentences of practical guidance on leading this specific person.",
+  },
+];
+
+const KNOWN_ASSESSMENT_FIELDS: ProfileFieldDef[] = [
+  {
+    key: "cliftonTop5",
+    label: "CliftonStrengths Top 5",
+    kind: "list",
+    target: "assessments",
+    group: "known",
+    hint: "Only when the dump names Clifton/Gallup themes. value = array of EXACT Gallup theme names (e.g. 'Woo', 'Empathy', 'Achiever'), ordered 1–5. Never invent themes.",
+  },
+  {
+    key: "enneagram",
+    label: "Enneagram (hypothesis)",
+    kind: "text",
+    target: "assessments",
+    group: "known",
+    hint: "A likely Enneagram type e.g. '3w2' — only when named or strongly evidenced. Hypothesis from behavior is almost never high confidence.",
+  },
+  {
+    key: "mbti",
+    label: "MBTI (hypothesis)",
+    kind: "text",
+    target: "assessments",
+    group: "known",
+    hint: "A likely MBTI type e.g. 'ENTJ' — only when named or strongly evidenced. Hypothesis from behavior is almost never high confidence.",
+  },
+];
+
 /** Fields the AI can draft for a person I report to (leading up). */
 const UP_FIELDS: ProfileFieldDef[] = [
-  { key: "archetype", label: "Leader type / archetype", kind: "text", target: "leadUp", hint: "The kind of leader they are, in a phrase (e.g. 'operator / driver', 'visionary', 'consensus-builder'). Name the recognizable leadership style." },
-  { key: "winsLike", label: "What \"good\" looks like to them", kind: "text", target: "leadUp", hint: "Their definition of a strong report — what earns their approval." },
-  { key: "anxieties", label: "What makes them anxious", kind: "text", target: "leadUp", hint: "What erodes their trust or triggers stress." },
-  { key: "currency", label: "Their currency", kind: "text", target: "leadUp", hint: "What earns trust fastest with them: throughput, data, decisiveness, loyalty, optics, etc." },
-  { key: "comms", label: "How they want to hear from me", kind: "text", target: "leadUp", hint: "Preferred cadence, channel, detail level, when to escalate vs. handle." },
-  { key: "theirScorecard", label: "What they're measured on", kind: "text", target: "leadUp", hint: "What their own boss judges them on — the number making them look good upward." },
+  {
+    key: "archetype",
+    label: "Leader type / archetype",
+    kind: "text",
+    target: "leadUp",
+    group: "leadUp",
+    hint: "The kind of leader they are, in a phrase (e.g. 'operator / driver', 'visionary', 'consensus-builder'). Name the recognizable leadership style.",
+  },
+  {
+    key: "winsLike",
+    label: 'What "good" looks like to them',
+    kind: "text",
+    target: "leadUp",
+    group: "leadUp",
+    hint: "Their definition of a strong report — what earns their approval.",
+  },
+  {
+    key: "anxieties",
+    label: "What makes them anxious",
+    kind: "text",
+    target: "leadUp",
+    group: "leadUp",
+    hint: "What erodes their trust or triggers stress.",
+  },
+  {
+    key: "currency",
+    label: "Their currency",
+    kind: "text",
+    target: "leadUp",
+    group: "leadUp",
+    hint: "What earns trust fastest with them: throughput, data, decisiveness, loyalty, optics, etc.",
+  },
+  {
+    key: "comms",
+    label: "How they want to hear from me",
+    kind: "text",
+    target: "leadUp",
+    group: "leadUp",
+    hint: "Preferred cadence, channel, detail level, when to escalate vs. handle.",
+  },
+  {
+    key: "theirScorecard",
+    label: "What they're measured on",
+    kind: "text",
+    target: "leadUp",
+    group: "leadUp",
+    hint: "What their own boss judges them on — the number making them look good upward.",
+  },
+  ...TRAIT_FIELDS,
+  ...KNOWN_ASSESSMENT_FIELDS,
+];
+
+const SELF_TRAIT_FIELDS: ProfileFieldDef[] = [
+  TRAIT_FIELDS[0],
+  TRAIT_FIELDS[1],
+  {
+    key: "howToLead",
+    label: "How I work best",
+    kind: "text",
+    target: "person",
+    group: "traits",
+    hint: "1-3 sentences on how others should lead / work with me — what brings out my best, what to avoid.",
+  },
 ];
 
 /** Fields the AI can draft for someone I lead (leading down). */
 const DOWN_FIELDS: ProfileFieldDef[] = [
-  { key: "strengths", label: "Strengths", kind: "list", target: "person", hint: "Concrete behavioral strengths, each a short phrase." },
-  { key: "watchOuts", label: "Watch-outs", kind: "list", target: "person", hint: "Failure modes / things to watch, each a short phrase." },
-  { key: "howToLead", label: "How to lead them", kind: "text", target: "person", hint: "1-3 sentences of practical guidance on leading this specific person." },
-  { key: "enneagram", label: "Enneagram (hypothesis)", kind: "text", target: "assessments", hint: "A likely Enneagram type e.g. '3w2' — a hypothesis inferred from behavior, NOT a real test result. Keep confidence low unless the dump is strongly indicative." },
-  { key: "mbti", label: "MBTI (hypothesis)", kind: "text", target: "assessments", hint: "A likely MBTI type e.g. 'ENTJ' — a hypothesis from behavior, NOT a real test. Keep confidence low unless strongly indicative." },
+  ...TRAIT_FIELDS,
+  ...KNOWN_ASSESSMENT_FIELDS,
 ];
 
-export function profileFieldsFor(direction: "up" | "down"): ProfileFieldDef[] {
-  return direction === "up" ? UP_FIELDS : DOWN_FIELDS;
+const SELF_FIELDS: ProfileFieldDef[] = [
+  ...SELF_TRAIT_FIELDS,
+  ...KNOWN_ASSESSMENT_FIELDS,
+];
+
+export type ProfileDirection = "up" | "down" | "self";
+
+export function profileFieldsFor(direction: ProfileDirection): ProfileFieldDef[] {
+  if (direction === "up") return UP_FIELDS;
+  if (direction === "self") return SELF_FIELDS;
+  return DOWN_FIELDS;
+}
+
+export type ProfileTargetId = string | "me";
+
+function resolveProfileTarget(targetId: ProfileTargetId): {
+  name: string;
+  direction: ProfileDirection;
+} {
+  const s = useStore.getState();
+  if (targetId === "me") {
+    return { name: s.me.name || "me", direction: "self" };
+  }
+  const person = s.people.find((p) => p.id === targetId);
+  if (!person) throw new Error("Person not found.");
+  const team = s.teams.find((t) => t.id === person.teamId);
+  return {
+    name: person.name,
+    direction: team?.direction === "up" ? "up" : "down",
+  };
 }
 
 export type ProfileSuggestion = {
@@ -447,56 +620,90 @@ export type ProfileSuggestion = {
   rationale: string;
 };
 
+export type CustomModalitySuggestion = {
+  name: string;
+  result: string;
+  source: "test" | "inferred" | "self-report";
+  confidence: "high" | "medium" | "low";
+  rationale: string;
+  notes?: string;
+};
+
 export type ProfileDraft = {
   /** One-line headline read of who this person is. */
   headline: string;
   suggestions: ProfileSuggestion[];
+  modalities: CustomModalitySuggestion[];
 };
 
+const THEME_SET = new Set(ALL_THEMES.map((t) => t.toLowerCase()));
+const THEME_BY_LOWER = Object.fromEntries(
+  ALL_THEMES.map((t) => [t.toLowerCase(), t])
+);
+
+/** Normalize & keep only real Gallup theme names, preserving order, max 5. */
+function normalizeCliftonTop5(raw: string[]): string[] {
+  const out: string[] = [];
+  for (const item of raw) {
+    const key = item.trim().toLowerCase();
+    if (!THEME_SET.has(key)) continue;
+    const canon = THEME_BY_LOWER[key];
+    if (out.some((t) => t.toLowerCase() === key)) continue;
+    out.push(canon);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
 /**
- * Turn a free-text brain dump about a person into structured, confidence-scored
- * field suggestions. The model only proposes a field when the text supports it,
- * and reports how confident it is so the caller can gate on trust.
+ * Turn a free-text brain dump about a person (or yourself) into structured,
+ * confidence-scored field suggestions.
  */
 export async function draftProfileFromBrainDump(
-  personId: string,
+  targetId: ProfileTargetId,
   brainDump: string
 ): Promise<ProfileDraft> {
   const s = useStore.getState();
-  const person = s.people.find((p) => p.id === personId);
-  if (!person) throw new Error("Person not found.");
-  const team = s.teams.find((t) => t.id === person.teamId);
-  const direction: "up" | "down" = team?.direction === "up" ? "up" : "down";
+  const { name, direction } = resolveProfileTarget(targetId);
   const fields = profileFieldsFor(direction);
   const allowedKeys = new Set(fields.map((f) => f.key));
 
   const relationship =
-    direction === "up"
-      ? `${person.name} is someone ${s.me.name} REPORTS TO. Build an operating manual for leading up to them.`
-      : `${person.name} is someone ${s.me.name} LEADS. Build a profile for leading them well.`;
+    direction === "self"
+      ? `${name} is building a SELF-assessment — how they are wired as a leader. Capture traits and frameworks from first-person reflection.`
+      : direction === "up"
+        ? `${name} is someone ${s.me.name} REPORTS TO. Build an operating manual for leading up to them — and capture wiring traits when the dump supports them.`
+        : `${name} is someone ${s.me.name} LEADS. Build a profile for leading them well.`;
 
   const fieldSpec = fields
     .map((f) => `- "${f.key}" (${f.kind}): ${f.label}. ${f.hint}`)
     .join("\n");
 
   const system = [
-    `You help ${s.me.name} turn what they know about a person into a structured leadership profile.`,
+    direction === "self"
+      ? `You help ${name} turn what they know about themselves into a structured self-assessment profile.`
+      : `You help ${s.me.name} turn what they know about a person into a structured leadership profile.`,
     relationship,
     ``,
-    `You will be given a free-text brain dump. Extract and INFER the following fields. Reason like an expert on leadership, CliftonStrengths, Enneagram and MBTI — you may infer a person's likely type/archetype from described behavior.`,
+    `You will be given a free-text brain dump (or a guided-mapping Q&A transcript). Prefer free-text leadership traits. Use known frameworks only when named or clearly evidenced. Use custom modalities for other named systems or sticky archetype labels that are more than a single trait chip.`,
     ``,
-    `Fields (propose ONLY these keys, omit any the dump doesn't support):`,
+    `Fields in "suggestions" (propose ONLY these keys, omit any the dump doesn't support):`,
     fieldSpec,
     ``,
+    `Also optionally return "modalities" — an array of custom modalities when the dump names another assessment system (Working Genius, DISC, StrengthsFinder domains under a different label, pastoral style, etc.) OR a compact archetype label that isn't just a strength chip (e.g. "creative-relational shepherd"). Each: { "name": string, "result": string, "source": "test"|"inferred"|"self-report", "confidence": "high"|"medium"|"low", "rationale": string, "notes"?: string }.`,
+    ``,
     `Rules:`,
-    `- Only include a field if the dump gives you something real to say. Do not pad.`,
-    `- Set confidence honestly: "high" = the dump states or strongly implies it; "medium" = a reasonable inference; "low" = a guess worth verifying. Formal test types (Enneagram/MBTI) inferred from behavior should almost never be "high".`,
+    `- Traits first: behavioral observations ("creative", "relational", "leads through presence") go in strengths / watchOuts / howToLead — NOT forced into Enneagram/MBTI.`,
+    `- Known frameworks (cliftonTop5, enneagram, mbti): only when the dump names them or evidence is clear. Do not invent Clifton themes; use exact Gallup names only.`,
+    `- Custom modalities: other named systems, or a sticky multi-word archetype. Do not duplicate plain trait chips as modalities.`,
+    `- Only include a field/modality if the dump gives you something real to say. Do not pad.`,
+    `- Set confidence honestly: "high" = stated or strongly implied; "medium" = reasonable inference; "low" = guess. Formal types inferred from behavior should almost never be "high". source "test" only if the dump says they took the assessment.`,
     `- rationale: one short clause pointing at what in the dump supports it.`,
     `- For list fields, value is an array of short phrases. For text fields, value is a string.`,
     `- headline: one plain-language sentence naming who this person is / how they operate.`,
     ``,
     `Respond with ONLY a JSON object (no markdown fences) shaped as:`,
-    `{ "headline": string, "suggestions": [{ "field": string, "value": string | string[], "confidence": "high"|"medium"|"low", "rationale": string }] }`,
+    `{ "headline": string, "suggestions": [{ "field": string, "value": string | string[], "confidence": "high"|"medium"|"low", "rationale": string }], "modalities": [{ "name": string, "result": string, "source": "test"|"inferred"|"self-report", "confidence": "high"|"medium"|"low", "rationale": string, "notes"?: string }] }`,
   ].join("\n");
 
   const full = await streamChat(
@@ -504,7 +711,10 @@ export async function draftProfileFromBrainDump(
     [
       {
         role: "user",
-        content: `Here is everything I know about ${person.name}:\n\n${brainDump.trim()}`,
+        content:
+          direction === "self"
+            ? `Here is everything I know about myself:\n\n${brainDump.trim()}`
+            : `Here is everything I know about ${name}:\n\n${brainDump.trim()}`,
       },
     ],
     () => {}
@@ -515,22 +725,152 @@ export async function draftProfileFromBrainDump(
     .filter((sg) => allowedKeys.has(sg.field))
     .map((sg) => {
       const def = fields.find((f) => f.key === sg.field)!;
-      // Coerce value shape to the field's kind.
       let value = sg.value;
       if (def.kind === "list" && !Array.isArray(value)) {
         value = value ? [String(value)] : [];
       } else if (def.kind === "text" && Array.isArray(value)) {
         value = value.join(" ");
       }
+      if (def.key === "cliftonTop5" && Array.isArray(value)) {
+        value = normalizeCliftonTop5(value.map(String));
+        if (value.length === 0) return null;
+      }
       return { ...sg, value };
+    })
+    .filter((sg): sg is ProfileSuggestion => sg !== null);
+
+  const modalities = (raw.modalities ?? [])
+    .filter(
+      (m) =>
+        typeof m?.name === "string" &&
+        m.name.trim() &&
+        typeof m?.result === "string" &&
+        m.result.trim()
+    )
+    .map((m) => {
+      const source =
+        m.source === "test" || m.source === "self-report" || m.source === "inferred"
+          ? m.source
+          : "inferred";
+      const confidence =
+        m.confidence === "high" || m.confidence === "medium" || m.confidence === "low"
+          ? m.confidence
+          : "medium";
+      return {
+        name: m.name.trim(),
+        result: m.result.trim(),
+        source,
+        confidence,
+        rationale: (m.rationale ?? "").trim() || "From the brain dump.",
+        ...(m.notes?.trim() ? { notes: m.notes.trim() } : {}),
+      } satisfies CustomModalitySuggestion;
     });
 
-  return { headline: raw.headline ?? "", suggestions };
+  return { headline: raw.headline ?? "", suggestions, modalities };
+}
+
+export type ProbeTurn = { question: string; answer: string };
+
+export type ProbeNext =
+  | { done: false; question: string }
+  | { done: true };
+
+/**
+ * Ask the next open-ended probe question to draw out a profile when the user
+ * doesn't have a ready brain dump. After enough substance, returns done:true
+ * so the caller can draft from the Q&A transcript.
+ */
+export async function nextProfileProbeQuestion(
+  targetId: ProfileTargetId,
+  turns: ProbeTurn[]
+): Promise<ProbeNext> {
+  const s = useStore.getState();
+  const { name, direction } = resolveProfileTarget(targetId);
+
+  const subject =
+    direction === "self"
+      ? `yourself (${name})`
+      : direction === "up"
+        ? `${name}, someone ${s.me.name} reports to`
+        : `${name}, someone ${s.me.name} leads`;
+
+  const goals =
+    direction === "self"
+      ? "strengths, watch-outs, how they work best, and any assessment frameworks they know"
+      : direction === "up"
+        ? "how they run things, what they reward, anxieties, currency, scorecard, and wiring traits"
+        : "how they work, strengths, struggles, motivation, feedback style, and any assessments";
+
+  const history =
+    turns.length === 0
+      ? "(no answers yet — ask the first question)"
+      : turns
+          .map((t, i) => `Q${i + 1}: ${t.question}\nA${i + 1}: ${t.answer}`)
+          .join("\n\n");
+
+  const system = [
+    `You interview ${s.me.name} to build a leadership profile of ${subject}.`,
+    `Ask ONE open-ended question at a time. Questions should be concrete and easy to answer from lived experience — not quiz questions about Enneagram/MBTI unless they volunteer frameworks.`,
+    `Goal areas to cover over the conversation: ${goals}.`,
+    ``,
+    `Rules:`,
+    `- Prefer behavior, stories, and observations over abstract labels.`,
+    `- Do not repeat a question already asked.`,
+    `- After 4–6 substantive answers (or sooner if answers are rich), set enough=true so we can draft the profile.`,
+    `- If answers are thin, keep asking (up to 8 turns) before enough=true.`,
+    `- Respond with ONLY JSON: { "enough": boolean, "question": string }. When enough is true, question may be "".`,
+  ].join("\n");
+
+  const full = await streamChat(
+    system,
+    [
+      {
+        role: "user",
+        content: `Interview so far:\n\n${history}\n\nReturn the next question (or enough=true).`,
+      },
+    ],
+    () => {}
+  );
+
+  const raw = parseProbeJson(full);
+  if (raw.enough || turns.length >= 8) {
+    return { done: true };
+  }
+  const question = (raw.question ?? "").trim();
+  if (!question) return { done: true };
+  return { done: false, question };
+}
+
+/** Format probe Q&A into a brain-dump transcript for drafting. */
+export function probeTurnsToBrainDump(turns: ProbeTurn[]): string {
+  return turns
+    .map((t) => `Q: ${t.question}\nA: ${t.answer}`)
+    .join("\n\n");
+}
+
+function parseProbeJson(text: string): { enough?: boolean; question?: string } {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = (fenced?.[1] ?? trimmed).trim();
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end < start) {
+    return { enough: false, question: trimmed.slice(0, 280) };
+  }
+  try {
+    return JSON.parse(candidate.slice(start, end + 1)) as {
+      enough?: boolean;
+      question?: string;
+    };
+  } catch {
+    return { enough: false, question: trimmed.slice(0, 280) };
+  }
 }
 
 function parseProfileDraftJson(text: string): {
   headline?: string;
   suggestions?: ProfileSuggestion[];
+  modalities?: CustomModalitySuggestion[];
 } {
   const trimmed = text.trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -544,10 +884,52 @@ function parseProfileDraftJson(text: string): {
     return JSON.parse(candidate.slice(start, end + 1)) as {
       headline?: string;
       suggestions?: ProfileSuggestion[];
+      modalities?: CustomModalitySuggestion[];
     };
   } catch {
     throw new Error("The model did not return a structured profile.");
   }
+}
+
+const MANDATE_REFINE_SYSTEM = `You refine a leader's team mandate into a clear, usable statement of purpose.
+
+Take their rough draft (or thin notes) and return ONE refined mandate — typically 2–5 sentences — that clarifies:
+- What outcome this team exists to drive
+- Who they serve and what "good" looks like
+- The leader's real responsibility (not a job-description dump)
+
+Rules:
+- Output ONLY the refined mandate text — no title, bullets, headings, or preamble
+- Keep the leader's voice and intent; sharpen and clarify, don't invent a new mission
+- Be concrete and leadership-useful; cut fluff and corporate jargon
+- If the draft is empty or nearly empty, draft a strong starting mandate from the team context
+- Prefer short paragraphs over lists
+`;
+
+/**
+ * Enrich / clarify a team's mandate. Streams accumulated text via onDelta.
+ */
+export async function refineTeamMandate(opts: {
+  teamId: string;
+  purpose?: string;
+  onDelta?: (text: string) => void;
+}): Promise<string> {
+  const context = teamSystemPrompt(opts.teamId);
+  const draft = opts.purpose?.trim();
+  const user = draft
+    ? `Refine this team mandate:\n\n${draft}`
+    : `Draft a clear starting mandate for this team from the context.`;
+
+  let acc = "";
+  const full = await streamChat(
+    `${MANDATE_REFINE_SYSTEM}\n\n---\n\n# Leadership context\n\n${context}`,
+    [{ role: "user", content: user }],
+    (delta) => {
+      acc += delta;
+      opts.onDelta?.(acc);
+    }
+  );
+  return full.trim();
 }
 
 export function coachPresets(person: Person): { label: string; prompt: string }[] {

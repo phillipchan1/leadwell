@@ -8,7 +8,7 @@ import {
   parseEnneagram,
   THEME_DOMAIN,
 } from "../data/frameworks";
-import { derivedRead } from "../lib/derive";
+import { derivedRead, hasLeadershipRead } from "../lib/derive";
 import { Avatar } from "./Avatar";
 import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
@@ -70,6 +70,8 @@ export function PersonProfile({
   const top5 = person.assessments.cliftonTop5 ?? [];
   const mbtiKey = person.assessments.mbti?.toUpperCase();
   const hasAssessments = top5.length > 0 || enn || mbtiKey;
+  const customMods = person.customModalities ?? [];
+  const hasRead = hasLeadershipRead(person);
 
   const teammates = people.filter((p) => p.teamId === person.teamId);
   const teammateIndex = teammates.findIndex((p) => p.id === person.id);
@@ -342,16 +344,24 @@ export function PersonProfile({
           <div className="flex flex-col gap-6 p-4">
             <section className="space-y-3">
               <SectionTitle>Assessment profile</SectionTitle>
-              {!hasAssessments ? (
-                <button
-                  onClick={() => setEditingAssessments(true)}
-                  className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-                >
-                  + Add assessments
-                  <div className="mt-1 text-xs">
-                    CliftonStrengths · Enneagram · MBTI
-                  </div>
-                </button>
+              {!hasRead ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setFillingProfile(true)}
+                    className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                  >
+                    ✨ AI fill from a brain dump
+                    <div className="mt-1 text-xs">
+                      Free text or guided mapping → traits & modalities
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setEditingAssessments(true)}
+                    className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                  >
+                    Or enter assessments manually
+                  </button>
+                </div>
               ) : (
                 <>
                   {top5.length > 0 && (
@@ -409,6 +419,31 @@ export function PersonProfile({
                       </div>
                     )}
                   </div>
+                  {customMods.length > 0 && (
+                    <div className="space-y-2">
+                      {customMods.map((m) => (
+                        <div
+                          key={m.id}
+                          className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
+                        >
+                          <div className="text-[10px] tracking-wider text-stone-400 uppercase">
+                            {m.name}
+                            {m.source !== "self-report" && (
+                              <span className="ml-1.5 font-normal normal-case tracking-normal">
+                                · {m.source}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm font-semibold">{m.result}</div>
+                          {m.notes && (
+                            <div className="mt-0.5 text-xs text-stone-500">
+                              {m.notes}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {(read.strengths.length > 0 || read.watchOuts.length > 0) && (
                     <div className="space-y-2">
                       {read.strengths.length > 0 && (
@@ -439,6 +474,18 @@ export function PersonProfile({
                       {person.howToLead}
                     </div>
                   )}
+                  {!hasAssessments &&
+                    customMods.length === 0 &&
+                    (read.strengths.length > 0 ||
+                      read.watchOuts.length > 0 ||
+                      person.howToLead) && (
+                      <button
+                        onClick={() => setEditingAssessments(true)}
+                        className="text-xs text-stone-400 hover:text-teal-600"
+                      >
+                        + Add formal assessments or other modalities
+                      </button>
+                    )}
                 </>
               )}
             </section>

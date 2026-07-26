@@ -6,15 +6,54 @@ import {
   THEME_DOMAIN,
 } from "../data/frameworks";
 
-/** A person counts as "assessed" once any framework result is recorded. */
-export function isAssessed(p: Person): boolean {
+/** Formal frameworks only: Clifton Top 5, Enneagram, or MBTI. */
+export function isAssessed(p: {
+  assessments: Person["assessments"];
+}): boolean {
   const a = p.assessments;
   return Boolean((a.cliftonTop5 && a.cliftonTop5.length > 0) || a.enneagram || a.mbti);
+}
+
+/**
+ * Any usable leadership read — formal assessments, free-text traits,
+ * how-to-lead, or custom modalities. Prefer this over isAssessed for
+ * "do I know how to lead them" gaps.
+ */
+export function hasLeadershipRead(p: {
+  assessments: Person["assessments"];
+  strengths: string[];
+  watchOuts: string[];
+  howToLead?: string;
+  customModalities?: Person["customModalities"];
+  leadUp?: Person["leadUp"];
+}): boolean {
+  return (
+    isAssessed(p as Person) ||
+    p.strengths.length > 0 ||
+    p.watchOuts.length > 0 ||
+    Boolean(p.howToLead?.trim()) ||
+    (p.customModalities?.length ?? 0) > 0 ||
+    Boolean(
+      p.leadUp &&
+        Object.values(p.leadUp).some((v) => typeof v === "string" && v.trim())
+    )
+  );
 }
 
 export function teamCoverage(people: Person[]): { assessed: number; total: number } {
   return {
     assessed: people.filter(isAssessed).length,
+    total: people.length,
+  };
+}
+
+/** Count of people with any leadership read (traits, modalities, or formal). */
+export function teamReadCoverage(people: Person[]): {
+  withRead: number;
+  total: number;
+} {
+  return {
+    withRead: people.filter(hasLeadershipRead).length,
     total: people.length,
   };
 }
@@ -46,7 +85,11 @@ export function blindSpots(people: Person[]): StrengthDomain[] {
  * The "read on them": manual strengths/watch-outs plus chips derived from
  * the Enneagram type, deduped.
  */
-export function derivedRead(p: Person): { strengths: string[]; watchOuts: string[] } {
+export function derivedRead(p: {
+  assessments: Person["assessments"];
+  strengths: string[];
+  watchOuts: string[];
+}): { strengths: string[]; watchOuts: string[] } {
   const enn = parseEnneagram(p.assessments.enneagram);
   const info = enn ? ENNEAGRAM[enn.type] : undefined;
   const dedupe = (xs: string[]) => [...new Set(xs)];

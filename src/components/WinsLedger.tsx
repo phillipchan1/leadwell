@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
 import type { Person } from "../types";
-import { SectionTitle } from "./ui";
+import { SectionTitle, inputCls, inputSmCls } from "./ui";
 
 /**
  * Value banked with a person I report to, in *their* currency — recallable
@@ -83,14 +83,14 @@ export function WinsLedger({ person }: { person: Person }) {
 
       <form onSubmit={submit} className="space-y-2">
         <input
-          className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-stone-700 dark:bg-stone-950"
+          className={inputCls}
           placeholder="Log a win…"
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
         {text.trim() && (
           <input
-            className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-stone-700 dark:bg-stone-950"
+            className={inputSmCls}
             placeholder="Impact in their language (optional)…"
             value={impact}
             onChange={(e) => setImpact(e.target.value)}

@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import { DOMAIN_COLOR } from "../data/frameworks";
-import { isAssessed, topDomain } from "../lib/derive";
+import { hasLeadershipRead, topDomain } from "../lib/derive";
 import { Avatar } from "./Avatar";
-import { Badge, Card, inputCls } from "./ui";
+import { Badge, Card, inputSmCls } from "./ui";
 
 type SortKey = "name" | "team" | "coverage" | "nextOneOnOne";
 
@@ -69,13 +69,13 @@ export function PeopleTable() {
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <input
-          className={`${inputCls} max-w-xs`}
+          className={`${inputSmCls} max-w-xs`}
           placeholder="Search people…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
-          className={`${inputCls} max-w-52`}
+          className={`${inputSmCls} max-w-52`}
           value={teamFilter}
           onChange={(e) => setTeamFilter(e.target.value)}
         >
@@ -122,7 +122,7 @@ export function PeopleTable() {
                       name={p.name}
                       photo={p.photo}
                       size={30}
-                      dimmed={!isAssessed(p)}
+                      dimmed={!hasLeadershipRead(p)}
                     />
                     <div>
                       <div className="font-medium">{p.name}</div>

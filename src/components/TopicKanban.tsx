@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Action, ActionColumn } from "../types";
 import { useStore } from "../store/useStore";
-import { inputCls } from "./ui";
+import { inputSmCls } from "./ui";
 
 const COLUMNS: { id: ActionColumn; label: string }[] = [
   { id: "backlog", label: "Backlog" },
@@ -78,7 +78,7 @@ export function TopicKanban({ personId }: { personId: string }) {
                 }}
               >
                 <input
-                  className={`${inputCls} text-xs`}
+                  className={inputSmCls}
                   placeholder="Talk about…"
                   value={drafts[col.id] ?? ""}
                   onChange={(e) =>
