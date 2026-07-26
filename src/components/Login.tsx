@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { signInWithGoogle } from "../lib/auth";
+import {
+  devTestUserConfigured,
+  signInAsTestUser,
+  signInWithGoogle,
+} from "../lib/auth";
 import { supabaseConfigured } from "../lib/supabase";
 
 /** Full-screen sign-in gate shown when there's no authenticated session. */
@@ -15,6 +19,18 @@ export function Login() {
       // Redirects away; nothing else runs on success.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed.");
+      setBusy(false);
+    }
+  };
+
+  const onTestSignIn = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await signInAsTestUser();
+      // onAuthStateChange runs bootstrap; the gate unmounts on its own.
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Test sign-in failed.");
       setBusy(false);
     }
   };
@@ -44,6 +60,20 @@ export function Login() {
           >
             <GoogleMark />
             {busy ? "Redirecting…" : "Continue with Google"}
+          </button>
+        )}
+
+        {/* Dev only — compiled out of production builds. Lets an agent drive
+            the real signed-in app without touching the Google account. */}
+        {supabaseConfigured && devTestUserConfigured && (
+          <button
+            type="button"
+            onClick={onTestSignIn}
+            disabled={busy}
+            data-testid="dev-test-signin"
+            className="mt-3 w-full rounded-lg border border-dashed border-amber-400 px-4 py-2 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-60 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/40"
+          >
+            {busy ? "Signing in…" : "Continue as test user (dev)"}
           </button>
         )}
 
