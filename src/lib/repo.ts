@@ -29,9 +29,10 @@ import type {
   Manager,
   Me,
   Note,
-  OneOnOne,
+  Session,
   Person,
   Team,
+  TrackedMeeting,
   TeamAction,
   TeamGoal,
   TeamNote,
@@ -49,7 +50,8 @@ export type PersistedData = {
   teams: Team[];
   people: Person[];
   actions: Action[];
-  oneOnOnes: OneOnOne[];
+  meetings: TrackedMeeting[];
+  sessions: Session[];
   goals: Goal[];
   notes: Note[];
   wins: Win[];
@@ -208,6 +210,7 @@ const map = {
       role: nn(m.role),
       domain_id: nn(m.domainId),
       photo: nn(m.photo),
+      no_meeting: nn(m.noMeeting),
       lead_up: nn(m.leadUp ?? null),
     }),
     fromRow: (r: Row): Manager => ({
@@ -216,6 +219,7 @@ const map = {
       role: opt(r.role as string | null),
       domainId: opt(r.domain_id as string | null),
       photo: opt(r.photo as string | null),
+      noMeeting: opt(r.no_meeting as boolean | null),
       leadUp: opt(r.lead_up as LeadUpProfile | null),
     }),
   },
@@ -231,6 +235,7 @@ const map = {
       purpose: nn(t.purpose),
       cadence: nn(t.cadence),
       last_met: nn(t.lastMet),
+      no_meeting: nn(t.noMeeting),
       sort_order: t.order,
       direction: nn(t.direction),
       parent_id: nn(t.parentId),
@@ -244,6 +249,7 @@ const map = {
       purpose: opt(r.purpose as string | null),
       cadence: opt(r.cadence as string | null),
       lastMet: opt(r.last_met as string | null),
+      noMeeting: opt(r.no_meeting as boolean | null),
       order: (r.sort_order as number) ?? 0,
       direction: opt(r.direction as "up" | "down" | null),
       parentId: opt(r.parent_id as string | null),
@@ -259,7 +265,7 @@ const map = {
       role: nn(p.role),
       photo: nn(p.photo),
       relationship_type: nn(p.relationshipType),
-      cadence: nn(p.cadence),
+      no_meeting: nn(p.noMeeting),
       clifton_top5: p.assessments.cliftonTop5 ?? [],
       enneagram: nn(p.assessments.enneagram),
       mbti: nn(p.assessments.mbti),
@@ -282,7 +288,7 @@ const map = {
         role: opt(r.role as string | null),
         photo: opt(r.photo as string | null),
         relationshipType: opt(r.relationship_type as string | null),
-        cadence: opt(r.cadence as Person["cadence"] | null),
+        noMeeting: opt(r.no_meeting as boolean | null),
         assessments: {
           ...(top5.length ? { cliftonTop5: top5 } : {}),
           ...(enneagram ? { enneagram } : {}),
@@ -316,21 +322,49 @@ const map = {
       column: (r.board_column as Action["column"]) ?? "backlog",
     }),
   },
-  oneOnOnes: {
+  meetings: {
+    table: "meetings",
+    toRow: (u: string, m: TrackedMeeting): Row => ({
+      user_id: u,
+      id: m.id,
+      subject_kind: m.subjectKind,
+      subject_id: m.subjectId,
+      name: nn(m.name),
+      rhythm: m.rhythm,
+      floor_days: nn(m.floorDays),
+      next_date: nn(m.nextDate),
+      role: nn(m.role),
+    }),
+    fromRow: (r: Row): TrackedMeeting => ({
+      id: r.id as string,
+      subjectKind: r.subject_kind as TrackedMeeting["subjectKind"],
+      subjectId: r.subject_id as string,
+      name: opt(r.name as string | null),
+      rhythm: (r.rhythm as TrackedMeeting["rhythm"]) ?? "as_needed",
+      floorDays: opt(r.floor_days as number | null),
+      nextDate: opt(r.next_date as string | null),
+      role: opt(r.role as TrackedMeeting["role"] | null),
+    }),
+  },
+  sessions: {
+    // Still the one_on_ones table — it was always a meeting occurrence, it just
+    // used to hardcode its subject. Migration 0007 backfills meeting_id.
     table: "one_on_ones",
-    toRow: (u: string, o: OneOnOne): Row => ({
+    toRow: (u: string, o: Session): Row => ({
       user_id: u,
       id: o.id,
-      person_id: o.personId,
+      meeting_id: o.meetingId,
       date: o.date,
+      point: nn(o.point),
       notes: nn(o.notes),
       next_date: nn(o.nextDate),
       transcript: nn(o.transcript),
     }),
-    fromRow: (r: Row): OneOnOne => ({
+    fromRow: (r: Row): Session => ({
       id: r.id as string,
-      personId: r.person_id as string,
+      meetingId: (r.meeting_id as string | null) ?? "",
       date: r.date as string,
+      point: opt(r.point as string | null),
       notes: opt(r.notes as string | null),
       nextDate: opt(r.next_date as string | null),
       transcript: opt(r.transcript as string | null),
@@ -512,7 +546,8 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     teams,
     people,
     actions,
-    oneOnOnes,
+    meetings,
+    sessions,
     goals,
     notes,
     wins,
@@ -528,6 +563,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     grab("teams"),
     grab("people"),
     grab("actions"),
+    grab("meetings"),
     grab("one_on_ones"),
     grab("goals"),
     grab("notes"),
@@ -547,7 +583,8 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     teams: teams.map(map.teams.fromRow).sort((a, b) => a.order - b.order),
     people: people.map(map.people.fromRow),
     actions: actions.map(map.actions.fromRow),
-    oneOnOnes: oneOnOnes.map(map.oneOnOnes.fromRow),
+    meetings: meetings.map(map.meetings.fromRow),
+    sessions: sessions.map(map.sessions.fromRow),
     goals: goals.map(map.goals.fromRow),
     notes: notes.map(map.notes.fromRow),
     wins: wins.map(map.wins.fromRow),

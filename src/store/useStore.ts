@@ -8,10 +8,13 @@ import type {
   Manager,
   Me,
   Note,
-  OneOnOne,
+  Session,
   Person,
   Team,
   TeamAction,
+  TrackedMeeting,
+  MeetingRhythm,
+  MeetingSubjectKind,
   TeamGoal,
   LeadUpProfile,
   Win,
@@ -26,12 +29,13 @@ import {
   capUp,
   seedActions,
   seedCapacities,
+  seedMeetings,
   seedDomains,
   seedGoals,
   seedManagers,
   seedMe,
   seedNotes,
-  seedOneOnOnes,
+  seedSessions,
   seedPeople,
   seedTeamActions,
   seedTeamGoals,
@@ -62,6 +66,7 @@ export type ModalState =
   | { kind: "person"; person?: Person; teamId?: string }
   | { kind: "manager"; manager?: Manager }
   | { kind: "domains" }
+  | { kind: "triage" }
   | null;
 
 type UIState = {
@@ -155,9 +160,26 @@ type Store = PersistedData &
     setActionColumn: (id: string, column: ActionColumn) => void;
     toggleAction: (id: string) => void;
     deleteAction: (id: string) => void;
-    addOneOnOne: (o: Omit<OneOnOne, "id">) => string;
-    updateOneOnOne: (id: string, patch: Partial<Omit<OneOnOne, "id">>) => void;
-    deleteOneOnOne: (id: string) => void;
+    // tracked meetings — the unit readiness is measured against
+    /** Opt in to being ready for a meeting with this subject. Returns its id. */
+    trackMeeting: (
+      subjectKind: MeetingSubjectKind,
+      subjectId: string,
+      rhythm: MeetingRhythm,
+      patch?: Partial<Omit<TrackedMeeting, "id" | "subjectKind" | "subjectId">>
+    ) => string;
+    updateMeeting: (id: string, patch: Partial<Omit<TrackedMeeting, "id">>) => void;
+    /** Only offered when the meeting has no sessions — history is never dropped. */
+    untrackMeeting: (id: string) => void;
+    /** Record (or clear) the explicit "I don't sit down with them" decision. */
+    setNoMeeting: (
+      subjectKind: MeetingSubjectKind,
+      subjectId: string,
+      value: boolean
+    ) => void;
+    addSession: (o: Omit<Session, "id">) => string;
+    updateSession: (id: string, patch: Partial<Omit<Session, "id">>) => void;
+    deleteSession: (id: string) => void;
     addGoal: (g: Omit<Goal, "id">) => void;
     updateGoal: (id: string, patch: Partial<Goal>) => void;
     deleteGoal: (id: string) => void;
@@ -183,6 +205,53 @@ type Store = PersistedData &
 const DATA_KEY = "data";
 const uid = () => Math.random().toString(36).slice(2, 10);
 
+/**
+ * Tracking a meeting answers the opt-in question outright, so any lingering
+ * "no meeting" decision on that subject is stale.
+ */
+function clearNoMeeting(
+  s: Store,
+  kind: MeetingSubjectKind,
+  subjectId: string
+): Partial<Store> {
+  if (kind === "person") {
+    return {
+      people: s.people.map((p) =>
+        p.id === subjectId && p.noMeeting ? { ...p, noMeeting: undefined } : p
+      ),
+    };
+  }
+  if (kind === "team") {
+    return {
+      teams: s.teams.map((t) =>
+        t.id === subjectId && t.noMeeting ? { ...t, noMeeting: undefined } : t
+      ),
+    };
+  }
+  return {
+    managers: s.managers.map((m) =>
+      m.id === subjectId && m.noMeeting ? { ...m, noMeeting: undefined } : m
+    ),
+  };
+}
+
+/** Meetings for a set of subjects, plus every session under them. */
+function withoutMeetingsFor(
+  s: Store,
+  kind: MeetingSubjectKind,
+  subjectIds: Set<string>
+): Pick<Store, "meetings" | "sessions"> {
+  const doomed = new Set(
+    s.meetings
+      .filter((m) => m.subjectKind === kind && subjectIds.has(m.subjectId))
+      .map((m) => m.id)
+  );
+  return {
+    meetings: s.meetings.filter((m) => !doomed.has(m.id)),
+    sessions: s.sessions.filter((o) => !doomed.has(o.meetingId)),
+  };
+}
+
 function migrateActions(actions: Action[]): Action[] {
   return actions.map((a) => ({
     ...a,
@@ -190,8 +259,8 @@ function migrateActions(actions: Action[]): Action[] {
   }));
 }
 
-function migrateOneOnOnes(oneOnOnes: OneOnOne[]): OneOnOne[] {
-  return oneOnOnes.map((o) => ({
+function migrateSessions(sessions: Session[]): Session[] {
+  return sessions.map((o) => ({
     ...o,
     // Legacy schedule stubs used notes: "Scheduled"
     notes: o.notes === "Scheduled" ? undefined : o.notes,
@@ -208,7 +277,8 @@ function seedData(): PersistedData {
     teams: seedTeams,
     people: seedPeople,
     actions: seedActions,
-    oneOnOnes: seedOneOnOnes,
+    meetings: seedMeetings,
+    sessions: seedSessions,
     goals: seedGoals,
     notes: seedNotes,
     wins: seedWins,
@@ -230,7 +300,8 @@ function blankData(): PersistedData {
     teams: [],
     people: [],
     actions: [],
-    oneOnOnes: [],
+    meetings: [],
+    sessions: [],
     goals: [],
     notes: [],
     wins: [],
@@ -271,7 +342,8 @@ function importLegacyLocalData(): PersistedData | null {
     teamGoals: saved.teamGoals ?? [],
     teamNotes: saved.teamNotes ?? [],
     actions: migrateActions(saved.actions ?? []),
-    oneOnOnes: migrateOneOnOnes(saved.oneOnOnes ?? []),
+    meetings: saved.meetings ?? [],
+    sessions: migrateSessions(saved.sessions ?? []),
     capacities: saved.capacities.some((c) => c.id === capUp.id)
       ? saved.capacities
       : [...saved.capacities, capUp],
@@ -454,6 +526,7 @@ export const useStore = create<Store>((set, get) => ({
       const { [`mgr:${id}`]: _pos, ...nodePositions } = s.nodePositions;
       return {
         managers: s.managers.filter((m) => m.id !== id),
+        ...withoutMeetingsFor(s, "manager", new Set([id])),
         // Wins are keyed by subject id, managers included.
         wins: s.wins.filter((w) => w.personId !== id),
         nodePositions,
@@ -504,7 +577,18 @@ export const useStore = create<Store>((set, get) => ({
           ),
         people: s.people.filter((p) => p.teamId !== id),
         actions: s.actions.filter((a) => !peopleIds.has(a.personId)),
-        oneOnOnes: s.oneOnOnes.filter((o) => !peopleIds.has(o.personId)),
+        ...(() => {
+          const viaPeople = withoutMeetingsFor(s, "person", peopleIds);
+          const doomed = new Set(
+            s.meetings
+              .filter((m) => m.subjectKind === "team" && m.subjectId === id)
+              .map((m) => m.id)
+          );
+          return {
+            meetings: viaPeople.meetings.filter((m) => !doomed.has(m.id)),
+            sessions: viaPeople.sessions.filter((o) => !doomed.has(o.meetingId)),
+          };
+        })(),
         goals: s.goals.filter((g) => !peopleIds.has(g.personId)),
         notes: s.notes.filter((n) => !peopleIds.has(n.personId)),
         wins: s.wins.filter((w) => !peopleIds.has(w.personId)),
@@ -595,7 +679,7 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({
       people: s.people.filter((p) => p.id !== id),
       actions: s.actions.filter((a) => a.personId !== id),
-      oneOnOnes: s.oneOnOnes.filter((o) => o.personId !== id),
+      ...withoutMeetingsFor(s, "person", new Set([id])),
       goals: s.goals.filter((g) => g.personId !== id),
       notes: s.notes.filter((n) => n.personId !== id),
       wins: s.wins.filter((w) => w.personId !== id),
@@ -654,17 +738,69 @@ export const useStore = create<Store>((set, get) => ({
   deleteAction: (id) =>
     set((s) => ({ actions: s.actions.filter((a) => a.id !== id) })),
 
-  addOneOnOne: (o) => {
+  trackMeeting: (subjectKind, subjectId, rhythm, patch) => {
+    const existing = get().meetings.find(
+      (m) => m.subjectKind === subjectKind && m.subjectId === subjectId
+    );
+    if (existing) {
+      get().updateMeeting(existing.id, { rhythm, ...patch });
+      return existing.id;
+    }
     const id = uid();
-    set((s) => ({ oneOnOnes: [...s.oneOnOnes, { ...o, id }] }));
+    set((s) => ({
+      meetings: [
+        ...s.meetings,
+        { id, subjectKind, subjectId, rhythm, ...patch },
+      ],
+      // Tracking answers the opt-in question, so the decision flag is moot.
+      ...clearNoMeeting(s, subjectKind, subjectId),
+    }));
     return id;
   },
-  updateOneOnOne: (id, patch) =>
+  updateMeeting: (id, patch) =>
     set((s) => ({
-      oneOnOnes: s.oneOnOnes.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+      meetings: s.meetings.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     })),
-  deleteOneOnOne: (id) =>
-    set((s) => ({ oneOnOnes: s.oneOnOnes.filter((o) => o.id !== id) })),
+  untrackMeeting: (id) =>
+    set((s) => ({
+      meetings: s.meetings.filter((m) => m.id !== id),
+      sessions: s.sessions.filter((o) => o.meetingId !== id),
+    })),
+  setNoMeeting: (subjectKind, subjectId, value) =>
+    set((s) => {
+      const flag = value ? true : undefined;
+      if (subjectKind === "person") {
+        return {
+          people: s.people.map((p) =>
+            p.id === subjectId ? { ...p, noMeeting: flag } : p
+          ),
+        };
+      }
+      if (subjectKind === "team") {
+        return {
+          teams: s.teams.map((t) =>
+            t.id === subjectId ? { ...t, noMeeting: flag } : t
+          ),
+        };
+      }
+      return {
+        managers: s.managers.map((m) =>
+          m.id === subjectId ? { ...m, noMeeting: flag } : m
+        ),
+      };
+    }),
+
+  addSession: (o) => {
+    const id = uid();
+    set((s) => ({ sessions: [...s.sessions, { ...o, id }] }));
+    return id;
+  },
+  updateSession: (id, patch) =>
+    set((s) => ({
+      sessions: s.sessions.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+    })),
+  deleteSession: (id) =>
+    set((s) => ({ sessions: s.sessions.filter((o) => o.id !== id) })),
 
   addGoal: (g) => set((s) => ({ goals: [...s.goals, { ...g, id: uid() }] })),
   updateGoal: (id, patch) =>
@@ -801,7 +937,8 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "teams",
   "people",
   "actions",
-  "oneOnOnes",
+  "meetings",
+  "sessions",
   "goals",
   "notes",
   "wins",

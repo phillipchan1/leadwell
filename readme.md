@@ -52,12 +52,14 @@ src/
   lib/
     storage.ts           # persistence seam (localStorage now, API later)
     derive.ts            # coverage, domain counts, blind spots, derived "read"
+    readiness.ts         # meeting prep: states, checks, roll-up, triage
     ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
   components/
     App shell: App.tsx (header, tabs, Ask AI)
     Tree: OrgTree.tsx, StatsBar.tsx, StrengthsDonut.tsx, Avatar.tsx
     Profile: PersonProfile.tsx, AssessmentEditor.tsx, AICoach.tsx
+    Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx
     Other tabs: Overview.tsx, PeopleTable.tsx
     forms.tsx, ui.tsx    # modals + small primitives
 ```
@@ -72,44 +74,73 @@ type Team     = { id: string; name: string; capacityId: string; description?: st
 type Domain = "Executing" | "Influencing" | "Relationship Building" | "Strategic Thinking";
 type Assessments = { cliftonTop5?: string[]; enneagram?: string; mbti?: string };
 
-type Cadence  = "weekly" | "biweekly" | "monthly" | "quarterly" | "none";
+type MeetingRhythm = "weekly" | "biweekly" | "monthly" | "quarterly" | "as_needed";
+
+// A meeting I've opted into being ready for. Points at a person (1:1), a team
+// (staff meeting, practice session) or a manager (check-in).
+type TrackedMeeting = {
+  id: string; subjectKind: "person" | "team" | "manager"; subjectId: string;
+  name?: string;                        // "Practice meeting"; defaults to the subject's name
+  rhythm: MeetingRhythm;
+  floorDays?: number;                   // as_needed only — a tolerance, not a rhythm
+  nextDate?: string;                    // an explicit booking always wins
+  role?: "convene" | "attend";
+};
 
 type Person = {
   id: string; teamId: string; name: string; role?: string;
   photo?: string;                       // base64 data URL (downscaled on upload)
   relationshipType?: string;
-  cadence?: Cadence;                    // 1:1 rhythm — drives readiness ("none" = no 1:1s)
+  noMeeting?: boolean;                  // "I deliberately don't sit down with them"
   assessments: Assessments;
   strengths: string[]; watchOuts: string[]; howToLead?: string;
 };
 type Action   = { id: string; personId: string; text: string; done: boolean; dueDate?: string };
-type OneOnOne = { id: string; personId: string; date: string; notes?: string; nextDate?: string };
+type Session  = { id: string; meetingId: string; date: string; point?: string; notes?: string; nextDate?: string };  // one occurrence
 type Goal     = { id: string; personId: string; title: string; progress: number; targetDate?: string };
 type Note     = { id: string; personId: string; date: string; body: string };
 type Me       = { name: string; title?: string; photo?: string };
 ```
 
-## Readiness (1:1 prep)
+## Readiness (meeting prep)
 
 Separate from coverage, which answers *do I know them*. Readiness answers **am I
-ready for the next time we sit down** — and it's measured against the clock, not
-in the abstract. A person's `cadence` projects the next 1:1 from the last one
-(`~Thu · 3d`), so nothing has to be scheduled for the signal to work; an
-explicitly booked `nextDate` always wins.
+ready for the next time we sit down** — measured against the clock, not in the
+abstract.
 
-Five states, worst-first: **Drifting** (past cadence, nothing next) → **Loose
-end** (a 1:1 was never written up) → **Prep due** (window open, checklist
-incomplete) → **Ready** → **Resting** (met recently — nothing is owed, and that's
-a good state). Relationship debt deliberately outranks paperwork debt. People
-with no cadence, or `"none"`, are left out entirely.
+**The meeting is the unit.** A 1:1, a staff meeting, a practice session and a
+check-in with the boss all prep identically, so they're all `TrackedMeeting`s
+pointing at different subjects. The same team can have a standing meeting *and*
+1:1s with its members; those are separate things to be ready for.
 
-Prep only starts mattering inside a window of `max(2 days, 25% of cadence)`.
-Team cards roll up **worst-of, never average**. The engine lives in
-[`src/lib/readiness.ts`](src/lib/readiness.ts); layer **`R`** on the canvas shows
-the rail, countdown chip and distribution bar, and the per-person prep panel
-([`PrepPanel.tsx`](src/components/PrepPanel.tsx)) links each failing check
-straight to where it gets fixed. Full design rationale — including what's
-deliberately *not* built — in [docs/readiness.md](docs/readiness.md).
+**Rhythm, not a calendar.** A meeting's rhythm projects its next occurrence from
+the last one (`~Thu · 3d`, the `~` marking a projection), so nothing has to be
+scheduled for the signal to work. An explicit `nextDate` always wins.
+`as_needed` promises nothing and projects nothing — give it a `floorDays`
+*tolerance* instead ("if it's been 6 weeks, something's wrong") and it sits
+**Dormant** until either something is booked or the floor is crossed. Metronome
+for what's regular, tripwire for what isn't.
+
+Six states, worst-first: **Drifting** (past the rhythm or floor, nothing next) →
+**Loose end** (an occurrence was never written up) → **Prep due** (window open,
+checklist incomplete) → **Ready** → **Resting** (met recently — nothing owed,
+and that's a good state) → **Dormant**. Relationship debt deliberately outranks
+paperwork debt. Prep only starts mattering inside a window of
+`max(2 days, 25% of the rhythm)`. Cards roll up **worst-of, never average**.
+
+**Nothing is measured until you opt in.** Three states per subject: tracked, a
+deliberate `noMeeting` decision, or *undecided* — and only undecided is counted
+at you, in a number that empties as you triage it
+([`TriageModal.tsx`](src/components/TriageModal.tsx), bulk by design). That
+closes the one hole opt-in creates: you can't go green by ignoring people, only
+by deciding about them.
+
+The engine lives in [`src/lib/readiness.ts`](src/lib/readiness.ts); layer **`R`**
+on the canvas shows the rail, countdown chip and distribution bar, and
+[`PrepPanel.tsx`](src/components/PrepPanel.tsx) — on people, teams and managers
+alike — links each failing check straight to where it gets fixed, including into
+the meeting that was never written up. Full design rationale, including what's
+deliberately *not* built, in [docs/readiness.md](docs/readiness.md).
 
 A person counts as **assessed** once any framework result is recorded. The team-node metric is assessment coverage (X/Y) — deliberately pluggable so a future 0–100 leadership-readiness score can roll up through teams without a rewrite.
 

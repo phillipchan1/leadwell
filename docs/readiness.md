@@ -4,14 +4,21 @@
 
 ## Status
 
-**Built — Phase 1, 1:1 signal only.** `Person.cadence`, the readiness engine
-([`src/lib/readiness.ts`](../src/lib/readiness.ts)), canvas layer `R`, and the
-per-person prep panel. Cadence *projects* the next 1:1 from the last one, so
-nothing has to be booked for the signal to work.
+**Built.** `TrackedMeeting` + `Session`, opt-in per subject, the readiness
+engine ([`src/lib/readiness.ts`](../src/lib/readiness.ts)), canvas layer `R`,
+prep panels on people / teams / managers, and bulk triage. Rhythm *projects*
+the next occurrence from the last one, so nothing has to be booked for the
+signal to work; `as_needed` + a floor covers meetings that are real but
+genuinely not on a rhythm.
 
-**Not built:** everything else. Note that **The simplification: a tracked
-meeting is the unit** (below) supersedes the per-entity approach described in
-the earlier sections — read those for the reasoning, that one for the model.
+**Not built:** the convener extras (per-session point, pre-wire), participant
+checks, ✦ Prep me, the Prep Sweep, Depth staleness.
+
+Note that **The simplification: a tracked meeting is the unit** (below) is the
+model as built. The sections before it are the reasoning that got there —
+including some per-entity fields that were superseded and never shipped.
+
+Requires migrations `0006` and `0007`.
 
 ## The problem, stated precisely
 

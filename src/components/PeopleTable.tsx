@@ -2,13 +2,14 @@ import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import { DOMAIN_COLOR } from "../data/frameworks";
 import { hasLeadershipRead, topDomain } from "../lib/derive";
+import { meetingFor } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { Badge, Card, inputSmCls } from "./ui";
 
-type SortKey = "name" | "team" | "coverage" | "nextOneOnOne";
+type SortKey = "name" | "team" | "coverage" | "nextSession";
 
 export function PeopleTable() {
-  const { people, teams, capacities, oneOnOnes, selectPerson, setTab } =
+  const { people, teams, capacities, meetings, sessions, selectPerson, setTab } =
     useStore();
   const [query, setQuery] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
@@ -19,8 +20,9 @@ export function PeopleTable() {
     const enriched = people.map((p) => {
       const team = teams.find((t) => t.id === p.teamId);
       const capacity = capacities.find((c) => c.id === team?.capacityId);
-      const next = oneOnOnes
-        .filter((o) => o.personId === p.id && o.nextDate)
+      const meeting = meetingFor(meetings, "person", p.id);
+      const next = sessions
+        .filter((o) => meeting && o.meetingId === meeting.id && o.nextDate)
         .map((o) => o.nextDate!)
         .sort()[0];
       const a = p.assessments;
@@ -46,13 +48,13 @@ export function PeopleTable() {
           return dir * (x.team?.name ?? "").localeCompare(y.team?.name ?? "");
         case "coverage":
           return dir * (x.coverage - y.coverage);
-        case "nextOneOnOne":
+        case "nextSession":
           return dir * (x.next ?? "9999").localeCompare(y.next ?? "9999");
         default:
           return dir * x.p.name.localeCompare(y.p.name);
       }
     });
-  }, [people, teams, capacities, oneOnOnes, query, teamFilter, sortKey, asc]);
+  }, [people, teams, capacities, sessions, query, teamFilter, sortKey, asc]);
 
   const sortBy = (key: SortKey) => {
     if (key === sortKey) setAsc(!asc);
@@ -101,8 +103,8 @@ export function PeopleTable() {
               <Th>Top domain</Th>
               <Th>Enneagram</Th>
               <Th>MBTI</Th>
-              <Th onClick={() => sortBy("nextOneOnOne")}>
-                Next 1:1{arrow("nextOneOnOne")}
+              <Th onClick={() => sortBy("nextSession")}>
+                Next 1:1{arrow("nextSession")}
               </Th>
             </tr>
           </thead>

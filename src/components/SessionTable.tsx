@@ -1,10 +1,10 @@
-import type { OneOnOne } from "../types";
+import type { Session } from "../types";
 import { useStore } from "../store/useStore";
 import {
-  oneOnOneStatus,
-  oneOnOneStatusLabel,
-  oneOnOneSummary,
-} from "../lib/oneOnOne";
+  sessionStatus,
+  sessionStatusLabel,
+  sessionSummary,
+} from "../lib/session";
 
 const STATUS_CLS: Record<string, string> = {
   scheduled:
@@ -14,23 +14,23 @@ const STATUS_CLS: Record<string, string> = {
   done: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
 };
 
-export function OneOnOneTable({
-  personId,
+export function SessionTable({
+  meetingId,
   onOpen,
   onCreated,
 }: {
-  personId: string;
+  meetingId: string;
   onOpen: (id: string) => void;
   onCreated?: (id: string) => void;
 }) {
-  const { oneOnOnes, addOneOnOne, updateOneOnOne, deleteOneOnOne } = useStore();
-  const rows = oneOnOnes
-    .filter((o) => o.personId === personId)
+  const { sessions, addSession, updateSession, deleteSession } = useStore();
+  const rows = sessions
+    .filter((o) => o.meetingId === meetingId)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const createNew = () => {
-    const id = addOneOnOne({
-      personId,
+    const id = addSession({
+      meetingId,
       date: new Date().toISOString().slice(0, 10),
     });
     onCreated?.(id);
@@ -50,13 +50,13 @@ export function OneOnOneTable({
         </thead>
         <tbody>
           {rows.map((o) => (
-            <OneOnOneRow
+            <SessionRow
               key={o.id}
               row={o}
               onOpen={() => onOpen(o.id)}
-              onPatch={(patch) => updateOneOnOne(o.id, patch)}
+              onPatch={(patch) => updateSession(o.id, patch)}
               onDelete={() => {
-                if (confirm("Delete this 1:1?")) deleteOneOnOne(o.id);
+                if (confirm("Delete this 1:1?")) deleteSession(o.id);
               }}
             />
           ))}
@@ -74,19 +74,19 @@ export function OneOnOneTable({
   );
 }
 
-function OneOnOneRow({
+function SessionRow({
   row,
   onOpen,
   onPatch,
   onDelete,
 }: {
-  row: OneOnOne;
+  row: Session;
   onOpen: () => void;
-  onPatch: (patch: Partial<OneOnOne>) => void;
+  onPatch: (patch: Partial<Session>) => void;
   onDelete: () => void;
 }) {
-  const status = oneOnOneStatus(row);
-  const summary = oneOnOneSummary(row);
+  const status = sessionStatus(row);
+  const summary = sessionSummary(row);
 
   return (
     <tr
@@ -115,7 +115,7 @@ function OneOnOneRow({
         <span
           className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-medium ${STATUS_CLS[status]}`}
         >
-          {oneOnOneStatusLabel(status)}
+          {sessionStatusLabel(status)}
         </span>
       </td>
       <td className="relative px-2.5 py-2">

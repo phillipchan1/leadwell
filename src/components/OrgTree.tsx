@@ -21,18 +21,23 @@ import { domainCounts, hasLeadershipRead, topDomain } from "../lib/derive";
 import {
   distribution,
   formatCountdown,
-  isTracked,
-  personReadiness,
+  isBehind,
+  meetingFor,
+  readinessFor,
   rollUp,
   STATE_COLOR,
   STATE_LABEL,
+  STATE_ORDER,
+  triageState,
   type Readiness,
+  type ReadinessData,
 } from "../lib/readiness";
 import { DOMAINS, DOMAIN_COLOR, THEME_DOMAIN } from "../data/frameworks";
 import { effectiveParentId } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import { Badge, Card, IconButton } from "./ui";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
+import { TriageModal } from "./TriageModal";
 
 const LAYER_KEYS: Record<string, TreeLayer> = {
   p: "people",
@@ -456,6 +461,7 @@ export function OrgTree() {
         />
       )}
       {modal?.kind === "domains" && <DomainsModal onClose={closeModal} />}
+      {modal?.kind === "triage" && <TriageModal onClose={closeModal} />}
     </div>
   );
 }
@@ -513,58 +519,115 @@ function DomainTab({
 
 /**
  * The one-line answer to "am I behind", always visible above the canvas and
- * scoped to whatever the domain filter is showing. Clicking jumps to the
- * person who needs you most.
+ * scoped to whatever the domain filter is showing.
+ *
+ * The undecided count is the honest denominator: opting in cures alarm fatigue
+ * but lets you go green by looking away, so anything you haven't *decided*
+ * about is counted — and only until you decide. It empties, and then it's gone.
  */
 function ReadinessSummary({ teams }: { teams: Team[] }) {
-  const { people, oneOnOnes, actions, treeLayers, selectPerson } = useStore();
+  const {
+    people,
+    managers,
+    meetings,
+    sessions,
+    actions,
+    teamActions,
+    treeLayers,
+    selectPerson,
+    selectTeam,
+    openModal,
+  } = useStore();
   if (!treeLayers.readiness) return null;
 
+  const rdata: ReadinessData = { meetings, sessions, actions, teamActions };
   const teamIds = new Set(teams.map((t) => t.id));
   const members = people.filter((p) => teamIds.has(p.teamId));
-  const readings = members.map((p) => ({
-    person: p,
-    readiness: personReadiness(p, oneOnOnes, actions),
-  }));
-  const tracked = readings.filter((r) => isTracked(r.readiness.state));
-  if (tracked.length === 0) return null;
 
-  const roll = rollUp(tracked.map((r) => r.readiness));
-  const worst = tracked
-    .filter((r) => r.readiness.state === roll.state)
+  type Entry = {
+    kind: "person" | "team";
+    id: string;
+    name: string;
+    readiness: Readiness;
+  };
+  const entries: Entry[] = [
+    ...teams.flatMap((t) => {
+      const r = readinessFor("team", t.id, rdata);
+      return r ? [{ kind: "team" as const, id: t.id, name: t.name, readiness: r }] : [];
+    }),
+    ...members.flatMap((p) => {
+      const r = readinessFor("person", p.id, rdata);
+      return r ? [{ kind: "person" as const, id: p.id, name: p.name, readiness: r }] : [];
+    }),
+  ];
+
+  const undecided =
+    members.filter((p) => triageState(p, meetings, "person") === "undecided")
+      .length +
+    teams.filter((t) => triageState(t, meetings, "team") === "undecided").length +
+    managers.filter((m) => triageState(m, meetings, "manager") === "undecided")
+      .length;
+
+  if (entries.length === 0 && undecided === 0) return null;
+
+  const roll = rollUp(entries.map((e) => e.readiness));
+  const worst = entries
+    .filter((e) => isBehind(e.readiness.state))
     .sort(
-      (a, b) => (a.readiness.daysUntil ?? 0) - (b.readiness.daysUntil ?? 0)
+      (a, b) =>
+        STATE_ORDER.indexOf(a.readiness.state) -
+          STATE_ORDER.indexOf(b.readiness.state) ||
+        (a.readiness.daysUntil ?? 0) - (b.readiness.daysUntil ?? 0)
     )[0];
 
   return (
     <div className="ml-auto flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
-      <span>
-        <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
-          {roll.ready}
-        </strong>{" "}
-        of{" "}
-        <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
-          {roll.tracked}
-        </strong>{" "}
-        ready
-      </span>
-      {roll.behind > 0 && worst && (
+      {entries.length > 0 && (
+        <span>
+          <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
+            {roll.ready}
+          </strong>{" "}
+          of{" "}
+          <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
+            {roll.tracked}
+          </strong>{" "}
+          ready
+        </span>
+      )}
+      {worst && (
         <>
           <span className="text-stone-300 dark:text-stone-700">·</span>
           <button
             type="button"
-            onClick={() => selectPerson(worst.person.id)}
+            onClick={() =>
+              worst.kind === "person"
+                ? selectPerson(worst.id)
+                : selectTeam(worst.id)
+            }
             className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-stone-100 dark:hover:bg-stone-800"
             title={worst.readiness.headline}
           >
             <span
               className="h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: STATE_COLOR[roll.state] }}
+              style={{ backgroundColor: STATE_COLOR[worst.readiness.state] }}
             />
             {roll.behind} need prep — start with{" "}
             <span className="font-medium text-stone-700 dark:text-stone-200">
-              {worst.person.name.split(" ")[0]}
+              {worst.name.split(" ")[0]}
             </span>
+          </button>
+        </>
+      )}
+      {undecided > 0 && (
+        <>
+          <span className="text-stone-300 dark:text-stone-700">·</span>
+          <button
+            type="button"
+            onClick={() => openModal({ kind: "triage" })}
+            className="rounded-md px-1.5 py-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+            title="Not a backlog — decide once and they leave this count for good"
+          >
+            <span className="tabular-nums">{undecided}</span> undecided
           </button>
         </>
       )}
@@ -783,10 +846,28 @@ function MeNode() {
 
 function ManagerNode({ data }: NodeProps) {
   const managerId = (data as { managerId: string }).managerId;
-  const { managers, domains, openModal, selectManager, selectedManagerId } =
-    useStore();
+  const {
+    managers,
+    domains,
+    meetings,
+    sessions,
+    actions,
+    teamActions,
+    treeLayers,
+    openModal,
+    selectManager,
+    selectedManagerId,
+  } = useStore();
   const manager = managers.find((m) => m.id === managerId);
   if (!manager) return null;
+  const readiness = treeLayers.readiness
+    ? readinessFor("manager", manager.id, {
+        meetings,
+        sessions,
+        actions,
+        teamActions,
+      })
+    : null;
   const domain = domains.find((d) => d.id === manager.domainId);
   const selected = selectedManagerId === manager.id;
   // How much of the operating manual is filled — the reason to open this node.
@@ -809,13 +890,20 @@ function ManagerNode({ data }: NodeProps) {
             {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
               "I report to"}
           </div>
-          <div className="text-[10px] text-stone-400">
+          <div className="flex items-center gap-1.5 text-[10px] text-stone-400">
             {filled > 0 ? (
               <span className="text-blue-500 dark:text-blue-400">
                 manual {filled}/6
               </span>
             ) : (
               "no manual yet"
+            )}
+            {readiness && (
+              <ReadinessChip
+                state={readiness.state}
+                text={formatCountdown(readiness)}
+                title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
+              />
             )}
           </div>
         </div>
@@ -850,7 +938,8 @@ function TeamNode({ data }: NodeProps) {
     people,
     capacities,
     domains,
-    oneOnOnes,
+    meetings,
+    sessions,
     actions,
     teamActions,
     addTeamAction,
@@ -884,16 +973,22 @@ function TeamNode({ data }: NodeProps) {
     readiness: showReadiness,
   } = treeLayers;
 
-  // Readiness is per-person; the card takes the worst of its members and the
-  // soonest 1:1 among them — that's the meeting you'd walk into next.
+  // A card can carry two different things to be ready for: the team's own
+  // standing meeting, and a 1:1 with each member. Both are tracked meetings.
+  const rdata: ReadinessData = { meetings, sessions, actions, teamActions };
+  const teamMeeting = meetingFor(meetings, "team", team.id);
+  const teamReading = readinessFor("team", team.id, rdata);
   const readings = new Map(
-    members.map((p) => [p.id, personReadiness(p, oneOnOnes, actions)])
+    members.flatMap((p) => {
+      const r = readinessFor("person", p.id, rdata);
+      return r ? [[p.id, r] as const] : [];
+    })
   );
-  const memberReadings = [...readings.values()];
-  const roll = rollUp(memberReadings);
-  const soonest = memberReadings
-    .filter((r) => isTracked(r.state) && r.daysUntil !== null)
-    .sort((a, b) => a.daysUntil! - b.daysUntil!)[0];
+  const allReadings = [
+    ...(teamReading ? [teamReading] : []),
+    ...readings.values(),
+  ];
+  const roll = rollUp(allReadings);
 
   return (
     <>
@@ -919,11 +1014,11 @@ function TeamNode({ data }: NodeProps) {
           style={{ backgroundColor: accent }}
         />
         {/* Readiness rail — worst member state, readable from across the canvas */}
-        {showReadiness && roll.tracked > 0 && (
+        {showReadiness && roll.state && (
           <div
             className="absolute top-1 bottom-0 left-0 w-[3px]"
             style={{ backgroundColor: STATE_COLOR[roll.state] }}
-            title={`${STATE_LABEL[roll.state]} — ${roll.behind} of ${roll.tracked} need prep`}
+            title={`${STATE_LABEL[roll.state]} — ${roll.behind} of ${roll.tracked} tracked need prep`}
             aria-hidden
           />
         )}
@@ -944,11 +1039,11 @@ function TeamNode({ data }: NodeProps) {
                 {capacity && (
                   <Badge color={capacity.color}>{capacity.label}</Badge>
                 )}
-                {showReadiness && soonest && (
+                {showReadiness && teamReading && teamMeeting && (
                   <ReadinessChip
-                    state={roll.state}
-                    text={formatCountdown(soonest)}
-                    title={`Soonest 1:1 on this team · ${STATE_LABEL[roll.state]}`}
+                    state={teamReading.state}
+                    text={formatCountdown(teamReading)}
+                    title={`${teamMeeting.name ?? "Team meeting"} · ${STATE_LABEL[teamReading.state]} — ${teamReading.headline}`}
                   />
                 )}
               </div>
@@ -992,10 +1087,11 @@ function TeamNode({ data }: NodeProps) {
 
           {showReadiness && roll.tracked > 0 && (
             <div className="mt-3 flex flex-col gap-1">
-              <ReadinessBar readings={memberReadings} />
+              <ReadinessBar readings={allReadings} />
               <div className="text-[10px] text-stone-400">
+                {teamMeeting?.name ? `${teamMeeting.name} · ` : ""}
                 {roll.behind === 0
-                  ? `${roll.tracked} on track`
+                  ? `${roll.tracked} tracked, all on track`
                   : `${roll.behind} of ${roll.tracked} need prep`}
               </div>
             </div>
@@ -1192,8 +1288,7 @@ function PersonRow({
   const dominant = topDomain(person);
   // Readiness owns the accent bar when its layer is on — it's the more
   // time-sensitive signal, and capacity is already carried by the card.
-  const tracked = readiness && isTracked(readiness.state);
-  const barColor = tracked
+  const barColor = readiness
     ? STATE_COLOR[readiness.state]
     : showDetail && dominant
       ? DOMAIN_COLOR[dominant]
@@ -1242,7 +1337,7 @@ function PersonRow({
             </div>
           )}
       </div>
-      {tracked ? (
+      {readiness ? (
         <ReadinessChip
           state={readiness.state}
           text={formatCountdown(readiness)}

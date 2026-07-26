@@ -9,13 +9,13 @@ import {
   THEME_DOMAIN,
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
-import type { CheckFix } from "../lib/readiness";
+import { meetingFor, type CheckFix } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
-import { OneOnOneTable } from "./OneOnOneTable";
+import { SessionTable } from "./SessionTable";
 import { MeetingEditor } from "./MeetingEditor";
 import { TopicKanban } from "./TopicKanban";
 import { WritingPad } from "./WritingPad";
@@ -25,11 +25,11 @@ import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
 
-type PersonTab = "profile" | "oneOnOnes" | "topics" | "notes";
+type PersonTab = "profile" | "sessions" | "topics" | "notes";
 
 const PERSON_TABS: { id: PersonTab; label: string }[] = [
   { id: "profile", label: "Profile" },
-  { id: "oneOnOnes", label: "1:1s" },
+  { id: "sessions", label: "1:1s" },
   { id: "topics", label: "Topics" },
   { id: "notes", label: "Notes" },
 ];
@@ -52,8 +52,10 @@ export function PersonProfile({
     modal,
     askAIOpen,
     settingsOpen,
-    oneOnOnes,
-    addOneOnOne,
+    meetings,
+    sessions,
+    addSession,
+    trackMeeting,
     goals,
     addGoal,
     updateGoal,
@@ -84,16 +86,17 @@ export function PersonProfile({
       ? teammates[teammateIndex + 1]
       : null;
 
-  const myOneOnOnes = oneOnOnes
-    .filter((o) => o.personId === person.id)
+  const meeting = meetingFor(meetings, "person", person.id);
+  const mySessions = sessions
+    .filter((o) => meeting && o.meetingId === meeting.id)
     .sort((a, b) => b.date.localeCompare(a.date));
   const myGoals = goals.filter((g) => g.personId === person.id);
   const myNotes = notes
     .filter((n) => n.personId === person.id)
     .sort((a, b) => b.date.localeCompare(a.date));
 
-  const lastOneOnOne = myOneOnOnes.find((o) => o.notes?.trim());
-  const nextOneOnOne = myOneOnOnes.find((o) => o.nextDate)?.nextDate;
+  const lastSession = mySessions.find((o) => o.notes?.trim());
+  const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
   const [tab, setTab] = useState<PersonTab>("profile");
   const [editingAssessments, setEditingAssessments] = useState(false);
@@ -193,10 +196,17 @@ export function PersonProfile({
     selectPerson,
   ]);
 
-  const startNewOneOnOne = () => {
-    setTab("oneOnOnes");
-    const id = addOneOnOne({
-      personId: person.id,
+  /**
+   * Logging a 1:1 for someone untracked starts tracking it as-needed rather
+   * than refusing: you get the history without being measured, and setting a
+   * rhythm stays the explicit opt-in.
+   */
+  const startNewSession = () => {
+    setTab("sessions");
+    const meetingId =
+      meeting?.id ?? trackMeeting("person", person.id, "as_needed");
+    const id = addSession({
+      meetingId,
       date: new Date().toISOString().slice(0, 10),
     });
     setOpenMeetingId(id);
@@ -205,18 +215,18 @@ export function PersonProfile({
   /** Send a failing readiness check to wherever it actually gets fixed. */
   const goFix = (fix: CheckFix, meetingId?: string) => {
     if (fix === "writeUp" && meetingId) {
-      setTab("oneOnOnes");
+      setTab("sessions");
       setOpenMeetingId(meetingId);
       return;
     }
     if (fix === "book") {
-      startNewOneOnOne();
+      startNewSession();
       return;
     }
     setTab("topics");
   };
 
-  const wideTab = tab === "oneOnOnes" || tab === "topics";
+  const wideTab = tab === "sessions" || tab === "topics";
 
   return (
     <aside
@@ -277,9 +287,9 @@ export function PersonProfile({
               </div>
             )}
             <div className="mt-1 text-[11px] text-stone-400">
-              {nextOneOnOne && `Next 1:1 ${nextOneOnOne}`}
-              {nextOneOnOne && lastOneOnOne && " · "}
-              {lastOneOnOne && `Last ${lastOneOnOne.date}`}
+              {nextSession && `Next 1:1 ${nextSession}`}
+              {nextSession && lastSession && " · "}
+              {lastSession && `Last ${lastSession.date}`}
             </div>
           </div>
           <button
@@ -294,7 +304,7 @@ export function PersonProfile({
           <QuickAction onClick={() => setFillingProfile(true)}>
             ✨ AI fill
           </QuickAction>
-          <QuickAction onClick={startNewOneOnOne}>+ New 1:1</QuickAction>
+          <QuickAction onClick={startNewSession}>+ New 1:1</QuickAction>
           <QuickAction
             onClick={() => {
               setTab("topics");
@@ -331,9 +341,9 @@ export function PersonProfile({
             }`}
           >
             {t.label}
-            {t.id === "oneOnOnes" && myOneOnOnes.length > 0 && (
+            {t.id === "sessions" && mySessions.length > 0 && (
               <span className="ml-1 text-[10px] text-stone-400">
-                {myOneOnOnes.length}
+                {mySessions.length}
               </span>
             )}
             {t.id === "notes" && myNotes.length > 0 && (
@@ -363,7 +373,12 @@ export function PersonProfile({
 
         {tab === "profile" && !isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
-            <PrepPanel person={person} onFix={goFix} />
+            <PrepPanel
+              subjectKind="person"
+              subjectId={person.id}
+              subjectName={person.name}
+              onFix={goFix}
+            />
             <section className="space-y-3">
               <SectionTitle>Assessment profile</SectionTitle>
               {!hasRead ? (
@@ -574,12 +589,26 @@ export function PersonProfile({
           </div>
         )}
 
-        {tab === "oneOnOnes" && (
+        {tab === "sessions" && (
           <div className="p-4">
-            <OneOnOneTable
-              personId={person.id}
-              onOpen={(id) => setOpenMeetingId(id)}
-            />
+            {meeting ? (
+              <SessionTable
+                meetingId={meeting.id}
+                onOpen={(id) => setOpenMeetingId(id)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={startNewSession}
+                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+              >
+                + Log a 1:1 with {person.name.split(" ")[0]}
+                <div className="mt-1 text-xs">
+                  Starts tracking it as-needed — set a rhythm when you want it
+                  measured
+                </div>
+              </button>
+            )}
           </div>
         )}
 
@@ -691,7 +720,7 @@ export function PersonProfile({
 
         {openMeetingId && (
           <MeetingEditor
-            oneOnOneId={openMeetingId}
+            sessionId={openMeetingId}
             onClose={() => setOpenMeetingId(null)}
           />
         )}

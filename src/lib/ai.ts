@@ -7,6 +7,7 @@ import {
   ALL_THEMES,
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "./derive";
+import { meetingFor } from "./readiness";
 import { useStore } from "../store/useStore";
 import { supabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import { getAccessToken } from "./auth";
@@ -51,8 +52,9 @@ export function personSystemPrompt(personId: string): string {
   const notes = s.notes
     .filter((n) => n.personId === person.id)
     .slice(-5);
-  const oneOnOnes = s.oneOnOnes
-    .filter((o) => o.personId === person.id)
+  const meeting = meetingFor(s.meetings, "person", person.id);
+  const sessions = s.sessions
+    .filter((o) => meeting && o.meetingId === meeting.id)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3);
   const actions = s.actions.filter(
@@ -129,8 +131,8 @@ export function personSystemPrompt(personId: string): string {
         .map((g) => `- ${g.title} (${Math.round(g.progress)}%)`)
         .join("\n")}`,
     topicLines && `## Open topics / actions\n${topicLines}`,
-    oneOnOnes.length &&
-      `## Recent 1:1s\n${oneOnOnes
+    sessions.length &&
+      `## Recent 1:1s\n${sessions
         .map((o) => `- ${o.date}: ${o.notes ?? "(no notes)"}`)
         .join("\n")}`,
     notes.length &&
@@ -449,17 +451,24 @@ export function parseStructuredMeeting(markdown: string): StructuredMeeting {
  * Structure a 1:1 from transcript + optional draft notes using person context.
  */
 export async function structureMeetingNotes(opts: {
-  personId: string;
+  /** Present for a 1:1 — pulls in that person's full leadership context. */
+  personId?: string;
+  /** Present for a team meeting — the team whose context to load. */
+  teamId?: string;
+  /** How to describe the meeting in the prompt, e.g. "1:1 with Sarah Kim". */
+  label: string;
   transcript?: string;
   draftNotes?: string;
   onDelta?: (text: string) => void;
 }): Promise<StructuredMeeting> {
-  const person = useStore.getState().people.find((p) => p.id === opts.personId);
-  const name = person?.name ?? "this person";
-  const context = personSystemPrompt(opts.personId);
+  const context = opts.personId
+    ? personSystemPrompt(opts.personId)
+    : opts.teamId
+      ? teamSystemPrompt(opts.teamId)
+      : orgSystemPrompt();
 
   const userParts = [
-    `Structure notes for my 1:1 with ${name}.`,
+    `Structure notes for my ${opts.label}.`,
     opts.draftNotes?.trim() &&
       `## Draft notes already written\n${opts.draftNotes.trim()}`,
     opts.transcript?.trim() &&

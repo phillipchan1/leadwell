@@ -50,29 +50,50 @@ function formatEntryDate(iso: string): string {
 }
 
 export function MeetingEditor({
-  oneOnOneId,
+  sessionId,
   onClose,
 }: {
-  oneOnOneId: string;
+  sessionId: string;
   onClose: () => void;
 }) {
   const {
-    oneOnOnes,
+    sessions,
+    meetings,
     people,
-    updateOneOnOne,
-    deleteOneOnOne,
+    teams,
+    managers,
+    updateSession,
+    deleteSession,
     addAction,
   } = useStore();
-  const meeting = oneOnOnes.find((o) => o.id === oneOnOneId);
-  const person = people.find((p) => p.id === meeting?.personId);
+  const session = sessions.find((o) => o.id === sessionId);
+  const meeting = meetings.find((m) => m.id === session?.meetingId);
+  const person =
+    meeting?.subjectKind === "person"
+      ? people.find((p) => p.id === meeting.subjectId)
+      : undefined;
+  const team =
+    meeting?.subjectKind === "team"
+      ? teams.find((t) => t.id === meeting.subjectId)
+      : undefined;
+  const manager =
+    meeting?.subjectKind === "manager"
+      ? managers.find((m) => m.id === meeting.subjectId)
+      : undefined;
+  const subjectName =
+    person?.name ?? team?.name ?? manager?.name ?? "this meeting";
+  /** "1:1 with Sarah Kim" / "Staff meeting" — used in copy and AI prompts. */
+  const meetingLabel =
+    meeting?.name ??
+    (person ? `1:1 with ${person.name}` : (team?.name ?? manager?.name ?? "meeting"));
 
-  const [notes, setNotes] = useState(meeting?.notes ?? "");
-  const [transcript, setTranscript] = useState(meeting?.transcript ?? "");
-  const [date, setDate] = useState(meeting?.date ?? "");
-  const [nextDate, setNextDate] = useState(meeting?.nextDate ?? "");
+  const [notes, setNotes] = useState(session?.notes ?? "");
+  const [transcript, setTranscript] = useState(session?.transcript ?? "");
+  const [date, setDate] = useState(session?.date ?? "");
+  const [nextDate, setNextDate] = useState(session?.nextDate ?? "");
   const [listening, setListening] = useState(false);
   const [showCapture, setShowCapture] = useState(
-    Boolean(meeting?.transcript?.trim())
+    Boolean(session?.transcript?.trim())
   );
   const [structuring, setStructuring] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
@@ -86,12 +107,12 @@ export function MeetingEditor({
   transcriptRef.current = transcript;
 
   useEffect(() => {
-    if (!meeting) return;
-    setNotes(meeting.notes ?? "");
-    setTranscript(meeting.transcript ?? "");
-    setDate(meeting.date);
-    setNextDate(meeting.nextDate ?? "");
-  }, [meeting?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!session) return;
+    setNotes(session.notes ?? "");
+    setTranscript(session.transcript ?? "");
+    setDate(session.date);
+    setNextDate(session.nextDate ?? "");
+  }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {
@@ -99,7 +120,7 @@ export function MeetingEditor({
     };
   }, []);
 
-  if (!meeting || !person) {
+  if (!session || !meeting) {
     return null;
   }
 
@@ -109,13 +130,13 @@ export function MeetingEditor({
     date: string;
     nextDate: string | undefined;
   }>) => {
-    const next: Partial<typeof meeting> = {};
+    const next: Partial<typeof session> = {};
     if ("notes" in patch) next.notes = patch.notes?.trim() || undefined;
     if ("transcript" in patch)
       next.transcript = patch.transcript?.trim() || undefined;
     if ("date" in patch && patch.date) next.date = patch.date;
     if ("nextDate" in patch) next.nextDate = patch.nextDate || undefined;
-    updateOneOnOne(meeting.id, next);
+    updateSession(session.id, next);
   };
 
   const saveNotes = (value: string) => {
@@ -163,7 +184,7 @@ export function MeetingEditor({
       const next = `${committed}${interim}`.trim();
       setTranscript(next);
       transcriptRef.current = next;
-      updateOneOnOne(meeting.id, { transcript: next || undefined });
+      updateSession(session.id, { transcript: next || undefined });
     };
     rec.onerror = (e) => {
       setError(e.error === "not-allowed" ? "Microphone permission denied." : e.error);
@@ -191,7 +212,9 @@ export function MeetingEditor({
     setParsed(null);
     try {
       const result = await structureMeetingNotes({
-        personId: person.id,
+        personId: person?.id,
+        teamId: team?.id,
+        label: meetingLabel,
         transcript,
         draftNotes: notes,
         onDelta: (t) => setPreview(t),
@@ -211,12 +234,12 @@ export function MeetingEditor({
     saveNotes(parsed.notes);
     if (parsed.suggestedNextDate) {
       setNextDate(parsed.suggestedNextDate);
-      updateOneOnOne(meeting.id, {
+      updateSession(session.id, {
         notes: parsed.notes,
         nextDate: parsed.suggestedNextDate,
       });
     }
-    if (createTopics && parsed.commitments.length) {
+    if (createTopics && person && parsed.commitments.length) {
       for (const text of parsed.commitments) {
         addAction(person.id, text, undefined, "backlog");
       }
@@ -225,7 +248,7 @@ export function MeetingEditor({
     setPreview(null);
   };
 
-  const firstName = person.name.split(" ")[0] ?? person.name;
+  const firstName = subjectName.split(" ")[0] ?? subjectName;
 
   return (
     <div className="meeting-journal absolute inset-0 z-20 flex flex-col">
@@ -241,10 +264,10 @@ export function MeetingEditor({
         <button
           type="button"
           className="rounded-md p-1.5 text-stone-300 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-stone-600 dark:hover:bg-red-950 dark:hover:text-red-400"
-          aria-label="Delete 1:1"
+          aria-label="Delete entry"
           onClick={() => {
-            if (confirm("Delete this 1:1?")) {
-              deleteOneOnOne(meeting.id);
+            if (confirm("Delete this entry?")) {
+              deleteSession(session.id);
               onClose();
             }
           }}
@@ -274,14 +297,14 @@ export function MeetingEditor({
                   />
                 </label>
                 <label className="block">
-                  <span className={fieldLabelCls}>Next 1:1</span>
+                  <span className={fieldLabelCls}>Next time</span>
                   <input
                     type="date"
                     className={inputCls}
                     value={nextDate}
                     onChange={(e) => {
                       setNextDate(e.target.value);
-                      updateOneOnOne(meeting.id, {
+                      updateSession(session.id, {
                         nextDate: e.target.value || undefined,
                       });
                     }}
@@ -300,7 +323,7 @@ export function MeetingEditor({
                   {formatEntryDate(date)}
                 </h1>
                 <p className="mt-2 text-[13px] tracking-wide text-stone-400 dark:text-stone-500">
-                  1:1 with {person.name}
+                  {meetingLabel}
                   {nextDate ? (
                     <span className="text-stone-300 dark:text-stone-600">
                       {" "}
@@ -359,7 +382,7 @@ export function MeetingEditor({
               </div>
               <textarea
                 className={`${inputCls} min-h-[88px] resize-y font-mono text-xs leading-relaxed`}
-                placeholder={`Paste a transcript from your 1:1 with ${firstName}, or use Listen…`}
+                placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
                 value={transcript}
                 onChange={(e) => saveTranscript(e.target.value)}
               />

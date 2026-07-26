@@ -7,6 +7,10 @@ import { Avatar } from "./Avatar";
 import { Badge, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AICoach } from "./AICoach";
 import { StatsBar } from "./StatsBar";
+import { PrepPanel } from "./PrepPanel";
+import { SessionTable } from "./SessionTable";
+import { MeetingEditor } from "./MeetingEditor";
+import { meetingFor, type CheckFix } from "../lib/readiness";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -37,6 +41,9 @@ export function TeamProfile({
     openModal,
     modal,
     askAIOpen,
+    meetings,
+    addSession,
+    trackMeeting,
     teamActions,
     addTeamAction,
     updateTeamAction,
@@ -82,6 +89,29 @@ export function TeamProfile({
   const [name, setName] = useState(team.name);
   const [mandate, setMandate] = useState(team.purpose ?? "");
   const [refining, setRefining] = useState(false);
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
+
+  const teamMeeting = meetingFor(meetings, "team", team.id);
+
+  /**
+   * Send a failing readiness check where it gets fixed. Teams have no topic
+   * board, so agenda and commitments both land on Next steps below.
+   */
+  const goFix = (fix: CheckFix, sessionId?: string) => {
+    if (fix === "writeUp" && sessionId) {
+      setOpenSessionId(sessionId);
+      return;
+    }
+    if (fix === "book") {
+      const meetingId =
+        teamMeeting?.id ?? trackMeeting("team", team.id, "as_needed");
+      setOpenSessionId(addSession({ meetingId, date: today() }));
+      return;
+    }
+    document
+      .getElementById(`team-next-steps-${team.id}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
   const [refineError, setRefineError] = useState<string | null>(null);
   const [newAction, setNewAction] = useState("");
   const [newGoal, setNewGoal] = useState("");
@@ -312,8 +342,34 @@ export function TeamProfile({
         </div>
       </header>
 
+      {openSessionId && (
+        <MeetingEditor
+          sessionId={openSessionId}
+          onClose={() => setOpenSessionId(null)}
+        />
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-8 px-5 py-5">
+          {/* Readiness for this team's own standing meeting — separate from
+              the 1:1s with its members, which live on each person. */}
+          <PrepPanel
+            subjectKind="team"
+            subjectId={team.id}
+            subjectName={team.name}
+            onFix={goFix}
+          />
+
+          {teamMeeting && (
+            <section className="space-y-2">
+              <SectionTitle>{teamMeeting.name ?? "Meetings"}</SectionTitle>
+              <SessionTable
+                meetingId={teamMeeting.id}
+                onOpen={(id) => setOpenSessionId(id)}
+              />
+            </section>
+          )}
+
           {/* Mandate — always editable, blur to save */}
           <section>
             <div className="mb-2 flex items-baseline justify-between gap-2">
@@ -393,7 +449,7 @@ export function TeamProfile({
           )}
 
           {/* Next steps — the reason you opened this panel */}
-          <section>
+          <section id={`team-next-steps-${team.id}`}>
             <div className="mb-2 flex items-baseline justify-between">
               <SectionTitle>Next steps</SectionTitle>
               {doneActions.length > 0 && (

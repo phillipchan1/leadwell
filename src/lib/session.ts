@@ -1,16 +1,16 @@
-import type { OneOnOne } from "../types";
+import type { Session } from "../types";
 
-export type OneOnOneStatus = "scheduled" | "needs_notes" | "done";
+export type SessionStatus = "scheduled" | "needs_notes" | "done";
 
 /** Derive a simple status for table display. */
-export function oneOnOneStatus(o: OneOnOne): OneOnOneStatus {
+export function sessionStatus(o: Session): SessionStatus {
   const hasNotes = Boolean(o.notes?.trim());
   if (hasNotes) return "done";
   if (o.nextDate) return "scheduled";
   return "needs_notes";
 }
 
-export function oneOnOneStatusLabel(status: OneOnOneStatus): string {
+export function sessionStatusLabel(status: SessionStatus): string {
   switch (status) {
     case "scheduled":
       return "Scheduled";
@@ -22,7 +22,7 @@ export function oneOnOneStatusLabel(status: OneOnOneStatus): string {
 }
 
 /** First non-empty line of notes, truncated for table summary. */
-export function oneOnOneSummary(o: OneOnOne, maxLen = 72): string {
+export function sessionSummary(o: Session, maxLen = 72): string {
   const raw = o.notes?.trim();
   if (!raw) return "";
   const first = raw

@@ -1,55 +1,146 @@
-import type { Person } from "../types";
+import type { MeetingRhythm, MeetingSubjectKind } from "../types";
 import { useStore } from "../store/useStore";
 import {
-  CADENCE_LABEL,
-  CADENCE_OPTIONS,
+  RHYTHM_LABEL,
+  RHYTHM_OPTIONS,
   STATE_COLOR,
   STATE_LABEL,
   formatCountdown,
-  isTracked,
-  personReadiness,
+  meetingFor,
+  meetingReadiness,
+  personAgenda,
+  sessionsFor,
+  teamAgenda,
   type CheckFix,
 } from "../lib/readiness";
 import { SectionTitle, inputSmCls } from "./ui";
 
+/** Default tolerance offered when a meeting is switched to as-needed. */
+const DEFAULT_FLOOR_DAYS = 45;
+
 /**
- * 1:1 prep for one person — the checklist *is* the score. No hidden weights,
- * no mystery number: four named things, each one click from fixed.
+ * Prep for one tracked meeting — the checklist *is* the score. No hidden
+ * weights, no mystery number: four named things, each one click from fixed.
+ *
+ * Until you opt in, this is a single quiet button. Nothing is measured, and
+ * nothing is counted at you, because most relationships have no meeting to
+ * track and a dashboard that can never be clean gets ignored.
  */
 export function PrepPanel({
-  person,
+  subjectKind,
+  subjectId,
+  subjectName,
   onFix,
 }: {
-  person: Person;
-  /** Jump the profile to wherever this check gets fixed. */
-  onFix: (fix: CheckFix, meetingId?: string) => void;
+  subjectKind: MeetingSubjectKind;
+  subjectId: string;
+  subjectName: string;
+  /** Jump to wherever this check gets fixed. */
+  onFix: (fix: CheckFix, sessionId?: string) => void;
 }) {
-  const { oneOnOnes, actions, updatePerson } = useStore();
-  const readiness = personReadiness(person, oneOnOnes, actions);
-  const tracked = isTracked(readiness.state);
+  const {
+    meetings,
+    sessions,
+    actions,
+    teamActions,
+    people,
+    teams,
+    managers,
+    trackMeeting,
+    updateMeeting,
+    untrackMeeting,
+    setNoMeeting,
+  } = useStore();
+
+  const meeting = meetingFor(meetings, subjectKind, subjectId);
+  const subject =
+    subjectKind === "person"
+      ? people.find((p) => p.id === subjectId)
+      : subjectKind === "team"
+        ? teams.find((t) => t.id === subjectId)
+        : managers.find((m) => m.id === subjectId);
+  const firstName = subjectName.split(" ")[0] ?? subjectName;
+  const label = subjectKind === "person" ? "1:1" : "meeting";
+
+  // ── Not tracked: the opt-in, and nothing else ───────────────────────────
+  if (!meeting) {
+    const decided = Boolean(subject?.noMeeting);
+    return (
+      <section className="space-y-2">
+        <SectionTitle>Readiness</SectionTitle>
+        <div className="rounded-xl border border-dashed border-stone-300 px-3 py-3 dark:border-stone-700">
+          <p className="text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+            {decided
+              ? `No ${label} with ${firstName} — left out of readiness on purpose.`
+              : `Track a ${label} to see whether you're ready for the next one. Nothing is measured until you do.`}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              className="rounded-lg bg-teal-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-teal-700"
+              onClick={() => trackMeeting(subjectKind, subjectId, "weekly")}
+            >
+              Track a {label}
+            </button>
+            {!decided && (
+              <button
+                type="button"
+                className="rounded-lg border border-stone-300 px-2.5 py-1 text-[11px] text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300"
+                onClick={() => setNoMeeting(subjectKind, subjectId, true)}
+                title="A decision, not a gap — clears them out of the undecided count"
+              >
+                No {label}
+              </button>
+            )}
+            {decided && (
+              <button
+                type="button"
+                className="rounded-lg px-2.5 py-1 text-[11px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                onClick={() => setNoMeeting(subjectKind, subjectId, false)}
+              >
+                Undo
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // ── Tracked: rhythm + the checklist ─────────────────────────────────────
+  const agenda =
+    subjectKind === "team"
+      ? teamAgenda(teamActions, subjectId)
+      : personAgenda(actions, subjectId);
+
+  const readiness = meetingReadiness(meeting, sessions, agenda);
   const color = STATE_COLOR[readiness.state];
-  const firstName = person.name.split(" ")[0] ?? person.name;
+  const sessionCount = sessionsFor(meeting.id, sessions).length;
 
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <SectionTitle>1:1 readiness</SectionTitle>
+        <SectionTitle>Readiness</SectionTitle>
         <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
           <span>Rhythm</span>
           <select
             className={`${inputSmCls} w-auto py-1`}
-            value={person.cadence ?? ""}
-            onChange={(e) =>
-              updatePerson(person.id, {
-                cadence: (e.target.value || undefined) as Person["cadence"],
-              })
-            }
-            aria-label={`How often I meet ${firstName} 1:1`}
+            value={meeting.rhythm}
+            onChange={(e) => {
+              const rhythm = e.target.value as MeetingRhythm;
+              updateMeeting(meeting.id, {
+                rhythm,
+                floorDays:
+                  rhythm === "as_needed"
+                    ? (meeting.floorDays ?? DEFAULT_FLOOR_DAYS)
+                    : undefined,
+              });
+            }}
+            aria-label={`How often this ${label} happens`}
           >
-            <option value="">Not set</option>
-            {CADENCE_OPTIONS.map((c) => (
-              <option key={c} value={c}>
-                {CADENCE_LABEL[c]}
+            {RHYTHM_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {RHYTHM_LABEL[r]}
               </option>
             ))}
           </select>
@@ -80,85 +171,111 @@ export function PrepPanel({
               {readiness.headline}
             </div>
           </div>
-          {tracked && readiness.nextDate && (
-            <span
-              className="shrink-0 font-mono text-[10px] tabular-nums"
-              style={{ color }}
-              title={
-                readiness.projected
-                  ? `Projected from the ${CADENCE_LABEL[
-                      person.cadence!
-                    ].toLowerCase()} rhythm — not booked`
-                  : "Booked"
-              }
-            >
-              {formatCountdown(readiness)}
-            </span>
-          )}
+          <span
+            className="shrink-0 font-mono text-[10px] tabular-nums"
+            style={{ color }}
+            title={
+              readiness.projected
+                ? `Projected from the ${RHYTHM_LABEL[meeting.rhythm].toLowerCase()} rhythm — not booked`
+                : "Booked"
+            }
+          >
+            {formatCountdown(readiness)}
+          </span>
         </div>
 
-        {!tracked ? (
-          <p className="px-3 py-2.5 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
-            {readiness.state === "paused"
-              ? `No 1:1 rhythm with ${firstName} — they're left out of readiness so they don't sit red forever.`
-              : `Set a rhythm and LeadWell projects the next 1:1 from the last one. Nothing to schedule.`}
-          </p>
-        ) : (
-          <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
-            {readiness.checks.map((check) => (
-              <li
-                key={check.id}
-                className="flex items-start gap-2.5 px-3 py-2 text-xs"
+        <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
+          {readiness.checks.map((check) => (
+            <li
+              key={check.id}
+              className="flex items-start gap-2.5 px-3 py-2 text-xs"
+            >
+              <span
+                className="mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white"
+                style={
+                  check.done
+                    ? { backgroundColor: STATE_COLOR.ready }
+                    : { boxShadow: `inset 0 0 0 1.5px ${STATE_COLOR.prep_due}` }
+                }
+                aria-hidden
               >
-                <span
-                  className={`mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white ${
-                    check.done ? "" : "bg-transparent"
-                  }`}
-                  style={
+                {check.done ? "✓" : ""}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div
+                  className={
                     check.done
-                      ? { backgroundColor: STATE_COLOR.ready }
-                      : { boxShadow: `inset 0 0 0 1.5px ${STATE_COLOR.prep_due}` }
+                      ? "text-stone-500 dark:text-stone-400"
+                      : "font-medium text-stone-700 dark:text-stone-200"
                   }
-                  aria-hidden
                 >
-                  {check.done ? "✓" : ""}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div
-                    className={
-                      check.done
-                        ? "text-stone-500 dark:text-stone-400"
-                        : "font-medium text-stone-700 dark:text-stone-200"
-                    }
-                  >
-                    {check.label}
-                  </div>
-                  {check.detail && (
-                    <div className="truncate text-[11px] text-stone-400">
-                      {check.detail}
-                    </div>
-                  )}
+                  {check.label}
                 </div>
-                {!check.done && (
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/50"
-                    onClick={() => onFix(check.fix, check.meetingId)}
-                  >
-                    {FIX_LABEL[check.fix]}
-                  </button>
+                {check.detail && (
+                  <div className="truncate text-[11px] text-stone-400">
+                    {check.detail}
+                  </div>
                 )}
-              </li>
-            ))}
-          </ul>
-        )}
+              </div>
+              {!check.done && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/50"
+                  onClick={() => onFix(check.fix, check.sessionId)}
+                >
+                  {FIX_LABEL[check.fix]}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        <div className="flex items-center justify-between gap-2 border-t border-stone-100 px-3 py-1.5 dark:border-stone-800/80">
+          {meeting.rhythm === "as_needed" ? (
+            <label className="flex items-center gap-1.5 text-[10px] text-stone-400">
+              Nudge me after
+              <input
+                type="number"
+                min={7}
+                className={`${inputSmCls} w-16 py-0.5 text-[11px]`}
+                value={meeting.floorDays ?? ""}
+                placeholder="never"
+                onChange={(e) =>
+                  updateMeeting(meeting.id, {
+                    floorDays: e.target.value
+                      ? Number(e.target.value)
+                      : undefined,
+                  })
+                }
+              />
+              days
+            </label>
+          ) : (
+            <span className="text-[10px] text-stone-400">
+              {sessionCount} logged
+            </span>
+          )}
+          <button
+            type="button"
+            className="rounded-md px-1.5 py-0.5 text-[10px] text-stone-400 enabled:hover:text-stone-600 disabled:opacity-40 dark:enabled:hover:text-stone-300"
+            disabled={sessionCount > 0}
+            title={
+              sessionCount > 0
+                ? "Can't untrack — it has history. Switch to As needed instead."
+                : "Stop tracking this meeting"
+            }
+            onClick={() => untrackMeeting(meeting.id)}
+          >
+            Stop tracking
+          </button>
+        </div>
       </div>
     </section>
   );
 }
 
 const FIX_LABEL: Record<CheckFix, string> = {
-  book: "Log 1:1",
+  book: "Log it",
   writeUp: "Write up",
   agenda: "Add topic",
   commitments: "Review",

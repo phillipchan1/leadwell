@@ -6,6 +6,14 @@ import {
   domainCounts,
   hasLeadershipRead,
 } from "../lib/derive";
+import {
+  STATE_COLOR,
+  STATE_ORDER,
+  isBehind,
+  meetingFor,
+  meetingReadiness,
+  personAgenda,
+} from "../lib/readiness";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
 import { Card, SectionTitle, buttonPrimaryCls } from "./ui";
 import { Avatar } from "./Avatar";
@@ -14,7 +22,8 @@ export function Overview() {
   const {
     people,
     teams,
-    oneOnOnes,
+    meetings,
+    sessions,
     actions,
     selectPerson,
     setTab,
@@ -30,20 +39,27 @@ export function Overview() {
   const openActions = actions.filter((a) => !a.done);
 
   const today = new Date().toISOString().slice(0, 10);
-  const upcoming = oneOnOnes
+  const upcoming = sessions
     .filter((o) => o.nextDate && o.nextDate >= today)
     .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
-  const staleThreshold = new Date();
-  staleThreshold.setDate(staleThreshold.getDate() - 30);
-  const staleCutoff = staleThreshold.toISOString().slice(0, 10);
-  const needAttention = people.filter((p) => {
-    const last = oneOnOnes
-      .filter((o) => o.personId === p.id)
-      .map((o) => o.date)
-      .sort()
-      .pop();
-    return !last || last < staleCutoff;
-  });
+  // Readiness, not a blanket 30-day rule: someone on a quarterly rhythm isn't
+  // neglected at day 31, and someone weekly is already behind by then.
+  const needAttention = people
+    .flatMap((p) => {
+      const meeting = meetingFor(meetings, "person", p.id);
+      if (!meeting) return [];
+      const readiness = meetingReadiness(
+        meeting,
+        sessions,
+        personAgenda(actions, p.id)
+      );
+      return isBehind(readiness.state) ? [{ person: p, readiness }] : [];
+    })
+    .sort(
+      (a, b) =>
+        STATE_ORDER.indexOf(a.readiness.state) -
+        STATE_ORDER.indexOf(b.readiness.state)
+    );
 
   const generateBrief = async () => {
     setLoading(true);
@@ -146,10 +162,10 @@ export function Overview() {
           <ul className="mt-3 space-y-2">
             {needAttention.length === 0 && (
               <li className="text-sm text-stone-400">
-                Everyone has had a recent 1:1. 🎉
+                Every tracked 1:1 is on track. 🎉
               </li>
             )}
-            {needAttention.map((p) => (
+            {needAttention.map(({ person: p, readiness }) => (
               <li key={p.id}>
                 <button
                   className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
@@ -159,10 +175,16 @@ export function Overview() {
                   }}
                 >
                   <Avatar name={p.name} photo={p.photo} size={30} />
-                  <div>
-                    <div className="text-sm">{p.name}</div>
-                    <div className="text-[11px] text-stone-400">
-                      No 1:1 in the last 30 days
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: STATE_COLOR[readiness.state] }}
+                      />
+                      {p.name}
+                    </div>
+                    <div className="truncate text-[11px] text-stone-400">
+                      {readiness.headline}
                     </div>
                   </div>
                 </button>

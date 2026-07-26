@@ -10,6 +10,8 @@ export type Team = {
   id: string;
   name: string;
   capacityId: string;
+  /** "This team has no standing meeting I run." A decision, not a gap. */
+  noMeeting?: boolean;
   /** Which life area this team belongs to (Day job, Church, Family…). */
   domainId?: string;
   description?: string;
@@ -39,6 +41,8 @@ export type Manager = {
   name: string;
   role?: string;
   domainId?: string;
+  /** "No standing check-in with them." A decision, not a gap. */
+  noMeeting?: boolean;
   photo?: string; // base64 data URL
   /** Operating manual for leading up to them — same shape as up-team people. */
   leadUp?: LeadUpProfile;
@@ -95,12 +99,46 @@ export type LeadUpProfile = {
 };
 
 /**
- * How often I sit down 1:1 with someone. Drives readiness: the rhythm projects
- * the next meeting from the last one, so prep can be measured without every
- * 1:1 being formally booked. "none" = deliberately no 1:1s (most of a large
- * volunteer team) and is excluded from readiness entirely.
+ * How often a tracked meeting recurs. The rhythm *projects* the next occurrence
+ * from the last one, so prep is measurable without anything being booked.
+ * "as_needed" makes no such promise — see `TrackedMeeting.floorDays`.
  */
-export type Cadence = "weekly" | "biweekly" | "monthly" | "quarterly" | "none";
+export type Cadence = "weekly" | "biweekly" | "monthly" | "quarterly";
+export type MeetingRhythm = Cadence | "as_needed";
+
+/** What a meeting is about. Every subject kind preps the same way. */
+export type MeetingSubjectKind = "person" | "team" | "manager";
+
+/** Whether the agenda is mine to set, or I'm just showing up with my piece. */
+export type MeetingRole = "convene" | "attend";
+
+/**
+ * A meeting I've opted into being ready for — the unit readiness is measured
+ * against. Deliberately not a property of a person or a team: the same team can
+ * have a standing meeting *and* 1:1s with its members, and those are different
+ * things to be ready for.
+ *
+ * Absence is meaningful. A subject with no TrackedMeeting and no `noMeeting`
+ * flag is *undecided*, which is the only thing worth counting at you.
+ */
+export type TrackedMeeting = {
+  id: string;
+  subjectKind: MeetingSubjectKind;
+  subjectId: string;
+  /** Optional label ("Practice meeting"); falls back to the subject's name. */
+  name?: string;
+  rhythm: MeetingRhythm;
+  /**
+   * `as_needed` only: the tolerance, not a rhythm. "If it's been 6 weeks,
+   * something's wrong." Without it an as-needed meeting never goes overdue —
+   * it just sits dormant until something is booked.
+   */
+  floorDays?: number;
+  /** An explicit booking always beats the projected date. */
+  nextDate?: string;
+  /** Defaults to "convene". Participants aren't scored on the agenda. */
+  role?: MeetingRole;
+};
 
 export type Person = {
   id: string;
@@ -109,8 +147,11 @@ export type Person = {
   role?: string;
   photo?: string; // base64 data URL
   relationshipType?: string;
-  /** 1:1 rhythm. Undefined = not set yet; the person isn't measured. */
-  cadence?: Cadence;
+  /**
+   * "I deliberately don't sit down with them." A decision, not a gap — it
+   * clears them out of the undecided count without pretending to track them.
+   */
+  noMeeting?: boolean;
   assessments: Assessments;
   strengths: string[];
   watchOuts: string[];
@@ -134,10 +175,13 @@ export type Action = {
   column?: ActionColumn;
 };
 
-export type OneOnOne = {
+/** One occurrence of a tracked meeting — what used to be a `OneOnOne`. */
+export type Session = {
   id: string;
-  personId: string;
+  meetingId: string;
   date: string;
+  /** Why we met *this* time. The antidote to a standing meeting on autopilot. */
+  point?: string;
   notes?: string;
   nextDate?: string;
   /** Raw mic / pasted transcript before AI structuring. */

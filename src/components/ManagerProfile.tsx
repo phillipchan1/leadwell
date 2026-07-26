@@ -6,6 +6,10 @@ import { Badge, SectionTitle } from "./ui";
 import { ManagerModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
+import { PrepPanel } from "./PrepPanel";
+import { SessionTable } from "./SessionTable";
+import { MeetingEditor } from "./MeetingEditor";
+import { meetingFor, type CheckFix } from "../lib/readiness";
 import { WinsLedger } from "./WinsLedger";
 
 /**
@@ -16,6 +20,9 @@ import { WinsLedger } from "./WinsLedger";
 export function ManagerProfile({ manager }: { manager: Manager }) {
   const {
     domains,
+    meetings,
+    addSession,
+    trackMeeting,
     selectManager,
     updateManagerLeadUp,
     deleteManager,
@@ -26,8 +33,39 @@ export function ManagerProfile({ manager }: { manager: Manager }) {
 
   const domain = domains.find((d) => d.id === manager.domainId);
   const [editing, setEditing] = useState(false);
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
 
-  useEffect(() => setEditing(false), [manager.id]);
+  const checkIn = meetingFor(meetings, "manager", manager.id);
+
+  useEffect(() => {
+    setEditing(false);
+    setOpenSessionId(null);
+  }, [manager.id]);
+
+  /**
+   * Leading up has no topic board yet, so an empty agenda points at the wins
+   * ledger — banking value in their currency *is* the prep for a check-in.
+   */
+  const goFix = (fix: CheckFix, sessionId?: string) => {
+    if (fix === "writeUp" && sessionId) {
+      setOpenSessionId(sessionId);
+      return;
+    }
+    if (fix === "book") {
+      const meetingId =
+        checkIn?.id ?? trackMeeting("manager", manager.id, "as_needed");
+      setOpenSessionId(
+        addSession({
+          meetingId,
+          date: new Date().toISOString().slice(0, 10),
+        })
+      );
+      return;
+    }
+    document
+      .getElementById(`wins-${manager.id}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -77,14 +115,38 @@ export function ManagerProfile({ manager }: { manager: Manager }) {
         </div>
       </div>
 
+      {openSessionId && (
+        <MeetingEditor
+          sessionId={openSessionId}
+          onClose={() => setOpenSessionId(null)}
+        />
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-6 p-4">
+          <PrepPanel
+            subjectKind="manager"
+            subjectId={manager.id}
+            subjectName={manager.name}
+            onFix={goFix}
+          />
+          {checkIn && (
+            <section className="space-y-2">
+              <SectionTitle>{checkIn.name ?? "Check-ins"}</SectionTitle>
+              <SessionTable
+                meetingId={checkIn.id}
+                onOpen={(id) => setOpenSessionId(id)}
+              />
+            </section>
+          )}
           <LeadUpManual
             key={manager.id}
             subject={manager}
             onChange={(patch) => updateManagerLeadUp(manager.id, patch)}
           />
-          <WinsLedger subjectId={manager.id} />
+          <div id={`wins-${manager.id}`}>
+            <WinsLedger subjectId={manager.id} />
+          </div>
           <section className="space-y-2">
             <SectionTitle>AI coach</SectionTitle>
             <AICoach manager={manager} />

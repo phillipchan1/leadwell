@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
-import type { Cadence, Manager, Person, Team } from "../types";
+import type { Manager, Person, Team } from "../types";
 import { eligibleParents } from "../lib/teams";
-import { CADENCE_LABEL, CADENCE_OPTIONS } from "../lib/readiness";
 import {
   Modal,
   inputCls,
@@ -500,17 +499,10 @@ export function PersonModal({
     person?.teamId ?? defaultTeamId ?? teams[0]?.id
   );
   const [photo, setPhoto] = useState<string | undefined>(person?.photo);
-  const [cadence, setCadence] = useState<Cadence | "">(person?.cadence ?? "");
 
   const save = () => {
     if (!name.trim() || !teamId) return;
-    const fields = {
-      name: name.trim(),
-      role,
-      teamId,
-      photo,
-      cadence: (cadence || undefined) as Cadence | undefined,
-    };
+    const fields = { name: name.trim(), role, teamId, photo };
     if (person) {
       updatePerson(person.id, fields);
     } else {
@@ -567,25 +559,6 @@ export function PersonModal({
               </option>
             ))}
           </select>
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>1:1 rhythm</span>
-          <select
-            className={inputCls}
-            value={cadence}
-            onChange={(e) => setCadence(e.target.value as Cadence | "")}
-          >
-            <option value="">Not set</option>
-            {CADENCE_OPTIONS.map((c) => (
-              <option key={c} value={c}>
-                {CADENCE_LABEL[c]}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-[11px] text-stone-400">
-            Projects the next 1:1 from the last one, so readiness works without
-            booking anything.
-          </span>
         </label>
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className={buttonGhostCls} onClick={onClose}>

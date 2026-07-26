@@ -5,7 +5,8 @@ import type {
   Team,
   Person,
   Action,
-  OneOnOne,
+  TrackedMeeting,
+  Session,
   Goal,
   Note,
   Win,
@@ -135,7 +136,6 @@ export const seedPeople: Person[] = [
     id: "p-sarah",
     teamId: "team-frontier",
     name: "Sarah Kim",
-    cadence: "weekly",
     role: "Worship Director",
     assessments: {
       cliftonTop5: ["Empathy", "Developer", "Belief", "Harmony", "Adaptability"],
@@ -151,7 +151,6 @@ export const seedPeople: Person[] = [
     id: "p-marcus",
     teamId: "team-frontier",
     name: "Marcus Webb",
-    cadence: "biweekly",
     role: "Youth Pastor",
     assessments: {
       cliftonTop5: ["Woo", "Communication", "Activator", "Positivity", "Ideation"],
@@ -167,7 +166,6 @@ export const seedPeople: Person[] = [
     id: "p-elena",
     teamId: "team-frontier",
     name: "Elena Ruiz",
-    cadence: "monthly",
     role: "Operations Coordinator",
     assessments: {},
     strengths: [],
@@ -177,7 +175,6 @@ export const seedPeople: Person[] = [
     id: "p-dave",
     teamId: "team-mens",
     name: "Dave Okafor",
-    cadence: "monthly",
     role: "Small Groups Lead",
     assessments: {
       cliftonTop5: ["Responsibility", "Relator", "Consistency", "Discipline", "Focus"],
@@ -193,7 +190,7 @@ export const seedPeople: Person[] = [
     id: "p-jordan",
     teamId: "team-mens",
     name: "Jordan Lee",
-    cadence: "none",
+    noMeeting: true,
     role: "Events Lead",
     assessments: {
       cliftonTop5: ["Arranger", "Achiever", "Maximizer", "Significance", "Strategic"],
@@ -209,7 +206,7 @@ export const seedPeople: Person[] = [
     id: "p-tom",
     teamId: "team-mens",
     name: "Tom Brady",
-    cadence: "none",
+    noMeeting: true,
     role: "Hospitality",
     assessments: {},
     strengths: [],
@@ -219,7 +216,6 @@ export const seedPeople: Person[] = [
     id: "p-priya",
     teamId: "team-product",
     name: "Priya Nair",
-    cadence: "weekly",
     role: "Staff Engineer",
     assessments: {
       cliftonTop5: ["Analytical", "Learner", "Intellection", "Input", "Deliberative"],
@@ -235,7 +231,6 @@ export const seedPeople: Person[] = [
     id: "p-alex",
     teamId: "team-product",
     name: "Alex Chen",
-    cadence: "biweekly",
     role: "Designer",
     assessments: {},
     strengths: [],
@@ -338,10 +333,52 @@ export const seedActions: Action[] = [
   },
 ];
 
-export const seedOneOnOnes: OneOnOne[] = [
+/**
+ * Tracked meetings — the things I've opted into being ready for. Note what's
+ * absent: most of the men's team has no meeting and no decision, which is what
+ * the undecided count is for.
+ */
+export const seedMeetings: TrackedMeeting[] = [
+  { id: "m-p-sarah", subjectKind: "person", subjectId: "p-sarah", rhythm: "weekly" },
+  { id: "m-p-marcus", subjectKind: "person", subjectId: "p-marcus", rhythm: "biweekly" },
+  { id: "m-p-elena", subjectKind: "person", subjectId: "p-elena", rhythm: "monthly" },
+  { id: "m-p-dave", subjectKind: "person", subjectId: "p-dave", rhythm: "monthly" },
+  { id: "m-p-priya", subjectKind: "person", subjectId: "p-priya", rhythm: "weekly" },
+  { id: "m-p-alex", subjectKind: "person", subjectId: "p-alex", rhythm: "biweekly" },
+  // The staff meeting itself — a gathering, not a relationship.
+  {
+    id: "m-staff",
+    subjectKind: "team",
+    subjectId: "team-frontier",
+    name: "Staff meeting",
+    rhythm: "weekly",
+    role: "convene",
+  },
+  // Led, real, and genuinely not on a rhythm — a floor, not a cadence.
+  {
+    id: "m-mens",
+    subjectKind: "team",
+    subjectId: "team-mens",
+    name: "Core team night",
+    rhythm: "as_needed",
+    floorDays: 45,
+    role: "convene",
+  },
+  // A practice I run for peers — I convene it, nobody reports to me.
+  {
+    id: "m-practice",
+    subjectKind: "team",
+    subjectId: "team-product",
+    name: "Practice meeting",
+    rhythm: "biweekly",
+    role: "convene",
+  },
+];
+
+export const seedSessions: Session[] = [
   {
     id: "o-1",
-    personId: "p-sarah",
+    meetingId: "m-p-sarah",
     date: "2026-06-24",
     notes: `## Summary
 Feeling stretched thin. We talked about delegating Sunday setup so she can focus on leading worship, not logistics.
@@ -364,14 +401,14 @@ Energy was lower than usual — mom's health is weighing on her. Lead with care 
   },
   {
     id: "o-2",
-    personId: "p-marcus",
+    meetingId: "m-p-marcus",
     date: "2026-06-30",
     notes: "Camp planning on track. Wants to grow in preaching — pair with a preaching cohort this fall.",
     nextDate: "2026-07-14",
   },
   {
     id: "o-3",
-    personId: "p-dave",
+    meetingId: "m-p-dave",
     date: "2026-06-10",
     nextDate: "2026-07-10",
   },
