@@ -337,17 +337,45 @@ Track the staff meeting, skip the 1:1s, and the app cheerfully reports Ready
 while you haven't spoken to anyone individually in two months. That's worse than
 noise, because it's *reassuring* and wrong.
 
-The fix is a visible denominator, never a nag: a quiet `3 of 9 tracked` next to
-the ready count. Not a state, not red, not a prompt — just a number you can't
-un-see. If it stays at 3 of 9, that's information about how you're leading, and
-it's yours to act on or ignore.
+The obvious fix — a visible `3 of 9 tracked` — is wrong, and wrong in an
+instructive way. Most relationships genuinely have no meeting to track. A
+standing count of "untracked" is an accusation aimed at six people who don't
+need one, and a denominator that can never reach zero is exactly the noise this
+whole design exists to avoid.
 
-Two smaller costs, both acceptable:
+### Three states, not two
 
-- **Depth stays on the Person**, outside meeting prep. Already the design — a
-  leadership read isn't prep for a specific meeting.
-- **"Deliberately no 1:1s" and "haven't decided" collapse into the same
-  untracked state.** The denominator above covers the case that mattered.
+The distinction I earlier proposed collapsing turns out to be load-bearing:
+
+| | Means | Shown as |
+|---|---|---|
+| **Tracked** | A meeting I'm accountable to prep for | Full readiness |
+| **No meeting** | Deliberately — I don't sit down with them | Nothing. A decision, not a gap. |
+| **Undecided** | I haven't said either way | The only thing counted |
+
+So the number is **"2 undecided"**, never "6 untracked". And it has the property
+that makes it humane: **it empties.** Every person you triage leaves it
+permanently. It's a one-time inbox, not a standing verdict, and it disappears
+at zero.
+
+That still closes the hazard. You can't go green by ignoring people — only by
+*deciding* about them. The decision is cheap, but it's a decision: marking
+someone "no meeting" is a legitimate leadership call, while never having
+considered them is the actual failure. The app asks once, and then never again.
+
+Two practical consequences:
+
+- **Triage must be bulk.** Adding nine volunteers can't mean nine prompts, or
+  the feature is a tax on growing a team.
+- **"No meeting" never auto-expires.** Resurfacing decisions is nagging by
+  another name. The list is reviewable whenever you want; it doesn't come find
+  you.
+
+`Person.cadence: "none"` already carries exactly this decision — it generalizes
+to teams and managers as the same explicit opt-out.
+
+One smaller cost, acceptable: **Depth stays on the Person**, outside meeting
+prep. Already the design — a leadership read isn't prep for a specific meeting.
 
 ### Migration
 
