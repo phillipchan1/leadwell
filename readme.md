@@ -104,7 +104,9 @@ src/
 ```ts
 type Capacity = { id: string; label: string; color: string };   // Manager (teal) / Leader (purple) / Influence (amber) / Report up (blue)
 type Team     = { id: string; name: string; capacityId: string; description?: string; order: number;
-                  direction?: "up" | "down" };                  // "up" = I report to this team; renders above me
+                  direction?: "up" | "down";                    // "up" = I report to this team; renders above me
+                  parentId?: string;                            // sub-team, nests under a broader team
+                  leaderId?: string };                          // a direct report runs it — hangs under them, not me
 
 type Domain = "Executing" | "Influencing" | "Relationship Building" | "Strategic Thinking";
 type Assessments = { cliftonTop5?: string[]; enneagram?: string; mbti?: string };
@@ -123,7 +125,9 @@ type TrackedMeeting = {
 };
 
 type Person = {
-  id: string; teamId: string; name: string; role?: string;
+  id: string; name: string; role?: string;
+  teamId?: string;                      // undefined = a direct report: their own node under me, no team
+  domainId?: string;                    // life area, only for a direct report (others inherit the team's)
   photo?: string;                       // base64 data URL (downscaled on upload)
   relationshipType?: string;
   noMeeting?: boolean;                  // "I deliberately don't sit down with them"

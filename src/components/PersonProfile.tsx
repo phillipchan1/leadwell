@@ -10,6 +10,7 @@ import {
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
 import { meetingFor, type CheckFix } from "../lib/readiness";
+import { teamsLedBy } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
 import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
@@ -57,6 +58,7 @@ export function PersonProfile({
     section,
     setSection,
     selectPerson,
+    selectTeam,
     deletePerson,
     updateLeadUp,
     modal,
@@ -78,6 +80,8 @@ export function PersonProfile({
 
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);
+  // Teams that are theirs to run, not mine.
+  const led = teamsLedBy(teams, person.id);
   // People on an "up" team are those I report to — leading up, not down.
   const isLeadUp = team?.direction === "up";
   const read = derivedRead(person);
@@ -201,7 +205,26 @@ export function PersonProfile({
           <Avatar name={person.name} photo={person.photo} size={52} />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-semibold">{person.name}</h2>
-            <div className="text-xs text-stone-500">{person.role}</div>
+            <div className="text-xs text-stone-500">
+              {[person.role, team?.name ?? "Reports directly to me"]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+            {led.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                <span className="text-[11px] text-stone-400">Leads</span>
+                {led.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => selectTeam(t.id)}
+                    className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {capacity && (
               <div className="mt-1">
                 <Badge color={capacity.color}>{capacity.label}</Badge>

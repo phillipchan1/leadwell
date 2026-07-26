@@ -20,7 +20,7 @@ import type {
   Win,
 } from "../types";
 import { storage } from "../lib/storage";
-import { isDescendant } from "../lib/teams";
+import { isDescendant, personDomainId } from "../lib/teams";
 import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
 import type { NodePosition, PersistedData } from "../lib/repo";
@@ -89,8 +89,9 @@ export type { NodePosition, PersistedData } from "../lib/repo";
 export type Phase = "loading" | "anon" | "ready";
 
 export type ModalState =
-  | { kind: "team"; team?: Team; parentId?: string }
-  | { kind: "person"; person?: Person; teamId?: string }
+  | { kind: "team"; team?: Team; parentId?: string; leaderId?: string }
+  /** `teamId: null` = add them as a direct report, with no team at all. */
+  | { kind: "person"; person?: Person; teamId?: string | null }
   | { kind: "manager"; manager?: Manager }
   | { kind: "domains" }
   | { kind: "triage" }
@@ -185,8 +186,11 @@ type Store = PersistedData &
     /** Merge a patch into a person's leading-up operating manual. */
     updateLeadUp: (personId: string, patch: Partial<LeadUpProfile>) => void;
     deletePerson: (id: string) => void;
-    /** Reorg seam: move a person to another team (future drag-and-drop calls this). */
-    movePerson: (personId: string, teamId: string) => void;
+    /**
+     * Reorg seam: move a person to another team (future drag-and-drop calls
+     * this). Undefined pulls them out of every team — a direct report of mine.
+     */
+    movePerson: (personId: string, teamId?: string) => void;
     // per-person records
     addAction: (
       personId: string,
@@ -504,7 +508,12 @@ export const useStore = create<Store>((set, get) => ({
       sel.kind === "team"
         ? teamInDomain(sel.id)
         : sel.kind === "person"
-          ? teamInDomain(s.people.find((p) => p.id === sel.id)?.teamId)
+          ? (() => {
+              const person = s.people.find((p) => p.id === sel.id);
+              // A direct report carries their own domain tag — there's no team
+              // to inherit one from.
+              return person ? personDomainId(person, s.teams) === id : false;
+            })()
           : sel.kind === "manager"
             ? s.managers.find((m) => m.id === sel.id)?.domainId === id
             : true;
@@ -636,6 +645,9 @@ export const useStore = create<Store>((set, get) => ({
       teams: s.teams.map((t) =>
         t.domainId === id ? { ...t, domainId: undefined } : t
       ),
+      people: s.people.map((p) =>
+        p.domainId === id ? { ...p, domainId: undefined } : p
+      ),
       managers: s.managers.map((m) =>
         m.domainId === id ? { ...m, domainId: undefined } : m
       ),
@@ -677,7 +689,9 @@ export const useStore = create<Store>((set, get) => ({
           ...team,
           id: uid(),
           order: s.teams.length,
-          ...(team.parentId ? { direction: "down" as const } : null),
+          ...(team.parentId || team.leaderId
+            ? { direction: "down" as const }
+            : null),
         },
       ],
     })),
@@ -691,6 +705,15 @@ export const useStore = create<Store>((set, get) => ({
       }
       if (next.parentId) next = { ...next, direction: "down" };
       if (next.direction === "up") next = { ...next, parentId: undefined };
+      // A team hangs off exactly one thing: a parent team, a direct report, or
+      // me. Handing it to someone lifts it out of any parent team, and it can
+      // never be a team I report up to.
+      if (next.leaderId) {
+        next = { ...next, parentId: undefined, direction: "down" };
+      }
+      if (next.parentId || next.direction === "up") {
+        next = { ...next, leaderId: undefined };
+      }
       return {
         teams: s.teams.map((t) => (t.id === id ? { ...t, ...next } : t)),
       };
@@ -704,12 +727,21 @@ export const useStore = create<Store>((set, get) => ({
       const { [`team:${id}`]: _chat, ...chats } = s.chats;
       const { [id]: _pos, ...nodePositions } = s.nodePositions;
       return {
-        // Orphan sub-teams rather than cascade-delete them.
+        // Orphan sub-teams rather than cascade-delete them. Teams led by
+        // someone on this roster come back to me rather than vanishing with
+        // their leader.
         teams: s.teams
           .filter((t) => t.id !== id)
-          .map((t) =>
-            t.parentId === id ? { ...t, parentId: undefined } : t
-          ),
+          .map((t) => {
+            const orphaned = t.parentId === id;
+            const lost = t.leaderId ? peopleIds.has(t.leaderId) : false;
+            if (!orphaned && !lost) return t;
+            return {
+              ...t,
+              ...(orphaned ? { parentId: undefined } : null),
+              ...(lost ? { leaderId: undefined } : null),
+            };
+          }),
         people: s.people.filter((p) => p.teamId !== id),
         actions: s.actions.filter((a) => !peopleIds.has(a.personId)),
         ...(() => {
@@ -814,14 +846,23 @@ export const useStore = create<Store>((set, get) => ({
     })),
   deletePerson: (id) => {
     const before = get();
-    set((s) => ({
-      people: s.people.filter((p) => p.id !== id),
-      actions: s.actions.filter((a) => a.personId !== id),
-      ...withoutMeetingsFor(s, "person", new Set([id])),
-      goals: s.goals.filter((g) => g.personId !== id),
-      notes: s.notes.filter((n) => n.personId !== id),
-      wins: s.wins.filter((w) => w.personId !== id),
-    }));
+    set((s) => {
+      const { [`person:${id}`]: _pos, ...nodePositions } = s.nodePositions;
+      return {
+        people: s.people.filter((p) => p.id !== id),
+        // Teams they led come back to me — losing the leader must not lose
+        // the team.
+        teams: s.teams.map((t) =>
+          t.leaderId === id ? { ...t, leaderId: undefined } : t
+        ),
+        actions: s.actions.filter((a) => a.personId !== id),
+        ...withoutMeetingsFor(s, "person", new Set([id])),
+        goals: s.goals.filter((g) => g.personId !== id),
+        notes: s.notes.filter((n) => n.personId !== id),
+        wins: s.wins.filter((w) => w.personId !== id),
+        nodePositions,
+      };
+    });
     // Step up to the team they were on, same as closing their panel.
     if (before.selectedPersonId === id) {
       const teamId = before.people.find((p) => p.id === id)?.teamId;

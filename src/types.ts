@@ -29,6 +29,14 @@ export type Team = {
    * (e.g. Setup & Breakdown under Frontier Ministries). Only for teams I lead.
    */
   parentId?: string;
+  /**
+   * A direct report who leads this team instead of me. The team hangs under
+   * *their* node rather than mine, and its meeting stops counting toward my
+   * readiness — it isn't mine to convene. Undefined = I lead it.
+   *
+   * @see delegatedTeamIds — the same is true of anything nested below it.
+   */
+  leaderId?: string;
 };
 
 /**
@@ -142,7 +150,17 @@ export type TrackedMeeting = {
 
 export type Person = {
   id: string;
-  teamId: string;
+  /**
+   * The team they sit on. Undefined = a direct report who isn't part of any
+   * team I lead — they hang straight off me, and any teams they lead hang off
+   * them (`Team.leaderId`). Not everyone I manage comes with a team attached.
+   */
+  teamId?: string;
+  /**
+   * Life area, for a direct report with no team to inherit one from. Ignored
+   * for people on a team — that team's domain wins.
+   */
+  domainId?: string;
   name: string;
   role?: string;
   photo?: string; // base64 data URL

@@ -74,6 +74,9 @@ export function TeamProfile({
 
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);
+  const parent = teams.find((t) => t.id === team.parentId);
+  // A direct report runs this team; I lead them, not it.
+  const leader = people.find((p) => p.id === team.leaderId);
   const subTeams = teams
     .filter((t) => t.parentId === team.id)
     .sort((a, b) => a.order - b.order);
@@ -209,6 +212,25 @@ export function TeamProfile({
                 <span className="text-[11px] text-stone-400">Reports up</span>
               )}
             </div>
+            {parent && (
+              <button
+                type="button"
+                className="mt-2 text-left text-xs text-stone-400 hover:text-teal-600"
+                onClick={() => selectTeam(parent.id)}
+              >
+                Under {parent.name}
+              </button>
+            )}
+            {leader && (
+              <button
+                type="button"
+                className="mt-2 block text-left text-xs text-stone-400 hover:text-teal-600"
+                onClick={() => selectPerson(leader.id)}
+                title="They run this team — your job is leading them, not it"
+              >
+                Led by {leader.name}
+              </button>
+            )}
           </div>
         </div>
 

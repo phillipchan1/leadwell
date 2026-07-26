@@ -35,7 +35,8 @@ export function PeopleTable() {
 
     const filtered = enriched.filter(
       (r) =>
-        (!teamFilter || r.team?.id === teamFilter) &&
+        (!teamFilter ||
+          (teamFilter === "none" ? !r.p.teamId : r.team?.id === teamFilter)) &&
         (!query ||
           r.p.name.toLowerCase().includes(query.toLowerCase()) ||
           r.p.role?.toLowerCase().includes(query.toLowerCase()))
@@ -82,6 +83,7 @@ export function PeopleTable() {
           onChange={(e) => setTeamFilter(e.target.value)}
         >
           <option value="">All teams</option>
+          <option value="none">Direct reports (no team)</option>
           {teams.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}
@@ -135,7 +137,11 @@ export function PeopleTable() {
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-stone-500">{team?.name}</td>
+                <td className="px-4 py-2.5 text-stone-500">
+                  {team?.name ?? (
+                    <span className="text-stone-400">Direct report</span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5">
                   {capacity && (
                     <Badge color={capacity.color}>{capacity.label}</Badge>

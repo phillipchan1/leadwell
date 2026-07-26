@@ -8,6 +8,7 @@ import {
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "./derive";
 import { meetingFor } from "./readiness";
+import { directReports, teamsLedBy } from "./teams";
 import { useStore } from "../store/useStore";
 import { supabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
 import { getAccessToken } from "./auth";
@@ -45,6 +46,7 @@ export function personSystemPrompt(personId: string): string {
   if (!person) return orgSystemPrompt();
 
   const team = s.teams.find((t) => t.id === person.teamId);
+  const ledTeams = teamsLedBy(s.teams, person.id);
   const capacity = s.capacities.find((c) => c.id === team?.capacityId);
   const read = derivedRead(person);
   const enn = parseEnneagram(person.assessments.enneagram);
@@ -86,6 +88,13 @@ export function personSystemPrompt(personId: string): string {
     `## Person: ${person.name}`,
     person.role && `Role: ${person.role}`,
     team && `Team: ${team.name}`,
+    !team &&
+      `Relationship: a direct report of ${s.me.name}'s who isn't on any team ${s.me.name} leads — the 1:1 is the whole relationship.`,
+    !team &&
+      ledTeams.length > 0 &&
+      `Teams ${person.name} leads (${s.me.name} does NOT lead these — coach through them, not around them): ${ledTeams
+        .map((t) => t.name)
+        .join(", ")}`,
     team?.direction === "up"
       ? `Relationship: ${person.name} is a leader ${s.me.name} REPORTS TO. Coaching here is about leading up — communicating well, building trust, bringing solutions, and managing this relationship — not about directing them.`
       : capacity &&
@@ -267,7 +276,8 @@ export function teamSystemPrompt(teamId: string): string {
 export function orgSystemPrompt(): string {
   const s = useStore.getState();
   const byOrder = [...s.teams].sort((a, b) => a.order - b.order);
-  const roots = byOrder.filter((t) => !t.parentId);
+  // Teams handed to a direct report hang under that person below, not here.
+  const roots = byOrder.filter((t) => !t.parentId && !t.leaderId);
   const formatTeam = (t: (typeof s.teams)[0], indent: string): string => {
     const cap = s.capacities.find((c) => c.id === t.capacityId);
     const members = s.people.filter((p) => p.teamId === t.id);
@@ -292,6 +302,24 @@ export function orgSystemPrompt(): string {
     }]\n${memberLines}${kidLines ? `\n${kidLines}` : ""}`;
   };
   const lines = roots.map((t) => formatTeam(t, ""));
+  // Direct reports: people Phil manages who aren't on any team he leads. The
+  // teams under them are theirs to run — coaching is about leading the leader.
+  const reportLines = directReports(s.people).map((p) => {
+    const a = p.assessments;
+    const bits = [
+      p.role,
+      a.cliftonTop5?.length ? `Top5: ${a.cliftonTop5.join(", ")}` : "unassessed",
+      a.enneagram && `Enneagram ${a.enneagram}`,
+      a.mbti,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const led = teamsLedBy(s.teams, p.id);
+    const ledLines = led.map((t) => formatTeam(t, "  ")).join("\n");
+    return `- ${p.name}${bits ? ` (${bits})` : ""}${
+      led.length ? `\n  Leads these teams — ${s.me.name} does not:` : ""
+    }${ledLines ? `\n${ledLines}` : ""}`;
+  });
   const me = s.me;
   const meTop5 = (me.assessments.cliftonTop5 ?? []).join(", ");
   const meMods = (me.customModalities ?? [])
@@ -317,6 +345,8 @@ export function orgSystemPrompt(): string {
     ``,
     `## Org`,
     ...lines,
+    reportLines.length ? `\n## Direct reports (no team of mine)` : "",
+    ...reportLines,
   ]
     .filter(Boolean)
     .join("\n");

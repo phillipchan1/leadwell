@@ -38,7 +38,12 @@ import {
   type ReadinessData,
 } from "../lib/readiness";
 import { DOMAINS, DOMAIN_COLOR, THEME_DOMAIN } from "../data/frameworks";
-import { effectiveParentId } from "../lib/teams";
+import {
+  delegatedTeamIds,
+  directReports,
+  effectiveParentId,
+  teamsLedBy,
+} from "../lib/teams";
 import { Avatar } from "./Avatar";
 import { Badge, Card, IconButton } from "./ui";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
@@ -61,50 +66,92 @@ const RANK_Y = 180; // first down-team rank below me
 const ME_W = 256; // w-64
 const MGR_W = 208; // manager card width
 const MGR_SPACING_X = MGR_W + 32;
+const REPORT_W = 256; // direct-report card width (w-64) — wider than a manager
+// card because this one parents teams, and a truncated name reads as a stub.
+
+/** Canvas node id for a direct report — teams use their bare id. */
+const reportNodeId = (personId: string) => `person:${personId}`;
+
+/**
+ * What a team hangs off in the current visible set: its parent team, else the
+ * direct report who leads it, else nothing (it hangs off me).
+ */
+function canvasParentId(
+  team: Team,
+  visibleTeamIds: Set<string>,
+  reportIds: Set<string>
+): string | undefined {
+  const parent = effectiveParentId(team, visibleTeamIds);
+  if (parent) return parent;
+  if (team.leaderId && reportIds.has(team.leaderId)) {
+    return reportNodeId(team.leaderId);
+  }
+  return undefined;
+}
+
+/** One node and everything hanging under it, for width-aware placement. */
+type Unit = { id: string; width: number; kids: Unit[] };
 
 /**
  * Default auto-layout: managers just above me, up-teams in a rank higher still,
- * root down-teams below me, sub-teams nested under their parents.
+ * root down-teams and direct reports below me, and — under each of those — the
+ * sub-teams or delegated teams they carry.
  */
 function defaultLayout(
   teams: Team[],
-  managers: Manager[]
+  managers: Manager[],
+  reports: Person[]
 ): Record<string, NodePosition> {
   const byOrder = (a: Team, b: Team) => a.order - b.order;
   const visibleIds = new Set(teams.map((t) => t.id));
+  const reportIds = new Set(reports.map((p) => p.id));
   const down = teams.filter((t) => t.direction !== "up");
   const up = teams.filter((t) => t.direction === "up").sort(byOrder);
 
   const childrenOf = (id: string) =>
-    down.filter((t) => effectiveParentId(t, visibleIds) === id).sort(byOrder);
+    down
+      .filter((t) => canvasParentId(t, visibleIds, reportIds) === id)
+      .sort(byOrder);
 
-  const roots = down
-    .filter((t) => !effectiveParentId(t, visibleIds))
-    .sort(byOrder);
+  const teamUnit = (t: Team): Unit => ({
+    id: t.id,
+    width: NODE_W,
+    kids: childrenOf(t.id).map(teamUnit),
+  });
 
-  const subtreeWidth = (t: Team): number => {
-    const kids = childrenOf(t.id);
-    if (kids.length === 0) return NODE_W;
+  const roots: Unit[] = [
+    ...down
+      .filter((t) => !canvasParentId(t, visibleIds, reportIds))
+      .sort(byOrder)
+      .map(teamUnit),
+    ...reports.map((p) => ({
+      id: reportNodeId(p.id),
+      width: REPORT_W,
+      kids: childrenOf(reportNodeId(p.id)).map(teamUnit),
+    })),
+  ];
+
+  const subtreeWidth = (u: Unit): number => {
+    if (u.kids.length === 0) return u.width;
     const inner =
-      kids.reduce((sum, k) => sum + subtreeWidth(k), 0) +
-      (kids.length - 1) * CHILD_GAP_X;
-    return Math.max(NODE_W, inner);
+      u.kids.reduce((sum, k) => sum + subtreeWidth(k), 0) +
+      (u.kids.length - 1) * CHILD_GAP_X;
+    return Math.max(u.width, inner);
   };
 
   const pos: Record<string, NodePosition> = {
     me: { x: -ME_W / 2, y: 0 },
   };
 
-  const placeTeam = (t: Team, centerX: number, y: number) => {
-    pos[t.id] = { x: centerX - NODE_W / 2, y };
-    const kids = childrenOf(t.id);
-    if (kids.length === 0) return;
-    const widths = kids.map(subtreeWidth);
+  const place = (u: Unit, centerX: number, y: number) => {
+    pos[u.id] = { x: centerX - u.width / 2, y };
+    if (u.kids.length === 0) return;
+    const widths = u.kids.map(subtreeWidth);
     const total =
-      widths.reduce((a, b) => a + b, 0) + (kids.length - 1) * CHILD_GAP_X;
+      widths.reduce((a, b) => a + b, 0) + (u.kids.length - 1) * CHILD_GAP_X;
     let x = centerX - total / 2;
-    kids.forEach((k, i) => {
-      placeTeam(k, x + widths[i] / 2, y + CHILD_DY);
+    u.kids.forEach((k, i) => {
+      place(k, x + widths[i] / 2, y + CHILD_DY);
       x += widths[i] + CHILD_GAP_X;
     });
   };
@@ -114,8 +161,8 @@ function defaultLayout(
     rootWidths.reduce((a, b) => a + b, 0) +
     Math.max(0, roots.length - 1) * CHILD_GAP_X;
   let rx = -rootsTotal / 2;
-  roots.forEach((t, i) => {
-    placeTeam(t, rx + rootWidths[i] / 2, RANK_Y);
+  roots.forEach((u, i) => {
+    place(u, rx + rootWidths[i] / 2, RANK_Y);
     rx += rootWidths[i] + CHILD_GAP_X;
   });
 
@@ -134,11 +181,17 @@ function defaultLayout(
   return pos;
 }
 
-const nodeTypes = { me: MeNode, team: TeamNode, manager: ManagerNode };
+const nodeTypes = {
+  me: MeNode,
+  team: TeamNode,
+  manager: ManagerNode,
+  report: DirectReportNode,
+};
 
 export function OrgTree() {
   const {
     teams,
+    people,
     managers,
     nodePositions,
     setNodePosition,
@@ -203,12 +256,25 @@ export function OrgTree() {
         : managers,
     [managers, treeDomainId]
   );
+  // Direct reports get their own node — they're the ones with no team card to
+  // live inside. Their domain is their own tag, not a team's.
+  const visibleReports = useMemo(() => {
+    const reports = directReports(people);
+    return treeDomainId
+      ? reports.filter((p) => p.domainId === treeDomainId)
+      : reports;
+  }, [people, treeDomainId]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
 
   useEffect(() => {
-    const defaults = defaultLayout(visibleTeams, visibleManagers);
+    const defaults = defaultLayout(
+      visibleTeams,
+      visibleManagers,
+      visibleReports
+    );
     const visibleIds = new Set(visibleTeams.map((t) => t.id));
+    const reportIds = new Set(visibleReports.map((p) => p.id));
     // Filtered views reflow tightly; All keeps any manually dragged positions.
     // New nodes (no saved position) are placed relative to where "me" currently
     // sits — or, for sub-teams, relative to their parent's current position.
@@ -226,7 +292,7 @@ export function OrgTree() {
 
       const team = visibleTeams.find((t) => t.id === id);
       const parentId = team
-        ? effectiveParentId(team, visibleIds)
+        ? canvasParentId(team, visibleIds, reportIds)
         : undefined;
       if (parentId && defaults[id] && defaults[parentId]) {
         const parentPos = resolvePos(parentId);
@@ -252,6 +318,12 @@ export function OrgTree() {
         position: resolvePos(`mgr:${m.id}`),
         data: { managerId: m.id },
       })),
+      ...visibleReports.map((p) => ({
+        id: reportNodeId(p.id),
+        type: "report",
+        position: resolvePos(reportNodeId(p.id)),
+        data: { personId: p.id },
+      })),
       ...visibleTeams.map((t) => ({
         id: t.id,
         type: "team",
@@ -259,10 +331,18 @@ export function OrgTree() {
         data: { teamId: t.id },
       })),
     ]);
-  }, [visibleTeams, visibleManagers, nodePositions, treeDomainId, setNodes]);
+  }, [
+    visibleTeams,
+    visibleManagers,
+    visibleReports,
+    nodePositions,
+    treeDomainId,
+    setNodes,
+  ]);
 
   const edges: Edge[] = useMemo(() => {
     const visibleIds = new Set(visibleTeams.map((t) => t.id));
+    const reportIds = new Set(visibleReports.map((p) => p.id));
     const teamEdges: Edge[] = visibleTeams.map((t) => {
       const capacity = capacities.find((c) => c.id === t.capacityId);
       const base = {
@@ -274,13 +354,29 @@ export function OrgTree() {
           opacity: 0.55,
         },
       };
-      const parentId = effectiveParentId(t, visibleIds);
+      const parentId = canvasParentId(t, visibleIds, reportIds);
       if (parentId) {
         return { ...base, source: parentId, target: t.id };
       }
       return t.direction === "up"
         ? { ...base, source: t.id, target: "me" }
         : { ...base, source: "me", target: t.id };
+    });
+    // Direct reports link to me the same way teams do — the relationship is
+    // no less real for having no team attached to it.
+    const reportEdges: Edge[] = visibleReports.map((p) => {
+      const domain = domains.find((d) => d.id === p.domainId);
+      return {
+        id: `e-${reportNodeId(p.id)}`,
+        source: "me",
+        target: reportNodeId(p.id),
+        type: "smoothstep" as const,
+        style: {
+          stroke: domain?.color ?? "#a8a29e",
+          strokeWidth: 1.5,
+          opacity: 0.55,
+        },
+      };
     });
     // Same solid link style as teams — managers are people I report to, not
     // a secondary/adjunct relationship.
@@ -298,8 +394,8 @@ export function OrgTree() {
         },
       };
     });
-    return [...teamEdges, ...managerEdges];
-  }, [visibleTeams, visibleManagers, capacities, domains]);
+    return [...teamEdges, ...reportEdges, ...managerEdges];
+  }, [visibleTeams, visibleManagers, visibleReports, capacities, domains]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -335,7 +431,7 @@ export function OrgTree() {
         >
           Manage domains
         </button>
-        <ReadinessSummary teams={visibleTeams} />
+        <ReadinessSummary teams={visibleTeams} reports={visibleReports} />
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
@@ -382,6 +478,13 @@ export function OrgTree() {
                 className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
               >
                 + Add team
+              </button>
+              <button
+                onClick={() => openModal({ kind: "person", teamId: null })}
+                className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 shadow-sm hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:border-teal-500"
+                title="Someone I manage who isn't part of a team I lead"
+              >
+                + Direct report
               </button>
               <button
                 onClick={() => openModal({ kind: "manager" })}
@@ -452,6 +555,7 @@ export function OrgTree() {
         <TeamModal
           team={modal.team}
           defaultParentId={modal.parentId}
+          defaultLeaderId={modal.leaderId}
           onClose={closeModal}
         />
       )}
@@ -530,7 +634,13 @@ function DomainTab({
  * but lets you go green by looking away, so anything you haven't *decided*
  * about is counted — and only until you decide. It empties, and then it's gone.
  */
-function ReadinessSummary({ teams }: { teams: Team[] }) {
+function ReadinessSummary({
+  teams,
+  reports,
+}: {
+  teams: Team[];
+  reports: Person[];
+}) {
   const {
     people,
     managers,
@@ -547,7 +657,15 @@ function ReadinessSummary({ teams }: { teams: Team[] }) {
 
   const rdata: ReadinessData = { meetings, sessions, actions, teamActions };
   const teamIds = new Set(teams.map((t) => t.id));
-  const members = people.filter((p) => teamIds.has(p.teamId));
+  const members = [
+    ...people.filter((p) => p.teamId && teamIds.has(p.teamId)),
+    ...reports,
+  ];
+  // Teams someone else leads aren't mine to convene, so neither they nor their
+  // rosters belong in the undecided count — I've already decided by handing
+  // them over. Tracking one explicitly still works; it just isn't asked of me.
+  const delegated = delegatedTeamIds(teams);
+  const mine = (p: Person) => !p.teamId || !delegated.has(p.teamId);
 
   type Entry = {
     kind: "person" | "team";
@@ -567,9 +685,14 @@ function ReadinessSummary({ teams }: { teams: Team[] }) {
   ];
 
   const undecided =
-    members.filter((p) => triageState(p, meetings, "person") === "undecided")
-      .length +
-    teams.filter((t) => triageState(t, meetings, "team") === "undecided").length +
+    members.filter(
+      (p) => mine(p) && triageState(p, meetings, "person") === "undecided"
+    ).length +
+    teams.filter(
+      (t) =>
+        !delegated.has(t.id) &&
+        triageState(t, meetings, "team") === "undecided"
+    ).length +
     managers.filter((m) => triageState(m, meetings, "manager") === "undecided")
       .length;
 
@@ -936,6 +1059,109 @@ function ManagerNode({ data }: NodeProps) {
   );
 }
 
+/**
+ * Someone I manage who isn't part of a team I lead — a node in their own right.
+ * The teams they lead hang under them, and are theirs to run: this card counts
+ * them, but the readiness chip is about my 1:1 with the person, not their
+ * meetings.
+ */
+function DirectReportNode({ data }: NodeProps) {
+  const personId = (data as { personId: string }).personId;
+  const {
+    people,
+    teams,
+    domains,
+    meetings,
+    sessions,
+    actions,
+    teamActions,
+    treeLayers,
+    openModal,
+    selectPerson,
+    selectedPersonId,
+  } = useStore();
+  const person = people.find((p) => p.id === personId);
+  if (!person) return null;
+  const readiness = treeLayers.readiness
+    ? readinessFor("person", person.id, {
+        meetings,
+        sessions,
+        actions,
+        teamActions,
+      })
+    : null;
+  const domain = domains.find((d) => d.id === person.domainId);
+  const led = teamsLedBy(teams, person.id);
+  const selected = selectedPersonId === person.id;
+
+  return (
+    <>
+      <Handle type="target" position={Position.Top} className="!opacity-0" />
+      <Card
+        className={`group flex w-64 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-teal-400 ${
+          selected ? "border-teal-500 ring-1 ring-teal-500/30" : ""
+        }`}
+        onClick={() => selectPerson(person.id)}
+      >
+        <Avatar
+          name={person.name}
+          photo={person.photo}
+          size={34}
+          dimmed={!hasLeadershipRead(person)}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-semibold">{person.name}</div>
+          <div className="truncate text-[10px] text-stone-400">
+            {[person.role, domain?.name].filter(Boolean).join(" · ") ||
+              "Direct report"}
+          </div>
+          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-stone-400">
+            <span className="truncate">
+              {led.length > 0
+                ? `${led.length} team${led.length === 1 ? "" : "s"}`
+                : "no teams"}
+            </span>
+            {readiness && (
+              <span className="shrink-0">
+                <ReadinessChip
+                  state={readiness.state}
+                  text={formatCountdown(readiness)}
+                  title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
+                />
+              </span>
+            )}
+          </div>
+        </div>
+        {domain && (
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ backgroundColor: domain.color }}
+            title={domain.name}
+          />
+        )}
+        <div
+          className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <IconButton
+            label={`Add a team ${person.name} leads`}
+            onClick={() => openModal({ kind: "team", leaderId: person.id })}
+          >
+            +
+          </IconButton>
+          <IconButton
+            label="Edit person"
+            onClick={() => openModal({ kind: "person", person })}
+          >
+            ✎
+          </IconButton>
+        </div>
+      </Card>
+      <Handle type="source" position={Position.Bottom} className="!opacity-0" />
+    </>
+  );
+}
+
 function TeamNode({ data }: NodeProps) {
   const teamId = (data as { teamId: string }).teamId;
   const {
@@ -965,6 +1191,7 @@ function TeamNode({ data }: NodeProps) {
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);
   const parent = teams.find((t) => t.id === team.parentId);
+  const leader = people.find((p) => p.id === team.leaderId);
   const members = people.filter((p) => p.teamId === team.id);
   const subTeams = teams.filter((t) => t.parentId === team.id);
   const nextAction = teamActions.find((a) => a.teamId === team.id && !a.done);
@@ -1039,6 +1266,11 @@ function TeamNode({ data }: NodeProps) {
                 {parent && (
                   <span className="text-[10px] text-stone-400">
                     under {parent.name}
+                  </span>
+                )}
+                {leader && (
+                  <span className="text-[10px] text-stone-400">
+                    led by {leader.name}
                   </span>
                 )}
                 {domain && <Badge color={domain.color}>{domain.name}</Badge>}

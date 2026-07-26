@@ -37,6 +37,9 @@ It creates one table per entity, all scoped to the signed-in user with RLS.
 1. Supabase dashboard → **SQL Editor → New query**.
 2. Paste the entire contents of `supabase/migrations/0001_init.sql`.
 3. **Run**. You should see it create the tables and policies with no errors.
+4. Then run each later migration in `supabase/migrations/` in order (`0002…`
+   through `0008…`) the same way. They're additive `alter table` statements and
+   are safe to re-run.
 
 **Or with the CLI** (if you use it):
 

@@ -239,6 +239,7 @@ const map = {
       sort_order: t.order,
       direction: nn(t.direction),
       parent_id: nn(t.parentId),
+      leader_id: nn(t.leaderId),
     }),
     fromRow: (r: Row): Team => ({
       id: r.id as string,
@@ -253,6 +254,7 @@ const map = {
       order: (r.sort_order as number) ?? 0,
       direction: opt(r.direction as "up" | "down" | null),
       parentId: opt(r.parent_id as string | null),
+      leaderId: opt(r.leader_id as string | null),
     }),
   },
   people: {
@@ -260,7 +262,9 @@ const map = {
     toRow: (u: string, p: Person): Row => ({
       user_id: u,
       id: p.id,
-      team_id: p.teamId,
+      // Null = a direct report with no team.
+      team_id: nn(p.teamId),
+      domain_id: nn(p.domainId),
       name: p.name,
       role: nn(p.role),
       photo: nn(p.photo),
@@ -283,7 +287,8 @@ const map = {
       const customModalities = (r.custom_modalities as CustomModality[] | null) ?? [];
       return {
         id: r.id as string,
-        teamId: r.team_id as string,
+        teamId: opt(r.team_id as string | null),
+        domainId: opt(r.domain_id as string | null),
         name: r.name as string,
         role: opt(r.role as string | null),
         photo: opt(r.photo as string | null),

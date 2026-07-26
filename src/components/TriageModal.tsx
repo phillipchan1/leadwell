@@ -6,6 +6,7 @@ import {
   RHYTHM_OPTIONS,
   triageState,
 } from "../lib/readiness";
+import { delegatedTeamIds } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import { Modal, buttonGhostCls, inputSmCls } from "./ui";
 
@@ -36,9 +37,18 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
   } = useStore();
   const [rhythm, setRhythm] = useState<MeetingRhythm>("biweekly");
 
+  // Teams handed to a direct report — and anyone on them — are already decided:
+  // they aren't mine to convene. Asking about them would refill a list whose
+  // whole point is that it empties.
+  const delegated = delegatedTeamIds(teams);
+
   const rows: Row[] = [
     ...teams
-      .filter((t) => triageState(t, meetings, "team") === "undecided")
+      .filter(
+        (t) =>
+          !delegated.has(t.id) &&
+          triageState(t, meetings, "team") === "undecided"
+      )
       .map((t) => ({
         kind: "team" as const,
         id: t.id,
@@ -54,14 +64,20 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
         sub: m.role ?? "I report to them",
       })),
     ...people
-      .filter((p) => triageState(p, meetings, "person") === "undecided")
+      .filter(
+        (p) =>
+          !(p.teamId && delegated.has(p.teamId)) &&
+          triageState(p, meetings, "person") === "undecided"
+      )
       .map((p) => {
         const team = teams.find((t) => t.id === p.teamId);
         return {
           kind: "person" as const,
           id: p.id,
           name: p.name,
-          sub: [p.role, team?.name].filter(Boolean).join(" · "),
+          sub:
+            [p.role, team?.name].filter(Boolean).join(" · ") ||
+            "Direct report",
         };
       }),
   ];

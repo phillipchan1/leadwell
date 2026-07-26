@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
 import type { Manager, Person, Team } from "../types";
-import { eligibleParents } from "../lib/teams";
+import { directReports, eligibleParents } from "../lib/teams";
 import {
   Modal,
   inputCls,
@@ -127,11 +127,14 @@ function DomainPicker({
 export function TeamModal({
   team,
   defaultParentId,
+  defaultLeaderId,
   onClose,
 }: {
   team?: Team; // present = edit
   /** Pre-select a parent when adding a sub-team from a team card. */
   defaultParentId?: string;
+  /** Pre-select the leader when adding a team from a direct report's node. */
+  defaultLeaderId?: string;
   onClose: () => void;
 }) {
   const { capacities, teams, addTeam, updateTeam, deleteTeam, people } =
@@ -154,9 +157,16 @@ export function TeamModal({
   const [parentId, setParentId] = useState<string | undefined>(
     team?.parentId ?? defaultParentId
   );
+  const [leaderId, setLeaderId] = useState<string | undefined>(
+    team?.leaderId ?? defaultLeaderId
+  );
 
   const parents = eligibleParents(teams, team?.id);
   const nested = Boolean(parentId);
+  // Only teamless direct reports can hold a team — someone inside a team card
+  // has no node of their own for it to hang from.
+  const candidateLeaders = directReports(people);
+  const delegated = Boolean(leaderId);
   const memberCount = team
     ? people.filter((p) => p.teamId === team.id).length
     : 0;
@@ -171,8 +181,9 @@ export function TeamModal({
       capacityId,
       domainId,
       description,
-      direction: nested ? ("down" as const) : direction,
+      direction: nested || delegated ? ("down" as const) : direction,
       parentId: parentId || undefined,
+      leaderId: leaderId || undefined,
     };
     if (team) updateTeam(team.id, patch);
     else addTeam(patch);
@@ -201,7 +212,7 @@ export function TeamModal({
             autoFocus
           />
         </label>
-        {parents.length > 0 && (
+        {!delegated && parents.length > 0 && (
           <label className="block">
             <span className={fieldLabelCls}>
               Parent team (optional)
@@ -232,6 +243,28 @@ export function TeamModal({
             </span>
           </label>
         )}
+        {!nested && candidateLeaders.length > 0 && (
+          <label className="block">
+            <span className={fieldLabelCls}>Who leads it</span>
+            <select
+              className={inputCls}
+              value={leaderId ?? ""}
+              onChange={(e) => setLeaderId(e.target.value || undefined)}
+            >
+              <option value="">Me</option>
+              {candidateLeaders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[11px] text-stone-400">
+              {delegated
+                ? "Hangs under them, not you — and its meetings stay out of your readiness unless you track one."
+                : "Hand it to a direct report and the team moves under them."}
+            </span>
+          </label>
+        )}
         <div className="block">
           <span className={fieldLabelCls}>Domain (life area)</span>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
@@ -258,7 +291,7 @@ export function TeamModal({
             ))}
           </div>
         </label>
-        {!nested && (
+        {!nested && !delegated && (
           <label className="block">
             <span className={fieldLabelCls}>
               Position in the tree
@@ -489,20 +522,39 @@ export function PersonModal({
   onClose,
 }: {
   person?: Person; // present = edit
-  defaultTeamId?: string;
+  /** `null` = start them as a direct report with no team. */
+  defaultTeamId?: string | null;
   onClose: () => void;
 }) {
-  const { teams, addPerson, updatePerson, selectPerson } = useStore();
+  const { teams, treeDomainId, addPerson, updatePerson, selectPerson } =
+    useStore();
   const [name, setName] = useState(person?.name ?? "");
   const [role, setRole] = useState(person?.role ?? "");
-  const [teamId, setTeamId] = useState(
-    person?.teamId ?? defaultTeamId ?? teams[0]?.id
+  // "" = no team: they report straight to me.
+  const [teamId, setTeamId] = useState<string>(
+    person
+      ? (person.teamId ?? "")
+      : defaultTeamId === null
+        ? ""
+        : (defaultTeamId ?? teams[0]?.id ?? "")
+  );
+  const [domainId, setDomainId] = useState<string | undefined>(
+    person?.domainId ?? treeDomainId ?? undefined
   );
   const [photo, setPhoto] = useState<string | undefined>(person?.photo);
+  const direct = !teamId;
 
   const save = () => {
-    if (!name.trim() || !teamId) return;
-    const fields = { name: name.trim(), role, teamId, photo };
+    if (!name.trim()) return;
+    const fields = {
+      name: name.trim(),
+      role,
+      teamId: teamId || undefined,
+      // Only a teamless person carries their own life area; on a team, the
+      // team's domain is the answer.
+      domainId: direct ? domainId : undefined,
+      photo,
+    };
     if (person) {
       updatePerson(person.id, fields);
     } else {
@@ -553,13 +605,26 @@ export function PersonModal({
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
           >
+            <option value="">None — reports directly to me</option>
             {teams.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
             ))}
           </select>
+          {direct && (
+            <span className="mt-1 block text-[11px] text-stone-400">
+              They'll get their own node under you. Teams they lead can hang
+              under them.
+            </span>
+          )}
         </label>
+        {direct && (
+          <div className="block">
+            <span className={fieldLabelCls}>Domain (life area)</span>
+            <DomainPicker domainId={domainId} onChange={setDomainId} />
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className={buttonGhostCls} onClick={onClose}>
             Cancel
@@ -567,7 +632,7 @@ export function PersonModal({
           <button
             type="submit"
             className={`${buttonPrimaryCls} inline-flex items-center gap-1.5`}
-            disabled={!name.trim() || !teamId}
+            disabled={!name.trim()}
             title="Enter or ⌘Enter"
           >
             {person ? "Save" : "Add person"}
