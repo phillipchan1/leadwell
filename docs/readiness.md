@@ -137,14 +137,9 @@ A score you can't act on is noise. Every item is (a) explicit, (b) visible, and
 5. Has a leadership read *(Depth gate)*
 6. ≥1 active goal, or goals reviewed in the last 90 days
 
-### Team — meeting prep
+### Gathering — recurring group meeting
 
-1. Cadence set
-2. Next meeting dated, or `lastMet` inside cadence
-3. ≥1 open next step
-4. Mandate set
-5. Every member has a read
-6. Notes captured from the last team meeting
+Different unit, different checks. See **Beyond the 1:1: gatherings** below.
 
 ### Manager — leading-up prep
 
@@ -156,6 +151,145 @@ A score you can't act on is noise. Every item is (a) explicit, (b) visible, and
 That third one is the genuinely novel piece. Nobody tracks *am I ready to lead
 up*. Walking into a review with an empty Wins ledger is the same failure as an
 empty 1:1 agenda, one level up, and it costs more.
+
+## Beyond the 1:1: gatherings
+
+### First, a correction to a tempting assumption
+
+1:1 readiness is *not* a manager-only feature. Nothing in the engine reads the
+org chart — what makes it apply is a **dyad plus a rhythm**. The man you mentor
+monthly and the peer you trade notes with every other week are exactly as
+measurable as a direct report. Set a cadence on anyone you sit down with
+one-to-one.
+
+What genuinely doesn't fit isn't *unmanaged people*. It's **meetings that aren't
+1:1s at all**.
+
+### The unit changes
+
+A 1:1 preps a **relationship**. A staff meeting, a practice session, a core-team
+night preps a **gathering** — and the thing you'd be embarrassed about is
+different. Nobody walks out of a staff meeting thinking "he didn't know me."
+They walk out thinking **"why did we meet?"**
+
+So a gathering gets its own checks. Same five states, same window logic, same
+worst-of roll-up — new checklist.
+
+### Convener or participant, not manager
+
+The axis that changes the checks is **who's driving**, and it has nothing to do
+with who reports to whom:
+
+- Product practice meeting — nobody there reports to you, and it's *entirely*
+  your prep problem, because you convene it.
+- A team meeting you merely attend — the agenda isn't yours. Your contribution
+  is.
+
+**Prep follows the convener, not the org chart.** That's the rule.
+
+```ts
+Team.meetingRole?: "convene" | "attend"   // default: convene for down-teams
+```
+
+### Convener checks
+
+1. **This session has a point.** One line: what this meeting is *for*, this
+   time. Not the team's mandate — the session's reason to exist.
+2. **Agenda has items** — the same kanban pattern as 1:1 topics, at team level.
+3. **Last session written up** — links straight into the notes.
+4. **No group commitment past due** — team actions rot quietly in a way 1:1
+   commitments don't; nobody in the room owns chasing them but you.
+5. **Nothing needs pre-wiring** *(see below)*
+
+Check 1 is the one that earns its place. The characteristic failure of a
+standing meeting is not that it's unprepared — it's that it runs on autopilot
+with no reason to have happened. A recurring meeting with no point for *this*
+session is a meeting you should cancel, and the app should be willing to say so.
+
+### Participant checks
+
+1. **My contribution is ready** — whatever I'm bringing.
+2. **My commitments from last time are closed.**
+3. **Anything I need to raise is queued.**
+
+Notably absent: agenda and purpose. Not your job, don't score yourself on it.
+
+### The pre-wire check
+
+The readiness marker nobody tracks, and the one most likely to save a meeting:
+
+> Is there anything on this agenda that shouldn't be heard for the first time in
+> the room?
+
+Flag an agenda item as needing a heads-up conversation, name who with, and
+readiness stays amber until that conversation has happened. Bringing a change to
+a staff meeting cold is how good decisions die in public — and it's entirely
+preventable by a checkbox that makes you go have the hallway conversation first.
+
+### Irregular gatherings: cadence vs. floor
+
+The men's core team is the honest hard case: real, led by you, and *not on a
+rhythm*. Three ways to model it, and only one isn't a lie:
+
+- **Force a cadence** — invents an expectation you never made. It'll sit red or
+  drifting forever and you'll learn to ignore the layer.
+- **Exclude it** — then it's invisible, which is the thing you were trying to
+  fix.
+- **As-needed, with a floor** — ✅
+
+Split the two promises a rhythm currently conflates:
+
+| | **Cadence** | **Floor** |
+|---|---|---|
+| Says | "We meet every other week" | "If it's been 6 weeks, something's wrong" |
+| Is | An expectation | A tolerance |
+| Projects a next date | Yes | No |
+| Can go Drifting | Past cadence + grace | Past the floor |
+
+```ts
+Team.meetingCadence?: Cadence | "as_needed"
+Team.meetingFloorDays?: number    // as_needed only — the tolerance
+Team.nextMeeting?: string         // an explicit booking always wins
+```
+
+An as-needed gathering is **Dormant** — grey, no guilt — until either you book a
+date (window opens, prep due) or you cross the floor (drifting: "9 weeks since
+the last one"). No projected date, no phantom deadline. The app can't tell you
+you're late for a meeting you never promised to hold; it *can* tell you there's
+one on Thursday with no agenda, and that it's been two months.
+
+That flip is the point: for irregular things the app stops being a metronome and
+becomes a tripwire.
+
+### Data model for gatherings
+
+Teams already carry `purpose`, `cadence` (free text) and `lastMet`, but there is
+no record of *a team meeting* — no notes, no dates, no per-session point. That's
+the missing plumbing:
+
+```ts
+type TeamMeeting = {
+  id: string; teamId: string; date: string;
+  point?: string;      // why we're meeting THIS time
+  notes?: string;
+  nextDate?: string;
+  transcript?: string;
+};
+```
+
+This mirrors `OneOnOne` exactly — which is the right call, because the codebase
+already pairs person records with team records (`Action`/`TeamAction`,
+`Goal`/`TeamGoal`, `Note`/`TeamNote`). Following that grain costs no migration of
+existing rows. The tidier refactor — one `Meeting` with a
+`{ subjectKind, subjectId }` — is worth doing later, once gatherings have earned
+their keep.
+
+Agenda items reuse `TeamAction` with a column, the same way 1:1 topics use
+`ActionColumn`.
+
+**Scope note:** one gathering per team. Every current case fits — staff meeting,
+practice session, core-team night. When a team needs two standing meetings,
+`TeamMeeting` grows a `seriesId` and the model splits then, not now.
 
 ## Roll-up: worst-of, never average
 
@@ -224,8 +358,8 @@ Small additions — most of the signal is already sitting in the store.
 | Field | Why | Status |
 |---|---|---|
 | `Person.cadence?: Cadence` | 1:1 rhythm varies per person; also carries `"none"` for people you deliberately don't 1:1 with, so one field covers both cadence and paused. | **shipped** (migration `0006`) |
-| `Team.nextMeeting?: string` | `lastMet` and `cadence` exist; there's no forward date. | later |
-| `Team.cadenceDays?: number` | Team `cadence` is free text ("Weekly"). Parse it on save, keep the text for display. | later |
+| `TeamMeeting` | Teams have no meeting record at all — no notes, no dates, no per-session point. The main gap. | gatherings |
+| `Team.meetingCadence` / `meetingFloorDays` / `nextMeeting` / `meetingRole` | Rhythm, tolerance, booking, and whether I convene or attend. | gatherings |
 | `Manager.nextCheckIn?: string` | Leading-up has no dates at all today. | later |
 | `Person.readUpdatedAt?: string` | See below. | later |
 
@@ -261,8 +395,9 @@ plus per-person cadence. Layer `R`, rail, countdown chip, distribution bar,
 summary line, and the prep checklist with one-click fixes into the meeting
 write-up and topic board.
 
-**Phase 2 — the fix.** **✦ Prep me**; team-meeting and lead-up readiness on the
-same engine.
+**Phase 2 — gatherings.** `TeamMeeting`, convener/participant checks,
+as-needed + floor, the same layer `R` reading team cards from their own meeting
+rather than only from their members. Then **✦ Prep me** and the pre-wire check.
 
 **Phase 3 — the rhythm.** Prep Sweep view, depth staleness and re-read prompts,
 manager check-in dates and Wins-ledger recency.
