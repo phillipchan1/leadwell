@@ -11,13 +11,20 @@ import { SessionTable } from "./SessionTable";
 import { MeetingEditor } from "./MeetingEditor";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { WinsLedger } from "./WinsLedger";
+import type { Density } from "./EntitySurface";
 
 /**
  * Side panel for a leader I report to. Managers have no assessments, goals, or
  * 1:1 history — leading up is the operating manual, the wins banked in their
  * currency, and a coach that reasons off both.
  */
-export function ManagerProfile({ manager }: { manager: Manager }) {
+export function ManagerProfile({
+  manager,
+  density = "peek",
+}: {
+  manager: Manager;
+  density?: Density;
+}) {
   const {
     domains,
     meetings,
@@ -79,9 +86,13 @@ export function ManagerProfile({ manager }: { manager: Manager }) {
   }, [modal, askAIOpen, settingsOpen, editing, selectManager]);
 
   return (
-    <aside className="relative flex h-full flex-col overflow-hidden border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+    <aside className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900">
       {/* Header */}
-      <div className="shrink-0 border-b border-stone-200 bg-white/90 p-4 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90">
+      <div
+        className={`shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${
+          density === "focus" ? "p-6" : "p-4"
+        }`}
+      >
         <div className="flex items-start gap-3">
           <Avatar name={manager.name} photo={manager.photo} size={52} />
           <div className="min-w-0 flex-1">
@@ -94,13 +105,6 @@ export function ManagerProfile({ manager }: { manager: Manager }) {
               {domain && <Badge color={domain.color}>{domain.name}</Badge>}
             </div>
           </div>
-          <button
-            className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
-            aria-label="Close profile"
-            onClick={() => selectManager(null)}
-          >
-            ✕
-          </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
           <QuickAction onClick={() => setEditing(true)}>Edit</QuickAction>
@@ -123,7 +127,7 @@ export function ManagerProfile({ manager }: { manager: Manager }) {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-6 p-4">
+        <div className={`flex flex-col gap-6 ${density === "focus" ? "p-6" : "p-4"}`}>
           <PrepPanel
             subjectKind="manager"
             subjectId={manager.id}

@@ -1,0 +1,103 @@
+/**
+ * The URL is the source of truth for what's selected.
+ *
+ * One entity renders on two surfaces: a **peek** panel beside a tab, and a
+ * full-page **focus** route. Promotion between them is just a route change,
+ * which is what makes every entity deep-linkable and back-button-safe.
+ *
+ *   /tree                        canvas, nothing open
+ *   /tree?team=t1                team peek beside the canvas
+ *   /tree?person=p3&s=sessions   person peek, 1:1s section
+ *   /team/t1                     team in focus
+ *   /person/p3/sessions          person in focus, 1:1s section
+ *   /me                          my own profile in focus
+ */
+
+export type Tab = "overview" | "tree" | "people";
+export type EntityKind = "team" | "person" | "manager" | "me";
+
+export type Selection = {
+  kind: EntityKind;
+  /** Empty for the singleton "me" entity, which needs no id. */
+  id: string;
+  /** Sub-page within the entity — a person's tab, a team's section. */
+  section?: string;
+};
+
+export type Route =
+  | { view: "tab"; tab: Tab; peek: Selection | null }
+  | { view: "focus"; target: Selection };
+
+const TABS: Tab[] = ["overview", "tree", "people"];
+/** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
+const ID_KINDS: EntityKind[] = ["team", "person", "manager"];
+
+export const DEFAULT_TAB: Tab = "tree";
+
+function isTab(value: string | undefined): value is Tab {
+  return TABS.includes(value as Tab);
+}
+
+/**
+ * A person outranks their team: selecting someone keeps their team selected
+ * for canvas highlighting, but the panel shows the person.
+ */
+function parsePeek(params: URLSearchParams): Selection | null {
+  const section = params.get("s") ?? undefined;
+  for (const kind of ID_KINDS) {
+    const id = params.get(kind);
+    if (id) return { kind, id, section };
+  }
+  if (params.get("me")) return { kind: "me", id: "", section };
+  return null;
+}
+
+export function parseRoute(pathname: string, search: string): Route {
+  const [head, ...rest] = pathname.split("/").filter(Boolean);
+
+  if (head === "me") {
+    return { view: "focus", target: { kind: "me", id: "", section: rest[0] } };
+  }
+  if (ID_KINDS.includes(head as EntityKind) && rest[0]) {
+    return {
+      view: "focus",
+      target: {
+        kind: head as EntityKind,
+        id: decodeURIComponent(rest[0]),
+        section: rest[1],
+      },
+    };
+  }
+
+  return {
+    view: "tab",
+    tab: isTab(head) ? head : DEFAULT_TAB,
+    peek: parsePeek(new URLSearchParams(search)),
+  };
+}
+
+export function routePath(route: Route): string {
+  if (route.view === "focus") {
+    const { kind, id, section } = route.target;
+    const base = kind === "me" ? "/me" : `/${kind}/${encodeURIComponent(id)}`;
+    return section ? `${base}/${section}` : base;
+  }
+
+  const params = new URLSearchParams();
+  const peek = route.peek;
+  if (peek) {
+    if (peek.kind === "me") params.set("me", "1");
+    else params.set(peek.kind, peek.id);
+    if (peek.section) params.set("s", peek.section);
+  }
+  const query = params.toString();
+  return `/${route.tab}${query ? `?${query}` : ""}`;
+}
+
+export function sameSelection(
+  a: Selection | null,
+  b: Selection | null
+): boolean {
+  if (!a || !b) return a === b;
+  return a.kind === b.kind && a.id === b.id && a.section === b.section;
+}

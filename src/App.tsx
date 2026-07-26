@@ -1,17 +1,17 @@
 import { useEffect } from "react";
-import { useStore, type Tab } from "./store/useStore";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useStore, setNavigate, type Tab } from "./store/useStore";
+import { parseRoute } from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
 import { OrgTree } from "./components/OrgTree";
 import { PeopleTable } from "./components/PeopleTable";
 import { Overview } from "./components/Overview";
-import { PersonProfile } from "./components/PersonProfile";
-import { MeProfile } from "./components/MeProfile";
-import { ManagerProfile } from "./components/ManagerProfile";
-import { TeamProfile } from "./components/TeamProfile";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
+import { FocusView } from "./components/FocusView";
+import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -19,26 +19,73 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "people", label: "People table" },
 ];
 
+/**
+ * The URL is the source of truth for what's selected: this pushes the router's
+ * navigate into the store (where the selection setters call it) and mirrors
+ * every location change back into state. One direction only, so the back
+ * button needs no special handling.
+ */
+function useRouteSync() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const applyRoute = useStore((s) => s.applyRoute);
+
+  // Registered in layout so a click in the first paint already navigates.
+  useEffect(() => {
+    setNavigate((path, opts) => navigate(path, { replace: opts?.replace }));
+    return () => setNavigate(null);
+  }, [navigate]);
+
+  useEffect(() => {
+    applyRoute(parseRoute(location.pathname, location.search));
+  }, [location.pathname, location.search, applyRoute]);
+}
+
+/**
+ * A URL can name an entity that no longer exists — a stale bookmark, a link
+ * from another account, something deleted in a second tab. Drop the selection
+ * instead of rendering an empty panel.
+ */
+function useDropStaleSelection() {
+  const navigate = useNavigate();
+  const phase = useStore((s) => s.phase);
+  const focused = useStore((s) => s.focused);
+  const tab = useStore((s) => s.tab);
+  const selectedMe = useStore((s) => s.selectedMe);
+  const selected = useSelectedEntity();
+  const hasSelectionInUrl = useStore(
+    (s) =>
+      Boolean(s.selectedPersonId || s.selectedTeamId || s.selectedManagerId) ||
+      s.selectedMe
+  );
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    if (selected || selectedMe || !hasSelectionInUrl) return;
+    navigate(focused ? "/tree" : `/${tab}`, { replace: true });
+  }, [phase, selected, selectedMe, hasSelectionInUrl, focused, tab, navigate]);
+}
+
 export default function App() {
+  useRouteSync();
+  useDropStaleSelection();
+
   const {
     phase,
     tab,
     setTab,
     people,
     teams,
-    managers,
     dark,
     toggleDark,
     userEmail,
-    selectedPersonId,
-    selectedTeamId,
-    selectedManagerId,
-    selectedMe,
+    focused,
     askAIOpen,
     setAskAIOpen,
     settingsOpen,
     setSettingsOpen,
   } = useStore();
+  const selected = useSelectedEntity();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -54,18 +101,8 @@ export default function App() {
   }
   if (phase === "anon") return <Login />;
 
-  const selectedPerson = people.find((p) => p.id === selectedPersonId);
-  const selectedTeam = teams.find((t) => t.id === selectedTeamId);
-  const selectedManager = managers.find((m) => m.id === selectedManagerId);
   const assessed = people.filter(hasLeadershipRead).length;
-  const showTeam = tab === "tree" && selectedTeam;
-  const showPerson = tab === "tree" && selectedPerson;
-  const showManager = tab === "tree" && selectedManager;
-  const showMe = tab === "tree" && selectedMe;
-  // Person drilled in from a team — keep both panels nested.
-  const nested = Boolean(
-    showTeam && showPerson && selectedPerson.teamId === selectedTeam.id
-  );
+  const inFocus = focused && Boolean(selected);
 
   return (
     <div className="flex h-full flex-col">
@@ -104,70 +141,45 @@ export default function App() {
         </div>
       </header>
 
-      {/* Tabs */}
-      <nav className="flex gap-1 border-b border-stone-200 bg-white px-5 dark:border-stone-800 dark:bg-stone-900">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`border-b-2 px-3 py-2.5 text-sm transition-colors ${
-              tab === t.id
-                ? "border-teal-600 font-medium text-teal-700 dark:text-teal-400"
-                : "border-transparent text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      {inFocus ? (
+        <FocusView />
+      ) : (
+        <>
+          {/* Tabs */}
+          <nav className="flex gap-1 border-b border-stone-200 bg-white px-5 dark:border-stone-800 dark:bg-stone-900">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`border-b-2 px-3 py-2.5 text-sm transition-colors ${
+                  tab === t.id
+                    ? "border-teal-600 font-medium text-teal-700 dark:text-teal-400"
+                    : "border-transparent text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
 
-      {/* Main */}
-      <div className="flex min-h-0 flex-1">
-        <main
-          className={`min-w-0 flex-1 p-5 ${
-            tab === "tree" ? "flex flex-col overflow-hidden" : "overflow-y-auto"
-          }`}
-        >
-          {tab === "overview" && <Overview />}
-          {tab === "tree" && <OrgTree />}
-          {tab === "people" && <PeopleTable />}
-        </main>
-
-        {/* Detail column ~60%. Alone = full team; nested = ~10% team rail + ~90% person. */}
-        {showTeam && (
-          <div className="flex w-[60%] min-w-[55%] shrink-0">
-            <div
-              className={
-                nested
-                  ? "w-[10%] min-w-[4.5rem] max-w-[6rem] shrink-0"
-                  : "min-w-0 flex-1"
-              }
+          {/* Main + peek */}
+          <div className="flex min-h-0 flex-1">
+            <main
+              className={`min-w-0 flex-1 p-5 ${
+                tab === "tree"
+                  ? "flex flex-col overflow-hidden"
+                  : "overflow-y-auto"
+              }`}
             >
-              <TeamProfile team={selectedTeam} nested={nested} />
-            </div>
-            {nested && showPerson && (
-              <div className="min-w-0 flex-1 border-l border-stone-200 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.12)] dark:border-stone-800 dark:shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.45)]">
-                <PersonProfile person={selectedPerson} nested />
-              </div>
-            )}
+              {tab === "overview" && <Overview />}
+              {tab === "tree" && <OrgTree />}
+              {tab === "people" && <PeopleTable />}
+            </main>
+
+            {selected && <PeekPanel />}
           </div>
-        )}
-        {showPerson && !nested && (
-          <div className="w-full max-w-xl shrink-0">
-            <PersonProfile person={selectedPerson} />
-          </div>
-        )}
-        {showManager && (
-          <div className="w-full max-w-xl shrink-0">
-            <ManagerProfile manager={selectedManager} />
-          </div>
-        )}
-        {showMe && (
-          <div className="w-full max-w-xl shrink-0">
-            <MeProfile />
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Global Ask AI */}
       {askAIOpen && (
@@ -175,9 +187,7 @@ export default function App() {
           <AICoach />
         </Modal>
       )}
-      {settingsOpen && (
-        <SettingsModal onClose={() => setSettingsOpen(false)} />
-      )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

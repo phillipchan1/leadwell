@@ -9,7 +9,7 @@ import { Badge, Card, inputSmCls } from "./ui";
 type SortKey = "name" | "team" | "coverage" | "nextSession";
 
 export function PeopleTable() {
-  const { people, teams, capacities, meetings, sessions, selectPerson, setTab } =
+  const { people, teams, capacities, meetings, sessions, selectPerson } =
     useStore();
   const [query, setQuery] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
@@ -115,7 +115,6 @@ export function PeopleTable() {
                 className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 dark:border-stone-800/60 dark:hover:bg-stone-800/40"
                 onClick={() => {
                   selectPerson(p.id);
-                  setTab("tree");
                 }}
               >
                 <td className="px-4 py-2.5">

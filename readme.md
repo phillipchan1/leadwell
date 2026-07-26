@@ -37,9 +37,42 @@ imported automatically on first sign-in.
   touches the browser. Powers the per-person AI coach, the header **Ask AI**
   chat, the Overview brief, and 1:1 note structuring (model: `claude-sonnet-5`).
 
+## Navigation model
+
+**The URL is the source of truth for what's selected.** Selection setters
+navigate; [`applyRoute`](src/store/useStore.ts) writes the resulting location
+back into the store. One direction only, so the back button needs no special
+handling and every entity is a link you can send someone.
+
+One entity renders on two surfaces:
+
+- **Peek** — a fixed-width panel beside the canvas. Shows exactly *one* entity.
+  Drilling into a member swaps the panel's contents and grows the breadcrumb
+  rather than opening a second panel beside the first, which is what lets the
+  model go as deep as the data does without running out of horizontal room.
+- **Focus** — the full page for one entity, at `/team/:id`, `/person/:id/:section`,
+  `/manager/:id`, `/me`. Replaces the canvas instead of covering it: promoting
+  out of a peek is for room to work, so nothing competes for width or has to be
+  dismissed before the app is usable again.
+
+Promotion between them is just a route change (`⌘↵`, or the `⤢` / `⤡` buttons).
+[`EntityChrome`](src/components/EntityChrome.tsx) owns the breadcrumb, the
+sibling pager (`←` / `→`), close, and that promotion for every entity kind — the
+profile components own content only, and render at both densities from one tree.
+
+```
+/tree                        canvas, nothing open
+/tree?team=t1                team peek beside the canvas
+/tree?person=p3&s=sessions   person peek, 1:1s section
+/person/p3/sessions          same person, same section, full page
+```
+
+Because a peek is not tied to the canvas, clicking a row in the People table
+opens it in place instead of throwing you back to the tree.
+
 ## Stack & structure
 
-React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
+React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
 
 The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. Card layers toggle independently by keystroke — **P** people · **A** action · **M** mandate · **G** gift mix · **D** detail · **R** readiness — and compose with the domain filter (`1`–`9`). **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 
@@ -50,13 +83,15 @@ src/
     frameworks.ts        # THEME_DOMAIN (all 34), domain colors, Enneagram, MBTI
     seed.ts              # seed teams/people/goals/notes
   lib/
+    routes.ts            # URL <-> selection model (peek vs focus surfaces)
     storage.ts           # persistence seam (localStorage now, API later)
     derive.ts            # coverage, domain counts, blind spots, derived "read"
     readiness.ts         # meeting prep: states, checks, roll-up, triage
     ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
   components/
-    App shell: App.tsx (header, tabs, Ask AI)
+    App shell: App.tsx (header, tabs, route sync, Ask AI)
+    Surfaces: EntitySurface.tsx (peek), FocusView.tsx (page), EntityChrome.tsx
     Tree: OrgTree.tsx, StatsBar.tsx, StrengthsDonut.tsx, Avatar.tsx
     Profile: PersonProfile.tsx, AssessmentEditor.tsx, AICoach.tsx
     Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx

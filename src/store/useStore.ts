@@ -44,7 +44,34 @@ import {
   seedWins,
 } from "../data/seed";
 
-export type Tab = "overview" | "tree" | "people";
+import {
+  DEFAULT_TAB,
+  routePath,
+  type Route,
+  type Selection,
+  type Tab,
+} from "../lib/routes";
+
+export type { Tab, Selection } from "../lib/routes";
+
+/**
+ * Selection lives in the URL, not in this store — the setters below navigate,
+ * and `applyRoute` writes the result back. The router installs this at mount.
+ */
+type Navigate = (path: string, opts?: { replace?: boolean }) => void;
+let navigate: Navigate | null = null;
+
+export function setNavigate(fn: Navigate | null) {
+  navigate = fn;
+}
+
+function go(path: string, opts?: { replace?: boolean }) {
+  // Before the router mounts (or in tests) fall back to a plain URL write so a
+  // selection is never silently dropped.
+  if (navigate) navigate(path, opts);
+  else if (typeof window !== "undefined")
+    window.history.replaceState({}, "", path);
+}
 
 /** Independent show/hide layers on org-tree team cards. */
 export type TreeLayer =
@@ -87,6 +114,10 @@ type UIState = {
   selectedManagerId: string | null;
   /** Side panel open for the signed-in leader's own profile. */
   selectedMe: boolean;
+  /** True when the selected entity is on its full-page focus route. */
+  focused: boolean;
+  /** Sub-page of the selected entity — a person's tab, a team's section. */
+  section: string | null;
   collapsedTeams: string[];
   dark: boolean;
   askAIOpen: boolean;
@@ -104,6 +135,16 @@ type Store = PersistedData &
     selectTeam: (id: string | null) => void;
     selectManager: (id: string | null) => void;
     selectMe: (open: boolean) => void;
+    /** Close whatever is open, without stepping up the breadcrumb. */
+    clearSelection: () => void;
+    /** Switch the selected entity's sub-page (person tab, team section). */
+    setSection: (section: string | null) => void;
+    /** Promote the current peek to its full-page focus route. */
+    openFocus: () => void;
+    /** Demote the focused entity back to a peek beside the canvas. */
+    closeFocus: () => void;
+    /** Write a parsed URL into selection state. Called only by the router. */
+    applyRoute: (route: Route) => void;
     toggleTeamCollapsed: (teamId: string) => void;
     toggleDark: () => void;
     setAskAIOpen: (open: boolean) => void;
@@ -356,6 +397,67 @@ function initialDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
+/**
+ * The team in context: the one selected outright, or the team of the person
+ * who is. Derived rather than stored so it stays right no matter what order
+ * the route and the cloud data arrive in.
+ */
+export function useActiveTeamId(): string | null {
+  return useStore((s) =>
+    s.selectedPersonId
+      ? (s.people.find((p) => p.id === s.selectedPersonId)?.teamId ?? null)
+      : s.selectedTeamId
+  );
+}
+
+/** The one entity the current route points at. A person outranks their team. */
+function currentSelection(s: UIState): Selection | null {
+  if (s.selectedPersonId)
+    return {
+      kind: "person",
+      id: s.selectedPersonId,
+      section: s.section ?? undefined,
+    };
+  if (s.selectedTeamId)
+    return {
+      kind: "team",
+      id: s.selectedTeamId,
+      section: s.section ?? undefined,
+    };
+  if (s.selectedManagerId) return { kind: "manager", id: s.selectedManagerId };
+  if (s.selectedMe) return { kind: "me", id: "" };
+  return null;
+}
+
+/** Navigate to a tab surface, optionally switching tabs on the way. */
+function goTab(
+  s: UIState,
+  sel: Selection | null,
+  tab?: Tab,
+  opts?: { replace?: boolean }
+) {
+  go(
+    routePath({
+      view: "tab",
+      tab: tab ?? (s.focused ? DEFAULT_TAB : s.tab),
+      peek: sel,
+    }),
+    opts
+  );
+}
+
+/**
+ * Navigate keeping whichever surface we're already on — a peek stays a peek,
+ * focus stays focus. Clearing the selection always lands back on a tab.
+ */
+function goTo(s: UIState, sel: Selection | null, opts?: { replace?: boolean }) {
+  if (s.focused && sel) {
+    go(routePath({ view: "focus", target: sel }), opts);
+    return;
+  }
+  goTab(s, sel, undefined, opts);
+}
+
 export const useStore = create<Store>((set, get) => ({
   ...blankData(),
   phase: "loading",
@@ -375,86 +477,117 @@ export const useStore = create<Store>((set, get) => ({
   selectedTeamId: null,
   selectedManagerId: null,
   selectedMe: false,
+  focused: false,
+  section: null,
   collapsedTeams: [],
   dark: initialDark(),
   askAIOpen: false,
   modal: null,
   settingsOpen: false,
 
-  setTab: (tab) => set({ tab }),
-  setTreeDomainId: (id) =>
-    set((s) => {
-      if (!id) return { treeDomainId: null };
-      const teamInDomain = (teamId: string | null | undefined) => {
-        if (!teamId) return false;
-        return s.teams.find((t) => t.id === teamId)?.domainId === id;
-      };
-      let { selectedTeamId, selectedPersonId, selectedManagerId } = s;
-      if (selectedTeamId && !teamInDomain(selectedTeamId)) selectedTeamId = null;
-      if (selectedPersonId) {
-        const person = s.people.find((p) => p.id === selectedPersonId);
-        if (!teamInDomain(person?.teamId)) selectedPersonId = null;
-      }
-      if (selectedManagerId) {
-        const manager = s.managers.find((m) => m.id === selectedManagerId);
-        if (manager?.domainId !== id) selectedManagerId = null;
-      }
-      return {
-        treeDomainId: id,
-        selectedTeamId,
-        selectedPersonId,
-        selectedManagerId,
-      };
-    }),
+  setTab: (tab) => {
+    const s = get();
+    goTab(s, currentSelection(s), tab);
+  },
+  // Filtering the canvas drops any selection that just left the view.
+  setTreeDomainId: (id) => {
+    const s = get();
+    set({ treeDomainId: id });
+    if (!id) return;
+    const sel = currentSelection(s);
+    if (!sel) return;
+    const teamInDomain = (teamId: string | null | undefined) =>
+      Boolean(teamId) &&
+      s.teams.find((t) => t.id === teamId)?.domainId === id;
+
+    const survives =
+      sel.kind === "team"
+        ? teamInDomain(sel.id)
+        : sel.kind === "person"
+          ? teamInDomain(s.people.find((p) => p.id === sel.id)?.teamId)
+          : sel.kind === "manager"
+            ? s.managers.find((m) => m.id === sel.id)?.domainId === id
+            : true;
+    if (!survives) goTo(s, null, { replace: true });
+  },
   toggleTreeLayer: (layer) =>
     set((s) => ({
       treeLayers: { ...s.treeLayers, [layer]: !s.treeLayers[layer] },
     })),
-  // Selecting a person keeps (or opens) their team so sidebars can nest.
-  selectPerson: (id) =>
+  /**
+   * Closing a person steps up to their team rather than dismissing outright —
+   * the breadcrumb parent is where you came from, so that's where back goes.
+   */
+  selectPerson: (id) => {
+    const s = get();
+    if (!id) {
+      const teamId = s.people.find((p) => p.id === s.selectedPersonId)?.teamId;
+      goTo(s, teamId ? { kind: "team", id: teamId } : null);
+      return;
+    }
+    goTo(s, { kind: "person", id });
+  },
+  selectTeam: (id) => goTo(get(), id ? { kind: "team", id } : null),
+  // A manager stands above me on the canvas — always reached from the tree.
+  selectManager: (id) => {
+    const s = get();
+    if (!id) {
+      goTo(s, null);
+      return;
+    }
+    const sel: Selection = { kind: "manager", id };
+    if (s.focused) go(routePath({ view: "focus", target: sel }));
+    else goTab(s, sel, "tree");
+  },
+  selectMe: (open) => {
+    const s = get();
+    if (!open) {
+      goTo(s, null);
+      return;
+    }
+    const sel: Selection = { kind: "me", id: "" };
+    if (s.focused) go(routePath({ view: "focus", target: sel }));
+    else goTab(s, sel, "tree");
+  },
+  clearSelection: () => goTo(get(), null),
+  // Sub-page moves replace history: back should leave the entity, not walk tabs.
+  setSection: (section) => {
+    const s = get();
+    const sel = currentSelection(s);
+    if (!sel) return;
+    goTo(s, { ...sel, section: section ?? undefined }, { replace: true });
+  },
+  openFocus: () => {
+    const sel = currentSelection(get());
+    if (sel) go(routePath({ view: "focus", target: sel }));
+  },
+  closeFocus: () => {
+    const s = get();
+    goTab(s, currentSelection(s), s.tab);
+  },
+  applyRoute: (route) =>
     set((s) => {
-      if (!id) return { selectedPersonId: null };
-      const person = s.people.find((p) => p.id === id);
-      return {
-        selectedPersonId: id,
-        selectedTeamId: person?.teamId ?? s.selectedTeamId,
-        selectedManagerId: null,
+      const sel = route.view === "focus" ? route.target : route.peek;
+      const next = {
+        // Focus routes don't name a tab — keep the one we'll return to.
+        tab: route.view === "focus" ? s.tab : route.tab,
+        focused: route.view === "focus",
+        section: sel?.section ?? null,
+        selectedPersonId: null as string | null,
+        selectedTeamId: null as string | null,
+        selectedManagerId: null as string | null,
         selectedMe: false,
       };
+      if (!sel) return next;
+      // A person's team is derived at read time (useActiveTeamId), not stored:
+      // a deep link applies its route before the cloud data has loaded, so any
+      // lookup done here would resolve against an empty store.
+      if (sel.kind === "person") next.selectedPersonId = sel.id;
+      else if (sel.kind === "team") next.selectedTeamId = sel.id;
+      else if (sel.kind === "manager") next.selectedManagerId = sel.id;
+      else next.selectedMe = true;
+      return next;
     }),
-  // Opening a team clears any drilled-in person / manager / me panel.
-  selectTeam: (id) =>
-    set({
-      selectedTeamId: id,
-      selectedPersonId: null,
-      selectedManagerId: null,
-      selectedMe: false,
-    }),
-  // A manager panel stands alone above me — nothing nests inside it.
-  selectManager: (id) =>
-    set(
-      id
-        ? {
-            selectedManagerId: id,
-            selectedPersonId: null,
-            selectedTeamId: null,
-            selectedMe: false,
-            tab: "tree",
-          }
-        : { selectedManagerId: null }
-    ),
-  selectMe: (open) =>
-    set(
-      open
-        ? {
-            selectedMe: true,
-            selectedPersonId: null,
-            selectedTeamId: null,
-            selectedManagerId: null,
-            tab: "tree",
-          }
-        : { selectedMe: false }
-    ),
   toggleTeamCollapsed: (teamId) =>
     set((s) => ({
       collapsedTeams: s.collapsedTeams.includes(teamId)
@@ -521,7 +654,8 @@ export const useStore = create<Store>((set, get) => ({
         m.id === id ? { ...m, leadUp: { ...m.leadUp, ...patch } } : m
       ),
     })),
-  deleteManager: (id) =>
+  deleteManager: (id) => {
+    const before = get();
     set((s) => {
       const { [`mgr:${id}`]: _pos, ...nodePositions } = s.nodePositions;
       return {
@@ -530,10 +664,10 @@ export const useStore = create<Store>((set, get) => ({
         // Wins are keyed by subject id, managers included.
         wins: s.wins.filter((w) => w.personId !== id),
         nodePositions,
-        selectedManagerId:
-          s.selectedManagerId === id ? null : s.selectedManagerId,
       };
-    }),
+    });
+    if (before.selectedManagerId === id) goTo(before, null, { replace: true });
+  },
 
   addTeam: (team) =>
     set((s) => ({
@@ -561,7 +695,8 @@ export const useStore = create<Store>((set, get) => ({
         teams: s.teams.map((t) => (t.id === id ? { ...t, ...next } : t)),
       };
     }),
-  deleteTeam: (id) =>
+  deleteTeam: (id) => {
+    const before = get();
     set((s) => {
       const peopleIds = new Set(
         s.people.filter((p) => p.teamId === id).map((p) => p.id)
@@ -598,12 +733,14 @@ export const useStore = create<Store>((set, get) => ({
         chats,
         nodePositions,
         collapsedTeams: s.collapsedTeams.filter((t) => t !== id),
-        selectedPersonId: peopleIds.has(s.selectedPersonId ?? "")
-          ? null
-          : s.selectedPersonId,
-        selectedTeamId: s.selectedTeamId === id ? null : s.selectedTeamId,
       };
-    }),
+    });
+    const hitPerson = before.people.some(
+      (p) => p.teamId === id && p.id === before.selectedPersonId
+    );
+    if (before.selectedTeamId === id || hitPerson)
+      goTo(before, null, { replace: true });
+  },
 
   addTeamAction: (teamId, text, dueDate) =>
     set((s) => ({
@@ -675,7 +812,8 @@ export const useStore = create<Store>((set, get) => ({
         p.id === personId ? { ...p, leadUp: { ...p.leadUp, ...patch } } : p
       ),
     })),
-  deletePerson: (id) =>
+  deletePerson: (id) => {
+    const before = get();
     set((s) => ({
       people: s.people.filter((p) => p.id !== id),
       actions: s.actions.filter((a) => a.personId !== id),
@@ -683,8 +821,15 @@ export const useStore = create<Store>((set, get) => ({
       goals: s.goals.filter((g) => g.personId !== id),
       notes: s.notes.filter((n) => n.personId !== id),
       wins: s.wins.filter((w) => w.personId !== id),
-      selectedPersonId: s.selectedPersonId === id ? null : s.selectedPersonId,
-    })),
+    }));
+    // Step up to the team they were on, same as closing their panel.
+    if (before.selectedPersonId === id) {
+      const teamId = before.people.find((p) => p.id === id)?.teamId;
+      goTo(before, teamId ? { kind: "team", id: teamId } : null, {
+        replace: true,
+      });
+    }
+  },
   movePerson: (personId, teamId) =>
     set((s) => ({
       people: s.people.map((p) => (p.id === personId ? { ...p, teamId } : p)),
@@ -899,10 +1044,8 @@ export const useStore = create<Store>((set, get) => ({
       userId,
       userEmail: email,
       phase: "ready",
-      selectedPersonId: null,
-      selectedTeamId: null,
-      selectedManagerId: null,
-      selectedMe: false,
+      // Selection is not cleared: the URL survives sign-in, so a deep link
+      // opens the entity it named. App drops the selection if the id is stale.
     });
   },
 

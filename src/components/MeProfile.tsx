@@ -13,6 +13,7 @@ import { Chip, SectionTitle } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { MeModal } from "./forms";
 import { ProfileFillModal } from "./ProfileFillModal";
+import type { Density } from "./EntitySurface";
 
 function QuickAction({
   onClick,
@@ -38,9 +39,9 @@ function QuickAction({
   );
 }
 
-/** Side panel for the signed-in leader — identity + self-assessment. */
-export function MeProfile() {
-  const { me, selectMe, teams, people } = useStore();
+/** The signed-in leader's own profile — identity + self-assessment. */
+export function MeProfile({ density = "peek" }: { density?: Density }) {
+  const { me, teams, people } = useStore();
   const read = derivedRead(me);
   const enn = parseEnneagram(me.assessments.enneagram);
   const top5 = me.assessments.cliftonTop5 ?? [];
@@ -54,8 +55,12 @@ export function MeProfile() {
   const [fillingProfile, setFillingProfile] = useState(false);
 
   return (
-    <div className="flex h-full flex-col border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
-      <div className="shrink-0 border-b border-stone-200 p-4 dark:border-stone-800">
+    <div className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
+      <div
+        className={`shrink-0 border-b border-stone-200 dark:border-stone-800 ${
+          density === "focus" ? "p-6" : "p-4"
+        }`}
+      >
         <div className="flex items-start gap-3">
           <Avatar name={me.name} photo={me.photo} size={48} />
           <div className="min-w-0 flex-1">
@@ -67,13 +72,6 @@ export function MeProfile() {
               {teams.length} teams · {withRead}/{people.length} with a read
             </div>
           </div>
-          <button
-            className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
-            aria-label="Close profile"
-            onClick={() => selectMe(false)}
-          >
-            ✕
-          </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
           <QuickAction onClick={() => setFillingProfile(true)}>
@@ -88,7 +86,11 @@ export function MeProfile() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto ${
+          density === "focus" ? "p-6" : "p-4"
+        }`}
+      >
         <section className="space-y-3">
           <SectionTitle>My profile</SectionTitle>
           <p className="text-xs text-stone-500">
