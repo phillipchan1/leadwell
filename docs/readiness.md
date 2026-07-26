@@ -1,6 +1,17 @@
 # Readiness — knowing whether I'm behind, before I walk in the room
 
-*Design spec. Nothing in here is built yet.*
+*Design spec.*
+
+## Status
+
+**Built — Phase 1, 1:1 signal only.** `Person.cadence`, the readiness engine
+([`src/lib/readiness.ts`](../src/lib/readiness.ts)), canvas layer `R`, and the
+per-person prep panel. Cadence *projects* the next 1:1 from the last one, so
+nothing has to be booked for the signal to work.
+
+**Not built:** team-meeting and lead-up readiness, ✦ Prep me, the Prep Sweep,
+Depth staleness. The engine's shape (states → checks → roll-up) is what those
+plug into.
 
 ## The problem, stated precisely
 
@@ -210,14 +221,17 @@ you; the sweep fixes you.
 
 Small additions — most of the signal is already sitting in the store.
 
-| Field | Why |
-|---|---|
-| `Team.nextMeeting?: string` | `lastMet` and `cadence` exist; there's no forward date. |
-| `Team.cadenceDays?: number` | `cadence` is free text ("Weekly"). Parse it on save, keep the text for display. |
-| `Person.cadenceDays?: number` | 1:1 rhythm varies per person. Overview currently hardcodes 30 days for everyone — that's wrong for a weekly direct and wrong for a quarterly volunteer. |
-| `Person.paused?: boolean` | Excludes people you don't 1:1 with. |
-| `Manager.nextCheckIn?: string` | Leading-up has no dates at all today. |
-| `Person.readUpdatedAt?: string` | See below. |
+| Field | Why | Status |
+|---|---|---|
+| `Person.cadence?: Cadence` | 1:1 rhythm varies per person; also carries `"none"` for people you deliberately don't 1:1 with, so one field covers both cadence and paused. | **shipped** (migration `0006`) |
+| `Team.nextMeeting?: string` | `lastMet` and `cadence` exist; there's no forward date. | later |
+| `Team.cadenceDays?: number` | Team `cadence` is free text ("Weekly"). Parse it on save, keep the text for display. | later |
+| `Manager.nextCheckIn?: string` | Leading-up has no dates at all today. | later |
+| `Person.readUpdatedAt?: string` | See below. | later |
+
+Note: Overview's "needs attention" still hardcodes 30 days for everyone. Once
+readiness covers more surfaces that should read `Person.cadence` instead —
+30 days is wrong for a weekly direct and wrong for a quarterly volunteer.
 
 ### Depth should go stale
 
@@ -242,12 +256,13 @@ something green. Coarse and honest beats precise and gamed.
 
 ## Phasing
 
-**Phase 1 — the read.** Derive readiness from data that already exists (plus
-`nextMeeting` / `cadenceDays`). Layer `R`, rail, countdown chip, header line.
-Answers "am I behind" without changing how anything is entered.
+**Phase 1 — the read.** ✅ Derive 1:1 readiness from data that already exists,
+plus per-person cadence. Layer `R`, rail, countdown chip, distribution bar,
+summary line, and the prep checklist with one-click fixes into the meeting
+write-up and topic board.
 
-**Phase 2 — the fix.** Prep drawer with the live checklist, `paused`, per-person
-cadence, **✦ Prep me**.
+**Phase 2 — the fix.** **✦ Prep me**; team-meeting and lead-up readiness on the
+same engine.
 
 **Phase 3 — the rhythm.** Prep Sweep view, depth staleness and re-read prompts,
 manager check-in dates and Wins-ledger recency.

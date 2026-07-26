@@ -41,7 +41,7 @@ imported automatically on first sign-in.
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
 
-The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
+The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. Card layers toggle independently by keystroke — **P** people · **A** action · **M** mandate · **G** gift mix · **D** detail · **R** readiness — and compose with the domain filter (`1`–`9`). **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 
 ```
 src/
@@ -72,10 +72,13 @@ type Team     = { id: string; name: string; capacityId: string; description?: st
 type Domain = "Executing" | "Influencing" | "Relationship Building" | "Strategic Thinking";
 type Assessments = { cliftonTop5?: string[]; enneagram?: string; mbti?: string };
 
+type Cadence  = "weekly" | "biweekly" | "monthly" | "quarterly" | "none";
+
 type Person = {
   id: string; teamId: string; name: string; role?: string;
   photo?: string;                       // base64 data URL (downscaled on upload)
   relationshipType?: string;
+  cadence?: Cadence;                    // 1:1 rhythm — drives readiness ("none" = no 1:1s)
   assessments: Assessments;
   strengths: string[]; watchOuts: string[]; howToLead?: string;
 };
@@ -85,6 +88,28 @@ type Goal     = { id: string; personId: string; title: string; progress: number;
 type Note     = { id: string; personId: string; date: string; body: string };
 type Me       = { name: string; title?: string; photo?: string };
 ```
+
+## Readiness (1:1 prep)
+
+Separate from coverage, which answers *do I know them*. Readiness answers **am I
+ready for the next time we sit down** — and it's measured against the clock, not
+in the abstract. A person's `cadence` projects the next 1:1 from the last one
+(`~Thu · 3d`), so nothing has to be scheduled for the signal to work; an
+explicitly booked `nextDate` always wins.
+
+Five states, worst-first: **Drifting** (past cadence, nothing next) → **Loose
+end** (a 1:1 was never written up) → **Prep due** (window open, checklist
+incomplete) → **Ready** → **Resting** (met recently — nothing is owed, and that's
+a good state). Relationship debt deliberately outranks paperwork debt. People
+with no cadence, or `"none"`, are left out entirely.
+
+Prep only starts mattering inside a window of `max(2 days, 25% of cadence)`.
+Team cards roll up **worst-of, never average**. The engine lives in
+[`src/lib/readiness.ts`](src/lib/readiness.ts); layer **`R`** on the canvas shows
+the rail, countdown chip and distribution bar, and the per-person prep panel
+([`PrepPanel.tsx`](src/components/PrepPanel.tsx)) links each failing check
+straight to where it gets fixed. Full design rationale — including what's
+deliberately *not* built — in [docs/readiness.md](docs/readiness.md).
 
 A person counts as **assessed** once any framework result is recorded. The team-node metric is assessment coverage (X/Y) — deliberately pluggable so a future 0–100 leadership-readiness score can roll up through teams without a rewrite.
 

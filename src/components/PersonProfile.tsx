@@ -9,6 +9,7 @@ import {
   THEME_DOMAIN,
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
+import type { CheckFix } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
@@ -22,6 +23,7 @@ import { MarkdownBody } from "./MarkdownBody";
 import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
+import { PrepPanel } from "./PrepPanel";
 
 type PersonTab = "profile" | "oneOnOnes" | "topics" | "notes";
 
@@ -200,6 +202,20 @@ export function PersonProfile({
     setOpenMeetingId(id);
   };
 
+  /** Send a failing readiness check to wherever it actually gets fixed. */
+  const goFix = (fix: CheckFix, meetingId?: string) => {
+    if (fix === "writeUp" && meetingId) {
+      setTab("oneOnOnes");
+      setOpenMeetingId(meetingId);
+      return;
+    }
+    if (fix === "book") {
+      startNewOneOnOne();
+      return;
+    }
+    setTab("topics");
+  };
+
   const wideTab = tab === "oneOnOnes" || tab === "topics";
 
   return (
@@ -347,6 +363,7 @@ export function PersonProfile({
 
         {tab === "profile" && !isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
+            <PrepPanel person={person} onFix={goFix} />
             <section className="space-y-3">
               <SectionTitle>Assessment profile</SectionTitle>
               {!hasRead ? (

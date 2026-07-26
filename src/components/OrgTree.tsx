@@ -18,6 +18,16 @@ import "@xyflow/react/dist/style.css";
 import { useStore, type NodePosition, type TreeLayer } from "../store/useStore";
 import type { Manager, Person, Team } from "../types";
 import { domainCounts, hasLeadershipRead, topDomain } from "../lib/derive";
+import {
+  distribution,
+  formatCountdown,
+  isTracked,
+  personReadiness,
+  rollUp,
+  STATE_COLOR,
+  STATE_LABEL,
+  type Readiness,
+} from "../lib/readiness";
 import { DOMAINS, DOMAIN_COLOR, THEME_DOMAIN } from "../data/frameworks";
 import { effectiveParentId } from "../lib/teams";
 import { Avatar } from "./Avatar";
@@ -30,6 +40,7 @@ const LAYER_KEYS: Record<string, TreeLayer> = {
   m: "mandate",
   g: "giftMix",
   d: "detail",
+  r: "readiness",
 };
 
 const NODE_W = 320; // matches w-80 on team cards
@@ -314,6 +325,7 @@ export function OrgTree() {
         >
           Manage domains
         </button>
+        <ReadinessSummary teams={visibleTeams} />
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
@@ -499,6 +511,67 @@ function DomainTab({
   );
 }
 
+/**
+ * The one-line answer to "am I behind", always visible above the canvas and
+ * scoped to whatever the domain filter is showing. Clicking jumps to the
+ * person who needs you most.
+ */
+function ReadinessSummary({ teams }: { teams: Team[] }) {
+  const { people, oneOnOnes, actions, treeLayers, selectPerson } = useStore();
+  if (!treeLayers.readiness) return null;
+
+  const teamIds = new Set(teams.map((t) => t.id));
+  const members = people.filter((p) => teamIds.has(p.teamId));
+  const readings = members.map((p) => ({
+    person: p,
+    readiness: personReadiness(p, oneOnOnes, actions),
+  }));
+  const tracked = readings.filter((r) => isTracked(r.readiness.state));
+  if (tracked.length === 0) return null;
+
+  const roll = rollUp(tracked.map((r) => r.readiness));
+  const worst = tracked
+    .filter((r) => r.readiness.state === roll.state)
+    .sort(
+      (a, b) => (a.readiness.daysUntil ?? 0) - (b.readiness.daysUntil ?? 0)
+    )[0];
+
+  return (
+    <div className="ml-auto flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+      <span>
+        <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
+          {roll.ready}
+        </strong>{" "}
+        of{" "}
+        <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
+          {roll.tracked}
+        </strong>{" "}
+        ready
+      </span>
+      {roll.behind > 0 && worst && (
+        <>
+          <span className="text-stone-300 dark:text-stone-700">·</span>
+          <button
+            type="button"
+            onClick={() => selectPerson(worst.person.id)}
+            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-stone-100 dark:hover:bg-stone-800"
+            title={worst.readiness.headline}
+          >
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: STATE_COLOR[roll.state] }}
+            />
+            {roll.behind} need prep — start with{" "}
+            <span className="font-medium text-stone-700 dark:text-stone-200">
+              {worst.person.name.split(" ")[0]}
+            </span>
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 const VIEW_LAYERS: {
   id: TreeLayer;
   label: string;
@@ -510,6 +583,12 @@ const VIEW_LAYERS: {
   { id: "mandate", label: "Mandate", shortcut: "M", title: "Team mandate text" },
   { id: "giftMix", label: "Gift", shortcut: "G", title: "Clifton domain mix bar" },
   { id: "detail", label: "Detail", shortcut: "D", title: "Per-person strength dots" },
+  {
+    id: "readiness",
+    label: "Ready",
+    shortcut: "R",
+    title: "1:1 readiness — am I prepared for the next one",
+  },
 ];
 
 function ViewLayers() {
@@ -579,6 +658,63 @@ function GiftMixBar({ people }: { people: Person[] }) {
               />
             ) : null
           )}
+    </div>
+  );
+}
+
+/** Readiness state as a small colored chip — the glanceable "am I ready". */
+function ReadinessChip({
+  state,
+  text,
+  title,
+}: {
+  state: Readiness["state"];
+  text: string;
+  title?: string;
+}) {
+  const color = STATE_COLOR[state];
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+      style={{ backgroundColor: color + "1f", color }}
+      title={title ?? STATE_LABEL[state]}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{
+          backgroundColor: state === "drifting" ? "transparent" : color,
+          boxShadow: state === "drifting" ? `inset 0 0 0 1.5px ${color}` : undefined,
+        }}
+      />
+      {text}
+    </span>
+  );
+}
+
+/** Proportional bar of member readiness states, worst-first. */
+function ReadinessBar({ readings }: { readings: Readiness[] }) {
+  const roll = rollUp(readings);
+  const segments = distribution(roll);
+  if (segments.length === 0) return null;
+  const total = segments.reduce((sum, s) => sum + s.count, 0);
+  const title = segments
+    .map((s) => `${STATE_LABEL[s.state]}: ${s.count}`)
+    .join(" · ");
+
+  return (
+    <div
+      className="flex h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800"
+      title={title}
+      role="img"
+      aria-label={title}
+    >
+      {segments.map((s) => (
+        <span
+          key={s.state}
+          className="h-full"
+          style={{ width: `${(s.count / total) * 100}%`, backgroundColor: s.color }}
+        />
+      ))}
     </div>
   );
 }
@@ -714,6 +850,8 @@ function TeamNode({ data }: NodeProps) {
     people,
     capacities,
     domains,
+    oneOnOnes,
+    actions,
     teamActions,
     addTeamAction,
     updateTeamAction,
@@ -737,13 +875,31 @@ function TeamNode({ data }: NodeProps) {
   const nextAction = teamActions.find((a) => a.teamId === team.id && !a.done);
   const selected = selectedTeamId === team.id;
   const accent = domain?.color ?? capacity?.color ?? "#0D9488";
-  const { people: showPeople, mandate, action, giftMix, detail } = treeLayers;
+  const {
+    people: showPeople,
+    mandate,
+    action,
+    giftMix,
+    detail,
+    readiness: showReadiness,
+  } = treeLayers;
+
+  // Readiness is per-person; the card takes the worst of its members and the
+  // soonest 1:1 among them — that's the meeting you'd walk into next.
+  const readings = new Map(
+    members.map((p) => [p.id, personReadiness(p, oneOnOnes, actions)])
+  );
+  const memberReadings = [...readings.values()];
+  const roll = rollUp(memberReadings);
+  const soonest = memberReadings
+    .filter((r) => isTracked(r.state) && r.daysUntil !== null)
+    .sort((a, b) => a.daysUntil! - b.daysUntil!)[0];
 
   return (
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
       <Card
-        className={`team-card group w-80 overflow-hidden p-0 shadow-sm ${
+        className={`team-card group relative w-80 overflow-hidden p-0 shadow-sm ${
           selected
             ? "is-selected ring-2 ring-offset-1 dark:ring-offset-stone-900"
             : ""
@@ -762,6 +918,15 @@ function TeamNode({ data }: NodeProps) {
           className="team-card__stripe h-1 w-full"
           style={{ backgroundColor: accent }}
         />
+        {/* Readiness rail — worst member state, readable from across the canvas */}
+        {showReadiness && roll.tracked > 0 && (
+          <div
+            className="absolute top-1 bottom-0 left-0 w-[3px]"
+            style={{ backgroundColor: STATE_COLOR[roll.state] }}
+            title={`${STATE_LABEL[roll.state]} — ${roll.behind} of ${roll.tracked} need prep`}
+            aria-hidden
+          />
+        )}
         <div
           className="cursor-pointer p-4 pb-2"
           onClick={() => selectTeam(team.id)}
@@ -778,6 +943,13 @@ function TeamNode({ data }: NodeProps) {
                 {domain && <Badge color={domain.color}>{domain.name}</Badge>}
                 {capacity && (
                   <Badge color={capacity.color}>{capacity.label}</Badge>
+                )}
+                {showReadiness && soonest && (
+                  <ReadinessChip
+                    state={roll.state}
+                    text={formatCountdown(soonest)}
+                    title={`Soonest 1:1 on this team · ${STATE_LABEL[roll.state]}`}
+                  />
                 )}
               </div>
             </div>
@@ -815,6 +987,17 @@ function TeamNode({ data }: NodeProps) {
           {giftMix && members.length > 0 && (
             <div className="mt-3">
               <GiftMixBar people={members} />
+            </div>
+          )}
+
+          {showReadiness && roll.tracked > 0 && (
+            <div className="mt-3 flex flex-col gap-1">
+              <ReadinessBar readings={memberReadings} />
+              <div className="text-[10px] text-stone-400">
+                {roll.behind === 0
+                  ? `${roll.tracked} on track`
+                  : `${roll.behind} of ${roll.tracked} need prep`}
+              </div>
             </div>
           )}
         </div>
@@ -882,6 +1065,7 @@ function TeamNode({ data }: NodeProps) {
                   selected={p.id === selectedPersonId}
                   capacityColor={capacity?.color ?? "#0D9488"}
                   showDetail={detail}
+                  readiness={showReadiness ? readings.get(p.id) : undefined}
                   onSelect={() => selectPerson(p.id)}
                   onEdit={() => openModal({ kind: "person", person: p })}
                 />
@@ -991,6 +1175,7 @@ function PersonRow({
   selected,
   capacityColor,
   showDetail,
+  readiness,
   onSelect,
   onEdit,
 }: {
@@ -998,11 +1183,21 @@ function PersonRow({
   selected: boolean;
   capacityColor: string;
   showDetail: boolean;
+  /** Present only when the readiness layer is on. */
+  readiness?: Readiness;
   onSelect: () => void;
   onEdit: () => void;
 }) {
   const assessed = hasLeadershipRead(person);
   const dominant = topDomain(person);
+  // Readiness owns the accent bar when its layer is on — it's the more
+  // time-sensitive signal, and capacity is already carried by the card.
+  const tracked = readiness && isTracked(readiness.state);
+  const barColor = tracked
+    ? STATE_COLOR[readiness.state]
+    : showDetail && dominant
+      ? DOMAIN_COLOR[dominant]
+      : capacityColor;
   return (
     <div
       className={`person-row group/person relative flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 ${
@@ -1013,9 +1208,7 @@ function PersonRow({
     >
       <span
         className="person-row__bar absolute top-1/2 left-0 h-7 w-[3px] origin-center -translate-y-1/2 rounded-full"
-        style={{
-          backgroundColor: showDetail && dominant ? DOMAIN_COLOR[dominant] : capacityColor,
-        }}
+        style={{ backgroundColor: barColor }}
         aria-hidden
       />
       <div className="person-row__avatar">
@@ -1049,10 +1242,18 @@ function PersonRow({
             </div>
           )}
       </div>
-      {!assessed && (
-        <span className="text-[10px] text-stone-300 dark:text-stone-600">
-          unassessed
-        </span>
+      {tracked ? (
+        <ReadinessChip
+          state={readiness.state}
+          text={formatCountdown(readiness)}
+          title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
+        />
+      ) : (
+        !assessed && (
+          <span className="text-[10px] text-stone-300 dark:text-stone-600">
+            unassessed
+          </span>
+        )
       )}
       <button
         className="rounded-md p-1 text-stone-300 opacity-0 transition-opacity group-hover/person:opacity-100 hover:text-stone-600"

@@ -135,6 +135,7 @@ export const seedPeople: Person[] = [
     id: "p-sarah",
     teamId: "team-frontier",
     name: "Sarah Kim",
+    cadence: "weekly",
     role: "Worship Director",
     assessments: {
       cliftonTop5: ["Empathy", "Developer", "Belief", "Harmony", "Adaptability"],
@@ -150,6 +151,7 @@ export const seedPeople: Person[] = [
     id: "p-marcus",
     teamId: "team-frontier",
     name: "Marcus Webb",
+    cadence: "biweekly",
     role: "Youth Pastor",
     assessments: {
       cliftonTop5: ["Woo", "Communication", "Activator", "Positivity", "Ideation"],
@@ -165,6 +167,7 @@ export const seedPeople: Person[] = [
     id: "p-elena",
     teamId: "team-frontier",
     name: "Elena Ruiz",
+    cadence: "monthly",
     role: "Operations Coordinator",
     assessments: {},
     strengths: [],
@@ -174,6 +177,7 @@ export const seedPeople: Person[] = [
     id: "p-dave",
     teamId: "team-mens",
     name: "Dave Okafor",
+    cadence: "monthly",
     role: "Small Groups Lead",
     assessments: {
       cliftonTop5: ["Responsibility", "Relator", "Consistency", "Discipline", "Focus"],
@@ -189,6 +193,7 @@ export const seedPeople: Person[] = [
     id: "p-jordan",
     teamId: "team-mens",
     name: "Jordan Lee",
+    cadence: "none",
     role: "Events Lead",
     assessments: {
       cliftonTop5: ["Arranger", "Achiever", "Maximizer", "Significance", "Strategic"],
@@ -204,6 +209,7 @@ export const seedPeople: Person[] = [
     id: "p-tom",
     teamId: "team-mens",
     name: "Tom Brady",
+    cadence: "none",
     role: "Hospitality",
     assessments: {},
     strengths: [],
@@ -213,6 +219,7 @@ export const seedPeople: Person[] = [
     id: "p-priya",
     teamId: "team-product",
     name: "Priya Nair",
+    cadence: "weekly",
     role: "Staff Engineer",
     assessments: {
       cliftonTop5: ["Analytical", "Learner", "Intellection", "Input", "Deliberative"],
@@ -228,6 +235,7 @@ export const seedPeople: Person[] = [
     id: "p-alex",
     teamId: "team-product",
     name: "Alex Chen",
+    cadence: "biweekly",
     role: "Designer",
     assessments: {},
     strengths: [],

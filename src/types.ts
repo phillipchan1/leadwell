@@ -94,6 +94,14 @@ export type LeadUpProfile = {
   theirScorecard?: string;
 };
 
+/**
+ * How often I sit down 1:1 with someone. Drives readiness: the rhythm projects
+ * the next meeting from the last one, so prep can be measured without every
+ * 1:1 being formally booked. "none" = deliberately no 1:1s (most of a large
+ * volunteer team) and is excluded from readiness entirely.
+ */
+export type Cadence = "weekly" | "biweekly" | "monthly" | "quarterly" | "none";
+
 export type Person = {
   id: string;
   teamId: string;
@@ -101,6 +109,8 @@ export type Person = {
   role?: string;
   photo?: string; // base64 data URL
   relationshipType?: string;
+  /** 1:1 rhythm. Undefined = not set yet; the person isn't measured. */
+  cadence?: Cadence;
   assessments: Assessments;
   strengths: string[];
   watchOuts: string[];

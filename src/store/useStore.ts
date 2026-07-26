@@ -43,7 +43,13 @@ import {
 export type Tab = "overview" | "tree" | "people";
 
 /** Independent show/hide layers on org-tree team cards. */
-export type TreeLayer = "people" | "mandate" | "action" | "giftMix" | "detail";
+export type TreeLayer =
+  | "people"
+  | "mandate"
+  | "action"
+  | "giftMix"
+  | "detail"
+  | "readiness";
 export type TreeLayers = Record<TreeLayer, boolean>;
 
 export type { NodePosition, PersistedData } from "../lib/repo";
@@ -291,6 +297,7 @@ export const useStore = create<Store>((set, get) => ({
     action: true,
     giftMix: false,
     detail: false,
+    readiness: true,
   },
   selectedPersonId: null,
   selectedTeamId: null,

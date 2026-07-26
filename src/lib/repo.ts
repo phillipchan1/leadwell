@@ -259,6 +259,7 @@ const map = {
       role: nn(p.role),
       photo: nn(p.photo),
       relationship_type: nn(p.relationshipType),
+      cadence: nn(p.cadence),
       clifton_top5: p.assessments.cliftonTop5 ?? [],
       enneagram: nn(p.assessments.enneagram),
       mbti: nn(p.assessments.mbti),
@@ -281,6 +282,7 @@ const map = {
         role: opt(r.role as string | null),
         photo: opt(r.photo as string | null),
         relationshipType: opt(r.relationship_type as string | null),
+        cadence: opt(r.cadence as Person["cadence"] | null),
         assessments: {
           ...(top5.length ? { cliftonTop5: top5 } : {}),
           ...(enneagram ? { enneagram } : {}),
