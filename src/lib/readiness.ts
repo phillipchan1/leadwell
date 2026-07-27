@@ -425,10 +425,14 @@ export function triageState(
   return subject.noMeeting ? "no_meeting" : "undecided";
 }
 
-/** Person topics as agenda: only the "This 1:1" column counts as queued. */
-export function personAgenda(actions: Action[], personId: string): AgendaItem[] {
+/**
+ * Topic-board items as agenda: only the queued column counts. Keyed by subject
+ * id, so it reads the same board for someone I lead and someone I report to —
+ * a manager's topics live in `actions` under the manager's id.
+ */
+export function personAgenda(actions: Action[], subjectId: string): AgendaItem[] {
   return actions
-    .filter((a) => a.personId === personId)
+    .filter((a) => a.personId === subjectId)
     .map((a) => ({ ...a, queued: a.column === "this_1on1" }));
 }
 

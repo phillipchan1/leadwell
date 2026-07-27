@@ -20,8 +20,7 @@ import { AICoach } from "./AICoach";
 import { SessionTable } from "./SessionTable";
 import { MeetingEditor } from "./MeetingEditor";
 import { TopicKanban } from "./TopicKanban";
-import { WritingPad } from "./WritingPad";
-import { MarkdownBody } from "./MarkdownBody";
+import { NotesPanel } from "./NotesPanel";
 import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
@@ -73,9 +72,6 @@ export function PersonProfile({
     updateGoal,
     deleteGoal,
     notes,
-    addNote,
-    updateNote,
-    deleteNote,
   } = useStore();
 
   const team = teams.find((t) => t.id === person.teamId);
@@ -115,15 +111,10 @@ export function PersonProfile({
   const [fillingProfile, setFillingProfile] = useState(false);
   const [newGoal, setNewGoal] = useState("");
   const [openMeetingId, setOpenMeetingId] = useState<string | null>(null);
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [composingNote, setComposingNote] = useState(false);
-  const [newNoteBody, setNewNoteBody] = useState("");
 
   // Editors are per-person; the tab resets itself via the route.
   useEffect(() => {
     setOpenMeetingId(null);
-    setEditingNoteId(null);
-    setComposingNote(false);
     setFillingProfile(false);
   }, [person.id]);
 
@@ -295,6 +286,12 @@ export function PersonProfile({
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         {tab === "profile" && isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
+            <PrepPanel
+              subjectKind="person"
+              subjectId={person.id}
+              subjectName={person.name}
+              onFix={goFix}
+            />
             <LeadUpManual
               key={person.id}
               subject={person}
@@ -552,106 +549,20 @@ export function PersonProfile({
         {tab === "topics" && (
           <div className="space-y-3 p-4">
             <p className="text-xs text-stone-500">
-              Park topics to talk about. Drag cards between columns — pull into
-              This 1:1 before you meet.
+              {isLeadUp
+                ? "What you need from them — asks, escalations, decisions. Pull into This check-in before you sit down."
+                : "Park topics to talk about. Drag cards between columns — pull into This 1:1 before you meet."}
             </p>
-            <TopicKanban personId={person.id} />
+            <TopicKanban
+              personId={person.id}
+              direction={isLeadUp ? "up" : "down"}
+            />
           </div>
         )}
 
         {tab === "notes" && (
-          <div className="flex flex-col gap-3 p-4">
-            {!composingNote && (
-              <button
-                type="button"
-                onClick={() => {
-                  setComposingNote(true);
-                  setNewNoteBody("");
-                }}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-              >
-                + New note
-              </button>
-            )}
-            {composingNote && (
-              <div className="space-y-2">
-                <WritingPad
-                  value={newNoteBody}
-                  onChange={(e) => setNewNoteBody(e.target.value)}
-                  placeholder="Quick note — context, observations, reminders…"
-                  autoFocus
-                  startEditing
-                  dualMode={false}
-                />
-                <div className="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    className="text-xs text-stone-400 hover:underline"
-                    onClick={() => setComposingNote(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-medium text-white"
-                    onClick={() => {
-                      if (!newNoteBody.trim()) return;
-                      addNote(person.id, newNoteBody.trim());
-                      setNewNoteBody("");
-                      setComposingNote(false);
-                    }}
-                  >
-                    Save note
-                  </button>
-                </div>
-              </div>
-            )}
-            {myNotes.length === 0 && !composingNote && (
-              <p className="text-center text-xs text-stone-400">
-                No notes yet.
-              </p>
-            )}
-            <ul className="space-y-3">
-              {myNotes.map((n) => (
-                <li key={n.id} className="group space-y-1">
-                  <div className="flex items-center justify-between text-[11px] text-stone-400">
-                    <span>{n.date}</span>
-                    <button
-                      type="button"
-                      className="opacity-0 hover:text-red-500 group-hover:opacity-100"
-                      aria-label="Delete note"
-                      onClick={() => deleteNote(n.id)}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  {editingNoteId === n.id ? (
-                    <WritingPad
-                      value={n.body}
-                      onChange={(e) =>
-                        updateNote(n.id, { body: e.target.value })
-                      }
-                      onBlur={() => setEditingNoteId(null)}
-                      autoFocus
-                      startEditing
-                      dualMode={false}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="journal-paper w-full text-left transition-opacity hover:opacity-90"
-                      onClick={() => setEditingNoteId(n.id)}
-                    >
-                      <div className="journal-pad-inner py-4">
-                        <MarkdownBody className="text-[0.95rem]">
-                          {n.body}
-                        </MarkdownBody>
-                      </div>
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+          <div className="p-4">
+            <NotesPanel subjectId={person.id} />
           </div>
         )}
 

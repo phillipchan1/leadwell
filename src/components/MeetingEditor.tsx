@@ -82,6 +82,12 @@ export function MeetingEditor({
       : undefined;
   const subjectName =
     person?.name ?? team?.name ?? manager?.name ?? "this meeting";
+  /**
+   * Whose topic board catches the commitments this meeting produced. People
+   * and managers both have one; teams don't yet, so their commitments stay in
+   * the notes rather than landing somewhere invisible.
+   */
+  const topicSubjectId = person?.id ?? manager?.id;
   /** "1:1 with Sarah Kim" / "Staff meeting" — used in copy and AI prompts. */
   const meetingLabel =
     meeting?.name ??
@@ -214,6 +220,7 @@ export function MeetingEditor({
       const result = await structureMeetingNotes({
         personId: person?.id,
         teamId: team?.id,
+        managerId: manager?.id,
         label: meetingLabel,
         transcript,
         draftNotes: notes,
@@ -239,9 +246,9 @@ export function MeetingEditor({
         nextDate: parsed.suggestedNextDate,
       });
     }
-    if (createTopics && person && parsed.commitments.length) {
+    if (createTopics && topicSubjectId && parsed.commitments.length) {
       for (const text of parsed.commitments) {
-        addAction(person.id, text, undefined, "backlog");
+        addAction(topicSubjectId, text, undefined, "backlog");
       }
     }
     setParsed(null);
@@ -409,7 +416,7 @@ export function MeetingEditor({
               />
               {parsed && !structuring && (
                 <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-                  {parsed.commitments.length > 0 && (
+                  {parsed.commitments.length > 0 && topicSubjectId && (
                     <label className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                       <input
                         type="checkbox"

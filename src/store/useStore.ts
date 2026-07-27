@@ -673,7 +673,10 @@ export const useStore = create<Store>((set, get) => ({
       return {
         managers: s.managers.filter((m) => m.id !== id),
         ...withoutMeetingsFor(s, "manager", new Set([id])),
-        // Wins are keyed by subject id, managers included.
+        // Topics, notes and wins are all keyed by subject id, managers
+        // included — leading up shares the person tables.
+        actions: s.actions.filter((a) => a.personId !== id),
+        notes: s.notes.filter((n) => n.personId !== id),
         wins: s.wins.filter((w) => w.personId !== id),
         nodePositions,
       };

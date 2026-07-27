@@ -156,8 +156,9 @@ export function personSystemPrompt(personId: string): string {
 
 /**
  * Build the leading-up system prompt for a manager node. Managers carry no
- * assessments or 1:1 history — the whole read is the operating manual plus the
- * wins banked with them.
+ * assessments — reading their personality isn't the job — but the check-in
+ * history, the topic board and the notes are all keyed by their id, same as
+ * anyone else, and the coach is much sharper with them than without.
  */
 export function managerSystemPrompt(managerId: string): string {
   const s = useStore.getState();
@@ -170,6 +171,27 @@ export function managerSystemPrompt(managerId: string): string {
     .filter((w) => w.personId === manager.id)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 6);
+
+  const checkIn = s.meetings.find(
+    (m) => m.subjectKind === "manager" && m.subjectId === manager.id
+  );
+  const sessions = checkIn
+    ? s.sessions
+        .filter((o) => o.meetingId === checkIn.id)
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 5)
+    : [];
+  const topicLines = s.actions
+    .filter((a) => a.personId === manager.id && !a.done)
+    .map(
+      (a) =>
+        `- ${a.text}${a.column === "this_1on1" ? " (queued for the next check-in)" : ""}`
+    )
+    .join("\n");
+  const notes = s.notes
+    .filter((n) => n.personId === manager.id)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
 
   return [
     `You are a leadership coach helping ${s.me.name} lead UP to one specific leader they report to. Coaching here is about managing this relationship well — communicating in their language, building trust, bringing solutions, and making them successful upward — not about directing them. Be practical and specific.`,
@@ -185,6 +207,14 @@ export function managerSystemPrompt(managerId: string): string {
       `## Wins banked with them\nValue ${s.me.name} has delivered, in their currency — usable as evidence at reviews or before an ask:\n${wins
         .map((w) => `- ${w.date}: ${w.text}${w.impact ? ` — ${w.impact}` : ""}`)
         .join("\n")}`,
+    topicLines &&
+      `## Open topics for them\nWhat ${s.me.name} needs to raise — asks, escalations, decisions to get:\n${topicLines}`,
+    sessions.length &&
+      `## Recent check-ins\n${sessions
+        .map((o) => `- ${o.date}: ${o.notes ?? "(no notes)"}`)
+        .join("\n")}`,
+    notes.length &&
+      `## Recent notes\n${notes.map((n) => `- ${n.date}: ${n.body}`).join("\n")}`,
     !manualLines
       ? `\nThe operating manual is still empty. Ask sharp questions that would fill it in — what they reward, what makes them anxious, their currency, how they want to hear from ${s.me.name}, and what their own boss measures them on — while still giving practical general leading-up advice.`
       : "",
@@ -485,6 +515,8 @@ export async function structureMeetingNotes(opts: {
   personId?: string;
   /** Present for a team meeting — the team whose context to load. */
   teamId?: string;
+  /** Present for a check-in with a leader I report to — leading-up context. */
+  managerId?: string;
   /** How to describe the meeting in the prompt, e.g. "1:1 with Sarah Kim". */
   label: string;
   transcript?: string;
@@ -495,7 +527,9 @@ export async function structureMeetingNotes(opts: {
     ? personSystemPrompt(opts.personId)
     : opts.teamId
       ? teamSystemPrompt(opts.teamId)
-      : orgSystemPrompt();
+      : opts.managerId
+        ? managerSystemPrompt(opts.managerId)
+        : orgSystemPrompt();
 
   const userParts = [
     `Structure notes for my ${opts.label}.`,

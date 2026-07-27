@@ -94,6 +94,8 @@ src/
     Surfaces: EntitySurface.tsx (peek), FocusView.tsx (page), EntityChrome.tsx
     Tree: OrgTree.tsx, StatsBar.tsx, StrengthsDonut.tsx, Avatar.tsx
     Profile: PersonProfile.tsx, AssessmentEditor.tsx, AICoach.tsx
+    Shared records: TopicKanban.tsx, NotesPanel.tsx    # keyed by subject id — people and managers alike
+    Leading up: ManagerProfile.tsx, LeadUpManual.tsx, WinsLedger.tsx
     Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx
     Other tabs: Overview.tsx, PeopleTable.tsx
     forms.tsx, ui.tsx    # modals + small primitives
@@ -180,6 +182,30 @@ on the canvas shows the rail, countdown chip and distribution bar, and
 alike — links each failing check straight to where it gets fixed, including into
 the meeting that was never written up. Full design rationale, including what's
 deliberately *not* built, in [docs/readiness.md](docs/readiness.md).
+
+## Leading up
+
+Two shapes of "above me": people on a team marked `direction: "up"` (a board, an
+elders group), and **`Manager`** nodes — one leader you answer to in a given
+domain, attached straight to you.
+
+Managing the relationship works the same either way, and the same way as leading
+down: a tracked check-in, its session history, a topic board and dated notes.
+Those share the person tables — `actions`, `notes` and `wins` are all keyed by
+*subject* id with no foreign key, so a manager's records slot in without a
+migration. What's different upward is what leads: the **operating manual**
+(`LeadUpManual` — what they reward, their anxieties, their currency, what their
+own boss measures them on) and the **wins ledger** (`WinsLedger` — value you've
+delivered, phrased in their currency, recallable at reviews and before an ask).
+Leading down you track someone else's growth; leading up you track your own
+value.
+
+The topic board is the same component pointed the other way
+(`TopicKanban direction="up"`): a topic for your boss is an ask, an escalation
+or a decision you need, not something you're raising *about* them — so the
+queued column reads **This check-in** and the coach frames it accordingly. The
+stored value is unchanged, which is what keeps the readiness engine ignorant of
+direction.
 
 A person counts as **assessed** once any framework result is recorded. The team-node metric is assessment coverage (X/Y) — deliberately pluggable so a future 0–100 leadership-readiness score can roll up through teams without a rewrite.
 

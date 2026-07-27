@@ -18,6 +18,13 @@ import { SectionTitle, inputSmCls } from "./ui";
 /** Default tolerance offered when a meeting is switched to as-needed. */
 const DEFAULT_FLOOR_DAYS = 45;
 
+/** What to call the meeting in copy — you don't have a "1:1" with your boss. */
+const SUBJECT_LABEL: Record<MeetingSubjectKind, string> = {
+  person: "1:1",
+  team: "meeting",
+  manager: "check-in",
+};
+
 /**
  * Prep for one tracked meeting — the checklist *is* the score. No hidden
  * weights, no mystery number: four named things, each one click from fixed.
@@ -60,7 +67,7 @@ export function PrepPanel({
         ? teams.find((t) => t.id === subjectId)
         : managers.find((m) => m.id === subjectId);
   const firstName = subjectName.split(" ")[0] ?? subjectName;
-  const label = subjectKind === "person" ? "1:1" : "meeting";
+  const label = SUBJECT_LABEL[subjectKind];
 
   // ── Not tracked: the opt-in, and nothing else ───────────────────────────
   if (!meeting) {
