@@ -13,7 +13,14 @@ import { meetingFor, type CheckFix } from "../lib/readiness";
 import { teamsLedBy } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import { Badge, Chip, ProgressBar, SectionTitle, inputCls } from "./ui";
+import {
+  Badge,
+  Chip,
+  ProgressBar,
+  ProfileAdminLinks,
+  SectionTitle,
+  inputCls,
+} from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
@@ -27,15 +34,19 @@ import { PrepPanel } from "./PrepPanel";
 
 type PersonTab = "profile" | "sessions" | "topics" | "notes";
 
-const PERSON_TABS: { id: PersonTab; label: string }[] = [
-  { id: "profile", label: "Profile" },
-  { id: "sessions", label: "1:1s" },
-  { id: "topics", label: "Topics" },
-  { id: "notes", label: "Notes" },
-];
+const PERSON_TAB_IDS: PersonTab[] = ["profile", "sessions", "topics", "notes"];
 
 function isPersonTab(value: string | null): value is PersonTab {
-  return PERSON_TABS.some((t) => t.id === value);
+  return PERSON_TAB_IDS.includes(value as PersonTab);
+}
+
+function personTabs(isLeadUp: boolean): { id: PersonTab; label: string }[] {
+  return [
+    { id: "profile", label: isLeadUp ? "Leading up" : "Profile" },
+    { id: "sessions", label: isLeadUp ? "Check-ins" : "1:1s" },
+    { id: "topics", label: "Topics" },
+    { id: "notes", label: "Notes" },
+  ];
 }
 
 /**
@@ -214,42 +225,18 @@ export function PersonProfile({
               </div>
             )}
             <div className="mt-1 text-[11px] text-stone-400">
-              {nextSession && `Next 1:1 ${nextSession}`}
+              {nextSession &&
+                `Next ${isLeadUp ? "check-in" : "1:1"} ${nextSession}`}
               {nextSession && lastSession && " · "}
               {lastSession && `Last ${lastSession.date}`}
             </div>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <QuickAction onClick={() => setFillingProfile(true)}>
-            ✨ AI fill
-          </QuickAction>
-          <QuickAction onClick={startNewSession}>+ New 1:1</QuickAction>
-          <QuickAction
-            onClick={() => {
-              setTab("topics");
-            }}
-          >
-            + Add topic
-          </QuickAction>
-          <QuickAction onClick={() => setEditingAssessments(true)}>
-            Assessments
-          </QuickAction>
-          <QuickAction onClick={() => setEditingPerson(true)}>Edit</QuickAction>
-          <QuickAction
-            danger
-            onClick={() => {
-              if (confirm(`Remove ${person.name}?`)) deletePerson(person.id);
-            }}
-          >
-            Remove
-          </QuickAction>
-        </div>
       </div>
 
       {/* Internal tabs */}
       <nav className="flex shrink-0 gap-0.5 border-b border-stone-200 px-3 dark:border-stone-800">
-        {PERSON_TABS.map((t) => (
+        {personTabs(isLeadUp).map((t) => (
           <button
             key={t.id}
             type="button"
@@ -294,6 +281,12 @@ export function PersonProfile({
               <SectionTitle>AI coach</SectionTitle>
               <AICoach person={person} />
             </section>
+            <ProfileAdminLinks
+              onEdit={() => setEditingPerson(true)}
+              onRemove={() => {
+                if (confirm(`Remove ${person.name}?`)) deletePerson(person.id);
+              }}
+            />
           </div>
         )}
 
@@ -306,7 +299,18 @@ export function PersonProfile({
               onFix={goFix}
             />
             <section className="space-y-3">
-              <SectionTitle>Assessment profile</SectionTitle>
+              <div className="flex items-baseline justify-between gap-2">
+                <SectionTitle>Assessment profile</SectionTitle>
+                {hasRead && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingAssessments(true)}
+                    className="text-[11px] text-stone-400 hover:text-teal-600"
+                  >
+                    Edit assessments
+                  </button>
+                )}
+              </div>
               {!hasRead ? (
                 <div className="space-y-2">
                   <button
@@ -512,6 +516,12 @@ export function PersonProfile({
               <SectionTitle>AI coach</SectionTitle>
               <AICoach person={person} />
             </section>
+            <ProfileAdminLinks
+              onEdit={() => setEditingPerson(true)}
+              onRemove={() => {
+                if (confirm(`Remove ${person.name}?`)) deletePerson(person.id);
+              }}
+            />
           </div>
         )}
 
@@ -528,7 +538,8 @@ export function PersonProfile({
                 onClick={startNewSession}
                 className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
               >
-                + Log a 1:1 with {person.name.split(" ")[0]}
+                + Log a {isLeadUp ? "check-in" : "1:1"} with{" "}
+                {person.name.split(" ")[0]}
                 <div className="mt-1 text-xs">
                   Starts tracking it as-needed — set a rhythm when you want it
                   measured
@@ -579,25 +590,3 @@ export function PersonProfile({
   );
 }
 
-function QuickAction({
-  children,
-  onClick,
-  danger = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 transition-colors ${
-        danger
-          ? "border-stone-200 text-stone-400 hover:border-red-300 hover:text-red-500 dark:border-stone-700"
-          : "border-stone-200 text-stone-600 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-300"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

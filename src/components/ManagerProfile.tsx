@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { Manager } from "../types";
 import { Avatar } from "./Avatar";
-import { Badge, SectionTitle } from "./ui";
+import { Badge, ProfileAdminLinks, SectionTitle } from "./ui";
 import { ManagerModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
@@ -65,8 +65,13 @@ export function ManagerProfile({
   const [editing, setEditing] = useState(false);
 
   const checkIn = meetingFor(meetings, "manager", manager.id);
-  const mySessions = sessions.filter((s) => checkIn && s.meetingId === checkIn.id);
+  const mySessions = sessions
+    .filter((s) => checkIn && s.meetingId === checkIn.id)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const myNotes = notes.filter((n) => n.personId === manager.id);
+
+  const lastSession = mySessions.find((o) => o.notes?.trim());
+  const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
   // The active tab is a URL sub-page, same as a person's — a check-in history
   // with your boss is a link you can come back to.
@@ -127,7 +132,7 @@ export function ManagerProfile({
       className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900"
       data-manager-tab={tab}
     >
-      {/* Header */}
+      {/* Header — identity only; session/topic create lives in their tabs */}
       <div
         className={`shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
       >
@@ -142,20 +147,12 @@ export function ManagerProfile({
               <Badge color="#3B82F6">Leading up</Badge>
               {domain && <Badge color={domain.color}>{domain.name}</Badge>}
             </div>
+            <div className="mt-1 text-[11px] text-stone-400">
+              {nextSession && `Next check-in ${nextSession}`}
+              {nextSession && lastSession && " · "}
+              {lastSession && `Last ${lastSession.date}`}
+            </div>
           </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <QuickAction onClick={startNewSession}>+ New check-in</QuickAction>
-          <QuickAction onClick={() => setTab("topics")}>+ Add topic</QuickAction>
-          <QuickAction onClick={() => setEditing(true)}>Edit</QuickAction>
-          <QuickAction
-            danger
-            onClick={() => {
-              if (confirm(`Remove ${manager.name}?`)) deleteManager(manager.id);
-            }}
-          >
-            Remove
-          </QuickAction>
         </div>
       </div>
 
@@ -206,6 +203,13 @@ export function ManagerProfile({
               <SectionTitle>AI coach</SectionTitle>
               <AICoach manager={manager} />
             </section>
+            <ProfileAdminLinks
+              onEdit={() => setEditing(true)}
+              onRemove={() => {
+                if (confirm(`Remove ${manager.name}?`))
+                  deleteManager(manager.id);
+              }}
+            />
           </div>
         )}
 
@@ -258,28 +262,5 @@ export function ManagerProfile({
         <ManagerModal manager={manager} onClose={() => setEditing(false)} />
       )}
     </aside>
-  );
-}
-
-function QuickAction({
-  children,
-  onClick,
-  danger = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 transition-colors ${
-        danger
-          ? "border-stone-200 text-stone-400 hover:border-red-300 hover:text-red-500 dark:border-stone-700"
-          : "border-stone-200 text-stone-600 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-300"
-      }`}
-    >
-      {children}
-    </button>
   );
 }

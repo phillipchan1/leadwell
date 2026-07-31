@@ -92,6 +92,34 @@ export function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
+/** De-emphasized Edit / Remove links for entity profile tabs. */
+export function ProfileAdminLinks({
+  onEdit,
+  onRemove,
+}: {
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-100 pt-4 text-xs dark:border-stone-800">
+      <button
+        type="button"
+        onClick={onEdit}
+        className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-stone-400 hover:text-red-500"
+      >
+        Remove
+      </button>
+    </div>
+  );
+}
+
 export function IconButton({
   label,
   onClick,
