@@ -119,6 +119,8 @@ type UIState = {
   focused: boolean;
   /** Sub-page of the selected entity — a person's tab, a team's section. */
   section: string | null;
+  /** Full-screen session editor — when set, SessionEditorView takes over. */
+  sessionId: string | null;
   collapsedTeams: string[];
   dark: boolean;
   askAIOpen: boolean;
@@ -140,6 +142,10 @@ type Store = PersistedData &
     clearSelection: () => void;
     /** Switch the selected entity's sub-page (person tab, team section). */
     setSection: (section: string | null) => void;
+    /** Open the full-screen session editor (promotes to focus). */
+    openSession: (sessionId: string) => void;
+    /** Close the session editor, return to the entity's session list. */
+    closeSession: () => void;
     /** Promote the current peek to its full-page focus route. */
     openFocus: () => void;
     /** Demote the focused entity back to a peek beside the canvas. */
@@ -416,20 +422,30 @@ export function useActiveTeamId(): string | null {
 
 /** The one entity the current route points at. A person outranks their team. */
 function currentSelection(s: UIState): Selection | null {
+  const sessionId = s.sessionId ?? undefined;
   if (s.selectedPersonId)
     return {
       kind: "person",
       id: s.selectedPersonId,
       section: s.section ?? undefined,
+      sessionId,
     };
   if (s.selectedTeamId)
     return {
       kind: "team",
       id: s.selectedTeamId,
       section: s.section ?? undefined,
+      sessionId,
     };
-  if (s.selectedManagerId) return { kind: "manager", id: s.selectedManagerId };
-  if (s.selectedMe) return { kind: "me", id: "" };
+  if (s.selectedManagerId)
+    return {
+      kind: "manager",
+      id: s.selectedManagerId,
+      section: s.section ?? undefined,
+      sessionId,
+    };
+  if (s.selectedMe)
+    return { kind: "me", id: "", section: s.section ?? undefined, sessionId };
   return null;
 }
 
@@ -483,6 +499,7 @@ export const useStore = create<Store>((set, get) => ({
   selectedMe: false,
   focused: false,
   section: null,
+  sessionId: null,
   collapsedTeams: [],
   dark: initialDark(),
   askAIOpen: false,
@@ -564,7 +581,53 @@ export const useStore = create<Store>((set, get) => ({
     const s = get();
     const sel = currentSelection(s);
     if (!sel) return;
-    goTo(s, { ...sel, section: section ?? undefined }, { replace: true });
+    goTo(s, { ...sel, section: section ?? undefined, sessionId: undefined }, {
+      replace: true,
+    });
+  },
+  openSession: (sessionId) => {
+    const s = get();
+    const session = s.sessions.find((o) => o.id === sessionId);
+    if (!session) return;
+    const meeting = s.meetings.find((m) => m.id === session.meetingId);
+    if (!meeting) return;
+
+    let sel: Selection;
+    if (meeting.subjectKind === "person") {
+      sel = {
+        kind: "person",
+        id: meeting.subjectId,
+        section: "sessions",
+        sessionId,
+      };
+    } else if (meeting.subjectKind === "manager") {
+      sel = {
+        kind: "manager",
+        id: meeting.subjectId,
+        section: "sessions",
+        sessionId,
+      };
+    } else {
+      sel = {
+        kind: "team",
+        id: meeting.subjectId,
+        section: "sessions",
+        sessionId,
+      };
+    }
+    go(routePath({ view: "focus", target: sel }));
+  },
+  closeSession: () => {
+    const s = get();
+    const sel = currentSelection(s);
+    if (!sel?.sessionId) return;
+    const { sessionId: _removed, ...rest } = sel;
+    // Teams embed meetings on the main profile — no sessions sub-page to land on.
+    const target =
+      rest.kind === "team"
+        ? { kind: rest.kind, id: rest.id }
+        : { ...rest, section: rest.section ?? "sessions" };
+    go(routePath({ view: "focus", target }));
   },
   openFocus: () => {
     const sel = currentSelection(get());
@@ -582,6 +645,7 @@ export const useStore = create<Store>((set, get) => ({
         tab: route.view === "focus" ? s.tab : route.tab,
         focused: route.view === "focus",
         section: sel?.section ?? null,
+        sessionId: sel?.sessionId ?? null,
         selectedPersonId: null as string | null,
         selectedTeamId: null as string | null,
         selectedManagerId: null as string | null,

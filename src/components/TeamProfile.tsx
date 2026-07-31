@@ -10,7 +10,6 @@ import { AICoach } from "./AICoach";
 import { StatsBar } from "./StatsBar";
 import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
-import { MeetingEditor } from "./MeetingEditor";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 
 function today() {
@@ -47,6 +46,7 @@ export function TeamProfile({
     meetings,
     addSession,
     trackMeeting,
+    openSession,
     teamActions,
     addTeamAction,
     updateTeamAction,
@@ -93,7 +93,6 @@ export function TeamProfile({
   const [name, setName] = useState(team.name);
   const [mandate, setMandate] = useState(team.purpose ?? "");
   const [refining, setRefining] = useState(false);
-  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
 
   const teamMeeting = meetingFor(meetings, "team", team.id);
 
@@ -101,15 +100,15 @@ export function TeamProfile({
    * Send a failing readiness check where it gets fixed. Teams have no topic
    * board, so agenda and commitments both land on Next steps below.
    */
-  const goFix = (fix: CheckFix, sessionId?: string) => {
-    if (fix === "writeUp" && sessionId) {
-      setOpenSessionId(sessionId);
+  const goFix = (fix: CheckFix, sessionRowId?: string) => {
+    if (fix === "writeUp" && sessionRowId) {
+      openSession(sessionRowId);
       return;
     }
     if (fix === "book") {
       const meetingId =
         teamMeeting?.id ?? trackMeeting("team", team.id, "as_needed");
-      setOpenSessionId(addSession({ meetingId, date: today() }));
+      openSession(addSession({ meetingId, date: today() }));
       return;
     }
     document
@@ -286,13 +285,6 @@ export function TeamProfile({
         </div>
       </header>
 
-      {openSessionId && (
-        <MeetingEditor
-          sessionId={openSessionId}
-          onClose={() => setOpenSessionId(null)}
-        />
-      )}
-
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-8 px-8 py-5">
           {/* Readiness for this team's own standing meeting — separate from
@@ -309,7 +301,7 @@ export function TeamProfile({
               <SectionTitle>{teamMeeting.name ?? "Meetings"}</SectionTitle>
               <SessionTable
                 meetingId={teamMeeting.id}
-                onOpen={(id) => setOpenSessionId(id)}
+                onOpen={openSession}
               />
             </section>
           )}

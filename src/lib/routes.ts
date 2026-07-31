@@ -10,6 +10,7 @@
  *   /tree?person=p3&s=sessions   person peek, 1:1s section
  *   /team/t1                     team in focus
  *   /person/p3/sessions          person in focus, 1:1s section
+ *   /person/p3/sessions/s42      full-screen editor for session s42
  *   /me                          my own profile in focus
  */
 
@@ -22,6 +23,8 @@ export type Selection = {
   id: string;
   /** Sub-page within the entity — a person's tab, a team's section. */
   section?: string;
+  /** When set, the full-screen session editor is open for this session. */
+  sessionId?: string;
 };
 
 export type Route =
@@ -44,11 +47,12 @@ function isTab(value: string | undefined): value is Tab {
  */
 function parsePeek(params: URLSearchParams): Selection | null {
   const section = params.get("s") ?? undefined;
+  const sessionId = params.get("session") ?? undefined;
   for (const kind of ID_KINDS) {
     const id = params.get(kind);
-    if (id) return { kind, id, section };
+    if (id) return { kind, id, section, sessionId };
   }
-  if (params.get("me")) return { kind: "me", id: "", section };
+  if (params.get("me")) return { kind: "me", id: "", section, sessionId };
   return null;
 }
 
@@ -65,6 +69,7 @@ export function parseRoute(pathname: string, search: string): Route {
         kind: head as EntityKind,
         id: decodeURIComponent(rest[0]),
         section: rest[1],
+        sessionId: rest[2] ? decodeURIComponent(rest[2]) : undefined,
       },
     };
   }
@@ -78,9 +83,13 @@ export function parseRoute(pathname: string, search: string): Route {
 
 export function routePath(route: Route): string {
   if (route.view === "focus") {
-    const { kind, id, section } = route.target;
+    const { kind, id, section, sessionId } = route.target;
     const base = kind === "me" ? "/me" : `/${kind}/${encodeURIComponent(id)}`;
-    return section ? `${base}/${section}` : base;
+    if (!section) return base;
+    const withSection = `${base}/${section}`;
+    return sessionId
+      ? `${withSection}/${encodeURIComponent(sessionId)}`
+      : withSection;
   }
 
   const params = new URLSearchParams();
@@ -89,6 +98,7 @@ export function routePath(route: Route): string {
     if (peek.kind === "me") params.set("me", "1");
     else params.set(peek.kind, peek.id);
     if (peek.section) params.set("s", peek.section);
+    if (peek.sessionId) params.set("session", peek.sessionId);
   }
   const query = params.toString();
   return `/${route.tab}${query ? `?${query}` : ""}`;
@@ -99,5 +109,10 @@ export function sameSelection(
   b: Selection | null
 ): boolean {
   if (!a || !b) return a === b;
-  return a.kind === b.kind && a.id === b.id && a.section === b.section;
+  return (
+    a.kind === b.kind &&
+    a.id === b.id &&
+    a.section === b.section &&
+    a.sessionId === b.sessionId
+  );
 }

@@ -5,7 +5,7 @@ import {
   structureMeetingNotes,
   type StructuredMeeting,
 } from "../lib/ai";
-import { WritingPad } from "./WritingPad";
+import { SessionEditor } from "./SessionEditor";
 import { buttonGhostCls, buttonPrimaryCls, fieldLabelCls, inputCls } from "./ui";
 
 type SpeechRecognitionLike = {
@@ -82,18 +82,13 @@ export function MeetingEditor({
       : undefined;
   const subjectName =
     person?.name ?? team?.name ?? manager?.name ?? "this meeting";
-  /**
-   * Whose topic board catches the commitments this meeting produced. People
-   * and managers both have one; teams don't yet, so their commitments stay in
-   * the notes rather than landing somewhere invisible.
-   */
   const topicSubjectId = person?.id ?? manager?.id;
-  /** "1:1 with Sarah Kim" / "Staff meeting" — used in copy and AI prompts. */
   const meetingLabel =
     meeting?.name ??
     (person ? `1:1 with ${person.name}` : (team?.name ?? manager?.name ?? "meeting"));
 
   const [notes, setNotes] = useState(session?.notes ?? "");
+  const [point, setPoint] = useState(session?.point ?? "");
   const [transcript, setTranscript] = useState(session?.transcript ?? "");
   const [date, setDate] = useState(session?.date ?? "");
   const [nextDate, setNextDate] = useState(session?.nextDate ?? "");
@@ -107,6 +102,7 @@ export function MeetingEditor({
   const [error, setError] = useState<string | null>(null);
   const [createTopics, setCreateTopics] = useState(true);
   const [editingMeta, setEditingMeta] = useState(false);
+  const [showTools, setShowTools] = useState(false);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const transcriptRef = useRef(transcript);
@@ -115,6 +111,7 @@ export function MeetingEditor({
   useEffect(() => {
     if (!session) return;
     setNotes(session.notes ?? "");
+    setPoint(session.point ?? "");
     setTranscript(session.transcript ?? "");
     setDate(session.date);
     setNextDate(session.nextDate ?? "");
@@ -126,18 +123,43 @@ export function MeetingEditor({
     };
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (preview !== null && !structuring) {
+        e.preventDefault();
+        setPreview(null);
+        setParsed(null);
+        return;
+      }
+      if (showCapture || showTools || editingMeta) {
+        e.preventDefault();
+        setShowCapture(false);
+        setShowTools(false);
+        setEditingMeta(false);
+        return;
+      }
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preview, structuring, showCapture, showTools, editingMeta, onClose]);
+
   if (!session || !meeting) {
     return null;
   }
 
   const persist = (patch: Partial<{
     notes: string;
+    point: string;
     transcript: string;
     date: string;
     nextDate: string | undefined;
   }>) => {
     const next: Partial<typeof session> = {};
     if ("notes" in patch) next.notes = patch.notes?.trim() || undefined;
+    if ("point" in patch) next.point = patch.point?.trim() || undefined;
     if ("transcript" in patch)
       next.transcript = patch.transcript?.trim() || undefined;
     if ("date" in patch && patch.date) next.date = patch.date;
@@ -164,13 +186,15 @@ export function MeetingEditor({
     const Ctor = getSpeechRecognition();
     if (!Ctor) {
       setError(
-        "Live listen isn’t supported in this browser. Paste a transcript instead."
+        "Live listen isn't supported in this browser. Paste a transcript instead."
       );
       setShowCapture(true);
+      setShowTools(true);
       return;
     }
     setError(null);
     setShowCapture(true);
+    setShowTools(true);
     const rec = new Ctor();
     rec.continuous = true;
     rec.interimResults = true;
@@ -216,6 +240,7 @@ export function MeetingEditor({
     setStructuring(true);
     setPreview("");
     setParsed(null);
+    setShowTools(true);
     try {
       const result = await structureMeetingNotes({
         personId: person?.id,
@@ -256,21 +281,32 @@ export function MeetingEditor({
   };
 
   const firstName = subjectName.split(" ")[0] ?? subjectName;
+  const backLabel = person
+    ? person.name
+    : team
+      ? team.name
+      : manager
+        ? manager.name
+        : subjectName;
 
   return (
-    <div className="meeting-journal absolute inset-0 z-20 flex flex-col">
-      <div className="flex shrink-0 items-center gap-2 px-4 pt-3 pb-1">
-        <button
-          type="button"
-          className="rounded-md px-2 py-1 text-sm text-stone-400 transition-colors hover:bg-stone-100/80 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-          onClick={onClose}
-        >
-          ← Back
+    <div className="meeting-editor-fullscreen">
+      <header className="meeting-editor-topbar">
+        <button type="button" className="meeting-editor-back" onClick={onClose}>
+          ← {backLabel}
         </button>
+        <span className="meeting-editor-topbar-label">{meetingLabel}</span>
         <div className="flex-1" />
         <button
           type="button"
-          className="rounded-md p-1.5 text-stone-300 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-stone-600 dark:hover:bg-red-950 dark:hover:text-red-400"
+          className={`meeting-editor-tool-toggle ${showTools ? "is-active" : ""}`}
+          onClick={() => setShowTools((v) => !v)}
+        >
+          Tools
+        </button>
+        <button
+          type="button"
+          className="meeting-editor-delete"
           aria-label="Delete entry"
           onClick={() => {
             if (confirm("Delete this entry?")) {
@@ -279,16 +315,15 @@ export function MeetingEditor({
             }
           }}
         >
-          ✕
+          Delete
         </button>
-      </div>
+      </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="mx-auto w-full max-w-xl px-5 pb-10 sm:px-8">
-          {/* Entry header — Day One style date hero */}
-          <header className="pt-4 pb-6 text-center sm:pt-8 sm:pb-8">
+      <div className="meeting-editor-scroll">
+        <div className="meeting-editor-page">
+          <header className="meeting-editor-header">
             {editingMeta ? (
-              <div className="mx-auto grid max-w-sm grid-cols-2 gap-3 text-left">
+              <div className="meeting-editor-meta-form">
                 <label className="block">
                   <span className={fieldLabelCls}>Date</span>
                   <input
@@ -322,17 +357,15 @@ export function MeetingEditor({
             ) : (
               <button
                 type="button"
-                className="group mx-auto block w-full"
+                className="meeting-editor-title-btn"
                 onClick={() => setEditingMeta(true)}
                 title="Edit dates"
               >
-                <h1 className="meeting-date text-[1.65rem] text-stone-800 transition-colors group-hover:text-teal-800 sm:text-[1.85rem] dark:text-stone-100 dark:group-hover:text-teal-300">
-                  {formatEntryDate(date)}
-                </h1>
-                <p className="mt-2 text-[13px] tracking-wide text-stone-400 dark:text-stone-500">
+                <h1 className="meeting-editor-title">{formatEntryDate(date)}</h1>
+                <p className="meeting-editor-subtitle">
                   {meetingLabel}
                   {nextDate ? (
-                    <span className="text-stone-300 dark:text-stone-600">
+                    <span>
                       {" "}
                       · Next {formatEntryDate(nextDate).replace(/^[^,]+, /, "")}
                     </span>
@@ -340,84 +373,80 @@ export function MeetingEditor({
                 </p>
               </button>
             )}
+
+            <input
+              type="text"
+              className="meeting-editor-point"
+              placeholder="Why we met this time…"
+              value={point}
+              onChange={(e) => {
+                setPoint(e.target.value);
+                persist({ point: e.target.value });
+              }}
+            />
           </header>
 
-          {/* Quiet capture tools */}
-          <div className="mb-5 flex flex-wrap items-center justify-center gap-1.5">
-            <button
-              type="button"
-              className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
-                listening
-                  ? "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400"
-                  : "text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-              }`}
-              onClick={toggleListen}
-            >
-              {listening ? "● Listening…" : "Listen"}
-            </button>
-            <button
-              type="button"
-              className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
-                showCapture
-                  ? "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200"
-                  : "text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-              }`}
-              onClick={() => setShowCapture((v) => !v)}
-            >
-              Transcript
-            </button>
-            <button
-              type="button"
-              className="rounded-full bg-teal-600/90 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-teal-600 disabled:opacity-60"
-              disabled={structuring}
-              onClick={runStructure}
-            >
-              {structuring ? "Structuring…" : "✦ Structure"}
-            </button>
-          </div>
-
-          {error && (
-            <p className="mb-4 text-center text-xs text-red-600 dark:text-red-400">
-              {error}
-            </p>
-          )}
-
-          {showCapture && (
-            <div className="mb-6 space-y-2">
-              <div className="text-center text-[10px] font-medium tracking-[0.16em] text-stone-400 uppercase">
-                Capture
+          {showTools && (
+            <div className="meeting-editor-tools">
+              <div className="meeting-editor-tools-row">
+                <button
+                  type="button"
+                  className={`meeting-editor-chip ${listening ? "is-listening" : ""}`}
+                  onClick={toggleListen}
+                >
+                  {listening ? "● Listening…" : "Listen"}
+                </button>
+                <button
+                  type="button"
+                  className={`meeting-editor-chip ${showCapture ? "is-active" : ""}`}
+                  onClick={() => setShowCapture((v) => !v)}
+                >
+                  Transcript
+                </button>
+                <button
+                  type="button"
+                  className="meeting-editor-chip is-primary"
+                  disabled={structuring}
+                  onClick={runStructure}
+                >
+                  {structuring ? "Structuring…" : "✦ Structure"}
+                </button>
               </div>
-              <textarea
-                className={`${inputCls} min-h-[88px] resize-y font-mono text-xs leading-relaxed`}
-                placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
-                value={transcript}
-                onChange={(e) => saveTranscript(e.target.value)}
-              />
+
+              {error && (
+                <p className="meeting-editor-error">{error}</p>
+              )}
+
+              {showCapture && (
+                <textarea
+                  className={`${inputCls} meeting-editor-transcript`}
+                  placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
+                  value={transcript}
+                  onChange={(e) => saveTranscript(e.target.value)}
+                />
+              )}
             </div>
           )}
 
           {preview !== null ? (
-            <div className="space-y-4">
-              <div className="text-center text-[10px] font-medium tracking-[0.16em] text-teal-600 uppercase dark:text-teal-400">
+            <div className="meeting-editor-preview-block">
+              <div className="meeting-editor-preview-label">
                 {structuring ? "Writing draft…" : "AI draft — review"}
               </div>
-              <WritingPad
+              <SessionEditor
+                sessionId={session.id}
                 value={preview}
-                onChange={(e) => {
-                  setPreview(e.target.value);
-                  if (parsed) {
-                    setParsed({ ...parsed, notes: e.target.value });
-                  }
+                onChange={(v) => {
+                  setPreview(v);
+                  if (parsed) setParsed({ ...parsed, notes: v });
                 }}
                 readOnly={structuring}
-                dualMode={!structuring}
-                startEditing={!structuring}
-                placeholder="Structuring…"
+                autoFocus={!structuring}
               />
               {parsed && !structuring && (
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                <div className="meeting-editor-preview-actions">
                   {parsed.commitments.length > 0 && topicSubjectId && (
-                    <label className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                    <label className="meeting-editor-topics-check">
                       <input
                         type="checkbox"
                         className="accent-teal-600"
@@ -449,12 +478,12 @@ export function MeetingEditor({
               )}
             </div>
           ) : (
-            <WritingPad
+            <SessionEditor
+              sessionId={session.id}
               value={notes}
-              onChange={(e) => saveNotes(e.target.value)}
+              onChange={saveNotes}
               placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
               autoFocus={!notes.trim()}
-              startEditing={!notes.trim()}
             />
           )}
         </div>

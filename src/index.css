@@ -868,3 +868,290 @@ label:focus-within > .field-label,
     min-height: 22rem;
   }
 }
+
+/* ── Full-screen session editor (Notion-like) ── */
+
+.session-editor-view {
+  @apply flex h-full min-h-0 flex-col bg-white dark:bg-stone-950;
+}
+
+.meeting-editor-fullscreen {
+  @apply flex h-full min-h-0 flex-col;
+}
+
+.meeting-editor-topbar {
+  @apply flex shrink-0 items-center gap-3 border-b border-stone-200 px-4 py-2.5 dark:border-stone-800;
+}
+
+.meeting-editor-back {
+  @apply rounded-md px-2 py-1 text-sm text-stone-500 transition-colors hover:bg-stone-100 hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200;
+}
+
+.meeting-editor-topbar-label {
+  @apply hidden truncate text-xs text-stone-400 sm:inline;
+}
+
+.meeting-editor-tool-toggle {
+  @apply rounded-md px-2.5 py-1 text-xs text-stone-500 transition-colors hover:bg-stone-100 dark:hover:bg-stone-800;
+}
+
+.meeting-editor-tool-toggle.is-active {
+  @apply bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200;
+}
+
+.meeting-editor-delete {
+  @apply rounded-md px-2.5 py-1 text-xs text-stone-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400;
+}
+
+.meeting-editor-scroll {
+  @apply min-h-0 flex-1 overflow-y-auto;
+}
+
+.meeting-editor-page {
+  @apply mx-auto w-full max-w-3xl px-6 py-8 sm:px-10 sm:py-12;
+}
+
+.meeting-editor-header {
+  @apply mb-8 space-y-4;
+}
+
+.meeting-editor-title-btn {
+  @apply block w-full text-left;
+}
+
+.meeting-editor-title {
+  font-family: var(--font-journal);
+  @apply text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-100;
+}
+
+.meeting-editor-subtitle {
+  @apply mt-2 text-sm text-stone-400 dark:text-stone-500;
+}
+
+.meeting-editor-meta-form {
+  @apply grid max-w-md grid-cols-2 gap-3;
+}
+
+.meeting-editor-point {
+  @apply w-full border-0 border-b border-transparent bg-transparent px-0 py-1 text-base text-stone-600 outline-none placeholder:text-stone-400 focus:border-stone-200 dark:text-stone-300 dark:placeholder:text-stone-600 dark:focus:border-stone-700;
+  font-family: var(--font-journal);
+}
+
+.meeting-editor-tools {
+  @apply mb-8 space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-4 dark:border-stone-800 dark:bg-stone-900/50;
+}
+
+.meeting-editor-tools-row {
+  @apply flex flex-wrap items-center gap-2;
+}
+
+.meeting-editor-chip {
+  @apply rounded-full px-3 py-1.5 text-xs text-stone-500 transition-colors hover:bg-white hover:text-stone-800 dark:hover:bg-stone-800 dark:hover:text-stone-200;
+}
+
+.meeting-editor-chip.is-active {
+  @apply bg-white text-stone-800 shadow-sm dark:bg-stone-800 dark:text-stone-200;
+}
+
+.meeting-editor-chip.is-listening {
+  @apply bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400;
+}
+
+.meeting-editor-chip.is-primary {
+  @apply bg-teal-600 font-medium text-white hover:bg-teal-700 hover:text-white;
+}
+
+.meeting-editor-error {
+  @apply text-xs text-red-600 dark:text-red-400;
+}
+
+.meeting-editor-transcript {
+  @apply min-h-[88px] resize-y font-mono text-xs leading-relaxed;
+}
+
+.meeting-editor-preview-block {
+  @apply space-y-4;
+}
+
+.meeting-editor-preview-label {
+  @apply text-center text-[10px] font-medium tracking-[0.16em] text-teal-600 uppercase dark:text-teal-400;
+}
+
+.meeting-editor-preview-actions {
+  @apply flex flex-wrap items-center justify-center gap-3 pt-2;
+}
+
+.meeting-editor-topics-check {
+  @apply flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400;
+}
+
+/* Session editor dual-mode */
+
+.session-editor-mode-bar {
+  @apply mb-4 flex items-center justify-between gap-3;
+}
+
+.session-editor-mode-toggle {
+  @apply inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5 dark:border-stone-700 dark:bg-stone-900;
+}
+
+.session-editor-mode-toggle button {
+  @apply rounded-md px-3 py-1 text-xs text-stone-500 transition-colors;
+}
+
+.session-editor-mode-toggle button.is-active {
+  @apply bg-white font-medium text-stone-800 shadow-sm dark:bg-stone-800 dark:text-stone-100;
+}
+
+.session-editor-mode-hint {
+  @apply text-[10px] tracking-wide text-stone-400 uppercase dark:text-stone-600;
+}
+
+/* Tiptap block editor */
+
+.notion-block-editor {
+  @apply relative min-h-[50vh];
+}
+
+.notion-block-editor .ProseMirror {
+  @apply outline-none;
+}
+
+.notion-editor-content {
+  font-family: var(--font-journal);
+  @apply min-h-[320px] text-[1.0625rem] leading-[1.75] text-stone-800 dark:text-stone-200;
+}
+
+.notion-editor-content > * + * {
+  margin-top: 0.35em;
+}
+
+.notion-editor-content p.is-editor-empty:first-child::before {
+  @apply pointer-events-none float-left h-0 text-stone-400 dark:text-stone-600;
+  content: attr(data-placeholder);
+}
+
+.notion-editor-content h1 {
+  @apply mt-6 mb-2 text-2xl font-semibold text-stone-900 dark:text-stone-100;
+}
+
+.notion-editor-content h2 {
+  @apply mt-5 mb-2 border-b border-stone-200 pb-1 text-xl font-semibold text-stone-900 dark:border-stone-800 dark:text-stone-100;
+}
+
+.notion-editor-content h3 {
+  @apply mt-4 mb-1 text-lg font-semibold text-stone-900 dark:text-stone-100;
+}
+
+.notion-editor-content ul,
+.notion-editor-content ol {
+  @apply my-2 pl-6;
+}
+
+.notion-editor-content ul {
+  @apply list-disc;
+}
+
+.notion-editor-content ol {
+  @apply list-decimal;
+}
+
+.notion-editor-content ul[data-type="taskList"] {
+  @apply list-none pl-0;
+}
+
+.notion-editor-content li[data-type="taskItem"] {
+  @apply flex items-start gap-2;
+}
+
+.notion-editor-content li[data-type="taskItem"] > label {
+  @apply mt-1.5;
+}
+
+.notion-editor-content blockquote {
+  @apply my-3 border-l-2 border-stone-300 pl-4 text-stone-600 italic dark:border-stone-600 dark:text-stone-400;
+}
+
+.notion-editor-content hr {
+  @apply my-6 border-stone-200 dark:border-stone-800;
+}
+
+.notion-editor-content a {
+  @apply text-teal-700 underline underline-offset-2 dark:text-teal-400;
+}
+
+.notion-bubble-menu {
+  @apply flex items-center gap-0.5 rounded-lg border border-stone-200 bg-white p-1 shadow-lg dark:border-stone-700 dark:bg-stone-900;
+}
+
+.notion-bubble-menu button {
+  @apply rounded px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800;
+}
+
+.notion-bubble-menu button.is-active {
+  @apply bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300;
+}
+
+.slash-menu-backdrop {
+  @apply fixed inset-0 z-40 cursor-default border-0 bg-transparent p-0;
+}
+
+.slash-menu {
+  @apply fixed z-50 min-w-[220px] overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900;
+}
+
+.slash-menu-item {
+  @apply flex w-full flex-col items-start px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800;
+}
+
+.slash-menu-title {
+  @apply text-sm font-medium text-stone-800 dark:text-stone-100;
+}
+
+.slash-menu-desc {
+  @apply text-xs text-stone-400 dark:text-stone-500;
+}
+
+/* Full-screen markdown mode */
+
+.notion-markdown-toolbar {
+  @apply mb-3 flex items-center justify-between gap-3;
+}
+
+.notion-mode-btn {
+  @apply rounded-md px-2.5 py-1 text-xs text-stone-500 transition-colors hover:bg-stone-100 dark:hover:bg-stone-800;
+}
+
+.notion-mode-btn.is-active {
+  @apply bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200;
+}
+
+.notion-markdown-hint {
+  @apply text-[10px] tracking-wide text-stone-400 uppercase dark:text-stone-600;
+}
+
+.notion-markdown-split {
+  @apply grid grid-cols-1 gap-4;
+}
+
+.notion-markdown-split.has-preview {
+  @apply lg:grid-cols-2;
+}
+
+.notion-markdown-source {
+  @apply min-h-[320px] w-full resize-none border-0 bg-transparent outline-none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  @apply text-sm leading-relaxed text-stone-800 dark:text-stone-200;
+}
+
+.notion-markdown-preview {
+  @apply min-h-[320px] rounded-xl border border-stone-200 bg-stone-50/50 p-4 dark:border-stone-800 dark:bg-stone-900/30;
+}
+
+.notion-markdown-empty {
+  @apply text-sm italic text-stone-400 dark:text-stone-600;
+}
+
+.notion-markdown-readonly {
+  @apply min-h-[200px];
+}

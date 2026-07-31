@@ -8,7 +8,6 @@ import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
 import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
-import { MeetingEditor } from "./MeetingEditor";
 import { NotesPanel } from "./NotesPanel";
 import { TopicKanban } from "./TopicKanban";
 import { meetingFor, type CheckFix } from "../lib/readiness";
@@ -51,6 +50,7 @@ export function ManagerProfile({
     notes,
     addSession,
     trackMeeting,
+    openSession,
     section,
     setSection,
     selectManager,
@@ -63,7 +63,6 @@ export function ManagerProfile({
 
   const domain = domains.find((d) => d.id === manager.domainId);
   const [editing, setEditing] = useState(false);
-  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
 
   const checkIn = meetingFor(meetings, "manager", manager.id);
   const mySessions = sessions.filter((s) => checkIn && s.meetingId === checkIn.id);
@@ -77,7 +76,6 @@ export function ManagerProfile({
 
   useEffect(() => {
     setEditing(false);
-    setOpenSessionId(null);
   }, [manager.id]);
 
   /**
@@ -89,7 +87,7 @@ export function ManagerProfile({
     setTab("sessions");
     const meetingId =
       checkIn?.id ?? trackMeeting("manager", manager.id, "as_needed");
-    setOpenSessionId(
+    openSession(
       addSession({
         meetingId,
         date: new Date().toISOString().slice(0, 10),
@@ -98,10 +96,10 @@ export function ManagerProfile({
   };
 
   /** Send a failing readiness check to wherever it actually gets fixed. */
-  const goFix = (fix: CheckFix, sessionId?: string) => {
-    if (fix === "writeUp" && sessionId) {
+  const goFix = (fix: CheckFix, sessionRowId?: string) => {
+    if (fix === "writeUp" && sessionRowId) {
       setTab("sessions");
-      setOpenSessionId(sessionId);
+      openSession(sessionRowId);
       return;
     }
     if (fix === "book") {
@@ -114,18 +112,13 @@ export function ManagerProfile({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (openSessionId) {
-        e.preventDefault();
-        setOpenSessionId(null);
-        return;
-      }
       if (modal || askAIOpen || settingsOpen || editing) return;
       e.preventDefault();
       selectManager(null);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modal, askAIOpen, settingsOpen, editing, openSessionId, selectManager]);
+  }, [modal, askAIOpen, settingsOpen, editing, selectManager]);
 
   const pad = "p-6";
 
@@ -221,7 +214,7 @@ export function ManagerProfile({
             {checkIn ? (
               <SessionTable
                 meetingId={checkIn.id}
-                onOpen={(id) => setOpenSessionId(id)}
+                onOpen={openSession}
               />
             ) : (
               <button
@@ -259,12 +252,6 @@ export function ManagerProfile({
           </div>
         )}
 
-        {openSessionId && (
-          <MeetingEditor
-            sessionId={openSessionId}
-            onClose={() => setOpenSessionId(null)}
-          />
-        )}
       </div>
 
       {editing && (

@@ -18,7 +18,6 @@ import { AssessmentEditor } from "./AssessmentEditor";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { SessionTable } from "./SessionTable";
-import { MeetingEditor } from "./MeetingEditor";
 import { TopicKanban } from "./TopicKanban";
 import { NotesPanel } from "./NotesPanel";
 import { LeadUpManual } from "./LeadUpManual";
@@ -67,6 +66,7 @@ export function PersonProfile({
     sessions,
     addSession,
     trackMeeting,
+    openSession,
     goals,
     addGoal,
     updateGoal,
@@ -110,22 +110,15 @@ export function PersonProfile({
   const [editingPerson, setEditingPerson] = useState(false);
   const [fillingProfile, setFillingProfile] = useState(false);
   const [newGoal, setNewGoal] = useState("");
-  const [openMeetingId, setOpenMeetingId] = useState<string | null>(null);
 
   // Editors are per-person; the tab resets itself via the route.
   useEffect(() => {
-    setOpenMeetingId(null);
     setFillingProfile(false);
   }, [person.id]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (openMeetingId) {
-        e.preventDefault();
-        setOpenMeetingId(null);
-        return;
-      }
       if (
         modal ||
         askAIOpen ||
@@ -147,7 +140,6 @@ export function PersonProfile({
     editingAssessments,
     editingPerson,
     fillingProfile,
-    openMeetingId,
     selectPerson,
   ]);
 
@@ -164,14 +156,14 @@ export function PersonProfile({
       meetingId,
       date: new Date().toISOString().slice(0, 10),
     });
-    setOpenMeetingId(id);
+    openSession(id);
   };
 
   /** Send a failing readiness check to wherever it actually gets fixed. */
-  const goFix = (fix: CheckFix, meetingId?: string) => {
-    if (fix === "writeUp" && meetingId) {
+  const goFix = (fix: CheckFix, sessionRowId?: string) => {
+    if (fix === "writeUp" && sessionRowId) {
       setTab("sessions");
-      setOpenMeetingId(meetingId);
+      openSession(sessionRowId);
       return;
     }
     if (fix === "book") {
@@ -528,7 +520,7 @@ export function PersonProfile({
             {meeting ? (
               <SessionTable
                 meetingId={meeting.id}
-                onOpen={(id) => setOpenMeetingId(id)}
+                onOpen={openSession}
               />
             ) : (
               <button
@@ -566,12 +558,6 @@ export function PersonProfile({
           </div>
         )}
 
-        {openMeetingId && (
-          <MeetingEditor
-            sessionId={openMeetingId}
-            onClose={() => setOpenMeetingId(null)}
-          />
-        )}
       </div>
 
       {editingAssessments && (

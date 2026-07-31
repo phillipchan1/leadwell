@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
-import { parseRoute } from "./lib/routes";
+import { parseRoute, routePath } from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
 import { OrgTree } from "./components/OrgTree";
 import { PeopleTable } from "./components/PeopleTable";
@@ -11,6 +11,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
 import { FocusView } from "./components/FocusView";
+import { SessionEditorView } from "./components/SessionEditorView";
 import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
 
 const TABS: { id: Tab; label: string }[] = [
@@ -37,8 +38,13 @@ function useRouteSync() {
   }, [navigate]);
 
   useEffect(() => {
-    applyRoute(parseRoute(location.pathname, location.search));
-  }, [location.pathname, location.search, applyRoute]);
+    const route = parseRoute(location.pathname, location.search);
+    if (route.view === "tab" && route.peek?.sessionId) {
+      navigate(routePath({ view: "focus", target: route.peek }), { replace: true });
+      return;
+    }
+    applyRoute(route);
+  }, [location.pathname, location.search, applyRoute, navigate]);
 }
 
 /**
@@ -51,6 +57,8 @@ function useDropStaleSelection() {
   const phase = useStore((s) => s.phase);
   const focused = useStore((s) => s.focused);
   const tab = useStore((s) => s.tab);
+  const sessionId = useStore((s) => s.sessionId);
+  const sessions = useStore((s) => s.sessions);
   const selectedMe = useStore((s) => s.selectedMe);
   const selected = useSelectedEntity();
   const hasSelectionInUrl = useStore(
@@ -61,9 +69,23 @@ function useDropStaleSelection() {
 
   useEffect(() => {
     if (phase !== "ready") return;
+    if (sessionId && !sessions.some((o) => o.id === sessionId)) {
+      navigate("/tree", { replace: true });
+      return;
+    }
     if (selected || selectedMe || !hasSelectionInUrl) return;
     navigate(focused ? "/tree" : `/${tab}`, { replace: true });
-  }, [phase, selected, selectedMe, hasSelectionInUrl, focused, tab, navigate]);
+  }, [
+    phase,
+    sessionId,
+    sessions,
+    selected,
+    selectedMe,
+    hasSelectionInUrl,
+    focused,
+    tab,
+    navigate,
+  ]);
 }
 
 export default function App() {
@@ -80,6 +102,7 @@ export default function App() {
     toggleDark,
     userEmail,
     focused,
+    sessionId,
     askAIOpen,
     setAskAIOpen,
     settingsOpen,
@@ -102,7 +125,17 @@ export default function App() {
   if (phase === "anon") return <Login />;
 
   const assessed = people.filter(hasLeadershipRead).length;
-  const inFocus = focused && Boolean(selected);
+  const inSessionEditor = Boolean(sessionId);
+  const inFocus = focused && Boolean(selected) && !inSessionEditor;
+
+  if (inSessionEditor) {
+    return (
+      <div className="flex h-full flex-col">
+        <SessionEditorView />
+        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
