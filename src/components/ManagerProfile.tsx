@@ -39,7 +39,7 @@ function isManagerTab(value: string | null): value is ManagerTab {
  */
 export function ManagerProfile({
   manager,
-  density = "peek",
+  density: _density = "peek",
 }: {
   manager: Manager;
   density?: Density;
@@ -127,7 +127,7 @@ export function ManagerProfile({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [modal, askAIOpen, settingsOpen, editing, openSessionId, selectManager]);
 
-  const pad = density === "focus" ? "p-6" : "p-4";
+  const pad = "p-6";
 
   return (
     <aside
@@ -141,7 +141,7 @@ export function ManagerProfile({
         <div className="flex items-start gap-3">
           <Avatar name={manager.name} photo={manager.photo} size={52} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold">{manager.name}</h2>
+            <h2 className="truncate text-lg font-semibold">{manager.name}</h2>
             <div className="text-xs text-stone-500">
               {manager.role ?? "Leader I report to"}
             </div>
@@ -151,7 +151,7 @@ export function ManagerProfile({
             </div>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <QuickAction onClick={startNewSession}>+ New check-in</QuickAction>
           <QuickAction onClick={() => setTab("topics")}>+ Add topic</QuickAction>
           <QuickAction onClick={() => setEditing(true)}>Edit</QuickAction>

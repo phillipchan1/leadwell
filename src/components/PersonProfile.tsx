@@ -46,7 +46,7 @@ function isPersonTab(value: string | null): value is PersonTab {
  */
 export function PersonProfile({
   person,
-  density = "peek",
+  density: _density = "peek",
 }: {
   person: Person;
   density?: Density;
@@ -181,7 +181,7 @@ export function PersonProfile({
     setTab("topics");
   };
 
-  const pad = density === "focus" ? "p-6" : "p-4";
+  const pad = "p-6";
 
   return (
     <aside
@@ -195,7 +195,7 @@ export function PersonProfile({
         <div className="flex items-start gap-3">
           <Avatar name={person.name} photo={person.photo} size={52} />
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-semibold">{person.name}</h2>
+            <h2 className="truncate text-lg font-semibold">{person.name}</h2>
             <div className="text-xs text-stone-500">
               {[person.role, team?.name ?? "Reports directly to me"]
                 .filter(Boolean)
@@ -228,7 +228,7 @@ export function PersonProfile({
             </div>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <QuickAction onClick={() => setFillingProfile(true)}>
             ✨ AI fill
           </QuickAction>

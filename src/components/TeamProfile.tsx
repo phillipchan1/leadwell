@@ -26,7 +26,7 @@ function today() {
  */
 export function TeamProfile({
   team,
-  density = "peek",
+  density: _density = "peek",
 }: {
   team: Team;
   density?: Density;
@@ -181,9 +181,7 @@ export function TeamProfile({
     <aside className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
       {/* Header — identity only */}
       <header
-        className={`shrink-0 border-b border-stone-200 py-4 dark:border-stone-800 ${
-          density === "focus" ? "px-8" : "px-5"
-        }`}
+        className="shrink-0 border-b border-stone-200 px-8 py-4 dark:border-stone-800"
         style={{ borderTop: `3px solid ${accent}` }}
       >
         <div className="flex items-start gap-3">
@@ -296,11 +294,7 @@ export function TeamProfile({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div
-          className={`flex flex-col gap-8 py-5 ${
-            density === "focus" ? "px-8" : "px-5"
-          }`}
-        >
+        <div className="flex flex-col gap-8 px-8 py-5">
           {/* Readiness for this team's own standing meeting — separate from
               the 1:1s with its members, which live on each person. */}
           <PrepPanel

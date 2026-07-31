@@ -147,14 +147,14 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
   if (!trail) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-50 px-2 py-1.5 dark:border-stone-800 dark:bg-stone-950/60">
+    <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-50 px-4 py-2 dark:border-stone-800 dark:bg-stone-950/60">
       {mode === "focus" && (
         <button
           type="button"
           onClick={closeFocus}
-          title="Back to the org tree"
+          title="Back to split view"
           className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-stone-700 dark:hover:bg-stone-800"
-          aria-label="Back to the org tree"
+          aria-label="Back to split view"
         >
           ←
         </button>
@@ -163,7 +163,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       {/* Breadcrumb */}
       <nav
         aria-label="Breadcrumb"
-        className="flex min-w-0 flex-1 items-center gap-1 text-xs"
+        className="flex min-w-0 flex-1 items-center gap-1 text-sm"
       >
         {trail.parent && (
           <>
@@ -212,8 +212,8 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
           <button
             type="button"
             onClick={openFocus}
-            title="Open full (⌘↵)"
-            aria-label="Open full"
+            title="Expand to full page (⌘↵)"
+            aria-label="Expand to full page"
             className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-teal-700 dark:hover:bg-stone-800 dark:hover:text-teal-300"
           >
             ⤢
@@ -222,8 +222,8 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
           <button
             type="button"
             onClick={closeFocus}
-            title="Back to the canvas (⌘↵)"
-            aria-label="Back to the canvas"
+            title="Back to split view (⌘↵)"
+            aria-label="Back to split view"
             className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-teal-700 dark:hover:bg-stone-800 dark:hover:text-teal-300"
           >
             ⤡

@@ -77,12 +77,12 @@ export function EntityBody({ density }: { density: Density }) {
 }
 
 /**
- * The peek: a fixed-width column beside the canvas showing exactly one entity.
- * Anything that needs more room than this gets promoted to focus.
+ * The peek: a ~55% workspace column beside the canvas showing exactly one
+ * entity. Anything that needs the full viewport gets promoted to focus.
  */
 export function PeekPanel() {
   return (
-    <div className="flex w-[36rem] min-w-[22rem] shrink-0 flex-col border-l border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+    <div className="flex min-w-[20rem] shrink-0 flex-[3] flex-col border-l border-stone-200 bg-white shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:border-stone-800 dark:bg-stone-900 dark:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)] lg:min-w-[30rem] lg:flex-[2.44]">
       <EntityChrome mode="peek" />
       <div className="flex min-h-0 flex-1 flex-col">
         <EntityBody density="peek" />

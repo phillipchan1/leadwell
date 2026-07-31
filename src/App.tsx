@@ -162,10 +162,10 @@ export default function App() {
             ))}
           </nav>
 
-          {/* Main + peek */}
+          {/* Main + peek — canvas ~45%, panel ~55% when open */}
           <div className="flex min-h-0 flex-1">
             <main
-              className={`min-w-0 flex-1 p-5 ${
+              className={`min-w-[16rem] flex-[2] p-5 lg:min-w-[22.5rem] ${
                 tab === "tree"
                   ? "flex flex-col overflow-hidden"
                   : "overflow-y-auto"

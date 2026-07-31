@@ -40,7 +40,7 @@ function QuickAction({
 }
 
 /** The signed-in leader's own profile — identity + self-assessment. */
-export function MeProfile({ density = "peek" }: { density?: Density }) {
+export function MeProfile({ density: _density = "peek" }: { density?: Density }) {
   const { me, teams, people } = useStore();
   const read = derivedRead(me);
   const enn = parseEnneagram(me.assessments.enneagram);
@@ -56,15 +56,11 @@ export function MeProfile({ density = "peek" }: { density?: Density }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
-      <div
-        className={`shrink-0 border-b border-stone-200 dark:border-stone-800 ${
-          density === "focus" ? "p-6" : "p-4"
-        }`}
-      >
+      <div className="shrink-0 border-b border-stone-200 p-6 dark:border-stone-800">
         <div className="flex items-start gap-3">
           <Avatar name={me.name} photo={me.photo} size={48} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-semibold">{me.name}</div>
+            <div className="truncate text-lg font-semibold">{me.name}</div>
             <div className="text-xs text-stone-500">
               {me.title ?? "Leader"} · you
             </div>
@@ -73,7 +69,7 @@ export function MeProfile({ density = "peek" }: { density?: Density }) {
             </div>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <QuickAction onClick={() => setFillingProfile(true)}>
             ✨ AI fill
           </QuickAction>
@@ -86,11 +82,7 @@ export function MeProfile({ density = "peek" }: { density?: Density }) {
         </div>
       </div>
 
-      <div
-        className={`min-h-0 flex-1 overflow-y-auto ${
-          density === "focus" ? "p-6" : "p-4"
-        }`}
-      >
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <section className="space-y-3">
           <SectionTitle>My profile</SectionTitle>
           <p className="text-xs text-stone-500">
