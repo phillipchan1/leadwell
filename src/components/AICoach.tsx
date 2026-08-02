@@ -12,8 +12,8 @@ import {
   teamCoachPresets,
   teamSystemPrompt,
 } from "../lib/ai";
-import { inputCls } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
 
 /**
  * Chat panel. Scoped to a person, a manager, or a team when given, otherwise
@@ -143,8 +143,9 @@ export function AICoach({
           send(input);
         }}
       >
-        <input
-          className={inputCls}
+        <Input
+          size="md"
+          className="flex-1"
           placeholder={
             person
               ? `Ask about leading ${person.name.split(" ")[0]}…`
@@ -153,7 +154,7 @@ export function AICoach({
                 : "Ask about your org…"
           }
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={setInput}
         />
         <Button
           type="submit"

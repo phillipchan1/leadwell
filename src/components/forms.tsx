@@ -4,8 +4,11 @@ import type { Health, HealthLevel, Manager, Person, Team } from "../types";
 import { todayISO } from "../lib/health";
 import { directReports, eligibleParents } from "../lib/teams";
 import { HealthField } from "./Health";
-import { Modal, inputCls, fieldLabelCls } from "./ui";
+import { Modal } from "./ui";
+import { Label } from "@/components/base/input/label";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { PhotoPicker } from "./PhotoPicker";
@@ -111,10 +114,10 @@ function DomainPicker({
       </div>
       {adding && (
         <div className="flex gap-2">
-          <input
-            className={inputCls}
+          <Input
+            size="md"
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
+            onChange={setNewName}
             placeholder="New domain, e.g. Family"
             autoFocus
             onKeyDown={(e) => {
@@ -217,71 +220,54 @@ export function TeamModal({
       onClose={onClose}
     >
       <div className="space-y-4">
-        <label className="block">
-          <span className={fieldLabelCls}>Name</span>
-          <input
-            className={inputCls}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Setup & Breakdown"
-            autoFocus
-          />
-        </label>
+        <Input
+          label="Name"
+          size="md"
+          value={name}
+          onChange={setName}
+          placeholder="e.g. Setup & Breakdown"
+          autoFocus
+        />
         {!delegated && parents.length > 0 && (
-          <label className="block">
-            <span className={fieldLabelCls}>
-              Parent team (optional)
-            </span>
-            <select
-              className={inputCls}
-              value={parentId ?? ""}
-              onChange={(e) => {
-                const next = e.target.value || undefined;
-                setParentId(next);
-                if (next) {
-                  setDirection("down");
-                  const p = teams.find((t) => t.id === next);
-                  if (p?.domainId && !team) setDomainId(p.domainId);
-                }
-              }}
-            >
-              <option value="">None — hangs off me</option>
-              {parents.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-[11px] text-stone-400">
-              Nest under a broader team you oversee (e.g. Setup under Frontier
-              Ministries).
-            </span>
-          </label>
+          <NativeSelect
+            label="Parent team (optional)"
+            size="md"
+            value={parentId ?? ""}
+            onChange={(e) => {
+              const next = e.target.value || undefined;
+              setParentId(next);
+              if (next) {
+                setDirection("down");
+                const p = teams.find((t) => t.id === next);
+                if (p?.domainId && !team) setDomainId(p.domainId);
+              }
+            }}
+            options={[
+              { label: "None — hangs off me", value: "" },
+              ...parents.map((p) => ({ label: p.name, value: p.id })),
+            ]}
+            hint="Nest under a broader team you oversee (e.g. Setup under Frontier Ministries)."
+          />
         )}
         {!nested && candidateLeaders.length > 0 && (
-          <label className="block">
-            <span className={fieldLabelCls}>Who leads it</span>
-            <select
-              className={inputCls}
-              value={leaderId ?? ""}
-              onChange={(e) => setLeaderId(e.target.value || undefined)}
-            >
-              <option value="">Me</option>
-              {candidateLeaders.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-[11px] text-stone-400">
-              {delegated
+          <NativeSelect
+            label="Who leads it"
+            size="md"
+            value={leaderId ?? ""}
+            onChange={(e) => setLeaderId(e.target.value || undefined)}
+            options={[
+              { label: "Me", value: "" },
+              ...candidateLeaders.map((p) => ({ label: p.name, value: p.id })),
+            ]}
+            hint={
+              delegated
                 ? "Hangs under them, not you — and its meetings stay out of your readiness unless you track one."
-                : "Hand it to a direct report and the team moves under them."}
-            </span>
-          </label>
+                : "Hand it to a direct report and the team moves under them."
+            }
+          />
         )}
         <div className="block">
-          <span className={fieldLabelCls}>Domain (life area)</span>
+          <Label>Domain (life area)</Label>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
         <HealthField
@@ -303,7 +289,7 @@ export function TeamModal({
           hint="Your own call on how this team is doing. Filter and sort by it in the tree and the table."
         />
         <label className="block">
-          <span className={fieldLabelCls}>My capacity</span>
+          <Label>My capacity</Label>
           <div className="flex gap-2">
             {capacities.map((c) => (
               <button
@@ -326,9 +312,7 @@ export function TeamModal({
         </label>
         {!nested && !delegated && (
           <label className="block">
-            <span className={fieldLabelCls}>
-              Position in the tree
-            </span>
+            <Label>Position in the tree</Label>
             <div className="flex gap-2">
               {(
                 [
@@ -352,16 +336,12 @@ export function TeamModal({
             </div>
           </label>
         )}
-        <label className="block">
-          <span className={fieldLabelCls}>
-            Description (optional)
-          </span>
-          <input
-            className={inputCls}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </label>
+        <Input
+          label="Description (optional)"
+          size="md"
+          value={description}
+          onChange={setDescription}
+        />
         <div className="flex items-center justify-between pt-2">
           {team ? (
             <Button
@@ -431,27 +411,23 @@ export function ManagerModal({
           Someone you report to. They'll appear directly above you in the tree.
         </p>
         <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
-        <label className="block">
-          <span className={fieldLabelCls}>Name</span>
-          <input
-            className={inputCls}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Dana Foster"
-            autoFocus
-          />
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>Role (optional)</span>
-          <input
-            className={inputCls}
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            placeholder="e.g. VP of Product, Lead Pastor"
-          />
-        </label>
+        <Input
+          label="Name"
+          size="md"
+          value={name}
+          onChange={setName}
+          placeholder="e.g. Dana Foster"
+          autoFocus
+        />
+        <Input
+          label="Role (optional)"
+          size="md"
+          value={role}
+          onChange={setRole}
+          placeholder="e.g. VP of Product, Lead Pastor"
+        />
         <div className="block">
-          <span className={fieldLabelCls}>Domain (life area)</span>
+          <Label>Domain (life area)</Label>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
         <div className="flex items-center justify-between pt-2">
@@ -506,24 +482,14 @@ export function MeModal({ onClose }: { onClose: () => void }) {
     <Modal title="Edit my profile" onClose={onClose}>
       <div className="space-y-4">
         <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
-        <label className="block">
-          <span className={fieldLabelCls}>Name</span>
-          <input
-            className={inputCls}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-          />
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>Title (optional)</span>
-          <input
-            className={inputCls}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Leader, Pastor, Engineering Manager"
-          />
-        </label>
+        <Input label="Name" size="md" value={name} onChange={setName} autoFocus />
+        <Input
+          label="Title (optional)"
+          size="md"
+          value={title}
+          onChange={setTitle}
+          placeholder="e.g. Leader, Pastor, Engineering Manager"
+        />
         <div className="flex justify-end gap-2 pt-2">
           <Button size="md" color="secondary" onClick={onClose}>
             Cancel
@@ -607,48 +573,32 @@ export function PersonModal({
         }}
       >
         <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
-        <label className="block">
-          <span className={fieldLabelCls}>Name</span>
-          <input
-            className={inputCls}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-          />
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>Role (optional)</span>
-          <input
-            className={inputCls}
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            placeholder="e.g. Worship Director"
-          />
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>Team</span>
-          <select
-            className={inputCls}
-            value={teamId}
-            onChange={(e) => setTeamId(e.target.value)}
-          >
-            <option value="">None — reports directly to me</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          {direct && (
-            <span className="mt-1 block text-[11px] text-stone-400">
-              They'll get their own node under you. Teams they lead can hang
-              under them.
-            </span>
-          )}
-        </label>
+        <Input label="Name" size="md" value={name} onChange={setName} autoFocus />
+        <Input
+          label="Role (optional)"
+          size="md"
+          value={role}
+          onChange={setRole}
+          placeholder="e.g. Worship Director"
+        />
+        <NativeSelect
+          label="Team"
+          size="md"
+          value={teamId}
+          onChange={(e) => setTeamId(e.target.value)}
+          options={[
+            { label: "None — reports directly to me", value: "" },
+            ...teams.map((t) => ({ label: t.name, value: t.id })),
+          ]}
+          hint={
+            direct
+              ? "They'll get their own node under you. Teams they lead can hang under them."
+              : undefined
+          }
+        />
         {direct && (
           <div className="block">
-            <span className={fieldLabelCls}>Domain (life area)</span>
+            <Label>Domain (life area)</Label>
             <DomainPicker domainId={domainId} onChange={setDomainId} />
           </div>
         )}
@@ -739,7 +689,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 aria-label={`Color for ${d.name}`}
               />
               <input
-                className={`${inputCls} field-input--ghost flex-1`}
+                className="field-input field-input--ghost flex-1"
                 value={d.name}
                 onChange={(e) => updateDomain(d.id, { name: e.target.value })}
                 aria-label="Domain name"
@@ -784,10 +734,10 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
             title="Color"
             aria-label="New domain color"
           />
-          <input
-            className={inputCls}
+          <Input
+            size="md"
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
+            onChange={setNewName}
             placeholder="e.g. SCE, Frontier, Family…"
             onKeyDown={(e) => {
               if (e.key === "Enter") {

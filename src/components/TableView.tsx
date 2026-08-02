@@ -43,8 +43,11 @@ import {
 } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { HealthBar, HealthSelect } from "./Health";
-import { Badge, Card, inputSmCls } from "./ui";
+import { Badge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
+import { SearchLg } from "@untitledui/icons";
 
 type ColumnKey = Exclude<SortKey, "name">;
 
@@ -299,54 +302,53 @@ export function TableView() {
     <div className="space-y-3">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <input
-          className={`${inputSmCls} max-w-56`}
+        <Input
+          size="sm"
+          icon={SearchLg}
+          className="max-w-56"
           placeholder="Search teams and people…"
+          aria-label="Search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
         />
         <label className="flex items-center gap-1.5 text-xs text-stone-400">
           Group
-          <select
-            className={`${inputSmCls} max-w-40`}
+          <NativeSelect
+            size="sm"
+            className="max-w-40"
             value={groupBy}
             onChange={(e) => setGroupBy(e.target.value as GroupBy)}
             aria-label="Group by"
-          >
-            {GROUP_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            options={GROUP_OPTIONS}
+          />
         </label>
         <label className="flex items-center gap-1.5 text-xs text-stone-400">
           Show
-          <select
-            className={`${inputSmCls} max-w-36`}
+          <NativeSelect
+            size="sm"
+            className="max-w-36"
             value={show}
             onChange={(e) => setShow(e.target.value as ShowKind)}
             aria-label="Show"
-          >
-            <option value="all">Teams &amp; people</option>
-            <option value="teams">Teams only</option>
-            <option value="people">People only</option>
-          </select>
+            options={[
+              { label: "Teams & people", value: "all" },
+              { label: "Teams only", value: "teams" },
+              { label: "People only", value: "people" },
+            ]}
+          />
         </label>
-        <select
-          className={`${inputSmCls} max-w-40`}
+        <NativeSelect
+          size="sm"
+          className="max-w-40"
           value={domainFilter}
           onChange={(e) => setDomainFilter(e.target.value)}
           aria-label="Filter by domain"
-        >
-          <option value="">All domains</option>
-          {domains.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-          <option value="none">No domain</option>
-        </select>
+          options={[
+            { label: "All domains", value: "" },
+            ...domains.map((d) => ({ label: d.name, value: d.id })),
+            { label: "No domain", value: "none" },
+          ]}
+        />
 
         <ColumnsMenu
           open={columnsOpen}

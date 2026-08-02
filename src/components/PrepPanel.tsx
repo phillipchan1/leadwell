@@ -13,8 +13,10 @@ import {
   teamAgenda,
   type CheckFix,
 } from "../lib/readiness";
-import { SectionTitle, inputSmCls } from "./ui";
+import { SectionTitle } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
 
 /** Default tolerance offered when a meeting is switched to as-needed. */
 const DEFAULT_FLOOR_DAYS = 45;
@@ -130,8 +132,9 @@ export function PrepPanel({
         <SectionTitle>Readiness</SectionTitle>
         <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
           <span>Rhythm</span>
-          <select
-            className={`${inputSmCls} w-auto py-1`}
+          <NativeSelect
+            size="sm"
+            className="w-auto"
             value={meeting.rhythm}
             onChange={(e) => {
               const rhythm = e.target.value as MeetingRhythm;
@@ -144,13 +147,11 @@ export function PrepPanel({
               });
             }}
             aria-label={`How often this ${label} happens`}
-          >
-            {RHYTHM_OPTIONS.map((r) => (
-              <option key={r} value={r}>
-                {RHYTHM_LABEL[r]}
-              </option>
-            ))}
-          </select>
+            options={RHYTHM_OPTIONS.map((r) => ({
+              label: RHYTHM_LABEL[r],
+              value: r,
+            }))}
+          />
         </label>
       </div>
 
@@ -242,17 +243,16 @@ export function PrepPanel({
           {meeting.rhythm === "as_needed" ? (
             <label className="flex items-center gap-1.5 text-[10px] text-stone-400">
               Nudge me after
-              <input
+              <Input
+                size="sm"
                 type="number"
-                min={7}
-                className={`${inputSmCls} w-16 py-0.5 text-[11px]`}
-                value={meeting.floorDays ?? ""}
+                className="w-16"
+                aria-label="Days before nudge"
+                value={meeting.floorDays?.toString() ?? ""}
                 placeholder="never"
-                onChange={(e) =>
+                onChange={(value) =>
                   updateMeeting(meeting.id, {
-                    floorDays: e.target.value
-                      ? Number(e.target.value)
-                      : undefined,
+                    floorDays: value ? Number(value) : undefined,
                   })
                 }
               />

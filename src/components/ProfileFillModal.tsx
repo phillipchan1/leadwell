@@ -19,8 +19,10 @@ import {
   liveReadFromDraft,
 } from "../lib/profileSignals";
 import { ProfileBuildCanvas } from "./ProfileBuildCanvas";
-import { Chip, inputCls, inputSmCls } from "./ui";
+import { Chip } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { TextArea } from "@/components/base/textarea/textarea";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 
@@ -405,8 +407,11 @@ export function ProfileFillModal({
           {!draft && entry === "dump" && (
             <div className="profile-fill-split">
               <div className="flex flex-col space-y-3">
-                <textarea
-                  className={`${inputCls} min-h-[14rem] flex-1 resize-none leading-relaxed`}
+                <TextArea
+                  aria-label="Brain dump"
+                  size="md"
+                  className="flex-1"
+                  textAreaClassName="min-h-[14rem] flex-1 resize-none leading-relaxed"
                   placeholder={
                     self
                       ? `Tell me about yourself — how you work, what you're great at, where you struggle, any Clifton / Working Genius / other results…`
@@ -415,7 +420,7 @@ export function ProfileFillModal({
                         : `Tell me everything about ${displayName.split(" ")[0]} — how they work, strengths, struggles, assessments…`
                   }
                   value={brainDump}
-                  onChange={(e) => setBrainDump(e.target.value)}
+                  onChange={setBrainDump}
                   autoFocus
                 />
                 {error && (
@@ -470,13 +475,15 @@ export function ProfileFillModal({
                     {probeQuestion}
                   </div>
                 )}
-                <textarea
-                  className={`${inputCls} h-28 resize-none leading-relaxed`}
+                <TextArea
+                  aria-label="Your answer"
+                  size="md"
+                  textAreaClassName="h-28 resize-none leading-relaxed"
                   placeholder="Your answer…"
                   value={probeAnswer}
-                  onChange={(e) => setProbeAnswer(e.target.value)}
+                  onChange={setProbeAnswer}
                   autoFocus
-                  disabled={loading || !probeQuestion}
+                  isDisabled={loading || !probeQuestion}
                 />
                 {error && (
                   <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/40 dark:text-red-300">
@@ -653,11 +660,13 @@ function SuggestionRow({
           {suggestion.confidence}
         </Chip>
       </div>
-      <textarea
-        className={`${inputSmCls} resize-none leading-relaxed`}
+      <TextArea
+        aria-label={label}
+        size="sm"
+        textAreaClassName="resize-none leading-relaxed"
         rows={kind === "list" ? 3 : 2}
         value={row.text}
-        onChange={(e) => onChange({ text: e.target.value })}
+        onChange={(text) => onChange({ text })}
       />
       {kind === "list" && (
         <div className="mt-0.5 text-[10px] text-stone-400">One per line.</div>
@@ -705,23 +714,27 @@ function ModalityRow({
           {suggestion.confidence}
         </Chip>
       </div>
-      <input
-        className={`${inputSmCls} mb-1.5`}
+      <Input
+        size="sm"
+        className="mb-1.5"
         value={row.name}
-        onChange={(e) => onChange({ name: e.target.value })}
+        onChange={(name) => onChange({ name })}
         placeholder="Name (e.g. Working Genius)"
       />
-      <textarea
-        className={`${inputSmCls} resize-none leading-relaxed`}
+      <TextArea
+        aria-label="Result"
+        size="sm"
+        textAreaClassName="resize-none leading-relaxed"
         rows={2}
         value={row.result}
-        onChange={(e) => onChange({ result: e.target.value })}
+        onChange={(result) => onChange({ result })}
         placeholder="Result"
       />
-      <input
-        className={`${inputSmCls} mt-1.5`}
+      <Input
+        size="sm"
+        className="mt-1.5"
         value={row.notes}
-        onChange={(e) => onChange({ notes: e.target.value })}
+        onChange={(notes) => onChange({ notes })}
         placeholder="Notes (optional)"
       />
       <div className="mt-1 text-[10px] text-stone-400">

@@ -19,8 +19,8 @@ import {
   ProgressBar,
   ProfileAdminLinks,
   SectionTitle,
-  inputCls,
 } from "./ui";
+import { Input } from "@/components/base/input/input";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
 import { Button } from "@/components/base/buttons/button";
@@ -531,11 +531,11 @@ export function PersonProfile({
                   setNewGoal("");
                 }}
               >
-                <input
-                  className={inputCls}
+                <Input
+                  size="md"
                   placeholder="Add a goal…"
                   value={newGoal}
-                  onChange={(e) => setNewGoal(e.target.value)}
+                  onChange={setNewGoal}
                 />
               </form>
             </section>

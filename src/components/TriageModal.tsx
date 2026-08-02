@@ -8,8 +8,9 @@ import {
 } from "../lib/readiness";
 import { delegatedTeamIds } from "../lib/teams";
 import { Avatar } from "./Avatar";
-import { Modal, inputSmCls } from "./ui";
+import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { NativeSelect } from "@/components/base/select/select-native";
 
 type Row = {
   kind: MeetingSubjectKind;
@@ -106,18 +107,18 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 dark:bg-stone-950/50">
             <label className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
               Track at
-              <select
-                className={`${inputSmCls} w-auto py-1`}
+              <NativeSelect
+                size="sm"
+                className="w-auto"
+                selectClassName="py-1"
                 value={rhythm}
                 onChange={(e) => setRhythm(e.target.value as MeetingRhythm)}
                 aria-label="Rhythm applied when tracking from this list"
-              >
-                {RHYTHM_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {RHYTHM_LABEL[r]}
-                  </option>
-                ))}
-              </select>
+                options={RHYTHM_OPTIONS.map((r) => ({
+                  label: RHYTHM_LABEL[r],
+                  value: r,
+                }))}
+              />
             </label>
             <Button size="sm" color="link-gray" onClick={clearAll}>
               No meeting with any of these ({rows.length})

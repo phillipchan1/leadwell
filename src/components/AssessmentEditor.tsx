@@ -9,8 +9,11 @@ import {
   MBTI,
   THEME_DOMAIN,
 } from "../data/frameworks";
-import { Modal, inputCls, fieldLabelCls } from "./ui";
+import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
+import { TextArea } from "@/components/base/textarea/textarea";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 
@@ -175,58 +178,49 @@ export function AssessmentEditor({
 
         {/* Enneagram */}
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className={fieldLabelCls}>Enneagram type</span>
-            <select
-              className={inputCls}
-              value={enneagramType}
-              onChange={(e) => {
-                setEnneagramType(e.target.value);
-                setWing("");
-              }}
-            >
-              <option value="">—</option>
-              {Object.entries(ENNEAGRAM).map(([n, info]) => (
-                <option key={n} value={n}>
-                  {n} — {info.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className={fieldLabelCls}>Wing</span>
-            <select
-              className={inputCls}
-              value={wing}
-              onChange={(e) => setWing(e.target.value)}
-              disabled={!enneagramType}
-            >
-              <option value="">—</option>
-              {wingOptions.map((w) => (
-                <option key={w} value={w}>
-                  w{w}
-                </option>
-              ))}
-            </select>
-          </label>
+          <NativeSelect
+            label="Enneagram type"
+            size="md"
+            value={enneagramType}
+            onChange={(e) => {
+              setEnneagramType(e.target.value);
+              setWing("");
+            }}
+            options={[
+              { label: "—", value: "" },
+              ...Object.entries(ENNEAGRAM).map(([n, info]) => ({
+                label: `${n} — ${info.name}`,
+                value: n,
+              })),
+            ]}
+          />
+          <NativeSelect
+            label="Wing"
+            size="md"
+            value={wing}
+            onChange={(e) => setWing(e.target.value)}
+            disabled={!enneagramType}
+            options={[
+              { label: "—", value: "" },
+              ...wingOptions.map((w) => ({ label: `w${w}`, value: w })),
+            ]}
+          />
         </div>
 
         {/* MBTI */}
-        <label className="block">
-          <span className={fieldLabelCls}>MBTI</span>
-          <select
-            className={inputCls}
-            value={mbti}
-            onChange={(e) => setMbti(e.target.value)}
-          >
-            <option value="">—</option>
-            {ALL_MBTI.map((t) => (
-              <option key={t} value={t}>
-                {t} — {MBTI[t].split("—")[0].trim()}
-              </option>
-            ))}
-          </select>
-        </label>
+        <NativeSelect
+          label="MBTI"
+          size="md"
+          value={mbti}
+          onChange={(e) => setMbti(e.target.value)}
+          options={[
+            { label: "—", value: "" },
+            ...ALL_MBTI.map((t) => ({
+              label: `${t} — ${MBTI[t].split("—")[0].trim()}`,
+              value: t,
+            })),
+          ]}
+        />
 
         {/* Custom modalities */}
         <div>
@@ -265,20 +259,22 @@ export function AssessmentEditor({
                 className="rounded-lg border border-stone-200 p-2.5 dark:border-stone-800"
               >
                 <div className="mb-1.5 flex gap-2">
-                  <input
-                    className={inputCls}
+                  <Input
+                    size="sm"
                     placeholder="Name"
                     value={m.name}
-                    onChange={(e) =>
+                    onChange={(value) =>
                       setModalities((rows) =>
                         rows.map((r, j) =>
-                          j === i ? { ...r, name: e.target.value } : r
+                          j === i ? { ...r, name: value } : r
                         )
                       )
                     }
                   />
-                  <select
-                    className={`${inputCls} w-28 shrink-0`}
+                  <NativeSelect
+                    size="sm"
+                    className="w-28 shrink-0"
+                    aria-label="Source"
                     value={m.source}
                     onChange={(e) =>
                       setModalities((rows) =>
@@ -292,11 +288,12 @@ export function AssessmentEditor({
                         )
                       )
                     }
-                  >
-                    <option value="self-report">Self-report</option>
-                    <option value="test">Test</option>
-                    <option value="inferred">Inferred</option>
-                  </select>
+                    options={[
+                      { label: "Self-report", value: "self-report" },
+                      { label: "Test", value: "test" },
+                      { label: "Inferred", value: "inferred" },
+                    ]}
+                  />
                   <ButtonUtility
                     size="xs"
                     color="tertiary"
@@ -308,26 +305,27 @@ export function AssessmentEditor({
                     }
                   />
                 </div>
-                <input
-                  className={`${inputCls} mb-1.5`}
+                <Input
+                  size="sm"
+                  className="mb-1.5"
                   placeholder="Result"
                   value={m.result}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setModalities((rows) =>
                       rows.map((r, j) =>
-                        j === i ? { ...r, result: e.target.value } : r
+                        j === i ? { ...r, result: value } : r
                       )
                     )
                   }
                 />
-                <input
-                  className={inputCls}
+                <Input
+                  size="sm"
                   placeholder="Notes (optional)"
                   value={m.notes}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setModalities((rows) =>
                       rows.map((r, j) =>
-                        j === i ? { ...r, notes: e.target.value } : r
+                        j === i ? { ...r, notes: value } : r
                       )
                     )
                   }
@@ -338,31 +336,28 @@ export function AssessmentEditor({
         </div>
 
         {/* Read on them */}
-        <label className="block">
-          <span className={fieldLabelCls}>Strengths (one per line)</span>
-          <textarea
-            className={`${inputCls} h-16 resize-none`}
-            value={strengths}
-            onChange={(e) => setStrengths(e.target.value)}
-          />
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>Watch-outs (one per line)</span>
-          <textarea
-            className={`${inputCls} h-16 resize-none`}
-            value={watchOuts}
-            onChange={(e) => setWatchOuts(e.target.value)}
-          />
-        </label>
-        <label className="block">
-          <span className={fieldLabelCls}>{howToLeadLabel}</span>
-          <textarea
-            className={`${inputCls} h-20 resize-none`}
-            value={howToLead}
-            onChange={(e) => setHowToLead(e.target.value)}
-            placeholder={howToLeadPlaceholder}
-          />
-        </label>
+        <TextArea
+          label="Strengths (one per line)"
+          size="md"
+          textAreaClassName="h-16 resize-none"
+          value={strengths}
+          onChange={setStrengths}
+        />
+        <TextArea
+          label="Watch-outs (one per line)"
+          size="md"
+          textAreaClassName="h-16 resize-none"
+          value={watchOuts}
+          onChange={setWatchOuts}
+        />
+        <TextArea
+          label={howToLeadLabel}
+          size="md"
+          textAreaClassName="h-20 resize-none"
+          value={howToLead}
+          onChange={setHowToLead}
+          placeholder={howToLeadPlaceholder}
+        />
       </div>
       <div className="mt-4 flex justify-end gap-2">
         <Button size="md" color="secondary" onClick={onClose}>

@@ -5,9 +5,11 @@ import { hasLeadershipRead } from "../lib/derive";
 import { hasApiKey, refineTeamMandate } from "../lib/ai";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import { Badge, ProgressBar, SectionTitle, inputCls } from "./ui";
+import { Badge, ProgressBar, SectionTitle } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { Input } from "@/components/base/input/input";
+import { TextArea } from "@/components/base/textarea/textarea";
 import { X } from "@untitledui/icons";
 import { AICoach } from "./AICoach";
 import { HealthField } from "./Health";
@@ -341,15 +343,17 @@ export function TeamProfile({
                 {refining ? "Refining…" : "✦ Refine"}
               </Button>
             </div>
-            <textarea
-              className={`${inputCls} min-h-[88px] resize-y leading-relaxed ${
+            <TextArea
+              size="md"
+              aria-label="Mandate"
+              textAreaClassName={`min-h-[88px] resize-y leading-relaxed ${
                 refining ? "opacity-80" : ""
               }`}
               placeholder="What am I responsible to lead this team toward?"
               value={mandate}
-              onChange={(e) => setMandate(e.target.value)}
+              onChange={setMandate}
               onBlur={saveMandate}
-              readOnly={refining}
+              isReadOnly={refining}
             />
             {refineError && (
               <p className="mt-1.5 text-[11px] text-red-500">{refineError}</p>
@@ -554,11 +558,11 @@ export function TeamProfile({
                 setNewNote("");
               }}
             >
-              <input
-                className={inputCls}
+              <Input
+                size="md"
                 placeholder="Capture a team note…"
                 value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
+                onChange={setNewNote}
               />
             </form>
             {myNotes.length > 0 && (
@@ -644,11 +648,11 @@ export function TeamProfile({
                       setNewGoal("");
                     }}
                   >
-                    <input
-                      className={inputCls}
+                    <Input
+                      size="md"
                       placeholder="Add a team goal…"
                       value={newGoal}
-                      onChange={(e) => setNewGoal(e.target.value)}
+                      onChange={setNewGoal}
                     />
                   </form>
                 </div>

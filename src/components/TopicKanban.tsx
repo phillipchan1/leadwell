@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Action, ActionColumn } from "../types";
 import { useStore } from "../store/useStore";
-import { inputSmCls } from "./ui";
+import { Input } from "@/components/base/input/input";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 
@@ -108,12 +108,13 @@ export function TopicKanban({
                   submit(col);
                 }}
               >
-                <input
-                  className={inputSmCls}
+                <Input
+                  size="sm"
                   placeholder={ADD_PLACEHOLDER[direction]}
+                  aria-label={`Add to ${COLUMN_LABEL[direction][col]}`}
                   value={drafts[col] ?? ""}
-                  onChange={(e) =>
-                    setDrafts((d) => ({ ...d, [col]: e.target.value }))
+                  onChange={(value) =>
+                    setDrafts((d) => ({ ...d, [col]: value }))
                   }
                 />
               </form>

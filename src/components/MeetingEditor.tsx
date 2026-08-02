@@ -6,8 +6,9 @@ import {
   type StructuredMeeting,
 } from "../lib/ai";
 import { SessionEditor } from "./SessionEditor";
-import { fieldLabelCls, inputCls } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { TextArea } from "@/components/base/textarea/textarea";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -325,35 +326,31 @@ export function MeetingEditor({
           <header className="meeting-editor-header">
             {editingMeta ? (
               <div className="meeting-editor-meta-form">
-                <label className="block">
-                  <span className={fieldLabelCls}>Date</span>
-                  <input
-                    type="date"
-                    className={inputCls}
-                    value={date}
-                    autoFocus
-                    onChange={(e) => {
-                      setDate(e.target.value);
-                      persist({ date: e.target.value });
-                    }}
-                    onBlur={() => setEditingMeta(false)}
-                  />
-                </label>
-                <label className="block">
-                  <span className={fieldLabelCls}>Next time</span>
-                  <input
-                    type="date"
-                    className={inputCls}
-                    value={nextDate}
-                    onChange={(e) => {
-                      setNextDate(e.target.value);
-                      updateSession(session.id, {
-                        nextDate: e.target.value || undefined,
-                      });
-                    }}
-                    onBlur={() => setEditingMeta(false)}
-                  />
-                </label>
+                <Input
+                  type="date"
+                  label="Date"
+                  size="sm"
+                  value={date}
+                  autoFocus
+                  onChange={(value) => {
+                    setDate(value);
+                    persist({ date: value });
+                  }}
+                  onBlur={() => setEditingMeta(false)}
+                />
+                <Input
+                  type="date"
+                  label="Next time"
+                  size="sm"
+                  value={nextDate}
+                  onChange={(value) => {
+                    setNextDate(value);
+                    updateSession(session.id, {
+                      nextDate: value || undefined,
+                    });
+                  }}
+                  onBlur={() => setEditingMeta(false)}
+                />
               </div>
             ) : (
               <button
@@ -419,11 +416,13 @@ export function MeetingEditor({
               )}
 
               {showCapture && (
-                <textarea
-                  className={`${inputCls} meeting-editor-transcript`}
+                <TextArea
+                  aria-label="Transcript"
+                  size="md"
+                  textAreaClassName="meeting-editor-transcript"
                   placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
                   value={transcript}
-                  onChange={(e) => saveTranscript(e.target.value)}
+                  onChange={saveTranscript}
                 />
               )}
             </div>

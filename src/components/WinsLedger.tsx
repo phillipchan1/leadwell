@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
-import { SectionTitle, inputCls, inputSmCls } from "./ui";
+import { SectionTitle } from "./ui";
+import { Input } from "@/components/base/input/input";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 
@@ -90,18 +91,18 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
       </ul>
 
       <form onSubmit={submit} className="space-y-2">
-        <input
-          className={inputCls}
+        <Input
+          size="md"
           placeholder="Log a win…"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={setText}
         />
         {text.trim() && (
-          <input
-            className={inputSmCls}
+          <Input
+            size="sm"
             placeholder="Impact in their language (optional)…"
             value={impact}
-            onChange={(e) => setImpact(e.target.value)}
+            onChange={setImpact}
           />
         )}
       </form>

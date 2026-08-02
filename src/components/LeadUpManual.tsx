@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { LeadUpProfile } from "../types";
 import { SectionTitle } from "./ui";
+import { TextArea } from "@/components/base/textarea/textarea";
 
 /**
  * Anyone I lead up to. Both up-team people and manager nodes carry the same
@@ -108,19 +109,18 @@ function ManualField({
   };
 
   return (
-    <label className="block rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-stone-800 dark:bg-stone-950/40">
-      <div className="text-xs font-medium text-stone-700 dark:text-stone-200">
-        {field.label}
-      </div>
-      <div className="mt-0.5 text-[10px] text-stone-400">{field.hint}</div>
-      <textarea
-        className="field-input field-input--sm mt-2 resize-none"
+    <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-stone-800 dark:bg-stone-950/40">
+      <TextArea
+        size="sm"
+        label={field.label}
+        hint={field.hint}
         rows={2}
         value={value}
         placeholder={field.placeholder}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={setValue}
         onBlur={commit}
+        textAreaClassName="resize-none"
       />
-    </label>
+    </div>
   );
 }

@@ -6,7 +6,10 @@ import { HEALTH_SCORE } from "../lib/health";
 import { meetingFor } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { HealthSelect } from "./Health";
-import { Badge, Card, inputSmCls } from "./ui";
+import { Badge, Card } from "./ui";
+import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
+import { SearchLg } from "@untitledui/icons";
 
 type SortKey = "name" | "team" | "coverage" | "nextSession" | "health";
 
@@ -85,25 +88,27 @@ export function PeopleTable() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <input
-          className={`${inputSmCls} max-w-xs`}
+        <Input
+          size="sm"
+          icon={SearchLg}
+          className="max-w-xs"
           placeholder="Search people…"
+          aria-label="Search people"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={setQuery}
         />
-        <select
-          className={`${inputSmCls} max-w-52`}
+        <NativeSelect
+          size="sm"
+          className="max-w-52"
           value={teamFilter}
           onChange={(e) => setTeamFilter(e.target.value)}
-        >
-          <option value="">All teams</option>
-          <option value="none">Direct reports (no team)</option>
-          {teams.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+          aria-label="Filter by team"
+          options={[
+            { label: "All teams", value: "" },
+            { label: "Direct reports (no team)", value: "none" },
+            ...teams.map((t) => ({ label: t.name, value: t.id })),
+          ]}
+        />
       </div>
 
       <Card className="overflow-x-auto">

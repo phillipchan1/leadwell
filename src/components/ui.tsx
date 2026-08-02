@@ -163,13 +163,3 @@ export function Modal({
   );
 }
 
-/** Default form control — soft fill, teal focus glow (see `.field-input` in CSS). */
-export const inputCls = "field-input";
-
-/** Dense filters / inline editors. */
-export const inputSmCls = "field-input field-input--sm";
-
-/** Borderless table / inline cells. */
-export const inputGhostCls = "field-input field-input--ghost";
-
-export const fieldLabelCls = "field-label";
