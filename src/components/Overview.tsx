@@ -122,9 +122,9 @@ export function Overview() {
   };
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* AI executive brief */}
-      <Card className="p-5 lg:col-span-2">
+      <Card className="p-6 lg:col-span-2">
         <div className="mb-3 flex items-center justify-between">
           <SectionTitle>Executive brief</SectionTitle>
           {keyed && (
@@ -194,7 +194,7 @@ export function Overview() {
       <div className="space-y-4">
         {/* Health — my own calls, worst first. Readiness below is about prep;
             this is about the thing itself. */}
-        <Card className="p-5">
+        <Card className="p-6">
           <div className="flex items-baseline justify-between gap-2">
             <SectionTitle>Health scan</SectionTitle>
             <Button
@@ -279,7 +279,7 @@ export function Overview() {
           )}
         </Card>
 
-        <Card className="p-5">
+        <Card className="p-6">
           <SectionTitle>Needs attention</SectionTitle>
           <ul className="mt-3 space-y-2">
             {needAttention.length === 0 && (
@@ -314,7 +314,7 @@ export function Overview() {
           </ul>
         </Card>
 
-        <Card className="p-5">
+        <Card className="p-6">
           <SectionTitle>Coverage gaps</SectionTitle>
           <ul className="mt-3 space-y-2">
             {unassessed.length === 0 && (
@@ -341,7 +341,7 @@ export function Overview() {
           </ul>
         </Card>
 
-        <Card className="p-5">
+        <Card className="p-6">
           <SectionTitle>Domain totals</SectionTitle>
           <ul className="mt-3 space-y-1 text-sm">
             {DOMAINS.map((d) => (

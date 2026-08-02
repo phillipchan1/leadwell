@@ -1056,26 +1056,10 @@ label:focus-within > .field-label,
   @apply flex flex-wrap items-center justify-center gap-3 pt-2;
 }
 
-.meeting-editor-topics-check {
-  @apply flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400;
-}
-
 /* Session editor dual-mode */
 
 .session-editor-mode-bar {
   @apply mb-4 flex items-center justify-between gap-3;
-}
-
-.session-editor-mode-toggle {
-  @apply inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5 dark:border-stone-700 dark:bg-stone-900;
-}
-
-.session-editor-mode-toggle button {
-  @apply rounded-md px-3 py-1 text-xs text-stone-500 transition-colors;
-}
-
-.session-editor-mode-toggle button.is-active {
-  @apply bg-white font-medium text-stone-800 shadow-sm dark:bg-stone-800 dark:text-stone-100;
 }
 
 .session-editor-mode-hint {

@@ -148,7 +148,7 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <header className="flex items-center justify-between border-b border-stone-200 bg-white px-5 py-3 dark:border-stone-800 dark:bg-stone-900">
+      <header className="flex items-center justify-between border-b border-stone-200 bg-white px-6 py-3 dark:border-stone-800 dark:bg-stone-900">
         <div className="flex items-baseline gap-4">
           <h1 className="text-lg font-bold tracking-tight">
             Lead<span className="text-teal-600">Well</span>
@@ -187,7 +187,7 @@ export default function App() {
           <Tabs
             selectedKey={tab}
             onSelectionChange={(key) => setTab(key as Tab)}
-            className="border-b border-stone-200 bg-white px-5 dark:border-stone-800 dark:bg-stone-900"
+            className="border-b border-stone-200 bg-white px-6 dark:border-stone-800 dark:bg-stone-900"
           >
             <TabList type="underline" size="sm" items={TABS}>
               {(t) => <TabItem id={t.id} label={t.label} />}
@@ -197,7 +197,7 @@ export default function App() {
           {/* Main + peek — canvas ~45%, panel ~55% when open */}
           <div className="flex min-h-0 flex-1">
             <main
-              className={`min-w-[16rem] flex-[2] p-5 lg:min-w-[22.5rem] ${
+              className={`min-w-[16rem] flex-[2] p-6 lg:min-w-[22.5rem] ${
                 tab === "tree"
                   ? "flex flex-col overflow-hidden"
                   : "overflow-y-auto"

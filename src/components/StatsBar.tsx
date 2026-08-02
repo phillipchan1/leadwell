@@ -1,7 +1,7 @@
 import type { Person } from "../types";
 import { DOMAINS, DOMAIN_COLOR } from "../data/frameworks";
 import { blindSpots, domainCounts, hasLeadershipRead, isAssessed, personalityMix } from "../lib/derive";
-import { SectionTitle } from "./ui";
+import { Card, SectionTitle } from "./ui";
 import { StrengthsDonut } from "./StrengthsDonut";
 
 export function StatsBar({ people }: { people: Person[] }) {
@@ -13,7 +13,7 @@ export function StatsBar({ people }: { people: Person[] }) {
   const spots = blindSpots(people);
 
   return (
-    <div className="grid grid-cols-1 gap-5 rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-950/40 md:grid-cols-3">
+    <Card className="grid grid-cols-1 gap-6 bg-stone-50/60 p-5 dark:bg-stone-950/40 md:grid-cols-3">
       {/* Strengths balance donut */}
       <div className="flex items-center gap-4">
         <StrengthsDonut counts={counts} size={96} />
@@ -67,7 +67,7 @@ export function StatsBar({ people }: { people: Person[] }) {
         <MixRow label="Enneagram" mix={mix.enneagram} />
         <MixRow label="MBTI" mix={mix.mbti} />
       </div>
-    </div>
+    </Card>
   );
 }
 
