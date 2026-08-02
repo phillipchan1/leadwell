@@ -12,6 +12,11 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
 import { Button } from "@/components/base/buttons/button";
+import {
+  Tab as TabItem,
+  TabList,
+  Tabs,
+} from "@/components/application/tabs/tabs";
 import { FocusView } from "./components/FocusView";
 import { SessionEditorView } from "./components/SessionEditorView";
 import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
@@ -178,22 +183,16 @@ export default function App() {
         <FocusView />
       ) : (
         <>
-          {/* Tabs */}
-          <nav className="flex gap-1 border-b border-stone-200 bg-white px-5 dark:border-stone-800 dark:bg-stone-900">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`border-b-2 px-3 py-2.5 text-sm transition-colors ${
-                  tab === t.id
-                    ? "border-teal-600 font-medium text-teal-700 dark:text-teal-400"
-                    : "border-transparent text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </nav>
+          {/* Tabs — navigation only; content is routed, so no panels */}
+          <Tabs
+            selectedKey={tab}
+            onSelectionChange={(key) => setTab(key as Tab)}
+            className="border-b border-stone-200 bg-white px-5 dark:border-stone-800 dark:bg-stone-900"
+          >
+            <TabList type="underline" size="sm" items={TABS}>
+              {(t) => <TabItem id={t.id} label={t.label} />}
+            </TabList>
+          </Tabs>
 
           {/* Main + peek — canvas ~45%, panel ~55% when open */}
           <div className="flex min-h-0 flex-1">

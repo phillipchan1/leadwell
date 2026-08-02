@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import {
+  Tab as TabItem,
+  TabList,
+  Tabs,
+} from "@/components/application/tabs/tabs";
 import { FullScreenMarkdown } from "./FullScreenMarkdown";
 import { NotionBlockEditor } from "./NotionBlockEditor";
 
@@ -79,26 +84,15 @@ export function SessionEditor({
     <div className="session-editor">
       {!readOnly && (
         <div className="session-editor-mode-bar">
-          <div className="session-editor-mode-toggle" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "blocks"}
-              className={mode === "blocks" ? "is-active" : ""}
-              onClick={() => switchMode("blocks")}
-            >
-              Blocks
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "markdown"}
-              className={mode === "markdown" ? "is-active" : ""}
-              onClick={() => switchMode("markdown")}
-            >
-              Markdown
-            </button>
-          </div>
+          <Tabs
+            selectedKey={mode}
+            onSelectionChange={(key) => switchMode(key as EditorMode)}
+          >
+            <TabList type="button-border" size="sm">
+              <TabItem id="blocks" label="Blocks" />
+              <TabItem id="markdown" label="Markdown" />
+            </TabList>
+          </Tabs>
           <span className="session-editor-mode-hint">⌘⇧M to toggle</span>
         </div>
       )}

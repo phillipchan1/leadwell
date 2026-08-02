@@ -20,6 +20,12 @@ import {
   SectionTitle,
 } from "./ui";
 import { Input } from "@/components/base/input/input";
+import {
+  Tab as TabItem,
+  TabList,
+  Tabs,
+} from "@/components/application/tabs/tabs";
+
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
 import { Badge } from "@/components/base/badges/badges";
@@ -240,33 +246,28 @@ export function PersonProfile({
         </div>
       </div>
 
-      {/* Internal tabs */}
-      <nav className="flex shrink-0 gap-0.5 border-b border-stone-200 px-3 dark:border-stone-800">
-        {personTabs(isLeadUp).map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`border-b-2 px-2.5 py-2 text-xs transition-colors ${
-              tab === t.id
-                ? "border-teal-600 font-medium text-teal-700 dark:text-teal-400"
-                : "border-transparent text-stone-500 hover:text-stone-700 dark:hover:text-stone-300"
-            }`}
-          >
-            {t.label}
-            {t.id === "sessions" && mySessions.length > 0 && (
-              <span className="ml-1 text-[10px] text-stone-400">
-                {mySessions.length}
-              </span>
-            )}
-            {t.id === "notes" && myNotes.length > 0 && (
-              <span className="ml-1 text-[10px] text-stone-400">
-                {myNotes.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </nav>
+      {/* Internal tabs — navigation only; sections render below */}
+      <Tabs
+        selectedKey={tab}
+        onSelectionChange={(key) => setTab(key as ReturnType<typeof personTabs>[number]["id"])}
+        className="shrink-0 border-b border-stone-200 px-3 dark:border-stone-800"
+      >
+        <TabList type="underline" size="sm" items={personTabs(isLeadUp)}>
+          {(t) => (
+            <TabItem
+              id={t.id}
+              label={t.label}
+              badge={
+                t.id === "sessions" && mySessions.length > 0
+                  ? mySessions.length
+                  : t.id === "notes" && myNotes.length > 0
+                    ? myNotes.length
+                    : undefined
+              }
+            />
+          )}
+        </TabList>
+      </Tabs>
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         {tab === "profile" && isLeadUp && (
