@@ -2,15 +2,24 @@ import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import { DOMAIN_COLOR } from "../data/frameworks";
 import { hasLeadershipRead, topDomain } from "../lib/derive";
+import { HEALTH_SCORE } from "../lib/health";
 import { meetingFor } from "../lib/readiness";
 import { Avatar } from "./Avatar";
+import { HealthSelect } from "./Health";
 import { Badge, Card, inputSmCls } from "./ui";
 
-type SortKey = "name" | "team" | "coverage" | "nextSession";
+type SortKey = "name" | "team" | "coverage" | "nextSession" | "health";
 
 export function PeopleTable() {
-  const { people, teams, capacities, meetings, sessions, selectPerson } =
-    useStore();
+  const {
+    people,
+    teams,
+    capacities,
+    meetings,
+    sessions,
+    selectPerson,
+    setHealth,
+  } = useStore();
   const [query, setQuery] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -43,8 +52,13 @@ export function PeopleTable() {
     );
 
     const dir = asc ? 1 : -1;
+    // Weakest first when ascending; unrated sorts last either way.
+    const healthRank = (p: (typeof enriched)[number]) =>
+      p.p.health ? HEALTH_SCORE[p.p.health.level] : 999;
     return filtered.sort((x, y) => {
       switch (sortKey) {
+        case "health":
+          return dir * (healthRank(x) - healthRank(y));
         case "team":
           return dir * (x.team?.name ?? "").localeCompare(y.team?.name ?? "");
         case "coverage":
@@ -99,6 +113,7 @@ export function PeopleTable() {
               <Th onClick={() => sortBy("name")}>Name{arrow("name")}</Th>
               <Th onClick={() => sortBy("team")}>Team{arrow("team")}</Th>
               <Th>Capacity</Th>
+              <Th onClick={() => sortBy("health")}>Health{arrow("health")}</Th>
               <Th onClick={() => sortBy("coverage")}>
                 Coverage{arrow("coverage")}
               </Th>
@@ -147,6 +162,14 @@ export function PeopleTable() {
                     <Badge color={capacity.color}>{capacity.label}</Badge>
                   )}
                 </td>
+                <td className="px-4 py-2.5">
+                  <HealthSelect
+                    size="sm"
+                    value={p.health?.level}
+                    onChange={(level) => setHealth("person", p.id, level)}
+                    ariaLabel={`Health for ${p.name}`}
+                  />
+                </td>
                 <td className="px-4 py-2.5 text-stone-500">{coverage}/3</td>
                 <td className="px-4 py-2.5">
                   {domain ? (
@@ -172,7 +195,7 @@ export function PeopleTable() {
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-8 text-center text-sm text-stone-400"
                 >
                   No people match.

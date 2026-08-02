@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
-import type { Manager, Person, Team } from "../types";
+import type { Health, HealthLevel, Manager, Person, Team } from "../types";
+import { todayISO } from "../lib/health";
 import { directReports, eligibleParents } from "../lib/teams";
+import { HealthField } from "./Health";
 import {
   Modal,
   inputCls,
@@ -10,6 +12,20 @@ import {
   buttonGhostCls,
 } from "./ui";
 import { PhotoPicker } from "./PhotoPicker";
+
+/**
+ * The health value to save from a modal. Re-stamps the date only when the call
+ * actually changed, so re-opening a modal to edit a name doesn't quietly
+ * refresh a rating I made two months ago.
+ */
+function nextHealth(
+  level: HealthLevel | undefined,
+  current: Health | undefined
+): Health | undefined {
+  if (!level) return undefined;
+  if (current?.level === level) return current;
+  return { level, note: current?.note, ratedOn: todayISO() };
+}
 
 // A palette for auto-coloring newly created domains.
 const DOMAIN_PALETTE = [
@@ -160,6 +176,10 @@ export function TeamModal({
   const [leaderId, setLeaderId] = useState<string | undefined>(
     team?.leaderId ?? defaultLeaderId
   );
+  const [healthLevel, setHealthLevel] = useState<HealthLevel | undefined>(
+    team?.health?.level
+  );
+  const [healthNote, setHealthNote] = useState(team?.health?.note ?? "");
 
   const parents = eligibleParents(teams, team?.id);
   const nested = Boolean(parentId);
@@ -176,10 +196,12 @@ export function TeamModal({
 
   const save = () => {
     if (!name.trim()) return;
+    const health = nextHealth(healthLevel, team?.health);
     const patch = {
       name: name.trim(),
       capacityId,
       domainId,
+      health: health && { ...health, note: healthNote.trim() || undefined },
       description,
       direction: nested || delegated ? ("down" as const) : direction,
       parentId: parentId || undefined,
@@ -269,6 +291,24 @@ export function TeamModal({
           <span className={fieldLabelCls}>Domain (life area)</span>
           <DomainPicker domainId={domainId} onChange={setDomainId} />
         </div>
+        <HealthField
+          health={
+            healthLevel
+              ? {
+                  level: healthLevel,
+                  note: healthNote,
+                  ratedOn:
+                    healthLevel === team?.health?.level
+                      ? team.health.ratedOn
+                      : undefined,
+                }
+              : undefined
+          }
+          onLevel={(level) => setHealthLevel(level ?? undefined)}
+          onNote={setHealthNote}
+          label="Health — my read"
+          hint="Your own call on how this team is doing. Filter and sort by it in the tree and the table."
+        />
         <label className="block">
           <span className={fieldLabelCls}>My capacity</span>
           <div className="flex gap-2">
@@ -542,13 +582,19 @@ export function PersonModal({
     person?.domainId ?? treeDomainId ?? undefined
   );
   const [photo, setPhoto] = useState<string | undefined>(person?.photo);
+  const [healthLevel, setHealthLevel] = useState<HealthLevel | undefined>(
+    person?.health?.level
+  );
+  const [healthNote, setHealthNote] = useState(person?.health?.note ?? "");
   const direct = !teamId;
 
   const save = () => {
     if (!name.trim()) return;
+    const health = nextHealth(healthLevel, person?.health);
     const fields = {
       name: name.trim(),
       role,
+      health: health && { ...health, note: healthNote.trim() || undefined },
       teamId: teamId || undefined,
       // Only a teamless person carries their own life area; on a team, the
       // team's domain is the answer.
@@ -625,6 +671,24 @@ export function PersonModal({
             <DomainPicker domainId={domainId} onChange={setDomainId} />
           </div>
         )}
+        <HealthField
+          health={
+            healthLevel
+              ? {
+                  level: healthLevel,
+                  note: healthNote,
+                  ratedOn:
+                    healthLevel === person?.health?.level
+                      ? person.health.ratedOn
+                      : undefined,
+                }
+              : undefined
+          }
+          onLevel={(level) => setHealthLevel(level ?? undefined)}
+          onNote={setHealthNote}
+          label="Health — my read"
+          hint="Your own call on how they're doing. Filter and sort by it in the tree and the table."
+        />
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className={buttonGhostCls} onClick={onClose}>
             Cancel

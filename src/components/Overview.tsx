@@ -14,9 +14,17 @@ import {
   meetingReadiness,
   personAgenda,
 } from "../lib/readiness";
+import {
+  HEALTH_COLOR,
+  HEALTH_LABEL,
+  HEALTH_LEVELS,
+  needsAttention,
+  rollUpHealth,
+} from "../lib/health";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
 import { Card, SectionTitle, buttonPrimaryCls } from "./ui";
 import { Avatar } from "./Avatar";
+import { HealthBar } from "./Health";
 
 export function Overview() {
   const {
@@ -26,6 +34,9 @@ export function Overview() {
     sessions,
     actions,
     selectPerson,
+    selectTeam,
+    setTab,
+    setHealthScan,
   } = useStore();
   const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,6 +70,28 @@ export function Overview() {
         STATE_ORDER.indexOf(a.readiness.state) -
         STATE_ORDER.indexOf(b.readiness.state)
     );
+
+  // The health scan, boiled down to the one question worth a card: what am I
+  // carrying that I've already told myself is in trouble?
+  const healthRoll = rollUpHealth([
+    ...teams.map((t) => t.health),
+    ...people.map((p) => p.health),
+  ]);
+  const weakest = [
+    ...teams.flatMap((t) =>
+      t.health && needsAttention(t.health.level)
+        ? [{ kind: "team" as const, id: t.id, name: t.name, health: t.health }]
+        : []
+    ),
+    ...people.flatMap((p) =>
+      p.health && needsAttention(p.health.level)
+        ? [{ kind: "person" as const, id: p.id, name: p.name, health: p.health, photo: p.photo }]
+        : []
+    ),
+  ].sort(
+    (a, b) =>
+      HEALTH_LEVELS.indexOf(b.health.level) - HEALTH_LEVELS.indexOf(a.health.level)
+  );
 
   const generateBrief = async () => {
     setLoading(true);
@@ -156,6 +189,93 @@ export function Overview() {
 
       {/* Who needs attention */}
       <div className="space-y-4">
+        {/* Health — my own calls, worst first. Readiness below is about prep;
+            this is about the thing itself. */}
+        <Card className="p-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <SectionTitle>Health scan</SectionTitle>
+            <button
+              type="button"
+              className="text-[11px] font-medium text-teal-600 hover:text-teal-700"
+              onClick={() => {
+                setHealthScan(["strained", "critical"]);
+                setTab("table");
+              }}
+            >
+              Open in table
+            </button>
+          </div>
+          {healthRoll.rated === 0 ? (
+            <p className="mt-3 text-sm text-stone-400">
+              Nothing rated yet. Set a health on any team or person and it shows
+              up here, on the canvas, and in the table.
+            </p>
+          ) : (
+            <>
+              <div className="mt-3 space-y-1">
+                <HealthBar roll={healthRoll} />
+                <div className="text-[11px] text-stone-400">
+                  {healthRoll.rated} of {teams.length + people.length} rated
+                  {healthRoll.level && (
+                    <>
+                      {" · overall "}
+                      <span
+                        className="font-medium"
+                        style={{ color: HEALTH_COLOR[healthRoll.level] }}
+                      >
+                        {HEALTH_LABEL[healthRoll.level].toLowerCase()}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {weakest.length === 0 && (
+                  <li className="text-sm text-stone-400">
+                    Nothing strained or critical. ✓
+                  </li>
+                )}
+                {weakest.map((w) => (
+                  <li key={`${w.kind}-${w.id}`}>
+                    <button
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                      onClick={() =>
+                        w.kind === "person" ? selectPerson(w.id) : selectTeam(w.id)
+                      }
+                    >
+                      {w.kind === "person" ? (
+                        <Avatar name={w.name} photo={w.photo} size={30} />
+                      ) : (
+                        <span
+                          className="h-[30px] w-[30px] shrink-0 rounded-lg"
+                          style={{
+                            backgroundColor: HEALTH_COLOR[w.health.level] + "24",
+                          }}
+                          aria-hidden
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 text-sm">
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor: HEALTH_COLOR[w.health.level],
+                            }}
+                          />
+                          {w.name}
+                        </div>
+                        <div className="truncate text-[11px] text-stone-400">
+                          {w.health.note ?? HEALTH_LABEL[w.health.level]}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Card>
+
         <Card className="p-5">
           <SectionTitle>Needs attention</SectionTitle>
           <ul className="mt-3 space-y-2">

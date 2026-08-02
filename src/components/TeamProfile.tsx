@@ -7,6 +7,7 @@ import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
 import { Badge, ProgressBar, SectionTitle, inputCls } from "./ui";
 import { AICoach } from "./AICoach";
+import { HealthField } from "./Health";
 import { StatsBar } from "./StatsBar";
 import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
@@ -40,6 +41,8 @@ export function TeamProfile({
     selectedPersonId,
     deleteTeam,
     updateTeam,
+    setHealth,
+    setHealthNote,
     openModal,
     modal,
     askAIOpen,
@@ -287,6 +290,18 @@ export function TeamProfile({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-8 px-8 py-5">
+          {/* My read on the team. Not derived from anything below it — the
+              whole point is that it's the call only I can make. */}
+          <section className="max-w-sm">
+            <HealthField
+              key={team.id}
+              health={team.health}
+              onLevel={(level) => setHealth("team", team.id, level)}
+              onNote={(note) => setHealthNote("team", team.id, note)}
+              label="Health — my read"
+            />
+          </section>
+
           {/* Readiness for this team's own standing meeting — separate from
               the 1:1s with its members, which live on each person. */}
           <PrepPanel

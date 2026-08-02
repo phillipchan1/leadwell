@@ -14,6 +14,8 @@ export type Team = {
   noMeeting?: boolean;
   /** Which life area this team belongs to (Day job, Church, Family…). */
   domainId?: string;
+  /** My own read on how this team is doing. Undefined = not rated yet. */
+  health?: Health;
   description?: string;
   /** Mandate — what I'm responsible to lead this team toward. */
   purpose?: string;
@@ -54,6 +56,26 @@ export type Manager = {
   photo?: string; // base64 data URL
   /** Operating manual for leading up to them — same shape as up-team people. */
   leadUp?: LeadUpProfile;
+};
+
+/**
+ * My own read on how a team or a person is doing right now — strongest to
+ * weakest. Deliberately a judgment call rather than a computed metric: the
+ * value is in recording what I already know so I can scan for it later.
+ */
+export type HealthLevel =
+  | "thriving"
+  | "solid"
+  | "watch"
+  | "strained"
+  | "critical";
+
+export type Health = {
+  level: HealthLevel;
+  /** One line of evidence behind the call — what makes it that. */
+  note?: string;
+  /** ISO date the call was last made. A read from eight months ago is a guess. */
+  ratedOn?: string;
 };
 
 export type StrengthTheme = string;
@@ -164,6 +186,8 @@ export type Person = {
   name: string;
   role?: string;
   photo?: string; // base64 data URL
+  /** My own read on how they're doing. Undefined = not rated yet. */
+  health?: Health;
   relationshipType?: string;
   /**
    * "I deliberately don't sit down with them." A decision, not a gap — it

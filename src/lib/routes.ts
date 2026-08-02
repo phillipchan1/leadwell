@@ -14,7 +14,7 @@
  *   /me                          my own profile in focus
  */
 
-export type Tab = "overview" | "tree" | "people";
+export type Tab = "overview" | "tree" | "table" | "people";
 export type EntityKind = "team" | "person" | "manager" | "me";
 
 export type Selection = {
@@ -31,7 +31,7 @@ export type Route =
   | { view: "tab"; tab: Tab; peek: Selection | null }
   | { view: "focus"; target: Selection };
 
-const TABS: Tab[] = ["overview", "tree", "people"];
+const TABS: Tab[] = ["overview", "tree", "table", "people"];
 /** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
 const ID_KINDS: EntityKind[] = ["team", "person", "manager"];
 

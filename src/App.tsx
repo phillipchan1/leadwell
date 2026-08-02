@@ -5,6 +5,7 @@ import { parseRoute, routePath } from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
 import { OrgTree } from "./components/OrgTree";
 import { PeopleTable } from "./components/PeopleTable";
+import { TableView } from "./components/TableView";
 import { Overview } from "./components/Overview";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
@@ -17,6 +18,8 @@ import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "tree", label: "Org tree" },
+  // The canvas's correlated view: same org, sortable and filterable.
+  { id: "table", label: "Table" },
   { id: "people", label: "People table" },
 ];
 
@@ -206,6 +209,7 @@ export default function App() {
             >
               {tab === "overview" && <Overview />}
               {tab === "tree" && <OrgTree />}
+              {tab === "table" && <TableView />}
               {tab === "people" && <PeopleTable />}
             </main>
 

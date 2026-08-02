@@ -87,6 +87,8 @@ src/
     storage.ts           # persistence seam (localStorage now, API later)
     derive.ts            # coverage, domain counts, blind spots, derived "read"
     readiness.ts         # meeting prep: states, checks, roll-up, triage
+    health.ts            # my own read: levels, the scan filter, roll-ups
+    orgTable.ts          # rows, outline, sorting + grouping for the table view
     ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
   components/
@@ -97,6 +99,8 @@ src/
     Shared records: TopicKanban.tsx, NotesPanel.tsx    # keyed by subject id — people and managers alike
     Leading up: ManagerProfile.tsx, LeadUpManual.tsx, WinsLedger.tsx
     Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx
+    Health: Health.tsx   # the property control, at every density
+    Table: TableView.tsx # the canvas's correlated view
     Other tabs: Overview.tsx, PeopleTable.tsx
     forms.tsx, ui.tsx    # modals + small primitives
 ```
@@ -105,7 +109,11 @@ src/
 
 ```ts
 type Capacity = { id: string; label: string; color: string };   // Manager (teal) / Leader (purple) / Influence (amber) / Report up (blue)
+type HealthLevel = "thriving" | "solid" | "watch" | "strained" | "critical";
+type Health   = { level: HealthLevel; note?: string; ratedOn?: string };  // my own read
+
 type Team     = { id: string; name: string; capacityId: string; description?: string; order: number;
+                  health?: Health;                              // my call on how the team is doing
                   direction?: "up" | "down";                    // "up" = I report to this team; renders above me
                   parentId?: string;                            // sub-team, nests under a broader team
                   leaderId?: string };                          // a direct report runs it — hangs under them, not me
@@ -132,6 +140,7 @@ type Person = {
   domainId?: string;                    // life area, only for a direct report (others inherit the team's)
   photo?: string;                       // base64 data URL (downscaled on upload)
   relationshipType?: string;
+  health?: Health;                      // my call on how they're doing
   noMeeting?: boolean;                  // "I deliberately don't sit down with them"
   assessments: Assessments;
   strengths: string[]; watchOuts: string[]; howToLead?: string;
@@ -182,6 +191,74 @@ on the canvas shows the rail, countdown chip and distribution bar, and
 alike — links each failing check straight to where it gets fixed, including into
 the meeting that was never written up. Full design rationale, including what's
 deliberately *not* built, in [docs/readiness.md](docs/readiness.md).
+
+## Health (my own read)
+
+Coverage answers *do I know them*. Readiness answers *am I ready for the next
+time we sit down*. Neither answers the question you actually carry around:
+**is this going well?** Nothing in the data can answer it — so health is one
+property you set yourself, on any team or person:
+
+```ts
+type HealthLevel = "thriving" | "solid" | "watch" | "strained" | "critical";
+type Health = { level: HealthLevel; note?: string; ratedOn?: string };
+```
+
+Five levels, strongest first, deliberately lopsided toward the weak end: "solid"
+covers everything that needs nothing from you, and the three below it are the
+ones worth telling apart when you're deciding where next week goes. The optional
+`note` is the one line of evidence behind the call ("no weekend off since
+March"), and `ratedOn` is re-stamped on every change — a read from eight months
+ago is a memory, and after 90 days the chip says **stale** rather than pretending
+otherwise.
+
+Set it anywhere it's visible: the add/edit modals, the team and person profiles,
+or straight from a table row. It's never derived. A team with no call of its own
+shows its people's average as a hollow `~solid` chip that says so — and still
+counts as *not rated* everywhere it matters, so a team can't go green because
+the people on it happen to be.
+
+**The scan** is the payoff. Layer **`H`** puts the levels on the canvas, and the
+scan bar above it counts every rated subject in view. Click a level and the
+canvas *dims* everything else rather than hiding it — filtering to Strained and
+watching two cards stay lit inside the shape of the org tells you where the
+strain is; a canvas with two cards on it doesn't. A team card stays lit when its
+own rating matches **or any of its people do**, so a scan finds the person even
+when the team around them reads fine. The scan is shared with the table view, so
+it follows you between the two surfaces. Overview carries the boiled-down
+version: the mix bar, and everything strained or critical, worst first.
+
+## Table view
+
+The canvas's correlated view — same store, same records, same health calls, a
+different question. The canvas is for shape and place ("who sits under what");
+the table is for comparison ("everything strained, sorted by how long since I
+met"). Clicking a row opens the same peek panel a card does, so drilling in
+never means starting over on the other surface.
+
+Teams and people share one row type on purpose: a table with two row shapes
+can't sort a person above a team, and *show me everything strained, whatever it
+is* is the whole point.
+
+- **Team outline** (the default) is the tree flattened: a team, its people, then
+  its sub-teams, indented — and direct reports carrying whatever they lead. Rows
+  collapse; sorting reorders siblings *within* each parent rather than destroying
+  the hierarchy.
+- **Group by** health, domain, capacity or type flattens it into buckets with a
+  count and a health mix bar per group. Unrated always sorts last.
+- **Filter** by search, domain, kind (teams / people), and the shared health
+  scan — plus a **Weak spots** preset for watch-or-worse. When a filter matches
+  something nested, its ancestors stay as dimmed context so a person never
+  floats with no team above them.
+- **Edit in place**: the health dropdown and its *why* line are live in every
+  row, which is what makes rating a whole org a two-minute pass rather than
+  twenty panel visits.
+- **Columns** toggle on and off (type, under, health, why, domain, ready, next,
+  capacity, read, size).
+
+Rows, outline, sorting and grouping live in
+[`src/lib/orgTable.ts`](src/lib/orgTable.ts); the view is
+[`TableView.tsx`](src/components/TableView.tsx).
 
 ## Leading up
 

@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   Domain,
   Goal,
+  HealthLevel,
   Manager,
   Me,
   Note,
@@ -20,6 +21,7 @@ import type {
   Win,
 } from "../types";
 import { storage } from "../lib/storage";
+import { todayISO, type HealthFilterValue } from "../lib/health";
 import { isDescendant, personDomainId } from "../lib/teams";
 import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
@@ -80,7 +82,8 @@ export type TreeLayer =
   | "action"
   | "giftMix"
   | "detail"
-  | "readiness";
+  | "readiness"
+  | "health";
 export type TreeLayers = Record<TreeLayer, boolean>;
 
 export type { NodePosition, PersistedData } from "../lib/repo";
@@ -107,6 +110,13 @@ type UIState = {
   tab: Tab;
   /** null = show every domain on one canvas; otherwise filter the tree. */
   treeDomainId: string | null;
+  /**
+   * Health levels being scanned for, shared by the canvas and the table —
+   * that's what makes them two views of one question rather than two filters
+   * to keep in sync. Empty = everything. The canvas dims what doesn't match
+   * (the shape of the org is the point there); the table drops the rows.
+   */
+  healthScan: HealthFilterValue[];
   /** Canvas card layers — toggle what each team card surfaces. */
   treeLayers: TreeLayers;
   selectedPersonId: string | null;
@@ -133,6 +143,10 @@ type Store = PersistedData &
     // ui
     setTab: (tab: Tab) => void;
     setTreeDomainId: (id: string | null) => void;
+    /** Add/remove one health level from the canvas scan. */
+    toggleHealthScan: (value: HealthFilterValue) => void;
+    /** Scan for a specific set of levels (or clear it with []). */
+    setHealthScan: (values: HealthFilterValue[]) => void;
     toggleTreeLayer: (layer: TreeLayer) => void;
     selectPerson: (id: string | null) => void;
     selectTeam: (id: string | null) => void;
@@ -172,6 +186,15 @@ type Store = PersistedData &
     /** Merge a patch into a manager's leading-up operating manual. */
     updateManagerLeadUp: (id: string, patch: Partial<LeadUpProfile>) => void;
     deleteManager: (id: string) => void;
+    // health — my own read on a team or a person
+    /** Set (or clear, with null) the health level. Stamps today's date. */
+    setHealth: (
+      kind: "team" | "person",
+      id: string,
+      level: HealthLevel | null
+    ) => void;
+    /** Edit the one-line evidence behind an existing health call. */
+    setHealthNote: (kind: "team" | "person", id: string, note: string) => void;
     // teams
     addTeam: (team: Omit<Team, "id" | "order">) => void;
     updateTeam: (id: string, patch: Partial<Team>) => void;
@@ -485,6 +508,7 @@ export const useStore = create<Store>((set, get) => ({
   userEmail: null,
   tab: "tree",
   treeDomainId: null,
+  healthScan: [],
   treeLayers: {
     people: false,
     mandate: true,
@@ -492,6 +516,7 @@ export const useStore = create<Store>((set, get) => ({
     giftMix: false,
     detail: false,
     readiness: true,
+    health: true,
   },
   selectedPersonId: null,
   selectedTeamId: null,
@@ -536,9 +561,22 @@ export const useStore = create<Store>((set, get) => ({
             : true;
     if (!survives) goTo(s, null, { replace: true });
   },
+  toggleHealthScan: (value) =>
+    set((s) => ({
+      healthScan: s.healthScan.includes(value)
+        ? s.healthScan.filter((v) => v !== value)
+        : [...s.healthScan, value],
+    })),
+  setHealthScan: (values) => set({ healthScan: values }),
   toggleTreeLayer: (layer) =>
     set((s) => ({
       treeLayers: { ...s.treeLayers, [layer]: !s.treeLayers[layer] },
+      // Scanning for a level with the layer hidden shows a filtered canvas
+      // that can't say why anything dimmed — turning the layer off drops the
+      // scan with it.
+      ...(layer === "health" && s.treeLayers.health
+        ? { healthScan: [] }
+        : null),
     })),
   /**
    * Closing a person steps up to their team rather than dismissing outright —
@@ -747,6 +785,38 @@ export const useStore = create<Store>((set, get) => ({
     });
     if (before.selectedManagerId === id) goTo(before, null, { replace: true });
   },
+
+  /**
+   * One writer for both subject kinds. Every change re-stamps `ratedOn`: the
+   * date is what separates a current read from a memory, and it would go stale
+   * silently if editing the level left it alone.
+   */
+  setHealth: (kind, id, level) =>
+    set((s) => {
+      const apply = <T extends { id: string; health?: Team["health"] }>(x: T): T =>
+        x.id !== id
+          ? x
+          : {
+              ...x,
+              health: level
+                ? { level, note: x.health?.note, ratedOn: todayISO() }
+                : undefined,
+            };
+      return kind === "team"
+        ? { teams: s.teams.map(apply) }
+        : { people: s.people.map(apply) };
+    }),
+  setHealthNote: (kind, id, note) =>
+    set((s) => {
+      const text = note.trim();
+      const apply = <T extends { id: string; health?: Team["health"] }>(x: T): T =>
+        x.id !== id || !x.health
+          ? x
+          : { ...x, health: { ...x.health, note: text || undefined } };
+      return kind === "team"
+        ? { teams: s.teams.map(apply) }
+        : { people: s.people.map(apply) };
+    }),
 
   addTeam: (team) =>
     set((s) => ({

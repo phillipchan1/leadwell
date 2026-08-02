@@ -22,6 +22,7 @@ import {
   inputCls,
 } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
+import { HealthField } from "./Health";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { SessionTable } from "./SessionTable";
@@ -70,6 +71,8 @@ export function PersonProfile({
     selectTeam,
     deletePerson,
     updateLeadUp,
+    setHealth,
+    setHealthNote,
     modal,
     askAIOpen,
     settingsOpen,
@@ -265,6 +268,16 @@ export function PersonProfile({
       <div className="relative min-h-0 flex-1 overflow-y-auto">
         {tab === "profile" && isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
+            {/* Upward, this rates the relationship rather than the person. */}
+            <section className="max-w-sm">
+              <HealthField
+                key={person.id}
+                health={person.health}
+                onLevel={(level) => setHealth("person", person.id, level)}
+                onNote={(note) => setHealthNote("person", person.id, note)}
+                label="Health — my read"
+              />
+            </section>
             <PrepPanel
               subjectKind="person"
               subjectId={person.id}
@@ -292,6 +305,16 @@ export function PersonProfile({
 
         {tab === "profile" && !isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
+            {/* How they're doing — my call, not a read of their assessments. */}
+            <section className="max-w-sm">
+              <HealthField
+                key={person.id}
+                health={person.health}
+                onLevel={(level) => setHealth("person", person.id, level)}
+                onNote={(note) => setHealthNote("person", person.id, note)}
+                label="Health — my read"
+              />
+            </section>
             <PrepPanel
               subjectKind="person"
               subjectId={person.id}

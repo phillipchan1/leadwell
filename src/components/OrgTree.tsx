@@ -24,6 +24,18 @@ import {
 import type { Manager, Person, Team } from "../types";
 import { domainCounts, hasLeadershipRead, topDomain } from "../lib/derive";
 import {
+  HEALTH_COLOR,
+  HEALTH_FILTER_VALUES,
+  HEALTH_LABEL,
+  filterColor,
+  filterLabel,
+  matchesHealth,
+  rollUpHealth,
+  teamHealth,
+  type HealthFilterValue,
+} from "../lib/health";
+import { HealthBar, HealthChip, HealthDot } from "./Health";
+import {
   distribution,
   formatCountdown,
   isBehind,
@@ -56,6 +68,7 @@ const LAYER_KEYS: Record<string, TreeLayer> = {
   g: "giftMix",
   d: "detail",
   r: "readiness",
+  h: "health",
 };
 
 const NODE_W = 320; // matches w-80 on team cards
@@ -398,7 +411,7 @@ export function OrgTree() {
   }, [visibleTeams, visibleManagers, visibleReports, capacities, domains]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       {/* Domain filter: All = full tree; pick a domain for a focused view */}
       <div
         className="flex flex-wrap items-center gap-1.5"
@@ -433,6 +446,8 @@ export function OrgTree() {
         </button>
         <ReadinessSummary teams={visibleTeams} reports={visibleReports} />
       </div>
+
+      <HealthScan teams={visibleTeams} reports={visibleReports} />
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         <ReactFlow
@@ -763,6 +778,151 @@ function ReadinessSummary({
   );
 }
 
+/**
+ * The health scan: counts per level across everything currently on the canvas,
+ * and — clicking one — the filter that dims everything else out of the way.
+ *
+ * Dimming rather than hiding is the whole point. Filtering to "Strained" and
+ * watching two cards stay lit inside the shape of the org tells you *where* the
+ * strain is; a canvas with two cards on it doesn't. A team stays lit if its own
+ * rating matches or any of its people do, so scanning finds the person even
+ * when the team around them reads fine.
+ */
+function HealthScan({
+  teams,
+  reports,
+}: {
+  teams: Team[];
+  reports: Person[];
+}) {
+  const people = useStore((s) => s.people);
+  const treeLayers = useStore((s) => s.treeLayers);
+  const filter = useStore((s) => s.healthScan);
+  const toggle = useStore((s) => s.toggleHealthScan);
+  const setFilter = useStore((s) => s.setHealthScan);
+
+  if (!treeLayers.health) return null;
+
+  const teamIds = new Set(teams.map((t) => t.id));
+  const members = people.filter((p) => p.teamId && teamIds.has(p.teamId));
+  const subjects = [...teams, ...members, ...reports];
+  if (subjects.length === 0) return null;
+
+  const roll = rollUpHealth(subjects.map((s) => s.health));
+  const unrated = subjects.length - roll.rated;
+
+  const countFor = (value: HealthFilterValue) =>
+    value === "unrated" ? unrated : roll.counts[value];
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[11px] font-medium tracking-wide text-stone-400 uppercase">
+        Health
+      </span>
+      {HEALTH_FILTER_VALUES.map((value) => {
+        const count = countFor(value);
+        const active = filter.includes(value);
+        const color = filterColor(value);
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={active}
+            disabled={count === 0 && !active}
+            onClick={() => toggle(value)}
+            title={
+              count === 0
+                ? `Nothing rated ${filterLabel(value).toLowerCase()} in view`
+                : `Scan for ${filterLabel(value).toLowerCase()} (${count})`
+            }
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-40 ${
+              active
+                ? "border-transparent font-medium text-white"
+                : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-500"
+            }`}
+            style={active ? { backgroundColor: color } : undefined}
+          >
+            {!active && (
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+            )}
+            {filterLabel(value)}
+            <span
+              className={`tabular-nums ${active ? "text-white/80" : "text-stone-400"}`}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
+      {filter.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setFilter([])}
+          className="rounded-md px-1.5 py-0.5 text-xs text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800"
+        >
+          Clear
+        </button>
+      )}
+      <span className="ml-auto text-xs text-stone-400">
+        {roll.rated === 0 ? (
+          "Nothing rated yet — set a health on any card"
+        ) : (
+          <>
+            <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
+              {roll.rated}
+            </strong>{" "}
+            of {subjects.length} rated
+            {roll.worst && (
+              <>
+                {" · worst "}
+                <span
+                  className="font-medium"
+                  style={{ color: HEALTH_COLOR[roll.worst] }}
+                >
+                  {HEALTH_LABEL[roll.worst].toLowerCase()}
+                </span>
+              </>
+            )}
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Is this card part of the current scan's answer? A team counts itself *and*
+ * its roster, so filtering for strain doesn't hide the card you need to click
+ * through to reach the strained person.
+ */
+function useScanDimmed(kind: "team" | "person" | "manager", id: string): boolean {
+  const filter = useStore((s) => s.healthScan);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+
+  if (filter.length === 0) return false;
+  if (kind === "manager") return !filter.includes("unrated");
+  if (kind === "person") {
+    const person = people.find((p) => p.id === id);
+    return !matchesHealth(person?.health, filter);
+  }
+  const team = teams.find((t) => t.id === id);
+  const members = people.filter((p) => p.teamId === id);
+  return !(
+    matchesHealth(team?.health, filter) ||
+    members.some((m) => matchesHealth(m.health, filter))
+  );
+}
+
+/** Cards fade back rather than disappear — see HealthScan. */
+const dimStyle = (dim: boolean): CSSProperties => ({
+  opacity: dim ? 0.22 : 1,
+  transition: "opacity 150ms ease-out",
+});
+
 const VIEW_LAYERS: {
   id: TreeLayer;
   label: string;
@@ -779,6 +939,12 @@ const VIEW_LAYERS: {
     label: "Ready",
     shortcut: "R",
     title: "1:1 readiness — am I prepared for the next one",
+  },
+  {
+    id: "health",
+    label: "Health",
+    shortcut: "H",
+    title: "My read on how each team and person is doing — and the scan bar",
   },
 ];
 
@@ -986,6 +1152,7 @@ function ManagerNode({ data }: NodeProps) {
     selectManager,
     selectedManagerId,
   } = useStore();
+  const dim = useScanDimmed("manager", managerId);
   const manager = managers.find((m) => m.id === managerId);
   if (!manager) return null;
   const readiness = treeLayers.readiness
@@ -1009,6 +1176,7 @@ function ManagerNode({ data }: NodeProps) {
         className={`group flex w-52 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-blue-400 ${
           selected ? "border-blue-500 ring-1 ring-blue-500/30" : ""
         }`}
+        style={dimStyle(dim)}
         onClick={() => selectManager(manager.id)}
       >
         <Avatar name={manager.name} photo={manager.photo} size={34} />
@@ -1080,6 +1248,7 @@ function DirectReportNode({ data }: NodeProps) {
     selectPerson,
     selectedPersonId,
   } = useStore();
+  const dim = useScanDimmed("person", personId);
   const person = people.find((p) => p.id === personId);
   if (!person) return null;
   const readiness = treeLayers.readiness
@@ -1101,6 +1270,7 @@ function DirectReportNode({ data }: NodeProps) {
         className={`group flex w-64 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-teal-400 ${
           selected ? "border-teal-500 ring-1 ring-teal-500/30" : ""
         }`}
+        style={dimStyle(dim)}
         onClick={() => selectPerson(person.id)}
       >
         <Avatar
@@ -1121,6 +1291,11 @@ function DirectReportNode({ data }: NodeProps) {
                 ? `${led.length} team${led.length === 1 ? "" : "s"}`
                 : "no teams"}
             </span>
+            {treeLayers.health && person.health && (
+              <span className="shrink-0">
+                <HealthChip health={person.health} size="sm" />
+              </span>
+            )}
             {readiness && (
               <span className="shrink-0">
                 <ReadinessChip
@@ -1185,6 +1360,8 @@ function TeamNode({ data }: NodeProps) {
   } = useStore();
   // Highlight the card while one of its members is open, not just the team.
   const activeTeamId = useActiveTeamId();
+  const healthFilter = useStore((s) => s.healthScan);
+  const dim = useScanDimmed("team", teamId);
 
   const team = teams.find((t) => t.id === teamId);
   if (!team) return null;
@@ -1204,7 +1381,13 @@ function TeamNode({ data }: NodeProps) {
     giftMix,
     detail,
     readiness: showReadiness,
+    health: showHealth,
   } = treeLayers;
+
+  // My call on the team, or — when I've never made one — the average of the
+  // calls I've made on its people, marked as derived so it never poses as mine.
+  const health = teamHealth(team, members);
+  const memberHealth = rollUpHealth(members.map((m) => m.health));
 
   // A card can carry two different things to be ready for: the team's own
   // standing meeting, and a 1:1 with each member. Both are tracked meetings.
@@ -1235,6 +1418,7 @@ function TeamNode({ data }: NodeProps) {
         style={
           {
             ["--team-accent"]: accent,
+            ...dimStyle(dim),
             ...(selected
               ? { ["--tw-ring-color"]: accent }
               : undefined),
@@ -1272,6 +1456,9 @@ function TeamNode({ data }: NodeProps) {
                   <span className="text-[10px] text-stone-400">
                     led by {leader.name}
                   </span>
+                )}
+                {showHealth && health && (
+                  <HealthChip health={health.health} derived={health.derived} />
                 )}
                 {domain && <Badge color={domain.color}>{domain.name}</Badge>}
                 {capacity && (
@@ -1320,6 +1507,30 @@ function TeamNode({ data }: NodeProps) {
           {giftMix && members.length > 0 && (
             <div className="mt-3">
               <GiftMixBar people={members} />
+            </div>
+          )}
+
+          {showHealth && (team.health?.note || memberHealth.rated > 0) && (
+            <div className="mt-3 flex flex-col gap-1">
+              {team.health?.note && (
+                <p className="line-clamp-2 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+                  {team.health.note}
+                </p>
+              )}
+              {memberHealth.rated > 0 && (
+                <>
+                  <HealthBar roll={memberHealth} />
+                  <div className="text-[10px] text-stone-400">
+                    {memberHealth.counts.strained + memberHealth.counts.critical >
+                    0
+                      ? `${
+                          memberHealth.counts.strained +
+                          memberHealth.counts.critical
+                        } of ${memberHealth.rated} rated need attention`
+                      : `${memberHealth.rated} of ${members.length} rated, none strained`}
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -1399,6 +1610,10 @@ function TeamNode({ data }: NodeProps) {
                   selected={p.id === selectedPersonId}
                   capacityColor={capacity?.color ?? "#0D9488"}
                   showDetail={detail}
+                  showHealth={showHealth}
+                  // A scan dims the people it isn't asking about, so an open
+                  // team card answers "who on this team" without a second look.
+                  dimmed={!matchesHealth(p.health, healthFilter)}
                   readiness={showReadiness ? readings.get(p.id) : undefined}
                   onSelect={() => selectPerson(p.id)}
                   onEdit={() => openModal({ kind: "person", person: p })}
@@ -1509,6 +1724,8 @@ function PersonRow({
   selected,
   capacityColor,
   showDetail,
+  showHealth,
+  dimmed = false,
   readiness,
   onSelect,
   onEdit,
@@ -1517,6 +1734,10 @@ function PersonRow({
   selected: boolean;
   capacityColor: string;
   showDetail: boolean;
+  /** Health layer on — show their level beside the name. */
+  showHealth?: boolean;
+  /** A health scan is running and they're not part of the answer. */
+  dimmed?: boolean;
   /** Present only when the readiness layer is on. */
   readiness?: Readiness;
   onSelect: () => void;
@@ -1536,7 +1757,12 @@ function PersonRow({
       className={`person-row group/person relative flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 ${
         selected ? "is-selected" : ""
       }`}
-      style={{ ["--person-accent"]: capacityColor } as CSSProperties}
+      style={
+        {
+          ["--person-accent"]: capacityColor,
+          ...dimStyle(dimmed),
+        } as CSSProperties
+      }
       onClick={onSelect}
     >
       <span
@@ -1555,7 +1781,7 @@ function PersonRow({
       </div>
       <div className="min-w-0 flex-1">
         <div
-          className={`truncate text-sm transition-colors ${
+          className={`flex items-center gap-1.5 truncate text-sm transition-colors ${
             selected
               ? "font-medium"
               : assessed
@@ -1563,7 +1789,8 @@ function PersonRow({
                 : "text-stone-400 dark:text-stone-500"
           }`}
         >
-          {person.name}
+          <span className="truncate">{person.name}</span>
+          {showHealth && <HealthDot health={person.health} />}
         </div>
         {showDetail ? (
           <PersonGiftDots person={person} />

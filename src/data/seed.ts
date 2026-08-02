@@ -56,6 +56,11 @@ export const seedTeams: Team[] = [
     cadence: "Weekly",
     lastMet: "2026-07-06",
     order: 0,
+    health: {
+      level: "solid",
+      note: "Trust is high, but the load across the four of us is uneven.",
+      ratedOn: "2026-07-20",
+    },
   },
   {
     id: "team-ministries",
@@ -67,6 +72,11 @@ export const seedTeams: Team[] = [
       "Keep Frontier's ministry teams healthy, staffed, and moving the same direction.",
     cadence: "Monthly leaders huddle",
     order: 1,
+    health: {
+      level: "watch",
+      note: "Two ministries still have no clear leader.",
+      ratedOn: "2026-07-12",
+    },
   },
   {
     id: "team-setup",
@@ -80,6 +90,11 @@ export const seedTeams: Team[] = [
     cadence: "Weekly",
     lastMet: "2026-07-13",
     order: 2,
+    health: {
+      level: "thriving",
+      note: "Volunteer bench is deeper than it has ever been.",
+      ratedOn: "2026-07-27",
+    },
   },
   {
     id: "team-mens",
@@ -90,6 +105,11 @@ export const seedTeams: Team[] = [
     purpose: "Raise up men who lead their families and serve the church.",
     cadence: "Monthly",
     order: 3,
+    health: {
+      level: "strained",
+      note: "Attendance sliding since spring and the core four are tired.",
+      ratedOn: "2026-06-30",
+    },
   },
   {
     id: "team-product",
@@ -99,6 +119,11 @@ export const seedTeams: Team[] = [
     description: "Cross-functional squad at work",
     purpose: "Ship the reporting rewrite and keep the squad unblocked.",
     order: 4,
+    health: {
+      level: "watch",
+      note: "Rewrite is behind and the squad knows it.",
+      ratedOn: "2026-07-28",
+    },
   },
   {
     id: "team-leaders",
@@ -137,6 +162,11 @@ export const seedPeople: Person[] = [
     teamId: "team-frontier",
     name: "Sarah Kim",
     role: "Worship Director",
+    health: {
+      level: "watch",
+      note: "Plate is past full — no weekend off since March.",
+      ratedOn: "2026-07-21",
+    },
     assessments: {
       cliftonTop5: ["Empathy", "Developer", "Belief", "Harmony", "Adaptability"],
       enneagram: "2w1",
@@ -152,6 +182,7 @@ export const seedPeople: Person[] = [
     teamId: "team-frontier",
     name: "Marcus Webb",
     role: "Youth Pastor",
+    health: { level: "solid", ratedOn: "2026-07-21" },
     assessments: {
       cliftonTop5: ["Woo", "Communication", "Activator", "Positivity", "Ideation"],
       enneagram: "7w8",
@@ -176,6 +207,11 @@ export const seedPeople: Person[] = [
     teamId: "team-mens",
     name: "Dave Okafor",
     role: "Small Groups Lead",
+    health: {
+      level: "thriving",
+      note: "Steadiest leader on the team — the guys go to him first.",
+      ratedOn: "2026-07-05",
+    },
     assessments: {
       cliftonTop5: ["Responsibility", "Relator", "Consistency", "Discipline", "Focus"],
       enneagram: "6w5",
@@ -192,6 +228,11 @@ export const seedPeople: Person[] = [
     name: "Jordan Lee",
     noMeeting: true,
     role: "Events Lead",
+    health: {
+      level: "strained",
+      note: "Running on empty; snapped at a volunteer in June.",
+      ratedOn: "2026-06-28",
+    },
     assessments: {
       cliftonTop5: ["Arranger", "Achiever", "Maximizer", "Significance", "Strategic"],
       enneagram: "3w2",
@@ -217,6 +258,11 @@ export const seedPeople: Person[] = [
     teamId: "team-product",
     name: "Priya Nair",
     role: "Staff Engineer",
+    health: {
+      level: "watch",
+      note: "Gone quiet since the re-org — worth asking directly.",
+      ratedOn: "2026-07-28",
+    },
     assessments: {
       cliftonTop5: ["Analytical", "Learner", "Intellection", "Input", "Deliberative"],
       enneagram: "5w4",
@@ -241,6 +287,7 @@ export const seedPeople: Person[] = [
     teamId: "team-leaders",
     name: "Mike Reynolds",
     role: "Lead Pastor",
+    health: { level: "solid", ratedOn: "2026-07-14" },
     assessments: {
       cliftonTop5: ["Strategic", "Command", "Achiever", "Belief", "Futuristic"],
       enneagram: "8w7",
