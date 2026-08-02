@@ -11,6 +11,7 @@ import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
+import { Button } from "@/components/base/buttons/button";
 import { FocusView } from "./components/FocusView";
 import { SessionEditorView } from "./components/SessionEditorView";
 import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
@@ -153,27 +154,25 @@ export default function App() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAskAIOpen(true)}
-            className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700"
-          >
+          <Button size="sm" onClick={() => setAskAIOpen(true)}>
             ✦ Ask AI
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
+            color="secondary"
             onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-            title={userEmail ?? "Settings"}
-            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-stone-600 hover:bg-stone-100 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+            aria-label={userEmail ?? "Settings"}
           >
             Settings
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
+            color="secondary"
             onClick={toggleDark}
             aria-label="Toggle dark mode"
-            className="rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm hover:bg-stone-100 dark:border-stone-700 dark:hover:bg-stone-800"
           >
             {dark ? "☀️" : "🌙"}
-          </button>
+          </Button>
         </div>
       </header>
 

@@ -4,13 +4,10 @@ import type { Health, HealthLevel, Manager, Person, Team } from "../types";
 import { todayISO } from "../lib/health";
 import { directReports, eligibleParents } from "../lib/teams";
 import { HealthField } from "./Health";
-import {
-  Modal,
-  inputCls,
-  fieldLabelCls,
-  buttonPrimaryCls,
-  buttonGhostCls,
-} from "./ui";
+import { Modal, inputCls, fieldLabelCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 import { PhotoPicker } from "./PhotoPicker";
 
 /**
@@ -127,13 +124,9 @@ function DomainPicker({
               }
             }}
           />
-          <button
-            type="button"
-            className={`${buttonPrimaryCls} px-3 py-2 text-xs`}
-            onClick={createDomain}
-          >
+          <Button size="sm" onClick={createDomain}>
             Add
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -371,9 +364,9 @@ export function TeamModal({
         </label>
         <div className="flex items-center justify-between pt-2">
           {team ? (
-            <button
-              type="button"
-              className="text-xs text-stone-400 hover:text-red-500"
+            <Button
+              size="sm"
+              color="link-destructive"
               onClick={() => {
                 const extra =
                   childCount > 0
@@ -390,22 +383,17 @@ export function TeamModal({
               }}
             >
               Delete team
-            </button>
+            </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
-            <button type="button" className={buttonGhostCls} onClick={onClose}>
+            <Button size="md" color="secondary" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              className={buttonPrimaryCls}
-              onClick={save}
-              disabled={!name.trim()}
-            >
+            </Button>
+            <Button size="md" onClick={save} isDisabled={!name.trim()}>
               {team ? "Save" : nested ? "Add sub-team" : "Add team"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -468,8 +456,9 @@ export function ManagerModal({
         </div>
         <div className="flex items-center justify-between pt-2">
           {manager ? (
-            <button
-              className="text-xs text-stone-400 hover:text-red-500"
+            <Button
+              size="sm"
+              color="link-destructive"
               onClick={() => {
                 if (confirm(`Remove ${manager.name}?`)) {
                   deleteManager(manager.id);
@@ -478,21 +467,17 @@ export function ManagerModal({
               }}
             >
               Remove
-            </button>
+            </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
-            <button className={buttonGhostCls} onClick={onClose}>
+            <Button size="md" color="secondary" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              className={buttonPrimaryCls}
-              onClick={save}
-              disabled={!name.trim()}
-            >
+            </Button>
+            <Button size="md" onClick={save} isDisabled={!name.trim()}>
               {manager ? "Save" : "Add manager"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -540,16 +525,12 @@ export function MeModal({ onClose }: { onClose: () => void }) {
           />
         </label>
         <div className="flex justify-end gap-2 pt-2">
-          <button className={buttonGhostCls} onClick={onClose}>
+          <Button size="md" color="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            className={buttonPrimaryCls}
-            onClick={save}
-            disabled={!name.trim()}
-          >
+          </Button>
+          <Button size="md" onClick={save} isDisabled={!name.trim()}>
             Save
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
@@ -690,20 +671,21 @@ export function PersonModal({
           hint="Your own call on how they're doing. Filter and sort by it in the tree and the table."
         />
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className={buttonGhostCls} onClick={onClose}>
+          <Button type="button" size="md" color="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className={`${buttonPrimaryCls} inline-flex items-center gap-1.5`}
-            disabled={!name.trim()}
-            title="Enter or ⌘Enter"
+            size="md"
+            isDisabled={!name.trim()}
+            iconTrailing={
+              <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
+                ↵
+              </kbd>
+            }
           >
             {person ? "Save" : "Add person"}
-            <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
-              ↵
-            </kbd>
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>
@@ -765,9 +747,12 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
               <span className="shrink-0 text-[10px] text-stone-400">
                 {n === 0 ? "unused" : `${n} tagged`}
               </span>
-              <button
-                className="shrink-0 rounded-md px-1.5 py-1 text-xs text-stone-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
-                title="Delete domain"
+              <ButtonUtility
+                size="xs"
+                color="tertiary"
+                icon={X}
+                tooltip="Delete domain"
+                className="shrink-0"
                 onClick={() => {
                   const msg =
                     n > 0
@@ -775,9 +760,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                       : `Delete "${d.name}"?`;
                   if (confirm(msg)) deleteDomain(d.id);
                 }}
-              >
-                ✕
-              </button>
+              />
             </li>
           );
         })}
@@ -813,13 +796,9 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
               }
             }}
           />
-          <button
-            className={buttonPrimaryCls}
-            onClick={create}
-            disabled={!newName.trim()}
-          >
+          <Button size="md" onClick={create} isDisabled={!newName.trim()}>
             Add
-          </button>
+          </Button>
         </div>
         <div className="mt-2 flex flex-wrap gap-1">
           {DOMAIN_PALETTE.map((c) => (
@@ -838,9 +817,9 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="mt-4 flex justify-end">
-        <button className={buttonGhostCls} onClick={onClose}>
+        <Button size="md" color="secondary" onClick={onClose}>
           Done
-        </button>
+        </Button>
       </div>
     </Modal>
   );
