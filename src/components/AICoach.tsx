@@ -44,10 +44,22 @@ export function AICoach({
   const [streaming, setStreaming] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const keyed = hasApiKey();
 
+  /**
+   * scrollIntoView walks the whole ancestor chain, so every streamed token was
+   * jerking the profile panel and the page along with the chat. Scroll only the
+   * log, and only when the reader is already at the bottom — otherwise someone
+   * reading back through the conversation gets yanked to the end mid-sentence.
+   */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = logRef.current;
+    if (!el) return;
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom > 80) return;
+    el.scrollTop = el.scrollHeight;
   }, [history.length, streaming]);
 
   const send = async (text: string) => {
@@ -84,7 +96,7 @@ export function AICoach({
   if (!keyed) {
     return (
       <div className="rounded-xl border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700">
-        <p className="font-medium text-stone-600 dark:text-stone-300">
+        <p className="font-medium text-stone-600 dark:text-stone-400">
           AI coach unavailable
         </p>
         <p className="mt-1 text-xs leading-relaxed">
@@ -99,13 +111,13 @@ export function AICoach({
     <div className="flex flex-col gap-3">
       {/* Presets */}
       {presets.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {presets.map((p) => (
             <button
               key={p.label}
               onClick={() => send(p.prompt)}
               disabled={streaming !== null}
-              className="rounded-full border border-stone-300 px-2.5 py-1 text-xs text-stone-600 hover:border-teal-500 hover:text-teal-600 disabled:opacity-50 dark:border-stone-700 dark:text-stone-300"
+              className="touch:min-h-11 rounded-full border border-stone-300 px-3 py-2 text-xs text-stone-600 transition-colors hover:border-teal-500 hover:text-teal-600 active:bg-stone-100 disabled:opacity-50 dark:border-stone-700 dark:text-stone-400 dark:active:bg-stone-800"
             >
               {p.label}
             </button>
@@ -115,7 +127,10 @@ export function AICoach({
 
       {/* Messages */}
       {(history.length > 0 || streaming !== null) && (
-        <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
+        <div
+          ref={logRef}
+          className="scroll-contain max-h-80 space-y-3 overflow-y-auto rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
+        >
           {history.map((m, i) => (
             <MessageBubble key={i} role={m.role} content={m.content} />
           ))}
@@ -130,7 +145,7 @@ export function AICoach({
       )}
 
       {error && (
-        <p className="text-xs text-red-500">
+        <p className="text-xs text-red-600 dark:text-red-400">
           {error}
         </p>
       )}
@@ -155,6 +170,8 @@ export function AICoach({
           }
           value={input}
           onChange={setInput}
+          enterKeyHint="send"
+          autoComplete="off"
         />
         <Button
           type="submit"

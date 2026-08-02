@@ -41,6 +41,8 @@ import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
+import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
+import { confirmAction } from "./ConfirmDialog";
 
 type PersonTab = "profile" | "sessions" | "topics" | "notes";
 
@@ -97,6 +99,7 @@ export function PersonProfile({
     notes,
   } = useStore();
 
+  const coarse = useCoarsePointer();
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);
   // Teams that are theirs to run, not mine.
@@ -205,10 +208,15 @@ export function PersonProfile({
     >
       {/* Header */}
       <div
-        className={`shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
+        className={`entity-header shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
       >
         <div className="flex items-start gap-3">
-          <Avatar name={person.name} photo={person.photo} size={52} />
+          <Avatar
+            name={person.name}
+            photo={person.photo}
+            size={52}
+            className="entity-header-avatar"
+          />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-lg font-semibold">{person.name}</h2>
             <div className="text-xs text-stone-500">
@@ -217,14 +225,14 @@ export function PersonProfile({
                 .join(" · ")}
             </div>
             {led.length > 0 && (
-              <div className="mt-1 flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-stone-400">Leads</span>
+              <div className="entity-header-secondary mt-1 flex flex-wrap items-center gap-1">
+                <span className="text-[11px] text-stone-500 dark:text-stone-400">Leads</span>
                 {led.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => selectTeam(t.id)}
-                    className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                    className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                   >
                     {t.name}
                   </button>
@@ -232,11 +240,11 @@ export function PersonProfile({
               </div>
             )}
             {capacity && (
-              <div className="mt-1">
+              <div className="entity-header-secondary mt-1">
                 <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
               </div>
             )}
-            <div className="mt-1 text-[11px] text-stone-400">
+            <div className="entity-header-secondary mt-1 text-[11px] text-stone-500 dark:text-stone-400">
               {nextSession &&
                 `Next ${isLeadUp ? "check-in" : "1:1"} ${nextSession}`}
               {nextSession && lastSession && " · "}
@@ -250,7 +258,7 @@ export function PersonProfile({
       <Tabs
         selectedKey={tab}
         onSelectionChange={(key) => setTab(key as ReturnType<typeof personTabs>[number]["id"])}
-        className="shrink-0 border-b border-stone-200 px-3 dark:border-stone-800"
+        className="shrink-0 overflow-x-auto scrollbar-hide border-b border-stone-200 px-3 dark:border-stone-800"
       >
         <TabList type="underline" size="sm" items={personTabs(isLeadUp)}>
           {(t) => (
@@ -269,7 +277,7 @@ export function PersonProfile({
         </TabList>
       </Tabs>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto">
+      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
         {tab === "profile" && isLeadUp && (
           <div className="flex flex-col gap-6 p-4">
             {/* Upward, this rates the relationship rather than the person. */}
@@ -300,8 +308,15 @@ export function PersonProfile({
             </section>
             <ProfileAdminLinks
               onEdit={() => setEditingPerson(true)}
-              onRemove={() => {
-                if (confirm(`Remove ${person.name}?`)) deletePerson(person.id);
+              onRemove={async () => {
+                if (
+                  await confirmAction({
+                    title: `Remove ${person.name}?`,
+                    body: "Their profile, notes and 1:1 history are removed.",
+                    confirmLabel: "Remove",
+                  })
+                )
+                  deletePerson(person.id);
               }}
             />
           </div>
@@ -342,7 +357,7 @@ export function PersonProfile({
                 <div className="space-y-2">
                   <button
                     onClick={() => setFillingProfile(true)}
-                    className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                    className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
                   >
                     ✨ AI fill from a brain dump
                     <div className="mt-1 text-xs">
@@ -351,7 +366,7 @@ export function PersonProfile({
                   </button>
                   <button
                     onClick={() => setEditingAssessments(true)}
-                    className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                    className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
                   >
                     Or enter assessments manually
                   </button>
@@ -377,7 +392,7 @@ export function PersonProfile({
                         {DOMAINS.map((d) => (
                           <span
                             key={d}
-                            className="flex items-center gap-1 text-[10px] text-stone-400"
+                            className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
                           >
                             <span
                               className="h-1.5 w-1.5 rounded-full"
@@ -392,7 +407,7 @@ export function PersonProfile({
                   <div className="grid grid-cols-2 gap-2">
                     {enn && (
                       <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                        <div className="text-[10px] tracking-wider text-stone-400 uppercase">
+                        <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
                           Enneagram
                         </div>
                         <div className="text-sm font-semibold">
@@ -403,7 +418,7 @@ export function PersonProfile({
                     )}
                     {mbtiKey && MBTI[mbtiKey] && (
                       <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                        <div className="text-[10px] tracking-wider text-stone-400 uppercase">
+                        <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
                           MBTI
                         </div>
                         <div className="text-sm font-semibold">{mbtiKey}</div>
@@ -420,7 +435,7 @@ export function PersonProfile({
                           key={m.id}
                           className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
                         >
-                          <div className="text-[10px] tracking-wider text-stone-400 uppercase">
+                          <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
                             {m.name}
                             {m.source !== "self-report" && (
                               <span className="ml-1.5 font-normal normal-case tracking-normal">
@@ -461,7 +476,7 @@ export function PersonProfile({
                     </div>
                   )}
                   {person.howToLead && (
-                    <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-300">
+                    <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-400">
                       <span className="font-medium text-teal-700 dark:text-teal-400">
                         How to lead:{" "}
                       </span>
@@ -492,7 +507,7 @@ export function PersonProfile({
                   <div key={g.id} className="group">
                     <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                       <span className="flex-1">{g.title}</span>
-                      <span className="text-xs text-stone-400">
+                      <span className="text-xs text-stone-500 dark:text-stone-400">
                         {Math.round(g.progress)}%
                       </span>
                       <ButtonUtility
@@ -500,7 +515,7 @@ export function PersonProfile({
                         color="tertiary"
                         icon={X}
                         tooltip="Delete goal"
-                        className="opacity-0 group-hover:opacity-100"
+                        className="opacity-0 touch:opacity-100 group-hover:opacity-100"
                         onClick={() => deleteGoal(g.id)}
                       />
                     </div>
@@ -512,8 +527,7 @@ export function PersonProfile({
                       onChange={(e) =>
                         updateGoal(g.id, { progress: Number(e.target.value) })
                       }
-                      className="mb-0.5 w-full accent-teal-600"
-                      style={{ height: 4 }}
+                      className="goal-range mb-0.5 w-full"
                     />
                     <ProgressBar value={g.progress} />
                   </div>
@@ -532,12 +546,26 @@ export function PersonProfile({
                   setNewGoal("");
                 }}
               >
-                <Input
-                  size="md"
-                  placeholder="Add a goal…"
-                  value={newGoal}
-                  onChange={setNewGoal}
-                />
+                {/* Implicit submit via the return key is undiscoverable on a
+                    touch keyboard, so the action is visible. */}
+                <div className="flex items-center gap-2">
+                  <Input
+                    size="md"
+                    className="flex-1"
+                    placeholder="Add a goal…"
+                    value={newGoal}
+                    onChange={setNewGoal}
+                    enterKeyHint="done"
+                  />
+                  <Button
+                    type="submit"
+                    size="md"
+                    color="secondary"
+                    isDisabled={!newGoal.trim()}
+                  >
+                    Add
+                  </Button>
+                </div>
               </form>
             </section>
 
@@ -547,8 +575,15 @@ export function PersonProfile({
             </section>
             <ProfileAdminLinks
               onEdit={() => setEditingPerson(true)}
-              onRemove={() => {
-                if (confirm(`Remove ${person.name}?`)) deletePerson(person.id);
+              onRemove={async () => {
+                if (
+                  await confirmAction({
+                    title: `Remove ${person.name}?`,
+                    body: "Their profile, notes and 1:1 history are removed.",
+                    confirmLabel: "Remove",
+                  })
+                )
+                  deletePerson(person.id);
               }}
             />
           </div>
@@ -565,7 +600,7 @@ export function PersonProfile({
               <button
                 type="button"
                 onClick={startNewSession}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
               >
                 + Log a {isLeadUp ? "check-in" : "1:1"} with{" "}
                 {person.name.split(" ")[0]}
@@ -580,10 +615,12 @@ export function PersonProfile({
 
         {tab === "topics" && (
           <div className="space-y-3 p-4">
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               {isLeadUp
                 ? "What you need from them — asks, escalations, decisions. Pull into This check-in before you sit down."
-                : "Park topics to talk about. Drag cards between columns — pull into This 1:1 before you meet."}
+                : coarse
+                  ? "Park topics to talk about. Use each card's Move to… control — pull into This 1:1 before you meet."
+                  : "Park topics to talk about. Drag cards between columns — pull into This 1:1 before you meet."}
             </p>
             <TopicKanban
               personId={person.id}

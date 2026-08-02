@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 
 export type SlashItem = {
@@ -15,6 +16,10 @@ type Props = {
   onClose: () => void;
 };
 
+const MARGIN = 8;
+/** Gap between the caret and the menu when it flips above. */
+const CARET_GAP = 24;
+
 export function SlashMenu({
   items,
   query,
@@ -22,7 +27,10 @@ export function SlashMenu({
   onSelect,
   onClose,
 }: Props) {
-  if (!position) return null;
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [placed, setPlaced] = useState<{ top: number; left: number } | null>(
+    null
+  );
 
   const filtered = items.filter(
     (item) =>
@@ -31,7 +39,42 @@ export function SlashMenu({
       item.description.toLowerCase().includes(query.toLowerCase())
   );
 
-  if (filtered.length === 0) return null;
+  /**
+   * The raw caret coordinates put the menu under the on-screen keyboard and
+   * off the right edge near the margin. `visualViewport` excludes the keyboard,
+   * so clamp to it and flip above the caret when there is no room below.
+   */
+  useLayoutEffect(() => {
+    if (!position || filtered.length === 0) {
+      setPlaced(null);
+      return;
+    }
+    const el = menuRef.current;
+    if (!el) return;
+
+    const vv = window.visualViewport;
+    const viewTop = vv?.offsetTop ?? 0;
+    const viewLeft = vv?.offsetLeft ?? 0;
+    const viewW = vv?.width ?? window.innerWidth;
+    const viewH = vv?.height ?? window.innerHeight;
+
+    const { width, height } = el.getBoundingClientRect();
+
+    const spaceBelow = viewTop + viewH - position.top;
+    const top =
+      spaceBelow < height + MARGIN
+        ? Math.max(viewTop + MARGIN, position.top - height - CARET_GAP)
+        : position.top;
+
+    const left = Math.min(
+      Math.max(viewLeft + MARGIN, position.left),
+      viewLeft + viewW - width - MARGIN
+    );
+
+    setPlaced({ top, left });
+  }, [position, filtered.length, query]);
+
+  if (!position || filtered.length === 0) return null;
 
   return (
     <>
@@ -42,8 +85,19 @@ export function SlashMenu({
         onClick={onClose}
       />
       <div
-        className="slash-menu"
-        style={{ top: position.top, left: position.left }}
+        ref={menuRef}
+        className="slash-menu scroll-contain"
+        style={{
+          top: placed?.top ?? position.top,
+          left: placed?.left ?? position.left,
+          // Never wider than the screen, never taller than the space left over
+          // once the keyboard is up.
+          maxWidth: "calc(100vw - 32px)",
+          maxHeight: "min(60vh, 20rem)",
+          overflowY: "auto",
+          // Avoid a visible jump between the raw and the clamped position.
+          visibility: placed ? "visible" : "hidden",
+        }}
         role="listbox"
       >
         {filtered.map((item) => (
@@ -51,7 +105,7 @@ export function SlashMenu({
             key={item.title}
             type="button"
             role="option"
-            className="slash-menu-item"
+            className="slash-menu-item touch:min-h-11"
             onClick={() => onSelect(item)}
           >
             <span className="slash-menu-title">{item.title}</span>

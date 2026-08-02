@@ -19,6 +19,7 @@ import { TopicKanban } from "./TopicKanban";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { WinsLedger } from "./WinsLedger";
 import type { Density } from "./EntitySurface";
+import { confirmAction } from "./ConfirmDialog";
 
 type ManagerTab = "manual" | "sessions" | "topics" | "notes";
 
@@ -140,7 +141,7 @@ export function ManagerProfile({
     >
       {/* Header — identity only; session/topic create lives in their tabs */}
       <div
-        className={`shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
+        className={`entity-header shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
       >
         <div className="flex items-start gap-3">
           <Avatar name={manager.name} photo={manager.photo} size={52} />
@@ -153,7 +154,7 @@ export function ManagerProfile({
               <TintBadge color="#3B82F6">Leading up</TintBadge>
               {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
             </div>
-            <div className="mt-1 text-[11px] text-stone-400">
+            <div className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
               {nextSession && `Next check-in ${nextSession}`}
               {nextSession && lastSession && " · "}
               {lastSession && `Last ${lastSession.date}`}
@@ -166,7 +167,7 @@ export function ManagerProfile({
       <Tabs
         selectedKey={tab}
         onSelectionChange={(key) => setTab(key as (typeof MANAGER_TABS)[number]["id"])}
-        className="shrink-0 border-b border-stone-200 px-3 dark:border-stone-800"
+        className="shrink-0 overflow-x-auto scrollbar-hide border-b border-stone-200 px-3 dark:border-stone-800"
       >
         <TabList type="underline" size="sm" items={MANAGER_TABS}>
           {(t) => (
@@ -185,7 +186,7 @@ export function ManagerProfile({
         </TabList>
       </Tabs>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto">
+      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
         {tab === "manual" && (
           <div className={`flex flex-col gap-6 ${pad}`}>
             <PrepPanel
@@ -206,8 +207,14 @@ export function ManagerProfile({
             </section>
             <ProfileAdminLinks
               onEdit={() => setEditing(true)}
-              onRemove={() => {
-                if (confirm(`Remove ${manager.name}?`))
+              onRemove={async () => {
+                if (
+                  await confirmAction({
+                    title: `Remove ${manager.name}?`,
+                    body: "Their profile, notes and check-in history are removed.",
+                    confirmLabel: "Remove",
+                  })
+                )
                   deleteManager(manager.id);
               }}
             />
@@ -225,7 +232,7 @@ export function ManagerProfile({
               <button
                 type="button"
                 onClick={startNewSession}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
               >
                 + Log a check-in with {manager.name.split(" ")[0]}
                 <div className="mt-1 text-xs">

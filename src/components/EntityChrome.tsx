@@ -12,15 +12,11 @@ import {
 } from "@untitledui/icons";
 
 /**
- * The navigation bar every entity surface shares: breadcrumb up, pager
- * sideways, promotion between peek and focus.
- *
- * This replaces panel-stacking. A peek shows exactly one entity — drilling
- * into a member swaps the panel's contents and grows the breadcrumb instead of
- * opening a second panel beside the first, which is what lets the model go as
- * deep as the data does without running out of horizontal room.
+ * The breadcrumb and sibling list for whatever the route points at. Shared so
+ * the chrome's pager and the surface's swipe gesture page through exactly the
+ * same sequence.
  */
-export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
+export function useEntityTrail() {
   const {
     people,
     teams,
@@ -117,11 +113,34 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       ? trail.siblings[index + 1]
       : null;
 
-  // ✕ dismisses the whole panel; the breadcrumb is what steps up a level.
-  const close = clearSelection;
+  const busy = modal || askAIOpen || settingsOpen;
+
+  return {
+    trail,
+    index,
+    prev,
+    next,
+    busy,
+    close: clearSelection,
+    openFocus,
+    closeFocus,
+  };
+}
+
+/**
+ * The navigation bar every entity surface shares: breadcrumb up, pager
+ * sideways, promotion between peek and focus.
+ *
+ * This replaces panel-stacking. A peek shows exactly one entity — drilling
+ * into a member swaps the panel's contents and grows the breadcrumb instead of
+ * opening a second panel beside the first, which is what lets the model go as
+ * deep as the data does without running out of horizontal room.
+ */
+export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
+  const { trail, index, prev, next, busy, close, openFocus, closeFocus } =
+    useEntityTrail();
 
   // ←/→ page through siblings, ⌘↵ promotes to focus and back.
-  const busy = modal || askAIOpen || settingsOpen;
   useEffect(() => {
     if (!trail) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -157,15 +176,31 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
   if (!trail) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-50 px-4 py-2 dark:border-stone-800 dark:bg-stone-950/60">
-      {mode === "focus" && (
-        <ButtonUtility
-          size="xs"
-          color="tertiary"
-          icon={ArrowLeft}
-          tooltip="Back to split view"
+    <div className="chrome-compact flex shrink-0 items-center gap-2 border-b border-stone-200 bg-stone-50 px-3 py-2 sm:px-4 dark:border-stone-800 dark:bg-stone-950/60">
+      {/* In iOS standalone there is no browser back and no edge gesture out of
+          a full-page surface, so this is the only exit — it gets a label. */}
+      {mode === "focus" ? (
+        <Button
+          size="sm"
+          color="link-gray"
+          iconLeading={ArrowLeft}
           onClick={closeFocus}
-        />
+          className="shrink-0"
+        >
+          <span className="max-sm:sr-only">Back</span>
+        </Button>
+      ) : (
+        /* The peek has no back; on a phone it fills the screen, so closing it
+           is the way out and needs the same prominence. */
+        <Button
+          size="sm"
+          color="link-gray"
+          iconLeading={ArrowLeft}
+          onClick={close}
+          className="shrink-0 lg:hidden"
+        >
+          <span className="sr-only">Back</span>
+        </Button>
       )}
 
       {/* Breadcrumb */}
@@ -183,7 +218,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             >
               {trail.parent.label}
             </Button>
-            <span className="shrink-0 text-stone-300 dark:text-stone-600">
+            <span className="shrink-0 text-stone-400 dark:text-stone-600">
               ›
             </span>
           </>
@@ -193,16 +228,17 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
         </span>
       </nav>
 
-      {/* Sibling pager */}
+      {/* Sibling pager — 2px between two 28px targets was a mis-tap waiting
+          to happen; the gap and the targets both grow on touch. */}
       {trail.siblings.length > 1 && (
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-2">
           <PagerButton
             label={prev ? `Previous — ${prev.name}` : "Previous"}
             disabled={!prev}
             onClick={() => prev && trail.select(prev.id)}
             icon={ChevronLeft}
           />
-          <span className="text-[10px] tabular-nums text-stone-400">
+          <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
             {index + 1}/{trail.siblings.length}
           </span>
           <PagerButton
@@ -214,7 +250,9 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
         </div>
       )}
 
-      <div className="ml-1 flex shrink-0 items-center gap-0.5">
+      <div className="ml-1 flex shrink-0 items-center gap-2">
+        {/* Peek↔focus promotion is a split-pane idea; below lg there is only
+            ever one surface, so the control has nothing to mean. */}
         {mode === "peek" ? (
           <ButtonUtility
             size="xs"
@@ -222,6 +260,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             icon={Expand01}
             tooltip="Expand to full page (⌘↵)"
             onClick={openFocus}
+            className="max-lg:hidden"
           />
         ) : (
           <ButtonUtility
@@ -230,6 +269,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             icon={Minimize01}
             tooltip="Back to split view (⌘↵)"
             onClick={closeFocus}
+            className="max-lg:hidden"
           />
         )}
         <ButtonUtility

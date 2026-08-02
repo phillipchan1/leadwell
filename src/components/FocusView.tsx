@@ -1,4 +1,5 @@
-import { EntityChrome } from "./EntityChrome";
+import { EntityChrome, useEntityTrail } from "./EntityChrome";
+import { useSwipePager } from "@/hooks/use-sheet";
 import { EntityBody, useSelectedEntity } from "./EntitySurface";
 
 /**
@@ -8,12 +9,21 @@ import { EntityBody, useSelectedEntity } from "./EntitySurface";
  */
 export function FocusView() {
   const selected = useSelectedEntity();
+  const { trail, prev, next } = useEntityTrail();
+  const swipe = useSwipePager({
+    onPrev: prev && trail ? () => trail.select(prev.id) : undefined,
+    onNext: next && trail ? () => trail.select(next.id) : undefined,
+  });
+
   if (!selected) return null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-stone-100/60 dark:bg-stone-950">
       <EntityChrome mode="focus" />
-      <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-stone-900">
+      <div
+        className="flex min-h-0 flex-1 flex-col bg-white dark:bg-stone-900"
+        {...swipe}
+      >
         <EntityBody density="focus" />
       </div>
     </div>

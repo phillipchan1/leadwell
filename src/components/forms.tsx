@@ -12,6 +12,8 @@ import { NativeSelect } from "@/components/base/select/select-native";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { PhotoPicker } from "./PhotoPicker";
+import { confirmAction } from "./ConfirmDialog";
+import { autoFocusUnlessTouch } from "../lib/pointer";
 
 /**
  * The health value to save from a modal. Re-stamps the date only when the call
@@ -106,7 +108,7 @@ function DomainPicker({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="rounded-full border border-dashed border-stone-300 px-2.5 py-1 text-xs text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+            className="rounded-full border border-dashed border-stone-300 px-2.5 py-1 text-xs text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
           >
             + New
           </button>
@@ -119,7 +121,7 @@ function DomainPicker({
             value={newName}
             onChange={setNewName}
             placeholder="New domain, e.g. Family"
-            autoFocus
+            autoFocus={autoFocusUnlessTouch()}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -226,7 +228,8 @@ export function TeamModal({
           value={name}
           onChange={setName}
           placeholder="e.g. Setup & Breakdown"
-          autoFocus
+          hint={name.trim() ? undefined : "A name is required to save."}
+          autoFocus={autoFocusUnlessTouch()}
         />
         {!delegated && parents.length > 0 && (
           <NativeSelect
@@ -299,7 +302,7 @@ export function TeamModal({
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-sm transition-colors ${
                   capacityId === c.id
                     ? "border-transparent text-white"
-                    : "border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-300"
+                    : "border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-400"
                 }`}
                 style={
                   capacityId === c.id ? { backgroundColor: c.color } : undefined
@@ -347,15 +350,17 @@ export function TeamModal({
             <Button
               size="sm"
               color="link-destructive"
-              onClick={() => {
+              onClick={async () => {
                 const extra =
                   childCount > 0
                     ? ` Its ${childCount} sub-team(s) will become top-level.`
                     : "";
                 if (
-                  confirm(
-                    `Delete "${team.name}" and its ${memberCount} member(s)?${extra}`
-                  )
+                  await confirmAction({
+                    title: `Delete "${team.name}"?`,
+                    body: `This removes the team and its ${memberCount} member(s).${extra}`,
+                    confirmLabel: "Delete team",
+                  })
                 ) {
                   deleteTeam(team.id);
                   onClose();
@@ -417,11 +422,14 @@ export function ManagerModal({
           value={name}
           onChange={setName}
           placeholder="e.g. Dana Foster"
-          autoFocus
+          hint={name.trim() ? undefined : "A name is required to save."}
+          autoFocus={autoFocusUnlessTouch()}
         />
         <Input
           label="Role (optional)"
           size="md"
+          name="organization-title"
+          autoComplete="organization-title"
           value={role}
           onChange={setRole}
           placeholder="e.g. VP of Product, Lead Pastor"
@@ -435,8 +443,14 @@ export function ManagerModal({
             <Button
               size="sm"
               color="link-destructive"
-              onClick={() => {
-                if (confirm(`Remove ${manager.name}?`)) {
+              onClick={async () => {
+                if (
+                  await confirmAction({
+                    title: `Remove ${manager.name}?`,
+                    body: "Their profile, notes and check-in history are removed.",
+                    confirmLabel: "Remove",
+                  })
+                ) {
                   deleteManager(manager.id);
                   onClose();
                 }
@@ -482,10 +496,21 @@ export function MeModal({ onClose }: { onClose: () => void }) {
     <Modal title="Edit my profile" onClose={onClose}>
       <div className="space-y-4">
         <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
-        <Input label="Name" size="md" value={name} onChange={setName} autoFocus />
+        <Input
+          label="Name"
+          size="md"
+          name="name"
+          autoComplete="name"
+          value={name}
+          onChange={setName}
+          hint={name.trim() ? undefined : "A name is required to save."}
+          autoFocus={autoFocusUnlessTouch()}
+        />
         <Input
           label="Title (optional)"
           size="md"
+          name="organization-title"
+          autoComplete="organization-title"
           value={title}
           onChange={setTitle}
           placeholder="e.g. Leader, Pastor, Engineering Manager"
@@ -573,10 +598,21 @@ export function PersonModal({
         }}
       >
         <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
-        <Input label="Name" size="md" value={name} onChange={setName} autoFocus />
+        <Input
+          label="Name"
+          size="md"
+          name="name"
+          autoComplete="name"
+          value={name}
+          onChange={setName}
+          hint={name.trim() ? undefined : "A name is required to save."}
+          autoFocus={autoFocusUnlessTouch()}
+        />
         <Input
           label="Role (optional)"
           size="md"
+          name="organization-title"
+          autoComplete="organization-title"
           value={role}
           onChange={setRole}
           placeholder="e.g. Worship Director"
@@ -694,7 +730,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => updateDomain(d.id, { name: e.target.value })}
                 aria-label="Domain name"
               />
-              <span className="shrink-0 text-[10px] text-stone-400">
+              <span className="shrink-0 text-[10px] text-stone-500 dark:text-stone-400">
                 {n === 0 ? "unused" : `${n} tagged`}
               </span>
               <ButtonUtility
@@ -703,26 +739,31 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 icon={X}
                 tooltip="Delete domain"
                 className="shrink-0"
-                onClick={() => {
-                  const msg =
-                    n > 0
-                      ? `Delete "${d.name}"? It will be removed from ${n} team/manager tag(s).`
-                      : `Delete "${d.name}"?`;
-                  if (confirm(msg)) deleteDomain(d.id);
+                onClick={async () => {
+                  if (
+                    await confirmAction({
+                      title: `Delete "${d.name}"?`,
+                      body:
+                        n > 0
+                          ? `It will be removed from ${n} team/manager tag(s).`
+                          : "This life area has no tags yet.",
+                    })
+                  )
+                    deleteDomain(d.id);
                 }}
               />
             </li>
           );
         })}
         {domains.length === 0 && (
-          <li className="py-4 text-center text-sm text-stone-400">
+          <li className="py-4 text-center text-sm text-stone-500 dark:text-stone-400">
             No domains yet — add your first life area below.
           </li>
         )}
       </ul>
 
       <div className="mt-4 rounded-xl border border-dashed border-stone-300 p-3 dark:border-stone-700">
-        <div className="mb-2 text-[11px] font-medium tracking-wide text-stone-400 uppercase">
+        <div className="mb-2 text-[11px] font-medium tracking-wide text-stone-500 dark:text-stone-400 uppercase">
           Add domain
         </div>
         <div className="flex items-center gap-2">

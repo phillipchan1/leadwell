@@ -42,6 +42,7 @@ import {
 } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { ReadinessChip } from "./ReadinessChip";
+import { Explain } from "./Explain";
 import { Th } from "./Th";
 import { HealthBar, HealthSelect } from "./Health";
 import { TintBadge, Card } from "./ui";
@@ -308,13 +309,13 @@ export function TableView() {
         <Input
           size="sm"
           icon={SearchLg}
-          className="max-w-56"
+          className="w-full sm:max-w-56"
           placeholder="Search teams and people…"
           aria-label="Search"
           value={query}
           onChange={setQuery}
         />
-        <label className="flex items-center gap-1.5 text-xs text-stone-400">
+        <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
           Group
           <NativeSelect
             size="sm"
@@ -325,7 +326,7 @@ export function TableView() {
             options={GROUP_OPTIONS}
           />
         </label>
-        <label className="flex items-center gap-1.5 text-xs text-stone-400">
+        <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
           Show
           <NativeSelect
             size="sm"
@@ -353,6 +354,7 @@ export function TableView() {
           ]}
         />
 
+        <div className="max-lg:hidden">
         <ColumnsMenu
           open={columnsOpen}
           onOpenChange={setColumnsOpen}
@@ -366,20 +368,20 @@ export function TableView() {
             })
           }
         />
+        </div>
 
-        <span className="ml-auto text-xs text-stone-400 tabular-nums">
+        <span className="ml-auto text-xs tabular-nums text-stone-500 dark:text-stone-400">
           {rowCount} row{rowCount === 1 ? "" : "s"}
         </span>
       </div>
 
       {/* Health scan — the same filter the org tree is using */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span
-          className="text-[11px] font-medium tracking-wide text-stone-400 uppercase"
-          title="Shared with the org tree, so a scan follows you between the two views"
-        >
-          Health
-        </span>
+        <Explain text="Shared with the org tree, so a scan follows you between the two views">
+          <span className="text-[11px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
+            Health
+          </span>
+        </Explain>
         <button
           type="button"
           onClick={() => setHealthScan(weakScan ? [] : [...WEAK_LEVELS])}
@@ -387,7 +389,7 @@ export function TableView() {
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
             weakScan
               ? "border-transparent bg-amber-500 font-medium text-white"
-              : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300"
+              : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
           }`}
           title="Everything I've flagged watch, strained or critical"
         >
@@ -408,7 +410,7 @@ export function TableView() {
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
                 active
                   ? "border-transparent font-medium text-white"
-                  : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300"
+                  : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
               }`}
               style={active ? { backgroundColor: color } : undefined}
             >
@@ -420,7 +422,7 @@ export function TableView() {
               )}
               {filterLabel(value)}
               <span
-                className={`tabular-nums ${active ? "text-white/80" : "text-stone-400"}`}
+                className={`tabular-nums ${active ? "text-white/80" : "text-stone-500 dark:text-stone-400"}`}
               >
                 {count}
               </span>
@@ -444,10 +446,73 @@ export function TableView() {
         )}
       </div>
 
-      <Card className="overflow-x-auto">
+      {/* Below lg the 52rem table would demand horizontal panning for every
+          row, so the same lines render as stacked cards instead. */}
+      <div className="flex flex-col gap-2 lg:hidden">
+        {lines.map((line) =>
+          line.kind === "group" ? (
+            <button
+              key={`mg-${line.key}`}
+              type="button"
+              onClick={() => toggleCollapsed(`group:${line.key}`)}
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-left text-xs font-medium text-stone-600 active:bg-stone-200 dark:bg-stone-900 dark:text-stone-400 dark:active:bg-stone-800"
+            >
+              <span className="w-3 shrink-0 text-stone-500 dark:text-stone-400">
+                {collapsed.has(`group:${line.key}`) ? "▸" : "▾"}
+              </span>
+              {line.color && (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: line.color }}
+                />
+              )}
+              <span className="flex-1 truncate">{line.label}</span>
+              <span className="tabular-nums text-stone-500">{line.count}</span>
+              <span className="w-16 shrink-0">
+                <HealthBar
+                  roll={rollUpHealth(line.records.map((r) => r.health))}
+                />
+              </span>
+            </button>
+          ) : (
+            <MobileRecordCard
+              key={`m-${line.record.id}`}
+              line={line}
+              selected={
+                line.record.kind === "team"
+                  ? line.record.team?.id === selectedTeamId
+                  : line.record.person?.id === selectedPersonId
+              }
+              onOpen={() =>
+                line.record.kind === "team"
+                  ? selectTeam(line.record.team!.id)
+                  : selectPerson(line.record.person!.id)
+              }
+              onToggle={() => toggleCollapsed(line.record.id)}
+              onHealth={(level) =>
+                setHealth(
+                  line.record.kind,
+                  line.record.kind === "team"
+                    ? line.record.team!.id
+                    : line.record.person!.id,
+                  level
+                )
+              }
+            />
+          )
+        )}
+        {rowCount === 0 && (
+          <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
+            Nothing matches this view.
+            {scanning && " Try clearing the health scan."}
+          </p>
+        )}
+      </div>
+
+      <Card className="max-lg:hidden overflow-x-auto">
         <table className="w-full min-w-[52rem] text-sm">
           <thead className="sticky top-0 z-10 bg-white dark:bg-stone-900">
-            <tr className="border-b border-stone-200 text-left text-xs text-stone-400 dark:border-stone-800">
+            <tr className="border-b border-stone-200 text-left text-xs text-stone-500 dark:text-stone-400 dark:border-stone-800">
               <Th
                 onClick={() => sortBy("name")}
                 sorted={sortedDir("name")}
@@ -478,7 +543,7 @@ export function TableView() {
                     colSpan={visible.length + 1}
                     className="px-4 py-2 text-xs font-medium text-stone-500 dark:text-stone-400"
                   >
-                    <span className="mr-1.5 inline-block w-3 text-stone-400">
+                    <span className="mr-1.5 inline-block w-3 text-stone-500 dark:text-stone-400">
                       {collapsed.has(`group:${line.key}`) ? "▸" : "▾"}
                     </span>
                     {line.color && (
@@ -488,7 +553,7 @@ export function TableView() {
                       />
                     )}
                     {line.label}
-                    <span className="ml-2 text-stone-400 tabular-nums">
+                    <span className="ml-2 text-stone-500 dark:text-stone-400 tabular-nums">
                       {line.count}
                     </span>
                     <span className="ml-3 inline-block w-24 align-middle">
@@ -539,7 +604,7 @@ export function TableView() {
               <tr>
                 <td
                   colSpan={visible.length + 1}
-                  className="px-4 py-10 text-center text-sm text-stone-400"
+                  className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                 >
                   Nothing matches this view.
                   {scanning && " Try clearing the health scan."}
@@ -587,7 +652,7 @@ function Row({
         >
           <button
             type="button"
-            className={`w-3 shrink-0 text-stone-400 ${hasChildren ? "" : "invisible"}`}
+            className={`w-3 shrink-0 text-stone-500 dark:text-stone-400 ${hasChildren ? "" : "invisible"}`}
             aria-label={expanded ? "Collapse" : "Expand"}
             onClick={(e) => {
               e.stopPropagation();
@@ -625,7 +690,7 @@ function Row({
               {record.name}
             </div>
             {record.role && (
-              <div className="truncate text-[11px] text-stone-400" title={record.role}>
+              <div className="truncate text-[11px] text-stone-500 dark:text-stone-400" title={record.role}>
                 {record.role}
               </div>
             )}
@@ -658,7 +723,7 @@ function Cell({
   onHealth: (level: HealthLevel | null) => void;
   onNote: (note: string) => void;
 }) {
-  const dash = <span className="text-stone-300 dark:text-stone-600">—</span>;
+  const dash = <span className="text-stone-400 dark:text-stone-600">—</span>;
 
   switch (column) {
     case "type":
@@ -689,12 +754,11 @@ function Cell({
             ariaLabel={`Health for ${record.name}`}
           />
           {record.derived && (
-            <span
-              className="text-[10px] text-stone-400"
-              title="Averaged from the people on it — I haven't rated the team itself"
-            >
-              ~{filterLabel(record.derived.level).toLowerCase()}
-            </span>
+            <Explain text="Averaged from the people on it — I haven't rated the team itself">
+              <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                ~{filterLabel(record.derived.level).toLowerCase()}
+              </span>
+            </Explain>
           )}
         </div>
       );
@@ -709,7 +773,7 @@ function Cell({
           dot={false}
         />
       ) : (
-        <span className="text-[11px] text-stone-300 dark:text-stone-600">
+        <span className="text-[11px] text-stone-400 dark:text-stone-600">
           untracked
         </span>
       );
@@ -749,7 +813,7 @@ function NoteCell({
 
   // Without a level there's nothing to explain — rate it first.
   if (!record.health) {
-    return <span className="text-stone-300 dark:text-stone-600">—</span>;
+    return <span className="text-stone-400 dark:text-stone-600">—</span>;
   }
 
   return (
@@ -808,7 +872,7 @@ function ColumnsMenu({
         aria-expanded={open}
       >
         Columns
-        <span className="ml-1 text-stone-400 tabular-nums">{columns.size}</span>
+        <span className="ml-1 text-stone-500 dark:text-stone-400 tabular-nums">{columns.size}</span>
       </Button>
       {open && (
         <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg dark:border-stone-800 dark:bg-stone-900">
@@ -831,3 +895,121 @@ function ColumnsMenu({
   );
 }
 
+
+/**
+ * One outline row as a card, for viewports where the wide table would need
+ * horizontal panning. Carries the same identity, health call and readiness the
+ * table's default columns show; the rest stays behind the desktop table.
+ */
+function MobileRecordCard({
+  line,
+  selected,
+  onOpen,
+  onToggle,
+  onHealth,
+}: {
+  line: Extract<Line, { kind: "row" }>;
+  selected: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+  onHealth: (level: HealthLevel | null) => void;
+}) {
+  const { record, depth, hasChildren, expanded, context } = line;
+  const isTeam = record.kind === "team";
+
+  return (
+    <div
+      className={`rounded-xl border transition-colors ${
+        selected
+          ? "border-teal-300 bg-teal-50/70 dark:border-teal-800 dark:bg-teal-950/30"
+          : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900"
+      } ${context ? "opacity-60" : ""}`}
+      // Indent tracks the outline, but capped so deep nesting still leaves
+      // room for the name on a 320px screen.
+      style={{ marginLeft: Math.min(depth, 3) * 12 }}
+    >
+      <div className="flex items-start gap-2 p-3">
+        <button
+          type="button"
+          className={`-m-1 flex size-8 shrink-0 items-center justify-center text-stone-500 dark:text-stone-400 ${
+            hasChildren ? "" : "invisible"
+          }`}
+          aria-label={expanded ? "Collapse" : "Expand"}
+          onClick={onToggle}
+        >
+          {expanded ? "▾" : "▸"}
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+        >
+          {isTeam ? (
+            <span
+              className="size-8 shrink-0 rounded-md"
+              style={{
+                backgroundColor:
+                  (record.domain?.color ?? record.capacity?.color ?? "#0D9488") +
+                  "24",
+                boxShadow: `inset 0 0 0 1.5px ${
+                  record.domain?.color ?? record.capacity?.color ?? "#0D9488"
+                }55`,
+              }}
+              aria-hidden
+            />
+          ) : (
+            <Avatar
+              name={record.name}
+              photo={record.person?.photo}
+              size={32}
+              dimmed={record.coverage === 0}
+            />
+          )}
+          <span className="min-w-0 flex-1">
+            <span
+              className={`block truncate text-sm ${isTeam ? "font-medium" : ""}`}
+            >
+              {record.name}
+            </span>
+            <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+              {record.role || record.typeLabel}
+              {record.underName ? ` · ${record.underName}` : ""}
+            </span>
+          </span>
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-3 py-2 dark:border-stone-800">
+        <HealthSelect
+          size="sm"
+          value={record.health?.level}
+          onChange={onHealth}
+          ariaLabel={`Health for ${record.name}`}
+        />
+        {record.readiness && (
+          <ReadinessChip
+            state={record.readiness.state}
+            text={formatCountdown(record.readiness)}
+            title={`${STATE_LABEL[record.readiness.state]} — ${record.readiness.headline}`}
+            dot={false}
+          />
+        )}
+        {record.domain && (
+          <TintBadge color={record.domain.color}>{record.domain.name}</TintBadge>
+        )}
+        {record.nextDate && (
+          <span className="text-xs tabular-nums text-stone-500 dark:text-stone-400">
+            Next {record.nextDate}
+          </span>
+        )}
+      </div>
+
+      {record.note && (
+        <p className="border-t border-stone-100 px-3 py-2 text-xs text-stone-600 dark:border-stone-800 dark:text-stone-400">
+          {record.note}
+        </p>
+      )}
+    </div>
+  );
+}

@@ -48,7 +48,7 @@ export function ProfileBuildCanvas({
           <div className="min-w-0 flex-1 space-y-2.5">
             <div>
               <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className="text-[10px] font-medium tracking-wider text-stone-400 uppercase">
+                <span className="text-[10px] font-medium tracking-wider text-stone-500 dark:text-stone-400 uppercase">
                   Confidence
                 </span>
                 <span className="font-mono text-xs tabular-nums text-teal-700 dark:text-teal-300">
@@ -62,7 +62,7 @@ export function ProfileBuildCanvas({
                 />
               </div>
             </div>
-            <p className="profile-build__headline line-clamp-2 text-sm leading-snug text-stone-600 dark:text-stone-300">
+            <p className="profile-build__headline line-clamp-2 text-sm leading-snug text-stone-600 dark:text-stone-400">
               {read.headline || emptyHint || "Listening…"}
             </p>
           </div>
@@ -87,7 +87,7 @@ export function ProfileBuildCanvas({
                       title={`${d}: ${n}`}
                     />
                   </div>
-                  <span className="text-[9px] leading-tight text-stone-400">
+                  <span className="text-[9px] leading-tight text-stone-500 dark:text-stone-400">
                     {d === "Relationship Building"
                       ? "Rel"
                       : d === "Strategic Thinking"
@@ -134,7 +134,7 @@ export function ProfileBuildCanvas({
         {howTo && (
           <div
             key={`h-${tick}`}
-            className="profile-build__chip profile-build__chip--enter rounded-xl border-l-2 border-teal-500 bg-teal-50/40 px-3 py-2 text-xs text-stone-600 dark:bg-teal-950/25 dark:text-stone-300"
+            className="profile-build__chip profile-build__chip--enter rounded-xl border-l-2 border-teal-500 bg-teal-50/40 px-3 py-2 text-xs text-stone-600 dark:bg-teal-950/25 dark:text-stone-400"
           >
             <span className="font-medium text-teal-700 dark:text-teal-400">
               {howTo.label}:{" "}
@@ -146,7 +146,7 @@ export function ProfileBuildCanvas({
         {read.signals.length === 0 && (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-8 text-center">
             <div className="profile-build__pulse-dot" />
-            <p className="max-w-[14rem] text-xs text-stone-400">
+            <p className="max-w-[14rem] text-xs text-stone-500 dark:text-stone-400">
               {emptyHint ??
                 "Names, themes, and traits will light up here as you type."}
             </p>
@@ -159,7 +159,7 @@ export function ProfileBuildCanvas({
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[10px] font-medium tracking-wider text-stone-400 uppercase">
+    <div className="text-[10px] font-medium tracking-wider text-stone-500 dark:text-stone-400 uppercase">
       {children}
     </div>
   );
@@ -266,7 +266,7 @@ function MeterRing({
         <span className="font-mono text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
           {Math.round(value)}%
         </span>
-        <span className="text-[8px] tracking-wide text-stone-400 uppercase">
+        <span className="text-[8px] tracking-wide text-stone-500 dark:text-stone-400 uppercase">
           {label}
         </span>
       </div>

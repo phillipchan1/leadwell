@@ -44,7 +44,6 @@ export function TeamProfile({
     selectTeam,
     selectPerson,
     selectedPersonId,
-    deleteTeam,
     updateTeam,
     setHealth,
     setHealthNote,
@@ -188,7 +187,7 @@ export function TeamProfile({
     <aside className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
       {/* Header — identity only */}
       <header
-        className="shrink-0 border-b border-stone-200 px-8 py-4 dark:border-stone-800"
+        className="entity-header shrink-0 border-b border-stone-200 px-8 py-4 dark:border-stone-800"
         style={{ borderTop: `3px solid ${accent}` }}
       >
         <div className="flex items-start gap-3">
@@ -214,7 +213,7 @@ export function TeamProfile({
               {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
               {capacity && <TintBadge color={capacity.color}>{capacity.label}</TintBadge>}
               {team.direction === "up" && (
-                <span className="text-[11px] text-stone-400">Reports up</span>
+                <span className="text-[11px] text-stone-500 dark:text-stone-400">Reports up</span>
               )}
             </div>
             {parent && (
@@ -246,12 +245,12 @@ export function TeamProfile({
           <span>
             {members.length} {members.length === 1 ? "person" : "people"}
           </span>
-          <span className="text-stone-300 dark:text-stone-600">·</span>
+          <span className="text-stone-400 dark:text-stone-600">·</span>
           <span>
             {team.lastMet ? (
               <>
                 Met{" "}
-                <span className="font-medium text-stone-700 dark:text-stone-300">
+                <span className="font-medium text-stone-700 dark:text-stone-400">
                   {team.lastMet}
                 </span>
               </>
@@ -266,6 +265,9 @@ export function TeamProfile({
           >
             Mark met today
           </Button>
+          {/* "Delete" used to sit right beside "Settings" — a mis-tap
+              destroyed the team and every member on it. Deleting now lives in
+              the team's settings modal, next to the rest of its admin. */}
           <Button
             size="sm"
             color="link-gray"
@@ -274,29 +276,10 @@ export function TeamProfile({
           >
             Settings
           </Button>
-          <Button
-            size="sm"
-            color="link-destructive"
-            onClick={() => {
-              const extra =
-                subTeams.length > 0
-                  ? ` Its ${subTeams.length} sub-team(s) will become top-level.`
-                  : "";
-              if (
-                confirm(
-                  `Delete "${team.name}" and its ${members.length} member(s)?${extra}`
-                )
-              ) {
-                deleteTeam(team.id);
-              }
-            }}
-          >
-            Delete
-          </Button>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-8 px-8 py-5">
           {/* My read on the team. Not derived from anything below it — the
               whole point is that it's the call only I can make. */}
@@ -378,7 +361,7 @@ export function TeamProfile({
                 )}
               </div>
               {subTeams.length === 0 ? (
-                <p className="text-xs italic text-stone-400">
+                <p className="text-xs italic text-stone-500 dark:text-stone-400">
                   No sub-teams — nest a team you specifically lead under this
                   broader purview.
                 </p>
@@ -395,7 +378,7 @@ export function TeamProfile({
                           className="flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:border-teal-400 dark:border-stone-800"
                         >
                           <span className="truncate font-medium">{st.name}</span>
-                          <span className="shrink-0 text-[11px] text-stone-400">
+                          <span className="shrink-0 text-[11px] text-stone-500 dark:text-stone-400">
                             {stCap?.label}
                             {stMembers.length
                               ? ` · ${stMembers.length}`
@@ -492,7 +475,7 @@ export function TeamProfile({
               </Button>
             </div>
             {members.length === 0 ? (
-              <p className="text-sm text-stone-400">No one on this team yet.</p>
+              <p className="text-sm text-stone-500 dark:text-stone-400">No one on this team yet.</p>
             ) : (
               <ul className="divide-y divide-stone-100 dark:divide-stone-800">
                 {members.map((p) => {
@@ -524,7 +507,7 @@ export function TeamProfile({
                             {p.name}
                           </div>
                           {p.role && (
-                            <div className="truncate text-[11px] text-stone-400">
+                            <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
                               {p.role}
                             </div>
                           )}
@@ -533,7 +516,7 @@ export function TeamProfile({
                           className={
                             active
                               ? "text-teal-600 dark:text-teal-400"
-                              : "text-stone-300"
+                              : "text-stone-400 dark:text-stone-500"
                           }
                         >
                           ›
@@ -570,9 +553,9 @@ export function TeamProfile({
                 {myNotes.map((n) => (
                   <li
                     key={n.id}
-                    className="group flex items-start gap-2 text-sm text-stone-600 dark:text-stone-300"
+                    className="group flex items-start gap-2 text-sm text-stone-600 dark:text-stone-400"
                   >
-                    <span className="shrink-0 pt-0.5 text-[11px] text-stone-400">
+                    <span className="shrink-0 pt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
                       {n.date}
                     </span>
                     <span className="flex-1 leading-relaxed">{n.body}</span>
@@ -581,7 +564,7 @@ export function TeamProfile({
                       color="tertiary"
                       icon={X}
                       tooltip="Delete note"
-                      className="opacity-0 group-hover:opacity-100"
+                      className="opacity-0 touch:opacity-100 group-hover:opacity-100"
                       onClick={() => deleteTeamNote(n.id)}
                     />
                   </li>
@@ -596,10 +579,10 @@ export function TeamProfile({
               className="flex w-full items-center justify-between rounded-xl border border-stone-200 px-3 py-2.5 text-left text-sm dark:border-stone-800"
               onClick={() => setShowMore((v) => !v)}
             >
-              <span className="font-medium text-stone-600 dark:text-stone-300">
+              <span className="font-medium text-stone-600 dark:text-stone-400">
                 Goals, strengths & AI
               </span>
-              <span className="text-stone-400">{showMore ? "▴" : "▾"}</span>
+              <span className="text-stone-500 dark:text-stone-400">{showMore ? "▴" : "▾"}</span>
             </button>
             {showMore && (
               <div className="mt-4 space-y-6">
@@ -610,7 +593,7 @@ export function TeamProfile({
                       <div key={g.id} className="group">
                         <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                           <span className="flex-1">{g.title}</span>
-                          <span className="text-xs text-stone-400">
+                          <span className="text-xs text-stone-500 dark:text-stone-400">
                             {Math.round(g.progress)}%
                           </span>
                           <ButtonUtility
@@ -618,7 +601,7 @@ export function TeamProfile({
                             color="tertiary"
                             icon={X}
                             tooltip="Delete goal"
-                            className="opacity-0 group-hover:opacity-100"
+                            className="opacity-0 touch:opacity-100 group-hover:opacity-100"
                             onClick={() => deleteTeamGoal(g.id)}
                           />
                         </div>
@@ -632,8 +615,7 @@ export function TeamProfile({
                               progress: Number(e.target.value),
                             })
                           }
-                          className="mb-0.5 w-full accent-teal-600"
-                          style={{ height: 4 }}
+                          className="goal-range mb-0.5 w-full"
                         />
                         <ProgressBar value={g.progress} />
                       </div>
@@ -732,7 +714,7 @@ function ActionRow({
           rows={1}
           className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none ${
             done
-              ? "text-stone-400 line-through decoration-stone-300"
+              ? "text-stone-500 dark:text-stone-400 line-through decoration-stone-300"
               : "text-stone-800 dark:text-stone-100"
           }`}
           value={value}
@@ -746,11 +728,11 @@ function ActionRow({
           }}
         />
         {dueDate && (
-          <div className="pt-0.5 text-[11px] text-stone-400">Due {dueDate}</div>
+          <div className="pt-0.5 text-[11px] text-stone-500 dark:text-stone-400">Due {dueDate}</div>
         )}
       </div>
       <button
-        className="mt-0.5 rounded-md px-1.5 py-0.5 text-sm text-stone-300 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40"
+        className="mt-0.5 rounded-md px-1.5 py-0.5 text-sm text-stone-400 dark:text-stone-500 opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40"
         aria-label="Delete"
         onClick={onDelete}
       >

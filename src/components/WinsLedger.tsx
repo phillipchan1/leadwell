@@ -44,7 +44,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
     <section className="space-y-3">
       <div>
         <SectionTitle>Wins banked</SectionTitle>
-        <p className="mt-1 text-[11px] text-stone-400">
+        <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
           Value delivered, phrased in their currency. Pull these up at reviews
           and before you ask for anything.
         </p>
@@ -68,7 +68,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-[10px] tabular-nums text-stone-400">
+                <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
                   {w.date}
                 </span>
                 <ButtonUtility
@@ -76,7 +76,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                   color="tertiary"
                   icon={X}
                   tooltip="Delete win"
-                  className="opacity-0 group-hover:opacity-100"
+                  className="opacity-0 touch:opacity-100 group-hover:opacity-100"
                   onClick={() => deleteWin(w.id)}
                 />
               </div>
@@ -84,7 +84,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
           </li>
         ))}
         {wins.length === 0 && (
-          <li className="rounded-xl border border-dashed border-stone-300 py-4 text-center text-xs text-stone-400 dark:border-stone-700">
+          <li className="rounded-xl border border-dashed border-stone-300 py-4 text-center text-xs text-stone-500 dark:text-stone-400 dark:border-stone-700">
             Nothing banked yet — log the next thing you deliver.
           </li>
         )}

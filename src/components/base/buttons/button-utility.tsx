@@ -93,6 +93,10 @@ export const ButtonUtility = ({
             {...props}
             className={cx(
                 "group relative inline-flex h-max cursor-pointer items-center justify-center rounded-md p-1.5 outline-focus-ring transition duration-100 ease-linear focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                // This is the delete/close/edit control across the whole app, and
+                // at p-1.5 it is a 28px target. Grow the box on touch without
+                // changing the icon, and acknowledge every tap.
+                "touch:min-h-11 touch:min-w-11 active:scale-95",
                 styles[color],
 
                 // Icon styles

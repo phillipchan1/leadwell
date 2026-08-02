@@ -125,42 +125,52 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
             </Button>
           </div>
 
-          <ul className="max-h-80 divide-y divide-stone-100 overflow-y-auto dark:divide-stone-800">
+          {/* Avatar + name + two buttons on one line squeezed the name column
+              to a couple of characters at 375px, so below sm the actions sit
+              under the name instead. */}
+          <ul className="scroll-contain max-h-80 divide-y divide-stone-100 overflow-y-auto dark:divide-stone-800">
             {rows.map((row) => (
-              <li key={`${row.kind}:${row.id}`} className="flex items-center gap-2.5 py-2">
-                {row.kind === "person" || row.kind === "manager" ? (
-                  <Avatar name={row.name} size={28} />
-                ) : (
-                  <span
-                    className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-stone-100 text-[10px] text-stone-400 dark:bg-stone-800"
-                    aria-hidden
-                  >
-                    ▤
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm">{row.name}</div>
-                  {row.sub && (
-                    <div className="truncate text-[11px] text-stone-400">
-                      {row.sub}
-                    </div>
+              <li
+                key={`${row.kind}:${row.id}`}
+                className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:gap-2.5"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                  {row.kind === "person" || row.kind === "manager" ? (
+                    <Avatar name={row.name} size={28} />
+                  ) : (
+                    <span
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-stone-100 text-[10px] text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                      aria-hidden
+                    >
+                      ▤
+                    </span>
                   )}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{row.name}</div>
+                    {row.sub && (
+                      <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                        {row.sub}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <Button
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => trackMeeting(row.kind, row.id, rhythm)}
-                >
-                  Track
-                </Button>
-                <Button
-                  size="sm"
-                  color="secondary"
-                  className="shrink-0"
-                  onClick={() => setNoMeeting(row.kind, row.id, true)}
-                >
-                  No meeting
-                </Button>
+                <div className="flex shrink-0 gap-2 max-sm:pl-[2.375rem]">
+                  <Button
+                    size="sm"
+                    className="max-sm:flex-1 max-sm:justify-center"
+                    onClick={() => trackMeeting(row.kind, row.id, rhythm)}
+                  >
+                    Track
+                  </Button>
+                  <Button
+                    size="sm"
+                    color="secondary"
+                    className="max-sm:flex-1 max-sm:justify-center"
+                    onClick={() => setNoMeeting(row.kind, row.id, true)}
+                  >
+                    No meeting
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

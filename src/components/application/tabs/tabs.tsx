@@ -57,8 +57,8 @@ const sizes = {
         "button-gray": "py-2 px-2.5",
         "button-border": "py-2 px-2.5",
         "button-minimal": "py-2 px-2.5",
-        underline: "px-0.5 pb-2.5 pt-0",
-        line: "pl-2.5 pr-3 py-0.5",
+        underline: "px-0.5 pb-2.5 pt-0 touch:min-h-11 touch:px-3",
+        line: "pl-2.5 pr-3 py-0.5 touch:min-h-11",
     },
     md: {
         base: "text-md font-semibold gap-1.5 *:data-icon:size-5",
@@ -66,8 +66,8 @@ const sizes = {
         "button-gray": "py-2.5 px-2.5",
         "button-border": "py-2.5 px-2.5",
         "button-minimal": "py-2.5 px-2.5",
-        underline: "px-0.5 pb-2.5 pt-0",
-        line: "pr-3.5 pl-3 py-1",
+        underline: "px-0.5 pb-2.5 pt-0 touch:min-h-11 touch:px-3",
+        line: "pr-3.5 pl-3 py-1 touch:min-h-11",
     },
 };
 
@@ -202,7 +202,7 @@ export const Tab = ({ label, children, badge, icon: Icon, className, ...otherPro
                                 size="sm"
                                 type={showPillColorBadge ? "pill-color" : "modern"}
                                 color={showPillColorBadge && (state.isHovered || state.isSelected) ? "brand" : "gray"}
-                                className={cx("hidden transition-inherit-all md:flex", size === "sm" && "-my-px")}
+                                className={cx("flex transition-inherit-all", size === "sm" && "-my-px")}
                             >
                                 {badge}
                             </Badge>

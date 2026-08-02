@@ -5,6 +5,7 @@ import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { MarkdownBody } from "./MarkdownBody";
 import { WritingPad } from "./WritingPad";
+import { autoFocusUnlessTouch } from "../lib/pointer";
 
 /**
  * Dated notes about one subject. Keyed by subject id, so it serves people I
@@ -46,7 +47,7 @@ export function NotesPanel({
             setComposing(true);
             setDraft("");
           }}
-          className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+          className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
         >
           + New note
         </button>
@@ -57,7 +58,7 @@ export function NotesPanel({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={placeholder}
-            autoFocus
+            autoFocus={autoFocusUnlessTouch()}
             startEditing
             dualMode={false}
           />
@@ -84,43 +85,60 @@ export function NotesPanel({
         </div>
       )}
       {mine.length === 0 && !composing && (
-        <p className="text-center text-xs text-stone-400">No notes yet.</p>
+        <p className="text-center text-xs text-stone-500 dark:text-stone-400">No notes yet.</p>
       )}
       <ul className="space-y-3">
         {mine.map((n) => (
           <li key={n.id} className="group space-y-1">
-            <div className="flex items-center justify-between text-[11px] text-stone-400">
+            <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
               <span>{n.date}</span>
               <ButtonUtility
                 size="xs"
                 color="tertiary"
                 icon={X}
                 tooltip="Delete note"
-                className="opacity-0 group-hover:opacity-100"
+                className="opacity-0 touch:opacity-100 group-hover:opacity-100"
                 onClick={() => deleteNote(n.id)}
               />
             </div>
             {editingId === n.id ? (
-              <WritingPad
-                value={n.body}
-                onChange={(e) => updateNote(n.id, { body: e.target.value })}
-                onBlur={() => setEditingId(null)}
-                autoFocus
-                startEditing
-                dualMode={false}
-              />
+              /* Exiting on blur meant tapping "Done" collapsed the editor
+                 before the tap resolved; the edit now ends on an explicit
+                 action. Changes are already saved on every keystroke. */
+              <div className="space-y-2">
+                <WritingPad
+                  value={n.body}
+                  onChange={(e) => updateNote(n.id, { body: e.target.value })}
+                  autoFocus={autoFocusUnlessTouch()}
+                  startEditing
+                  dualMode={false}
+                />
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={() => setEditingId(null)}>
+                    Done
+                  </Button>
+                </div>
+              </div>
             ) : (
-              <button
-                type="button"
-                className="journal-paper w-full text-left transition-opacity hover:opacity-90"
-                onClick={() => setEditingId(n.id)}
-              >
+              /* Rendered markdown contains links and checkboxes, so it cannot
+                 live inside a <button>: that is invalid HTML, and on touch a
+                 tap on a link both followed it and entered edit mode. */
+              <div className="journal-paper relative">
                 <div className="journal-pad-inner py-4">
                   <MarkdownBody className="text-[0.95rem]">
                     {n.body}
                   </MarkdownBody>
                 </div>
-              </button>
+                <div className="flex justify-end px-4 pb-3">
+                  <Button
+                    size="sm"
+                    color="link-gray"
+                    onClick={() => setEditingId(n.id)}
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
             )}
           </li>
         ))}

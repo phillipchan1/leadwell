@@ -149,7 +149,7 @@ export function AssessmentEditor({
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-sm font-medium">CliftonStrengths Top 5</span>
-            <span className="text-xs text-stone-400">
+            <span className="text-xs text-stone-500 dark:text-stone-400">
               {top5.length}/5 selected, in rank order
             </span>
           </div>
@@ -169,7 +169,7 @@ export function AssessmentEditor({
               ))}
             </ol>
           )}
-          <div className="flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+          <div className="scroll-contain flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
             {ALL_THEMES.filter((t) => !top5.includes(t)).map((t) => (
               <button
                 key={t}
@@ -256,12 +256,12 @@ export function AssessmentEditor({
               + Add modality
             </Button>
           </div>
-          <p className="mb-2 text-[11px] text-stone-400">
+          <p className="mb-2 text-[11px] text-stone-500 dark:text-stone-400">
             Working Genius, DISC, pastoral style — anything that isn’t Clifton /
             Enneagram / MBTI.
           </p>
           {modalities.length === 0 && (
-            <p className="text-xs text-stone-400">None yet.</p>
+            <p className="text-xs text-stone-500 dark:text-stone-400">None yet.</p>
           )}
           <div className="space-y-2">
             {modalities.map((m, i) => (

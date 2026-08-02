@@ -89,7 +89,14 @@ export type TreeLayers = Record<TreeLayer, boolean>;
 export type { NodePosition, PersistedData } from "../lib/repo";
 
 /** Auth/loading lifecycle for the whole app. */
-export type Phase = "loading" | "anon" | "ready";
+/**
+ * "anon" means *not signed in*. A failed load is "error" — conflating the two
+ * signed people out whenever they went through a tunnel.
+ */
+export type Phase = "loading" | "anon" | "ready" | "error";
+
+/** Whether the last write to the cloud landed. Surfaced in the app chrome. */
+export type SyncStatus = "idle" | "saving" | "error";
 
 export type ModalState =
   | { kind: "team"; team?: Team; parentId?: string; leaderId?: string }
@@ -103,6 +110,10 @@ export type ModalState =
 type UIState = {
   /** Auth/loading phase. UI renders the app only when "ready". */
   phase: Phase;
+  /** Why the load failed, shown on the error screen. */
+  loadError: string | null;
+  /** Whether pending edits have reached the cloud. */
+  syncStatus: SyncStatus;
   /** Signed-in user id (Supabase auth uid) — the RLS scope for all data. */
   userId: string | null;
   /** Signed-in user's email, for the account menu. */
@@ -270,6 +281,8 @@ type Store = PersistedData &
     clearChat: (key: string) => void;
     // auth / lifecycle
     bootstrap: () => Promise<void>;
+    /** Re-run bootstrap after a load failure, resetting backoff. */
+    retryBootstrap: () => Promise<void>;
     hydrate: (data: PersistedData, userId: string, email: string | null) => void;
     signOut: () => Promise<void>;
     // data management
@@ -504,6 +517,8 @@ function goTo(s: UIState, sel: Selection | null, opts?: { replace?: boolean }) {
 export const useStore = create<Store>((set, get) => ({
   ...blankData(),
   phase: "loading",
+  loadError: null,
+  syncStatus: "idle",
   userId: null,
   userEmail: null,
   tab: "tree",
@@ -1208,12 +1223,30 @@ export const useStore = create<Store>((set, get) => ({
       get().hydrate(doc, userId, email);
     } catch (e) {
       console.error("LeadWell: failed to load cloud data", e);
-      // Surface as anon so the user can retry sign-in rather than a blank app.
-      set({ phase: "anon", userId: null, userEmail: null });
+      // A dropped connection is not a failed sign-in. Keep the session and
+      // offer a retry — dropping to the login screen mid-commute was
+      // indistinguishable from being signed out.
+      set({
+        phase: "error",
+        loadError:
+          e instanceof Error && e.message
+            ? e.message
+            : "We couldn't reach your data.",
+      });
+      scheduleBootstrapRetry();
     }
   },
 
+  retryBootstrap: async () => {
+    clearBootstrapRetry();
+    bootstrapAttempts = 0;
+    set({ phase: "loading", loadError: null });
+    await get().bootstrap();
+  },
+
   hydrate: (doc, userId, email) => {
+    clearBootstrapRetry();
+    bootstrapAttempts = 0;
     // Record the loaded doc as the persistence baseline BEFORE it lands in the
     // store, so the resulting change event is a no-op (same array references).
     repo.setBaseline(doc);
@@ -1222,6 +1255,7 @@ export const useStore = create<Store>((set, get) => ({
       userId,
       userEmail: email,
       phase: "ready",
+      loadError: null,
       // Selection is not cleared: the URL survives sign-in, so a deep link
       // opens the entity it named. App drops the selection if the id is stale.
     });
@@ -1270,10 +1304,53 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "nodePositions",
 ];
 
+/** Exponential backoff for a failed initial load, capped so it keeps trying. */
+let bootstrapAttempts = 0;
+let bootstrapRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearBootstrapRetry() {
+  if (bootstrapRetryTimer) {
+    clearTimeout(bootstrapRetryTimer);
+    bootstrapRetryTimer = null;
+  }
+}
+
+function scheduleBootstrapRetry() {
+  clearBootstrapRetry();
+  bootstrapAttempts += 1;
+  const delay = Math.min(30_000, 1_000 * 2 ** (bootstrapAttempts - 1));
+  bootstrapRetryTimer = setTimeout(() => {
+    bootstrapRetryTimer = null;
+    if (useStore.getState().phase === "error") {
+      void useStore.getState().bootstrap();
+    }
+  }, delay);
+}
+
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncInFlight: Promise<void> | null = null;
 /** More edits arrived while a sync was writing — coalesce another pass. */
 let syncQueued = false;
+/** Consecutive failed writes, driving the retry backoff. */
+let syncFailures = 0;
+let syncRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearSyncRetry() {
+  if (syncRetryTimer) {
+    clearTimeout(syncRetryTimer);
+    syncRetryTimer = null;
+  }
+}
+
+function scheduleSyncRetry(userId: string) {
+  clearSyncRetry();
+  syncFailures += 1;
+  const delay = Math.min(30_000, 1_000 * 2 ** (syncFailures - 1));
+  syncRetryTimer = setTimeout(() => {
+    syncRetryTimer = null;
+    void runSync(userId);
+  }, delay);
+}
 
 function extractData(state: Store): PersistedData {
   return Object.fromEntries(
@@ -1304,9 +1381,18 @@ function runSync(userId: string): Promise<void> {
         return;
       }
       try {
+        useStore.setState({ syncStatus: "saving" });
         await repo.syncData(userId, extractData(latest));
+        syncFailures = 0;
+        clearSyncRetry();
+        useStore.setState({ syncStatus: "idle" });
       } catch (e) {
+        // A silent console.error left the UI looking saved while edits were
+        // being dropped. Show it, and keep trying.
         console.error("LeadWell: cloud sync failed", e);
+        useStore.setState({ syncStatus: "error" });
+        scheduleSyncRetry(userId);
+        return;
       }
     } while (syncQueued);
   })().finally(() => {
@@ -1355,8 +1441,29 @@ if (typeof window !== "undefined") {
     void flushPendingSync();
   };
   window.addEventListener("pagehide", flush);
+
+  /**
+   * Connectivity came back, or the user returned to a backgrounded tab. Retry
+   * whatever stalled — a failed load and a failed write are both recoverable
+   * without a reload, which is the normal case on a phone.
+   */
+  const recover = () => {
+    const state = useStore.getState();
+    if (state.phase === "error") {
+      void state.retryBootstrap();
+      return;
+    }
+    if (state.userId && (state.syncStatus === "error" || syncTimer)) {
+      clearSyncRetry();
+      syncFailures = 0;
+      void runSync(state.userId);
+    }
+  };
+
+  window.addEventListener("online", recover);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flush();
+    else recover();
   });
 }
 

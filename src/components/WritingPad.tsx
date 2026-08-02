@@ -6,6 +6,7 @@ import {
   type TextareaHTMLAttributes,
 } from "react";
 import { MarkdownBody } from "./MarkdownBody";
+import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 
 type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value"> & {
   value: string;
@@ -41,6 +42,7 @@ export function WritingPad({
 }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const pendingFocus = useRef(false);
+  const coarse = useCoarsePointer();
   const preferEdit =
     startEditing ?? (Boolean(autoFocus) || !String(value ?? "").trim());
   const [editing, setEditing] = useState(preferEdit || !dualMode);
@@ -59,7 +61,11 @@ export function WritingPad({
     const el = ref.current;
     if (!el) return;
     el.style.height = "0px";
-    el.style.height = `${Math.max(el.scrollHeight, 200)}px`;
+    // Cap the growth and let the textarea scroll internally instead of pushing
+    // the caret past the bottom of the visual viewport.
+    const max = Math.max(240, (window.visualViewport?.height ?? window.innerHeight) * 0.55);
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 200), max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }, [value, editing, showPreview]);
 
   useEffect(() => {
@@ -94,19 +100,25 @@ export function WritingPad({
   }
 
   if (showPreview) {
+    const startEditingNow = () => {
+      pendingFocus.current = true;
+      setEditing(true);
+    };
     return (
       <div className={`journal-paper ${frameClassName}`}>
-        <button
-          type="button"
-          className="journal-pad-inner w-full cursor-text text-left"
-          onClick={() => {
-            pendingFocus.current = true;
-            setEditing(true);
-          }}
-        >
+        <div className="journal-pad-inner">
           <MarkdownBody>{text}</MarkdownBody>
-          <span className="journal-hint">Click to edit · Markdown</span>
-        </button>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="journal-hint !mt-0">Markdown supported</span>
+            <button
+              type="button"
+              onClick={startEditingNow}
+              className="touch:min-h-11 rounded-md px-2 py-1 text-xs font-medium text-teal-700 transition-colors hover:bg-teal-50 active:bg-teal-100 dark:text-teal-400 dark:hover:bg-teal-950/40"
+            >
+              Edit
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -145,9 +157,24 @@ export function WritingPad({
           {...rest}
         />
         {dualMode && (
-          <span className="journal-hint">
-            Esc to preview · Markdown supported
-          </span>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <span className="journal-hint !mt-0">
+              {coarse ? "Markdown supported" : "Esc to preview · Markdown supported"}
+            </span>
+            {coarse && text.trim() && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setEditing(false);
+                  ref.current?.blur();
+                }}
+                className="min-h-11 rounded-md px-2 py-1 text-xs font-medium text-teal-700 dark:text-teal-400"
+              >
+                Done
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -25,6 +25,7 @@ import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
+import { autoFocusUnlessTouch } from "../lib/pointer";
 
 type RowState = { accepted: boolean; text: string };
 
@@ -412,7 +413,7 @@ export function ProfileFillModal({
                   }
                   value={brainDump}
                   onChange={setBrainDump}
-                  autoFocus
+                  autoFocus={autoFocusUnlessTouch()}
                 />
                 {error && (
                   <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/40 dark:text-red-300">
@@ -450,10 +451,10 @@ export function ProfileFillModal({
             <div className="profile-fill-split">
               <div className="flex flex-col space-y-3">
                 {probeTurns.length > 0 && (
-                  <div className="max-h-28 space-y-2 overflow-y-auto rounded-lg bg-stone-50 p-2 text-[11px] text-stone-500 dark:bg-stone-950/50">
+                  <div className="scroll-contain max-h-28 space-y-2 overflow-y-auto rounded-lg bg-stone-50 p-2 text-[11px] text-stone-500 dark:bg-stone-950/50">
                     {probeTurns.map((t, i) => (
                       <div key={i}>
-                        <div className="font-medium text-stone-600 dark:text-stone-300">
+                        <div className="font-medium text-stone-600 dark:text-stone-400">
                           Q{i + 1}. {t.question}
                         </div>
                         <div className="pl-2">{t.answer}</div>
@@ -473,7 +474,7 @@ export function ProfileFillModal({
                   placeholder="Your answer…"
                   value={probeAnswer}
                   onChange={setProbeAnswer}
-                  autoFocus
+                  autoFocus={autoFocusUnlessTouch()}
                   isDisabled={loading || !probeQuestion}
                 />
                 {error && (
@@ -539,7 +540,7 @@ export function ProfileFillModal({
                   if (!draft.modalities.length) return null;
                   return (
                     <div key={group} className="space-y-2">
-                      <div className="text-[10px] font-medium tracking-wider text-stone-400 uppercase">
+                      <div className="text-[10px] font-medium tracking-wider text-stone-500 dark:text-stone-400 uppercase">
                         {GROUP_LABEL.custom}
                       </div>
                       {draft.modalities.map((m, i) => (
@@ -563,7 +564,7 @@ export function ProfileFillModal({
                 if (!items.length) return null;
                 return (
                   <div key={group} className="space-y-2">
-                    <div className="text-[10px] font-medium tracking-wider text-stone-400 uppercase">
+                    <div className="text-[10px] font-medium tracking-wider text-stone-500 dark:text-stone-400 uppercase">
                       {GROUP_LABEL[group]}
                     </div>
                     {items.map((sg) => {
@@ -645,9 +646,9 @@ function SuggestionRow({
         onChange={(text) => onChange({ text })}
       />
       {kind === "list" && (
-        <div className="mt-0.5 text-[10px] text-stone-400">One per line.</div>
+        <div className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400">One per line.</div>
       )}
-      <div className="mt-1 text-[10px] text-stone-400">
+      <div className="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
         Why: {suggestion.rationale}
       </div>
     </div>
@@ -710,7 +711,7 @@ function ModalityRow({
         onChange={(notes) => onChange({ notes })}
         placeholder="Notes (optional)"
       />
-      <div className="mt-1 text-[10px] text-stone-400">
+      <div className="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
         {suggestion.source} · Why: {suggestion.rationale}
       </div>
     </div>

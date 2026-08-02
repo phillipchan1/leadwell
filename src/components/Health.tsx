@@ -22,6 +22,7 @@ import {
 import { Input } from "@/components/base/input/input";
 import { Label } from "@/components/base/input/label";
 import { NativeSelect } from "@/components/base/select/select-native";
+import { Explain } from "./Explain";
 
 /** The property dropdown. `null` from onChange means "clear the rating". */
 export function HealthSelect({
@@ -55,7 +56,7 @@ export function HealthSelect({
         onChange={(e) => onChange((e.target.value || null) as HealthLevel | null)}
         onClick={(e) => e.stopPropagation()}
         className={`w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 ${
-          value ? "" : "text-stone-400"
+          value ? "" : "text-stone-500 dark:text-stone-400"
         } ${className}`}
         style={
           color
@@ -133,11 +134,14 @@ export function HealthChip({
 export function HealthDot({ health }: { health?: Health }) {
   if (!health) return null;
   return (
-    <span
-      className="h-2 w-2 shrink-0 rounded-full"
-      style={{ backgroundColor: HEALTH_COLOR[health.level] }}
-      title={`${HEALTH_LABEL[health.level]}${health.note ? ` — ${health.note}` : ""}`}
-    />
+    <Explain
+      text={`${HEALTH_LABEL[health.level]}${health.note ? ` — ${health.note}` : ""}`}
+    >
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: HEALTH_COLOR[health.level] }}
+      />
+    </Explain>
   );
 }
 
@@ -200,23 +204,28 @@ export function HealthField({
       <div className="flex items-baseline justify-between gap-2">
         <Label>{label}</Label>
         {rated && (
-          <span
-            className={`text-[10px] ${
-              isStale(health) ? "text-amber-600 dark:text-amber-400" : "text-stone-400"
-            }`}
-            title={
+          <Explain
+            text={
               isStale(health)
                 ? "This call is over three months old — worth a fresh look"
                 : undefined
             }
           >
-            {rated}
-          </span>
+            <span
+              className={`text-[10px] ${
+                isStale(health)
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-stone-500 dark:text-stone-400"
+              }`}
+            >
+              {rated}
+            </span>
+          </Explain>
         )}
       </div>
       <HealthSelect value={health?.level} onChange={onLevel} ariaLabel={label} />
       {/* The scale, taught in place: what the level you just picked means. */}
-      <p className="text-[11px] text-stone-400">
+      <p className="text-[11px] text-stone-500 dark:text-stone-400">
         {health
           ? HEALTH_HINT[health.level]
           : "Not rated — pick the level that matches your gut."}
@@ -240,7 +249,7 @@ export function HealthField({
           aria-label={`${label} note`}
         />
       )}
-      {hint && <p className="text-[11px] text-stone-400">{hint}</p>}
+      {hint && <p className="text-[11px] text-stone-500 dark:text-stone-400">{hint}</p>}
     </div>
   );
 }

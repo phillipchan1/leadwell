@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>LeadWell — offline</title>
+    <meta name="theme-color" content="#0d9488" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #fafaf9;
+        --fg: #1c1917;
+        --muted: #57534e;
+        --card: #ffffff;
+        --line: #e7e5e4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0c0a09;
+          --fg: #fafaf9;
+          --muted: #a8a29e;
+          --card: #1c1917;
+          --line: #292524;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(env(safe-area-inset-top) + 24px) 24px
+          calc(env(safe-area-inset-bottom) + 24px);
+        background: var(--bg);
+        color: var(--fg);
+        font-family:
+          "Inter Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .card {
+        width: 100%;
+        max-width: 24rem;
+        text-align: center;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 1rem;
+        padding: 2rem 1.5rem;
+      }
+      img {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+      }
+      h1 {
+        margin: 1.25rem 0 0.5rem;
+        font-size: 1.125rem;
+        letter-spacing: -0.01em;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9375rem;
+        line-height: 1.55;
+      }
+      button {
+        margin-top: 1.5rem;
+        min-height: 44px;
+        width: 100%;
+        border: 0;
+        border-radius: 0.625rem;
+        background: #0d9488;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.9375rem;
+        cursor: pointer;
+      }
+      button:active {
+        background: #0f766e;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="/icon-192.png" alt="" />
+      <h1>You're offline</h1>
+      <p>
+        LeadWell can't reach the network right now. Your saved work is safe —
+        reconnect and try again.
+      </p>
+      <button type="button" onclick="location.replace('/')">Try again</button>
+    </div>
+    <script>
+      // Bounce back into the app the moment connectivity returns.
+      addEventListener("online", () => location.replace("/"));
+    </script>
+  </body>
+</html>

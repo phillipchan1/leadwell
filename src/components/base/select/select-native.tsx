@@ -16,7 +16,7 @@ interface NativeSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>
 
 const styles = {
     sm: {
-        root: "py-2 pl-3 text-sm",
+        root: "py-2 pl-3 text-sm touch:text-md",
         icon: "size-4 right-2.5 stroke-[2.25px]",
     },
     md: {

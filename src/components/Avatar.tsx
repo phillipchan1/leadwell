@@ -6,12 +6,15 @@ export function Avatar({
   size = 40,
   dimmed = false,
   ring,
+  className = "",
 }: {
   name: string;
   photo?: string;
   size?: number;
   dimmed?: boolean;
   ring?: string; // ring color when selected
+  /** Hook for context-specific sizing (e.g. landscape compaction). */
+  className?: string;
 }) {
   const style: React.CSSProperties = {
     width: size,
@@ -21,7 +24,7 @@ export function Avatar({
   };
   const cls = `flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-white select-none ${
     dimmed ? "opacity-40 grayscale" : ""
-  }`;
+  } ${className}`;
 
   if (photo) {
     return (

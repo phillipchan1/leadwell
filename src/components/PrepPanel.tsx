@@ -130,7 +130,7 @@ export function PrepPanel({
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <SectionTitle>Readiness</SectionTitle>
-        <label className="flex items-center gap-1.5 text-[11px] text-stone-400">
+        <label className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
           <span>Rhythm</span>
           <NativeSelect
             size="sm"
@@ -220,7 +220,7 @@ export function PrepPanel({
                   {check.label}
                 </div>
                 {check.detail && (
-                  <div className="truncate text-[11px] text-stone-400">
+                  <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
                     {check.detail}
                   </div>
                 )}
@@ -241,12 +241,14 @@ export function PrepPanel({
 
         <div className="flex items-center justify-between gap-2 border-t border-stone-100 px-3 py-1.5 dark:border-stone-800/80">
           {meeting.rhythm === "as_needed" ? (
-            <label className="flex items-center gap-1.5 text-[10px] text-stone-400">
+            <label className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
               Nudge me after
               <Input
                 size="sm"
                 type="number"
-                className="w-16"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                className="w-20"
                 aria-label="Days before nudge"
                 value={meeting.floorDays?.toString() ?? ""}
                 placeholder="never"
@@ -259,7 +261,7 @@ export function PrepPanel({
               days
             </label>
           ) : (
-            <span className="text-[10px] text-stone-400">
+            <span className="text-[10px] text-stone-500 dark:text-stone-400">
               {sessionCount} logged
             </span>
           )}

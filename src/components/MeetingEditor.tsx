@@ -11,6 +11,9 @@ import { Checkbox } from "@/components/base/checkbox/checkbox";
 
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
+import { confirmAction } from "./ConfirmDialog";
+import { autoFocusUnlessTouch } from "../lib/pointer";
+import { ArrowLeft, DotsVertical, Trash01 } from "@untitledui/icons";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -97,6 +100,8 @@ export function MeetingEditor({
   const [date, setDate] = useState(session?.date ?? "");
   const [nextDate, setNextDate] = useState(session?.nextDate ?? "");
   const [listening, setListening] = useState(false);
+  // Resolved once at mount so the control can say up front whether it works.
+  const [speechSupported] = useState(() => Boolean(getSpeechRecognition()));
   const [showCapture, setShowCapture] = useState(
     Boolean(session?.transcript?.trim())
   );
@@ -296,8 +301,13 @@ export function MeetingEditor({
   return (
     <div className="meeting-editor-fullscreen">
       <header className="meeting-editor-topbar">
-        <button type="button" className="meeting-editor-back" onClick={onClose}>
-          ← {backLabel}
+        <button
+          type="button"
+          className="meeting-editor-back flex min-h-11 shrink-0 items-center gap-1"
+          onClick={onClose}
+        >
+          <ArrowLeft className="size-4 shrink-0" />
+          <span className="max-w-[9rem] truncate">{backLabel}</span>
         </button>
         <span className="meeting-editor-topbar-label">{meetingLabel}</span>
         <div className="flex-1" />
@@ -308,19 +318,19 @@ export function MeetingEditor({
         >
           Tools
         </button>
-        <button
-          type="button"
-          className="meeting-editor-delete"
-          aria-label="Delete entry"
-          onClick={() => {
-            if (confirm("Delete this entry?")) {
+        <EntryMenu
+          onDelete={async () => {
+            if (
+              await confirmAction({
+                title: "Delete this entry?",
+                body: "The write-up and any transcript go with it.",
+              })
+            ) {
               deleteSession(session.id);
               onClose();
             }
           }}
-        >
-          Delete
-        </button>
+        />
       </header>
 
       <div className="meeting-editor-scroll">
@@ -333,7 +343,7 @@ export function MeetingEditor({
                   label="Date"
                   size="sm"
                   value={date}
-                  autoFocus
+                  autoFocus={autoFocusUnlessTouch()}
                   onChange={(value) => {
                     setDate(value);
                     persist({ date: value });
@@ -389,13 +399,22 @@ export function MeetingEditor({
           {showTools && (
             <div className="meeting-editor-tools">
               <div className="meeting-editor-tools-row">
-                <button
-                  type="button"
-                  className={`meeting-editor-chip ${listening ? "is-listening" : ""}`}
-                  onClick={toggleListen}
-                >
-                  {listening ? "● Listening…" : "Listen"}
-                </button>
+                {speechSupported ? (
+                  <button
+                    type="button"
+                    className={`meeting-editor-chip ${listening ? "is-listening" : ""}`}
+                    onClick={toggleListen}
+                  >
+                    {listening ? "● Listening…" : "Listen"}
+                  </button>
+                ) : (
+                  <span
+                    className="meeting-editor-chip cursor-not-allowed opacity-60"
+                    title="Live listen needs speech recognition, which this browser doesn't offer"
+                  >
+                    Listen unavailable — paste a transcript
+                  </span>
+                )}
                 <button
                   type="button"
                   className={`meeting-editor-chip ${showCapture ? "is-active" : ""}`}
@@ -443,7 +462,7 @@ export function MeetingEditor({
                   if (parsed) setParsed({ ...parsed, notes: v });
                 }}
                 readOnly={structuring}
-                autoFocus={!structuring}
+                autoFocus={!structuring && autoFocusUnlessTouch()}
               />
               {parsed && !structuring && (
                 <div className="meeting-editor-preview-actions">
@@ -480,11 +499,70 @@ export function MeetingEditor({
               value={notes}
               onChange={saveNotes}
               placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
-              autoFocus={!notes.trim()}
+              autoFocus={!notes.trim() && autoFocusUnlessTouch()}
             />
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Destructive actions for the open entry, held behind one control so "Delete"
+ * is never adjacent to a benign button in the topbar.
+ */
+function EntryMenu({ onDelete }: { onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        aria-label="Entry actions"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={() => setOpen((v) => !v)}
+        className="flex size-11 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 active:bg-stone-200 dark:hover:bg-stone-800 dark:active:bg-stone-700"
+      >
+        <DotsVertical className="size-4.5" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="flex min-h-11 w-full items-center gap-2.5 px-4 text-left text-sm text-red-600 active:bg-red-50 dark:text-red-400 dark:active:bg-red-950/40"
+          >
+            <Trash01 className="size-4 shrink-0" />
+            Delete entry
+          </button>
+        </div>
+      )}
     </div>
   );
 }

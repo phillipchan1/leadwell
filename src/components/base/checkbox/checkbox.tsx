@@ -18,6 +18,9 @@ export const CheckboxBase = ({ className, isSelected, isDisabled, isIndeterminat
         <div
             className={cx(
                 "relative flex size-4 shrink-0 cursor-pointer appearance-none items-center justify-center rounded bg-primary ring-1 ring-primary ring-inset",
+                // The visual box stays 16px; an overflowing pseudo-element grows
+                // the tap target to 44px without disturbing surrounding layout.
+                "touch:after:absolute touch:after:-inset-3.5 touch:after:content-['']",
                 size === "md" && "size-5 rounded-md",
                 (isSelected || isIndeterminate) && "bg-brand-solid ring-brand-solid",
                 isDisabled && "cursor-not-allowed opacity-50",

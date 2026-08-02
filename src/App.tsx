@@ -1,16 +1,14 @@
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
 import { parseRoute, routePath } from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
-import { OrgTree } from "./components/OrgTree";
-import { PeopleTable } from "./components/PeopleTable";
-import { TableView } from "./components/TableView";
 import { Overview } from "./components/Overview";
 import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
+import { ConfirmHost } from "./components/ConfirmDialog";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -18,16 +16,46 @@ import {
   Tabs,
 } from "@/components/application/tabs/tabs";
 import { FocusView } from "./components/FocusView";
-import { SessionEditorView } from "./components/SessionEditorView";
 import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
+import {
+  BottomNav,
+  HeaderOverflow,
+  LoadErrorScreen,
+  LoadingSplash,
+  SyncIndicator,
+  TABS,
+} from "./components/AppChrome";
+import { cx } from "@/utils/cx";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "tree", label: "Org tree" },
-  // The canvas's correlated view: same org, sortable and filterable.
-  { id: "table", label: "Table" },
-  { id: "people", label: "People table" },
-];
+/**
+ * The canvas (React Flow), the org table and the session editor are the three
+ * heaviest imports in the bundle and none of them is needed to paint Overview.
+ * Splitting them keeps the first load on mobile data to the shell.
+ */
+const OrgTree = lazy(() =>
+  import("./components/OrgTree").then((m) => ({ default: m.OrgTree }))
+);
+const TableView = lazy(() =>
+  import("./components/TableView").then((m) => ({ default: m.TableView }))
+);
+const PeopleTable = lazy(() =>
+  import("./components/PeopleTable").then((m) => ({ default: m.PeopleTable }))
+);
+const SessionEditorView = lazy(() =>
+  import("./components/SessionEditorView").then((m) => ({
+    default: m.SessionEditorView,
+  }))
+);
+
+function PaneFallback() {
+  return (
+    <div className="space-y-3 p-1" aria-hidden="true">
+      <div className="h-6 w-40 animate-pulse rounded-md bg-stone-200 dark:bg-stone-800" />
+      <div className="h-32 animate-pulse rounded-xl bg-stone-200/70 dark:bg-stone-800/70" />
+      <div className="h-32 animate-pulse rounded-xl bg-stone-200/50 [animation-delay:150ms] dark:bg-stone-800/50" />
+    </div>
+  );
+}
 
 /**
  * The URL is the source of truth for what's selected: this pushes the router's
@@ -107,8 +135,6 @@ export default function App() {
     setTab,
     people,
     teams,
-    dark,
-    toggleDark,
     focused,
     sessionId,
     askAIOpen,
@@ -118,18 +144,15 @@ export default function App() {
   } = useStore();
   const selected = useSelectedEntity();
 
+  const dark = useStore((s) => s.dark);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
   // Auth/loading gate: only the "ready" phase renders the full app.
-  if (phase === "loading") {
-    return (
-      <div className="flex h-full items-center justify-center bg-stone-50 text-sm text-stone-400 dark:bg-stone-950">
-        Loading your org…
-      </div>
-    );
-  }
+  if (phase === "loading") return <LoadingSplash />;
+  // A network failure is not a sign-out — keep the session and offer a retry.
+  if (phase === "error") return <LoadErrorScreen />;
   if (phase === "anon") return <Login />;
 
   const assessed = people.filter(hasLeadershipRead).length;
@@ -139,80 +162,85 @@ export default function App() {
   if (inSessionEditor) {
     return (
       <div className="flex h-full flex-col">
-        <SessionEditorView />
+        <SyncIndicator />
+        <Suspense fallback={<LoadingSplash />}>
+          <SessionEditorView />
+        </Suspense>
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        <ConfirmHost />
       </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-stone-200 bg-white px-6 py-3 dark:border-stone-800 dark:bg-stone-900">
-        <div className="flex items-baseline gap-4">
+      {/* Header — pads past the status bar / Dynamic Island in standalone. */}
+      <header className="pad-safe-top pad-safe-x chrome-compact flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3 sm:px-6 dark:border-stone-800 dark:bg-stone-900 [--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]">
+        <div className="flex min-w-0 items-baseline gap-4">
           <h1 className="text-lg font-bold tracking-tight">
             Lead<span className="text-teal-600">Well</span>
           </h1>
-          <span className="hidden text-xs text-stone-400 sm:inline">
+          <span className="hidden truncate text-xs text-stone-500 lg:inline dark:text-stone-400">
             {assessed} of {people.length} with a read · {teams.length} teams
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Button size="sm" onClick={() => setAskAIOpen(true)}>
             ✦ Ask AI
           </Button>
-          <Button
-            size="sm"
-            color="secondary"
-            onClick={() => setSettingsOpen(true)}
-          >
-            Settings
-          </Button>
-          <Button
-            size="sm"
-            color="secondary"
-            onClick={toggleDark}
-            aria-label="Toggle dark mode"
-          >
-            {dark ? "☀️" : "🌙"}
-          </Button>
+          <HeaderOverflow />
         </div>
       </header>
+
+      <SyncIndicator />
 
       {inFocus ? (
         <FocusView />
       ) : (
         <>
-          {/* Tabs — navigation only; content is routed, so no panels */}
+          {/* Tabs — navigation only; content is routed, so no panels.
+              Below lg the bottom bar owns navigation, and on an open entity
+              this strip would be a third stacked nav bar. */}
           <Tabs
             selectedKey={tab}
             onSelectionChange={(key) => setTab(key as Tab)}
-            className="border-b border-stone-200 bg-white px-6 dark:border-stone-800 dark:bg-stone-900"
+            className={cx(
+              "chrome-compact-hide shrink-0 border-b border-stone-200 bg-white px-6 dark:border-stone-800 dark:bg-stone-900",
+              "max-lg:hidden"
+            )}
           >
             <TabList type="underline" size="sm" items={TABS}>
               {(t) => <TabItem id={t.id} label={t.label} />}
             </TabList>
           </Tabs>
 
-          {/* Main + peek — canvas ~45%, panel ~55% when open */}
+          {/* Main + peek. Above lg they sit side by side; below lg exactly one
+              is on screen, because 16rem + 20rem cannot fit a 375px phone. */}
           <div className="flex min-h-0 flex-1">
             <main
-              className={`min-w-[16rem] flex-[2] p-6 lg:min-w-[22.5rem] ${
+              className={cx(
+                "pad-safe-x flex-[2] p-4 sm:p-6 lg:min-w-[22.5rem]",
                 tab === "tree"
                   ? "flex flex-col overflow-hidden"
-                  : "overflow-y-auto"
-              }`}
+                  : "scroll-contain overflow-y-auto",
+                // The entity takes the whole viewport on a phone.
+                selected && "max-lg:hidden"
+              )}
             >
-              {tab === "overview" && <Overview />}
-              {tab === "tree" && <OrgTree />}
-              {tab === "table" && <TableView />}
-              {tab === "people" && <PeopleTable />}
+              <Suspense fallback={<PaneFallback />}>
+                {tab === "overview" && <Overview />}
+                {tab === "tree" && <OrgTree />}
+                {tab === "table" && <TableView />}
+                {tab === "people" && <PeopleTable />}
+              </Suspense>
             </main>
 
             {selected && <PeekPanel />}
           </div>
         </>
       )}
+
+      <BottomNav />
 
       {/* Global Ask AI */}
       {askAIOpen && (
@@ -221,6 +249,7 @@ export default function App() {
         </Modal>
       )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      <ConfirmHost />
     </div>
   );
 }

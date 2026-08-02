@@ -29,7 +29,7 @@ export function Th({
         <button
           type="button"
           onClick={onClick}
-          className="inline-flex cursor-pointer items-center gap-0.5 font-medium select-none hover:text-stone-600 dark:hover:text-stone-300"
+          className="inline-flex cursor-pointer items-center gap-0.5 font-medium select-none hover:text-stone-600 dark:hover:text-stone-400 dark:text-stone-500"
         >
           {children}
           {sorted && <span aria-hidden>{sorted === "asc" ? "↑" : "↓"}</span>}

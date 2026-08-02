@@ -25,8 +25,8 @@ export function StatsBar({ people }: { people: Person[] }) {
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: DOMAIN_COLOR[d] }}
               />
-              <span className="text-stone-600 dark:text-stone-300">{d}</span>
-              <span className="text-stone-400">
+              <span className="text-stone-600 dark:text-stone-400">{d}</span>
+              <span className="text-stone-500 dark:text-stone-400">
                 {totalThemes ? Math.round((counts[d] / totalThemes) * 100) : 0}%
               </span>
             </div>
@@ -39,11 +39,11 @@ export function StatsBar({ people }: { people: Person[] }) {
         <SectionTitle>Coverage</SectionTitle>
         <div className="text-3xl font-semibold">
           {withRead}
-          <span className="text-lg font-normal text-stone-400">
+          <span className="text-lg font-normal text-stone-500 dark:text-stone-400">
             /{people.length} with a read
           </span>
         </div>
-        <p className="text-xs text-stone-400">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           {formallyAssessed} with Clifton / Enneagram / MBTI
         </p>
         {spots.length > 0 ? (
@@ -55,7 +55,7 @@ export function StatsBar({ people }: { people: Person[] }) {
             ✓ All four domains represented.
           </p>
         ) : (
-          <p className="text-xs text-stone-400">
+          <p className="text-xs text-stone-500 dark:text-stone-400">
             Add CliftonStrengths results to see the balance.
           </p>
         )}
@@ -75,11 +75,11 @@ function MixRow({ label, mix }: { label: string; mix: Record<string, number> }) 
   const entries = Object.entries(mix).sort((a, b) => b[1] - a[1]);
   return (
     <div className="text-xs">
-      <span className="text-stone-400">{label}: </span>
+      <span className="text-stone-500 dark:text-stone-400">{label}: </span>
       {entries.length === 0 ? (
-        <span className="text-stone-300 dark:text-stone-600">none recorded</span>
+        <span className="text-stone-400 dark:text-stone-600">none recorded</span>
       ) : (
-        <span className="text-stone-600 dark:text-stone-300">
+        <span className="text-stone-600 dark:text-stone-400">
           {entries
             .map(([k, n]) => (n > 1 ? `${k} ×${n}` : k))
             .join(" · ")}

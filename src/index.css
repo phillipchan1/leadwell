@@ -1,5 +1,8 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
+/* Self-hosted so the serif face survives offline and costs no third-party
+   DNS + TLS round trip before first paint. */
+@import "@fontsource-variable/source-serif-4";
 @import "./styles/theme.css";
 @import "./styles/typography.css";
 
@@ -13,6 +16,12 @@
 @custom-variant label (& [data-label]);
 @custom-variant focus-input-within (&:has(input:focus));
 
+/* Touch-only rules. Use `touch:` for anything a finger needs that a mouse
+   doesn't — larger hit areas, always-visible affordances, 16px type. Use
+   `hoverable:` for decorative hover so it never sticks after a tap. */
+@custom-variant touch (@media (pointer: coarse));
+@custom-variant hoverable (@media (hover: hover) and (pointer: fine));
+
 @theme {
   /* Inter Variable (self-hosted via @fontsource) feeds Untitled UI's
      --font-body / --font-display, declared in styles/theme.css. */
@@ -22,8 +31,8 @@
   --color-infl: #ef9f27;
   --color-rel: #d4537e;
   --color-strat: #7f77dd;
-  --font-journal: "Source Serif 4", "Iowan Old Style", "Palatino Linotype",
-    Palatino, Georgia, serif;
+  --font-journal: "Source Serif 4 Variable", "Source Serif 4",
+    "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
 /* ── Untitled UI base rules & utilities (from its generated globals.css) ── */
@@ -90,10 +99,80 @@ html,
 body,
 #root {
   height: 100%;
+  /* dvh tracks the *small* viewport, so the shell fits with the iOS address
+     bar shown and re-fits when it collapses. The 100% above stays as the
+     fallback for engines without dvh. */
+  height: 100dvh;
 }
 
 body {
   @apply bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
+  /* No document-level scroll to rubber-band or pull-to-refresh: every
+     scrolling surface in the app is an inner pane. */
+  overscroll-behavior-y: none;
+}
+
+#root {
+  /* Kills the 300ms double-tap-to-zoom delay on every button and link. */
+  touch-action: manipulation;
+}
+
+/* Safe areas. The shell is edge-to-edge under viewport-fit=cover, so each
+   chrome surface pads itself rather than insetting the whole app — that keeps
+   backgrounds bleeding into the notch and home-indicator regions. */
+@utility pad-safe-top {
+  padding-top: max(var(--pad-safe-top, 0px), env(safe-area-inset-top));
+}
+
+@utility pad-safe-bottom {
+  padding-bottom: max(var(--pad-safe-bottom, 0px), env(safe-area-inset-bottom));
+}
+
+@utility pad-safe-x {
+  padding-left: max(var(--pad-safe-x, 0px), env(safe-area-inset-left));
+  padding-right: max(var(--pad-safe-x, 0px), env(safe-area-inset-right));
+}
+
+/* Every nested scroller stops its momentum at its own boundary instead of
+   handing the gesture to the surface behind it. */
+@utility scroll-contain {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Touch baseline ── */
+
+/* iOS zooms the viewport when a focused control renders under 16px and never
+   zooms back out. Every control below that floor is raised here; the design
+   system's own `sm` variants carry a matching `touch:text-md`. */
+@media (pointer: coarse) {
+  .field-input,
+  .field-input--sm,
+  .meeting-editor-transcript,
+  .notion-markdown-source,
+  .meeting-editor-point {
+    font-size: 16px;
+  }
+
+  /* The focus lift fires at the same moment as the keyboard-open scroll
+     adjustment, which reads as a double jump. */
+  .field-input:focus {
+    transform: none;
+  }
+}
+
+/* Reserve the iOS interactive back-swipe gutter. Applied to surfaces that
+   otherwise capture horizontal drags (the org canvas). */
+@utility edge-back-gutter {
+  &::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 20px;
+    z-index: 20;
+    pointer-events: auto;
+  }
 }
 
 /* ── Journal writing surface (Day One–inspired) ── */
@@ -159,11 +238,11 @@ body {
   font-style: italic;
   font-size: 1.0625rem;
   line-height: 1.75;
-  @apply text-stone-400 dark:text-stone-600;
+  @apply text-stone-500 dark:text-stone-400;
 }
 
 .journal-hint {
-  @apply mt-4 block text-[10px] font-medium tracking-[0.14em] text-stone-400/80 uppercase dark:text-stone-600;
+  @apply mt-4 block text-[10px] font-medium tracking-[0.14em] text-stone-500 uppercase dark:text-stone-400;
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -690,6 +769,30 @@ label:focus-within > .field-label,
     transition: border-color 120ms ease, box-shadow 120ms ease;
     transform: none;
   }
+
+  /* Looping decoration is the part that actually bothers people; kill the
+     animation entirely rather than shortening it. */
+  .profile-build--parsing .profile-build__glow,
+  .profile-build__pulse-dot,
+  .profile-build__chip--enter {
+    animation: none !important;
+  }
+
+  .team-card,
+  .team-card:active,
+  .person-row,
+  .person-row:active,
+  .person-row__avatar,
+  .person-row__bar {
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+
+  /* react-aria drives modal enter/exit through tailwindcss-animate. */
+  .animate-in,
+  .animate-out {
+    animation-duration: 1ms !important;
+  }
 }
 
 /* Org tree — snappy team / person selection */
@@ -703,12 +806,32 @@ label:focus-within > .field-label,
   will-change: transform;
 }
 
-.team-card:hover {
-  transform: translateY(-5px);
-  border-color: color-mix(in srgb, var(--team-accent) 55%, rgb(231 229 228));
-  box-shadow:
-    0 14px 28px -10px color-mix(in srgb, var(--team-accent) 38%, transparent),
-    0 6px 12px -6px rgb(28 25 23 / 0.1);
+/* Hover lift is decorative and must not persist after a tap: on touch,
+   :hover sticks to the last-tapped element until something else is tapped,
+   leaving cards randomly raised. */
+@media (hover: hover) and (pointer: fine) {
+  .team-card:hover {
+    transform: translateY(-5px);
+    border-color: color-mix(in srgb, var(--team-accent) 55%, rgb(231 229 228));
+    box-shadow:
+      0 14px 28px -10px color-mix(in srgb, var(--team-accent) 38%, transparent),
+      0 6px 12px -6px rgb(28 25 23 / 0.1);
+  }
+
+  .team-card.is-selected:hover {
+    transform: translateY(-6px);
+    box-shadow:
+      0 16px 30px -10px color-mix(in srgb, var(--team-accent) 48%, transparent),
+      0 6px 12px -6px rgb(28 25 23 / 0.1);
+  }
+
+  .team-card:hover .team-card__stripe {
+    height: 0.35rem;
+  }
+
+  .dark .team-card:hover {
+    border-color: color-mix(in srgb, var(--team-accent) 50%, rgb(68 64 60));
+  }
 }
 
 .team-card.is-selected {
@@ -717,13 +840,6 @@ label:focus-within > .field-label,
   box-shadow:
     0 12px 24px -10px color-mix(in srgb, var(--team-accent) 45%, transparent),
     0 4px 10px -4px rgb(28 25 23 / 0.08);
-}
-
-.team-card.is-selected:hover {
-  transform: translateY(-6px);
-  box-shadow:
-    0 16px 30px -10px color-mix(in srgb, var(--team-accent) 48%, transparent),
-    0 6px 12px -6px rgb(28 25 23 / 0.1);
 }
 
 .team-card:active,
@@ -736,13 +852,8 @@ label:focus-within > .field-label,
   transition: height 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.team-card:hover .team-card__stripe,
 .team-card.is-selected .team-card__stripe {
   height: 0.35rem;
-}
-
-.dark .team-card:hover {
-  border-color: color-mix(in srgb, var(--team-accent) 50%, rgb(68 64 60));
 }
 
 .dark .team-card.is-selected {
@@ -757,9 +868,24 @@ label:focus-within > .field-label,
     box-shadow 120ms ease;
 }
 
-.person-row:hover {
-  transform: translateX(3px);
-  background-color: color-mix(in srgb, var(--person-accent) 9%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .person-row:hover {
+    transform: translateX(3px);
+    background-color: color-mix(in srgb, var(--person-accent) 9%, transparent);
+  }
+
+  .person-row.is-selected:hover {
+    transform: translateX(5px);
+    background-color: color-mix(in srgb, var(--person-accent) 18%, transparent);
+  }
+
+  .person-row:hover .person-row__bar {
+    transform: scaleY(1);
+  }
+
+  .person-row:hover .person-row__avatar {
+    transform: scale(1.08);
+  }
 }
 
 .person-row.is-selected {
@@ -768,18 +894,9 @@ label:focus-within > .field-label,
   box-shadow: inset 3px 0 0 0 var(--person-accent);
 }
 
-.person-row.is-selected:hover {
-  transform: translateX(5px);
-  background-color: color-mix(in srgb, var(--person-accent) 18%, transparent);
-}
-
 .person-row__bar {
   transform: scaleY(0);
   transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.person-row:hover .person-row__bar {
-  transform: scaleY(1);
 }
 
 .person-row.is-selected .person-row__bar {
@@ -788,10 +905,6 @@ label:focus-within > .field-label,
 
 .person-row__avatar {
   transition: transform 140ms cubic-bezier(0.34, 1.4, 0.64, 1);
-}
-
-.person-row:hover .person-row__avatar {
-  transform: scale(1.08);
 }
 
 .person-row.is-selected .person-row__avatar {
@@ -1063,7 +1176,7 @@ label:focus-within > .field-label,
 }
 
 .session-editor-mode-hint {
-  @apply text-[10px] tracking-wide text-stone-400 uppercase dark:text-stone-600;
+  @apply text-[10px] tracking-wide text-stone-500 uppercase dark:text-stone-400;
 }
 
 /* Tiptap block editor */
@@ -1086,7 +1199,7 @@ label:focus-within > .field-label,
 }
 
 .notion-editor-content p.is-editor-empty:first-child::before {
-  @apply pointer-events-none float-left h-0 text-stone-400 dark:text-stone-600;
+  @apply pointer-events-none float-left h-0 text-stone-400 dark:text-stone-500;
   content: attr(data-placeholder);
 }
 
@@ -1186,7 +1299,7 @@ label:focus-within > .field-label,
 }
 
 .notion-markdown-hint {
-  @apply text-[10px] tracking-wide text-stone-400 uppercase dark:text-stone-600;
+  @apply text-[10px] tracking-wide text-stone-500 uppercase dark:text-stone-400;
 }
 
 .notion-markdown-split {
@@ -1208,9 +1321,150 @@ label:focus-within > .field-label,
 }
 
 .notion-markdown-empty {
-  @apply text-sm italic text-stone-400 dark:text-stone-600;
+  @apply text-sm italic text-stone-500 dark:text-stone-400;
 }
 
 .notion-markdown-readonly {
   @apply min-h-[200px];
+}
+
+/* ── Goal progress slider ──
+   A 4px-tall input is unusable with a finger. The visible track stays thin
+   while the input itself carries a full-height hit area. */
+
+.goal-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.goal-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(231 229 228);
+}
+
+.dark .goal-range::-webkit-slider-runnable-track {
+  background: rgb(41 37 36);
+}
+
+.goal-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(231 229 228);
+}
+
+.dark .goal-range::-moz-range-track {
+  background: rgb(41 37 36);
+}
+
+.goal-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  width: 16px;
+  /* Centres the thumb on the 4px track: (track - thumb) / 2. */
+  margin-top: -6px;
+  border-radius: 999px;
+  background: #0d9488;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(28 25 23 / 0.25);
+  transition: transform 120ms ease;
+}
+
+.goal-range::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border-radius: 999px;
+  background: #0d9488;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgb(28 25 23 / 0.25);
+}
+
+.dark .goal-range::-webkit-slider-thumb,
+.dark .goal-range::-moz-range-thumb {
+  border-color: rgb(28 25 23);
+}
+
+.goal-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.goal-range:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+@media (pointer: coarse) {
+  /* 44px of grabbable height, same 4px of visible track. */
+  .goal-range {
+    height: 44px;
+  }
+
+  .goal-range::-webkit-slider-thumb {
+    height: 26px;
+    width: 26px;
+    margin-top: -11px;
+  }
+
+  .goal-range::-moz-range-thumb {
+    height: 26px;
+    width: 26px;
+  }
+}
+
+/* ── Landscape phones ──
+   ~375px of height with three stacked chrome bars leaves a sliver of content,
+   so the chrome compacts instead of the content shrinking. */
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .chrome-compact {
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
+  }
+
+  .chrome-compact-hide {
+    display: none;
+  }
+
+  /* The bottom bar drops to icons only. */
+  .chrome-compact button {
+    min-height: 2rem;
+  }
+
+  /* The wordmark keeps its role as a landmark at a smaller size. */
+  header.chrome-compact h1 {
+    font-size: 0.9375rem;
+  }
+
+  /* Underline tabs give up the 44px floor here — in landscape the pointer is
+     still a finger, but height is the scarcer resource. */
+  [role="tab"] {
+    min-height: 2rem !important;
+    padding-bottom: 0.375rem !important;
+  }
+
+  /* Chrome buttons stop reserving a 44px box; the pointer is still a finger,
+     but in a 360px-tall window height is the scarcer resource. */
+  .chrome-compact .group,
+  header.chrome-compact button {
+    min-height: 1.75rem !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+
+  /* The entity's own header is the single biggest consumer of height, and it
+     restates what the breadcrumb directly above it already says. Drop it here
+     and let the body have the room; everything in it also appears below. */
+  .entity-header {
+    display: none;
+  }
+
+  .entity-header-secondary {
+    display: none;
+  }
 }

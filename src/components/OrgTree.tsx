@@ -73,6 +73,7 @@ import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Edit01, Plus } from "@untitledui/icons";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
 import { TriageModal } from "./TriageModal";
+import { TableView } from "./TableView";
 
 const LAYER_KEYS: Record<string, TreeLayer> = {
   p: "people",
@@ -425,6 +426,15 @@ export function OrgTree() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
+      {/* A fitted canvas renders 320px team cards at 1–3px of text on a phone,
+          and one-finger pan swallows both page scroll and the iOS edge-back
+          gesture. Below lg the same org is the outline instead — same records,
+          same health calls, readable without pinching. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+        <TableView />
+      </div>
+
+      <div className="hidden min-h-0 flex-1 flex-col gap-2 lg:flex">
       {/* Domain filter: All = full tree; pick a domain for a focused view */}
       <div
         className="flex flex-wrap items-center gap-1.5"
@@ -462,6 +472,14 @@ export function OrgTree() {
       <HealthScan teams={visibleTeams} reports={visibleReports} />
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+        {/* React Flow captures one-finger drag to pan, which swallows the iOS
+            interactive back-swipe. This gutter absorbs touches in the edge
+            zone without panning, so Safari still gets the gesture. Only on
+            coarse pointers — a mouse near the edge should still pan. */}
+        <div
+          aria-hidden
+          className="absolute inset-y-0 left-0 z-10 hidden w-5 touch:block"
+        />
         <ReactFlow
           key={treeDomainId ?? "all"}
           nodes={nodes}
@@ -538,7 +556,7 @@ export function OrgTree() {
           >
             {!treeDomainId && domains.length > 0 && (
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                <span className="text-[10px] font-medium text-stone-400">Domains</span>
+                <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400">Domains</span>
                 {domains.map((d) => (
                   <span
                     key={d.id}
@@ -554,7 +572,7 @@ export function OrgTree() {
               </div>
             )}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
-              <span className="text-[10px] font-medium text-stone-400">Capacity</span>
+              <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400">Capacity</span>
               {capacities.map((c) => (
                 <span
                   key={c.id}
@@ -570,6 +588,7 @@ export function OrgTree() {
             </div>
           </Panel>
         </ReactFlow>
+      </div>
       </div>
 
       {modal?.kind === "team" && (
@@ -619,7 +638,7 @@ function DomainTab({
       className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
         active
           ? "border-transparent font-medium text-white"
-          : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-500"
+          : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
       }`}
       style={
         active
@@ -637,7 +656,7 @@ function DomainTab({
       {shortcut && (
         <kbd
           className={`ml-0.5 hidden rounded px-1 font-mono text-[10px] sm:inline ${
-            active ? "bg-white/20 text-white/90" : "bg-stone-100 text-stone-400 dark:bg-stone-800"
+            active ? "bg-white/20 text-white/90" : "bg-stone-100 text-stone-500 dark:text-stone-400 dark:bg-stone-800"
           }`}
         >
           {shortcut}
@@ -745,7 +764,7 @@ function ReadinessSummary({
       )}
       {worst && (
         <>
-          <span className="text-stone-300 dark:text-stone-700">·</span>
+          <span className="text-stone-400 dark:text-stone-700">·</span>
           <button
             type="button"
             onClick={() =>
@@ -769,11 +788,11 @@ function ReadinessSummary({
       )}
       {undecided > 0 && (
         <>
-          <span className="text-stone-300 dark:text-stone-700">·</span>
+          <span className="text-stone-400 dark:text-stone-700">·</span>
           <button
             type="button"
             onClick={() => openModal({ kind: "triage" })}
-            className="rounded-md px-1.5 py-0.5 text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300"
+            className="rounded-md px-1.5 py-0.5 text-stone-500 dark:text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-400"
             title="Not a backlog — decide once and they leave this count for good"
           >
             <span className="tabular-nums">{undecided}</span> undecided
@@ -822,7 +841,7 @@ function HealthScan({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] font-medium tracking-wide text-stone-400 uppercase">
+      <span className="text-[11px] font-medium tracking-wide text-stone-500 dark:text-stone-400 uppercase">
         Health
       </span>
       {HEALTH_FILTER_VALUES.map((value) => {
@@ -844,7 +863,7 @@ function HealthScan({
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-40 ${
               active
                 ? "border-transparent font-medium text-white"
-                : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-500"
+                : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
             }`}
             style={active ? { backgroundColor: color } : undefined}
           >
@@ -856,7 +875,7 @@ function HealthScan({
             )}
             {filterLabel(value)}
             <span
-              className={`tabular-nums ${active ? "text-white/80" : "text-stone-400"}`}
+              className={`tabular-nums ${active ? "text-white/80" : "text-stone-500 dark:text-stone-400"}`}
             >
               {count}
             </span>
@@ -868,7 +887,7 @@ function HealthScan({
           Clear
         </Button>
       )}
-      <span className="ml-auto text-xs text-stone-400">
+      <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
         {roll.rated === 0 ? (
           "Nothing rated yet — set a health on any card"
         ) : (
@@ -967,7 +986,7 @@ function ViewLayers() {
             className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm shadow-sm ${
               on
                 ? "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-                : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-300"
+                : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
             }`}
           >
             {layer.label}
@@ -975,7 +994,7 @@ function ViewLayers() {
               className={`rounded px-1 font-mono text-[10px] ${
                 on
                   ? "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
-                  : "bg-stone-100 text-stone-400 dark:bg-stone-800"
+                  : "bg-stone-100 text-stone-500 dark:text-stone-400 dark:bg-stone-800"
               }`}
             >
               {layer.shortcut}
@@ -1156,11 +1175,11 @@ function ManagerNode({ data }: NodeProps) {
         <Avatar name={manager.name} photo={manager.photo} size={34} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold">{manager.name}</div>
-          <div className="truncate text-[10px] text-stone-400">
+          <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
             {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
               "I report to"}
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-stone-400">
+          <div className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
             {filled > 0 ? (
               <span className="text-blue-500 dark:text-blue-400">
                 manual {filled}/6
@@ -1185,7 +1204,7 @@ function ManagerNode({ data }: NodeProps) {
           />
         )}
         <div
-          className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
+          className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           <ButtonUtility
@@ -1256,11 +1275,11 @@ function DirectReportNode({ data }: NodeProps) {
         />
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-semibold">{person.name}</div>
-          <div className="truncate text-[10px] text-stone-400">
+          <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
             {[person.role, domain?.name].filter(Boolean).join(" · ") ||
               "Direct report"}
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-stone-400">
+          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
             <span className="truncate">
               {led.length > 0
                 ? `${led.length} team${led.length === 1 ? "" : "s"}`
@@ -1290,7 +1309,7 @@ function DirectReportNode({ data }: NodeProps) {
           />
         )}
         <div
-          className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
+          className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           <ButtonUtility
@@ -1425,12 +1444,12 @@ function TeamNode({ data }: NodeProps) {
               <div className="truncate text-sm font-semibold">{team.name}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {parent && (
-                  <span className="text-[10px] text-stone-400">
+                  <span className="text-[10px] text-stone-500 dark:text-stone-400">
                     under {parent.name}
                   </span>
                 )}
                 {leader && (
-                  <span className="text-[10px] text-stone-400">
+                  <span className="text-[10px] text-stone-500 dark:text-stone-400">
                     led by {leader.name}
                   </span>
                 )}
@@ -1451,7 +1470,7 @@ function TeamNode({ data }: NodeProps) {
               </div>
             </div>
             <div
-              className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
+              className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
               <ButtonUtility
@@ -1475,8 +1494,8 @@ function TeamNode({ data }: NodeProps) {
             <p
               className={`mt-3 line-clamp-2 text-xs leading-relaxed ${
                 team.purpose
-                  ? "text-stone-600 dark:text-stone-300"
-                  : "italic text-stone-400"
+                  ? "text-stone-600 dark:text-stone-400"
+                  : "italic text-stone-500 dark:text-stone-400"
               }`}
             >
               {team.purpose ?? "No mandate set — click to add"}
@@ -1499,7 +1518,7 @@ function TeamNode({ data }: NodeProps) {
               {memberHealth.rated > 0 && (
                 <>
                   <HealthBar roll={memberHealth} />
-                  <div className="text-[10px] text-stone-400">
+                  <div className="text-[10px] text-stone-500 dark:text-stone-400">
                     {memberHealth.counts.strained + memberHealth.counts.critical >
                     0
                       ? `${
@@ -1516,7 +1535,7 @@ function TeamNode({ data }: NodeProps) {
           {showReadiness && roll.tracked > 0 && (
             <div className="mt-3 flex flex-col gap-1">
               <ReadinessBar readings={allReadings} />
-              <div className="text-[10px] text-stone-400">
+              <div className="text-[10px] text-stone-500 dark:text-stone-400">
                 {teamMeeting?.name ? `${teamMeeting.name} · ` : ""}
                 {roll.behind === 0
                   ? `${roll.tracked} tracked, all on track`
@@ -1549,7 +1568,7 @@ function TeamNode({ data }: NodeProps) {
           className="cursor-pointer border-t border-stone-100 px-4 py-2.5 dark:border-stone-800"
           onClick={() => selectTeam(team.id)}
         >
-          <div className="flex items-center justify-between text-[11px] text-stone-400">
+          <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
             <span>
               {members.length} {members.length === 1 ? "person" : "people"}
               {subTeams.length > 0
@@ -1600,7 +1619,7 @@ function TeamNode({ data }: NodeProps) {
               ))}
               {members.length === 0 && (
                 <button
-                  className="rounded-lg border border-dashed border-stone-300 py-2 text-xs text-stone-400 hover:border-stone-400 hover:text-stone-500 dark:border-stone-700"
+                  className="rounded-lg border border-dashed border-stone-300 py-2 text-xs text-stone-500 dark:text-stone-400 hover:border-stone-400 hover:text-stone-500 dark:border-stone-700"
                   onClick={() => openModal({ kind: "person", teamId: team.id })}
                 >
                   + Add first person
@@ -1669,7 +1688,7 @@ function CardNextStep({
         )}
         <textarea
           rows={2}
-          className="w-full resize-none bg-transparent text-xs font-medium leading-relaxed text-teal-900 outline-none placeholder:font-normal placeholder:text-stone-400 dark:text-teal-100"
+          className="w-full resize-none bg-transparent text-xs font-medium leading-relaxed text-teal-900 outline-none placeholder:font-normal placeholder:text-stone-500 dark:text-stone-400 dark:text-teal-100"
           placeholder="What's the next move for this team?"
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -1775,7 +1794,7 @@ function PersonRow({
         ) : null}
         {(!showDetail || !(person.assessments.cliftonTop5?.length || person.assessments.enneagram)) &&
           person.role && (
-            <div className="truncate text-[11px] text-stone-400">
+            <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
               {person.role}
             </div>
           )}
@@ -1788,7 +1807,7 @@ function PersonRow({
         />
       ) : (
         !assessed && (
-          <span className="text-[10px] text-stone-300 dark:text-stone-600">
+          <span className="text-[10px] text-stone-400 dark:text-stone-600">
             unassessed
           </span>
         )
@@ -1798,7 +1817,7 @@ function PersonRow({
         color="tertiary"
         icon={Edit01}
         tooltip="Edit"
-        className="opacity-0 transition-opacity group-hover/person:opacity-100"
+        className="opacity-0 touch:opacity-100 transition-opacity group-hover/person:opacity-100"
         onClick={(e: MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
           onEdit();

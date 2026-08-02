@@ -124,8 +124,8 @@ export function Overview() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* AI executive brief */}
-      <Card className="p-6 lg:col-span-2">
-        <div className="mb-3 flex items-center justify-between">
+      <Card className="order-last p-6 lg:order-first lg:col-span-2">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <SectionTitle>Executive brief</SectionTitle>
           {keyed && (
             <Button
@@ -139,13 +139,21 @@ export function Overview() {
             </Button>
           )}
         </div>
-        {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
-        {brief ? (
-          <div className="text-sm leading-relaxed whitespace-pre-wrap text-stone-700 dark:text-stone-200">
+        {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+        {loading && !brief ? (
+          /* Reserve the height the answer will occupy so the card doesn't
+             reflow on every streamed token. */
+          <div className="min-h-[7rem] space-y-2.5" aria-hidden="true">
+            <div className="h-3.5 w-full animate-pulse rounded bg-stone-200 dark:bg-stone-800" />
+            <div className="h-3.5 w-11/12 animate-pulse rounded bg-stone-200 [animation-delay:120ms] dark:bg-stone-800" />
+            <div className="h-3.5 w-4/5 animate-pulse rounded bg-stone-200 [animation-delay:240ms] dark:bg-stone-800" />
+          </div>
+        ) : brief ? (
+          <div className="min-h-[7rem] text-sm leading-relaxed whitespace-pre-wrap text-stone-700 dark:text-stone-200">
             {brief}
           </div>
         ) : (
-          <div className="space-y-3 text-sm text-stone-600 dark:text-stone-300">
+          <div className="space-y-3 text-sm text-stone-600 dark:text-stone-400">
             {/* Local (non-AI) brief so the tab is useful without a key */}
             <p>
               You lead <strong>{people.length} people</strong> across{" "}
@@ -182,7 +190,7 @@ export function Overview() {
               .
             </p>
             {!keyed && (
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 AI brief needs a signed-in session and the server AI function.
               </p>
             )}
@@ -199,7 +207,7 @@ export function Overview() {
             <SectionTitle>Health scan</SectionTitle>
             <Button
               size="sm"
-              color="link-color"
+              color="link-gray"
               onClick={() => {
                 setHealthScan(["strained", "critical"]);
                 setTab("table");
@@ -209,7 +217,7 @@ export function Overview() {
             </Button>
           </div>
           {healthRoll.rated === 0 ? (
-            <p className="mt-3 text-sm text-stone-400">
+            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
               Nothing rated yet. Set a health on any team or person and it shows
               up here, on the canvas, and in the table.
             </p>
@@ -217,7 +225,7 @@ export function Overview() {
             <>
               <div className="mt-3 space-y-1">
                 <HealthBar roll={healthRoll} />
-                <div className="text-[11px] text-stone-400">
+                <div className="text-[11px] text-stone-500 dark:text-stone-400">
                   {healthRoll.rated} of {teams.length + people.length} rated
                   {healthRoll.level && (
                     <>
@@ -234,14 +242,14 @@ export function Overview() {
               </div>
               <ul className="mt-3 space-y-2">
                 {weakest.length === 0 && (
-                  <li className="text-sm text-stone-400">
+                  <li className="text-sm text-stone-500 dark:text-stone-400">
                     Nothing strained or critical. ✓
                   </li>
                 )}
                 {weakest.map((w) => (
                   <li key={`${w.kind}-${w.id}`}>
                     <button
-                      className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                      className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-stone-50 active:bg-stone-100 dark:hover:bg-stone-800/50 dark:active:bg-stone-800"
                       onClick={() =>
                         w.kind === "person" ? selectPerson(w.id) : selectTeam(w.id)
                       }
@@ -267,7 +275,7 @@ export function Overview() {
                           />
                           {w.name}
                         </div>
-                        <div className="truncate text-[11px] text-stone-400">
+                        <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
                           {w.health.note ?? HEALTH_LABEL[w.health.level]}
                         </div>
                       </div>
@@ -283,14 +291,14 @@ export function Overview() {
           <SectionTitle>Needs attention</SectionTitle>
           <ul className="mt-3 space-y-2">
             {needAttention.length === 0 && (
-              <li className="text-sm text-stone-400">
+              <li className="text-sm text-stone-500 dark:text-stone-400">
                 Every tracked 1:1 is on track. 🎉
               </li>
             )}
             {needAttention.map(({ person: p, readiness }) => (
               <li key={p.id}>
                 <button
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                  className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-stone-50 active:bg-stone-100 dark:hover:bg-stone-800/50 dark:active:bg-stone-800"
                   onClick={() => {
                     selectPerson(p.id);
                   }}
@@ -304,7 +312,7 @@ export function Overview() {
                       />
                       {p.name}
                     </div>
-                    <div className="truncate text-[11px] text-stone-400">
+                    <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
                       {readiness.headline}
                     </div>
                   </div>
@@ -318,12 +326,12 @@ export function Overview() {
           <SectionTitle>Coverage gaps</SectionTitle>
           <ul className="mt-3 space-y-2">
             {unassessed.length === 0 && (
-              <li className="text-sm text-stone-400">Everyone has a read. ✓</li>
+              <li className="text-sm text-stone-500 dark:text-stone-400">Everyone has a read. ✓</li>
             )}
             {unassessed.map((p) => (
               <li key={p.id}>
                 <button
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left hover:bg-stone-50 dark:hover:bg-stone-800/50"
+                  className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-stone-50 active:bg-stone-100 dark:hover:bg-stone-800/50 dark:active:bg-stone-800"
                   onClick={() => {
                     selectPerson(p.id);
                   }}
@@ -331,7 +339,7 @@ export function Overview() {
                   <Avatar name={p.name} photo={p.photo} size={30} dimmed />
                   <div>
                     <div className="text-sm">{p.name}</div>
-                    <div className="text-[11px] text-stone-400">
+                    <div className="text-[11px] text-stone-500 dark:text-stone-400">
                       No profile read yet
                     </div>
                   </div>

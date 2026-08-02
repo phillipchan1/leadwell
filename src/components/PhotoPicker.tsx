@@ -2,6 +2,7 @@ import { useRef, useState, type DragEvent } from "react";
 import { AVATAR_THEMES } from "../data/avatars";
 import { Avatar, fileToDataUrl } from "./Avatar";
 import { Button } from "@/components/base/buttons/button";
+import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 
 type Props = {
   name: string;
@@ -11,6 +12,8 @@ type Props = {
 
 export function PhotoPicker({ name, photo, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const coarse = useCoarsePointer();
   const [dragging, setDragging] = useState(false);
   const [themeId, setThemeId] = useState(AVATAR_THEMES[0].id);
   const [showAvatars, setShowAvatars] = useState(!photo);
@@ -69,7 +72,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
           aria-label="Upload photo"
         >
           <Avatar name={name || "?"} photo={photo} size={64} />
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-[10px] font-medium text-white opacity-0 transition group-hover:bg-stone-900/45 group-hover:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-[10px] font-medium text-white opacity-0 transition touch:bg-stone-900/45 touch:opacity-100 group-hover:bg-stone-900/45 group-hover:opacity-100">
             Change
           </span>
         </button>
@@ -78,15 +81,27 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
           <div className="text-sm font-medium text-stone-800 dark:text-stone-100">
             {dragging ? "Drop to set photo" : "Photo or avatar"}
           </div>
-          <p className="mt-0.5 text-xs text-stone-500">
-            Drag an image here, or{" "}
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-xs text-stone-500 dark:text-stone-400">
+            {coarse ? "Tap to choose a photo" : "Drag an image here, or"}{" "}
             <Button
               size="sm"
               color="link-color"
               onClick={() => inputRef.current?.click()}
             >
-              browse
+              {coarse ? "browse" : "browse"}
             </Button>
+            {coarse && (
+              <>
+                {" · "}
+                <Button
+                  size="sm"
+                  color="link-color"
+                  onClick={() => cameraRef.current?.click()}
+                >
+                  take a photo
+                </Button>
+              </>
+            )}
             {" · "}
             <Button
               size="sm"
@@ -124,6 +139,17 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
             e.target.value = "";
           }}
         />
+        <input
+          ref={cameraRef}
+          type="file"
+          accept="image/*"
+          capture="user"
+          className="hidden"
+          onChange={async (e) => {
+            await applyFile(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
       </div>
 
       {showAvatars && (
@@ -133,7 +159,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
               <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Avatar themes
               </div>
-              <p className="text-[11px] text-stone-400">{theme.blurb}</p>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">{theme.blurb}</p>
             </div>
           </div>
 
@@ -148,7 +174,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
                   className={`rounded-md px-2 py-1 text-xs transition-colors ${
                     active
                       ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                      : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                   }`}
                 >
                   {t.label}
@@ -181,7 +207,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
                     className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                     draggable={false}
                   />
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-900/55 to-transparent px-1.5 pb-1 pt-4 text-left text-[10px] font-medium text-white opacity-0 transition group-hover:opacity-100">
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-900/55 to-transparent px-1.5 pb-1 pt-4 text-left text-[10px] font-medium text-white opacity-0 touch:opacity-100 transition group-hover:opacity-100">
                     {a.label}
                   </span>
                 </button>

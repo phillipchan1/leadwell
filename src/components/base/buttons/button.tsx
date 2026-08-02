@@ -11,6 +11,8 @@ export const styles = sortCx({
     common: {
         root: [
             "group relative inline-flex h-max cursor-pointer items-center justify-center whitespace-nowrap outline-brand transition duration-100 ease-linear before:absolute focus-visible:outline-2 focus-visible:outline-offset-2",
+            // Touch has no hover, so a tap needs its own acknowledgement.
+            "active:scale-[0.97]",
             // When button is used within `InputGroup`
             "in-data-input-wrapper:shadow-xs in-data-input-wrapper:focus:!z-50 in-data-input-wrapper:in-data-leading:-mr-px in-data-input-wrapper:in-data-leading:rounded-r-none in-data-input-wrapper:in-data-leading:before:rounded-r-none in-data-input-wrapper:in-data-trailing:-ml-px in-data-input-wrapper:in-data-trailing:rounded-l-none in-data-input-wrapper:in-data-trailing:before:rounded-l-none",
             // Disabled styles
@@ -80,6 +82,8 @@ export const styles = sortCx({
         "link-color": {
             root: [
                 "justify-normal rounded p-0! text-brand-secondary hover:text-brand-secondary_hover",
+                // Link buttons collapse to their text box; give a finger a real target.
+                "touch:min-h-11",
                 // Inner text underline
                 "*:data-text:underline *:data-text:decoration-transparent hover:*:data-text:decoration-fg-brand-secondary_alt",
                 // Icon styles
@@ -89,6 +93,8 @@ export const styles = sortCx({
         "link-gray": {
             root: [
                 "justify-normal rounded p-0! text-tertiary hover:text-tertiary_hover",
+                // Link buttons collapse to their text box; give a finger a real target.
+                "touch:min-h-11",
                 // Inner text underline
                 "*:data-text:underline *:data-text:decoration-transparent hover:*:data-text:decoration-fg-quaternary",
                 // Icon styles
@@ -121,6 +127,8 @@ export const styles = sortCx({
         "link-destructive": {
             root: [
                 "justify-normal rounded p-0! text-error-primary outline-error hover:text-error-primary_hover",
+                // Link buttons collapse to their text box; give a finger a real target.
+                "touch:min-h-11",
                 // Inner text underline
                 "*:data-text:underline *:data-text:decoration-transparent *:data-text:underline-offset-2 hover:*:data-text:decoration-current",
                 // Icon styles

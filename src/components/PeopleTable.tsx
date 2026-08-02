@@ -112,10 +112,75 @@ export function PeopleTable() {
         />
       </div>
 
-      <Card className="overflow-x-auto">
-        <table className="w-full text-sm">
+      {/* Nine columns collapse to unreadable widths on a phone, so below lg
+          each person is a card carrying the columns that actually get scanned:
+          identity, team, health and the next 1:1. */}
+      <div className="flex flex-col gap-2 lg:hidden">
+        {rows.map(({ p, team, capacity, next, coverage, domain }) => (
+          <div
+            key={p.id}
+            className="rounded-xl border border-stone-200 bg-white transition-colors dark:border-stone-800 dark:bg-stone-900"
+          >
+            <button
+              type="button"
+              onClick={() => selectPerson(p.id)}
+              className="flex w-full items-center gap-3 p-3 text-left active:bg-stone-50 dark:active:bg-stone-800/60"
+            >
+              <Avatar
+                name={p.name}
+                photo={p.photo}
+                size={40}
+                dimmed={!hasLeadershipRead(p)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{p.name}</span>
+                <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                  {[p.role, team?.name ?? "Direct report"]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+              {next && (
+                <span className="shrink-0 text-xs tabular-nums text-stone-500 dark:text-stone-400">
+                  {next}
+                </span>
+              )}
+            </button>
+            <div className="flex flex-wrap items-center gap-2 border-t border-stone-100 px-3 py-2 dark:border-stone-800">
+              <HealthSelect
+                size="sm"
+                value={p.health?.level}
+                onChange={(level) => setHealth("person", p.id, level)}
+                ariaLabel={`Health for ${p.name}`}
+              />
+              {capacity && (
+                <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
+              )}
+              {domain && (
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: DOMAIN_COLOR[domain] }}
+                >
+                  {domain}
+                </span>
+              )}
+              <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
+                Read {coverage}/3
+              </span>
+            </div>
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
+            No one matches this view.
+          </p>
+        )}
+      </div>
+
+      <Card className="max-lg:hidden overflow-x-auto">
+        <table className="w-full min-w-[64rem] text-sm">
           <thead>
-            <tr className="border-b border-stone-200 text-left text-xs text-stone-400 dark:border-stone-800">
+            <tr className="border-b border-stone-200 text-left text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
               <Th onClick={() => sortBy("name")} sorted={sortedDir("name")}>Name</Th>
               <Th onClick={() => sortBy("team")} sorted={sortedDir("team")}>Team</Th>
               <Th>Capacity</Th>
@@ -138,7 +203,7 @@ export function PeopleTable() {
             {rows.map(({ p, team, capacity, next, coverage, domain }) => (
               <tr
                 key={p.id}
-                className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 dark:border-stone-800/60 dark:hover:bg-stone-800/40"
+                className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 active:bg-stone-100 dark:border-stone-800/60 dark:hover:bg-stone-800/40 dark:active:bg-stone-800"
                 onClick={() => {
                   selectPerson(p.id);
                 }}
@@ -154,7 +219,7 @@ export function PeopleTable() {
                     <div>
                       <div className="font-medium">{p.name}</div>
                       {p.role && (
-                        <div className="text-[11px] text-stone-400">
+                        <div className="text-[11px] text-stone-500 dark:text-stone-400">
                           {p.role}
                         </div>
                       )}
@@ -163,7 +228,7 @@ export function PeopleTable() {
                 </td>
                 <td className="px-4 py-2.5 text-stone-500">
                   {team?.name ?? (
-                    <span className="text-stone-400">Direct report</span>
+                    <span className="text-stone-500 dark:text-stone-400">Direct report</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5">
@@ -189,7 +254,7 @@ export function PeopleTable() {
                       {domain}
                     </span>
                   ) : (
-                    <span className="text-stone-300 dark:text-stone-600">—</span>
+                    <span className="text-stone-400 dark:text-stone-500">—</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-stone-500">
@@ -205,7 +270,7 @@ export function PeopleTable() {
               <tr>
                 <td
                   colSpan={9}
-                  className="px-4 py-8 text-center text-sm text-stone-400"
+                  className="px-4 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
                 >
                   No people match.
                 </td>
