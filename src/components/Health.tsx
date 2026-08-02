@@ -19,7 +19,9 @@ import {
   isStale,
   type HealthRollUp,
 } from "../lib/health";
-import { fieldLabelCls, inputCls } from "./ui";
+import { Input } from "@/components/base/input/input";
+import { Label } from "@/components/base/input/label";
+import { NativeSelect } from "@/components/base/select/select-native";
 
 /** The property dropdown. `null` from onChange means "clear the rating". */
 export function HealthSelect({
@@ -37,37 +39,50 @@ export function HealthSelect({
 }) {
   const color = value ? HEALTH_COLOR[value] : undefined;
   const compact = size === "sm";
+  const options = [
+    { label: "Not rated", value: "" },
+    ...HEALTH_LEVELS.map((l) => ({ label: HEALTH_LABEL[l], value: l })),
+  ];
+
+  // The dense table-cell variant stays custom: the control itself is tinted
+  // by its value, which the design system's select can't express.
+  if (compact) {
+    return (
+      <select
+        aria-label={ariaLabel}
+        title={value ? HEALTH_HINT[value] : "Not rated yet"}
+        value={value ?? ""}
+        onChange={(e) => onChange((e.target.value || null) as HealthLevel | null)}
+        onClick={(e) => e.stopPropagation()}
+        className={`w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 ${
+          value ? "" : "text-stone-400"
+        } ${className}`}
+        style={
+          color
+            ? { backgroundColor: color + "1f", color }
+            : { backgroundColor: "transparent" }
+        }
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
   return (
-    <select
+    <NativeSelect
       aria-label={ariaLabel}
       title={value ? HEALTH_HINT[value] : "Not rated yet"}
       value={value ?? ""}
       onChange={(e) => onChange((e.target.value || null) as HealthLevel | null)}
       onClick={(e) => e.stopPropagation()}
-      className={
-        compact
-          ? `w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 ${
-              value ? "" : "text-stone-400"
-            } ${className}`
-          : `${inputCls} cursor-pointer font-medium ${className}`
-      }
-      style={
-        color
-          ? compact
-            ? { backgroundColor: color + "1f", color }
-            : { color }
-          : compact
-            ? { backgroundColor: "transparent" }
-            : undefined
-      }
-    >
-      <option value="">Not rated</option>
-      {HEALTH_LEVELS.map((l) => (
-        <option key={l} value={l} title={HEALTH_HINT[l]}>
-          {HEALTH_LABEL[l]}
-        </option>
-      ))}
-    </select>
+      options={options}
+      selectClassName={`cursor-pointer font-medium ${className}`}
+      style={color ? { color } : undefined}
+    />
   );
 }
 
@@ -183,7 +198,7 @@ export function HealthField({
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-2">
-        <span className={fieldLabelCls}>{label}</span>
+        <Label>{label}</Label>
         {rated && (
           <span
             className={`text-[10px] ${
@@ -207,11 +222,11 @@ export function HealthField({
           : "Not rated — pick the level that matches your gut."}
       </p>
       {health && onNote && (
-        <input
-          className={`${inputCls} text-sm`}
+        <Input
+          size="sm"
           placeholder="What makes it that? (optional)"
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={setNote}
           onBlur={() => {
             if ((health.note ?? "") !== note.trim()) onNote(note);
           }}
