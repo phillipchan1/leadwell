@@ -20,11 +20,10 @@ import {
 } from "../lib/profileSignals";
 import { ProfileBuildCanvas } from "./ProfileBuildCanvas";
 import { Badge } from "@/components/base/badges/badges";
+import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
-import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { X } from "@untitledui/icons";
 
 type RowState = { accepted: boolean; text: string };
 
@@ -328,38 +327,29 @@ export function ProfileFillModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`AI fill profile for ${displayName}`}
-    >
-      <div
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl dark:border-stone-800 dark:bg-stone-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-stone-200 px-5 py-3 dark:border-stone-800">
-          <div>
-            <h2 className="text-base font-semibold">
-              ✨ AI fill — {self ? "me" : displayName}
-            </h2>
-            <p className="text-[11px] text-stone-400">
-              {self
-                ? "Watch the profile assemble as you type — then draft with AI."
-                : "Live build as you type · or guided mapping if you’re still figuring them out."}
-            </p>
+    <Modal
+      size="lg"
+      title={`✨ AI fill — ${self ? "me" : displayName}`}
+      subtitle={
+        self
+          ? "Watch the profile assemble as you type — then draft with AI."
+          : "Live build as you type · or guided mapping if you’re still figuring them out."
+      }
+      onClose={onClose}
+      footer={
+        draft ? (
+          <div className="flex w-full items-center justify-between gap-2">
+            <Button size="md" color="secondary" onClick={resetAll}>
+              ← Start over
+            </Button>
+            <Button size="md" onClick={apply} isDisabled={acceptedCount === 0}>
+              Apply {acceptedCount} field{acceptedCount === 1 ? "" : "s"}
+            </Button>
           </div>
-          <ButtonUtility
-            size="sm"
-            color="tertiary"
-            icon={X}
-            tooltip="Close"
-            onClick={onClose}
-          />
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        ) : undefined
+      }
+    >
+      <div className="pt-1">
           {noKey && (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
               Sign in with AI configured to use AI fill.
@@ -608,20 +598,8 @@ export function ProfileFillModal({
               </div>
             </div>
           )}
-        </div>
-
-        {draft && (
-          <div className="flex shrink-0 items-center justify-between gap-2 border-t border-stone-200 px-5 py-3 dark:border-stone-800">
-            <Button size="md" color="secondary" onClick={resetAll}>
-              ← Start over
-            </Button>
-            <Button size="md" onClick={apply} isDisabled={acceptedCount === 0}>
-              Apply {acceptedCount} field{acceptedCount === 1 ? "" : "s"}
-            </Button>
-          </div>
-        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

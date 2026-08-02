@@ -133,7 +133,18 @@ export function AssessmentEditor({
     <Modal
       title={`${self ? "My assessments" : "Assessments"} — ${displayName}`}
       onClose={onClose}
-    >      <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+      footer={
+        <>
+          <Button size="md" color="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="md" onClick={save}>
+            Save assessments
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
         {/* CliftonStrengths */}
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
@@ -358,14 +369,6 @@ export function AssessmentEditor({
           onChange={setHowToLead}
           placeholder={howToLeadPlaceholder}
         />
-      </div>
-      <div className="mt-4 flex justify-end gap-2">
-        <Button size="md" color="secondary" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button size="md" onClick={save}>
-          Save assessments
-        </Button>
       </div>
     </Modal>
   );

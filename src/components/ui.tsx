@@ -1,5 +1,10 @@
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Button } from "@/components/base/buttons/button";
+import {
+  Dialog,
+  Modal as SysModal,
+  ModalOverlay,
+} from "@/components/application/modals/modal";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 
@@ -100,51 +105,65 @@ export function ProfileAdminLinks({
   );
 }
 
+/**
+ * App modal on the design system's React Aria overlay: focus trap, scroll
+ * lock, Escape and backdrop dismissal all come from the primitives. Render
+ * conditionally (`{open && <Modal …>}`); `onClose` unmounts it.
+ */
 export function Modal({
   title,
+  subtitle,
   onClose,
   children,
+  size = "md",
+  footer,
 }: {
   title: string;
+  /** Muted line under the title. */
+  subtitle?: string;
   onClose: () => void;
   children: ReactNode;
+  /** md = forms (max-w-md); lg = wide working surfaces (max-w-3xl). */
+  size?: "md" | "lg";
+  /** Pinned action bar below the scrolling body. */
+  footer?: ReactNode;
 }) {
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
+    <ModalOverlay
+      isOpen
+      isDismissable
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div
-        className="max-h-[min(90vh,720px)] w-full max-w-md overflow-y-auto rounded-2xl border border-stone-200 bg-white p-6 shadow-xl dark:border-stone-800 dark:bg-stone-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-          <ButtonUtility
-            size="sm"
-            color="tertiary"
-            icon={X}
-            tooltip="Close"
-            onClick={onClose}
-          />
-        </div>
-        {children}
-      </div>
-    </div>
+      <SysModal className={size === "lg" ? "max-w-3xl" : "max-w-md"}>
+        <Dialog aria-label={title} className="flex max-h-[inherit] flex-col">
+          <div className="flex items-start justify-between gap-3 px-6 pt-6 pb-4">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+              {subtitle && (
+                <p className="mt-0.5 text-xs text-stone-500">{subtitle}</p>
+              )}
+            </div>
+            <ButtonUtility
+              size="sm"
+              color="tertiary"
+              icon={X}
+              tooltip="Close"
+              onClick={onClose}
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            {children}
+          </div>
+          {footer && (
+            <div className="flex items-center justify-end gap-2 border-t border-stone-200 px-6 py-4 dark:border-stone-800">
+              {footer}
+            </div>
+          )}
+        </Dialog>
+      </SysModal>
+    </ModalOverlay>
   );
 }
 
