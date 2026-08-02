@@ -45,6 +45,8 @@ import { ReadinessChip } from "./ReadinessChip";
 import { HealthBar, HealthSelect } from "./Health";
 import { TintBadge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Checkbox } from "@/components/base/checkbox/checkbox";
+
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SearchLg } from "@untitledui/icons";
@@ -807,10 +809,9 @@ function ColumnsMenu({
               key={c.key}
               className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-stone-800"
             >
-              <input
-                type="checkbox"
-                className="accent-teal-600"
-                checked={columns.has(c.key)}
+              <Checkbox
+                size="sm"
+                isSelected={columns.has(c.key)}
                 onChange={() => onToggle(c.key)}
               />
               {c.label}

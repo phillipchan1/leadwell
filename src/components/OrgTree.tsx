@@ -67,6 +67,8 @@ import { Avatar } from "./Avatar";
 import { ReadinessChip } from "./ReadinessChip";
 import { TintBadge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { Checkbox } from "@/components/base/checkbox/checkbox";
+
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Edit01, Plus } from "@untitledui/icons";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
@@ -1657,12 +1659,11 @@ function CardNextStep({
       </div>
       <div className="mt-0.5 flex items-start gap-1.5">
         {action && (
-          <input
-            type="checkbox"
-            checked={false}
+          <Checkbox
+            size="sm"
+            isSelected={false}
             onChange={() => onToggle(action.id)}
-            className="mt-1.5 shrink-0 accent-teal-600"
-            title="Mark done"
+            className="mt-1 shrink-0"
             aria-label="Mark next step done"
           />
         )}

@@ -20,6 +20,7 @@ import {
 } from "../lib/profileSignals";
 import { ProfileBuildCanvas } from "./ProfileBuildCanvas";
 import { Badge } from "@/components/base/badges/badges";
+import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
@@ -625,15 +626,12 @@ function SuggestionRow({
       }`}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-200">
-          <input
-            type="checkbox"
-            className="accent-teal-600"
-            checked={row.accepted}
-            onChange={(e) => onChange({ accepted: e.target.checked })}
-          />
-          {label}
-        </label>
+        <Checkbox
+          size="sm"
+          isSelected={row.accepted}
+          onChange={(accepted) => onChange({ accepted })}
+          label={label}
+        />
         <Badge size="sm" color={CONFIDENCE_COLOR[suggestion.confidence]}>
           {suggestion.confidence}
         </Badge>
@@ -679,15 +677,12 @@ function ModalityRow({
       }`}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-xs font-medium text-stone-700 dark:text-stone-200">
-          <input
-            type="checkbox"
-            className="accent-teal-600"
-            checked={row.accepted}
-            onChange={(e) => onChange({ accepted: e.target.checked })}
-          />
-          Custom modality
-        </label>
+        <Checkbox
+          size="sm"
+          isSelected={row.accepted}
+          onChange={(accepted) => onChange({ accepted })}
+          label="Custom modality"
+        />
         <Badge size="sm" color={CONFIDENCE_COLOR[suggestion.confidence]}>
           {suggestion.confidence}
         </Badge>

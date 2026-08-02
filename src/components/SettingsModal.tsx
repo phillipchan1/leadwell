@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
+import { Toggle } from "@/components/base/toggle/toggle";
 import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 
@@ -66,14 +67,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 Preference stays on this device.
               </p>
             </div>
-            <Button
-              size="md"
-              color={dark ? "primary" : "secondary"}
-              className="min-w-[4.5rem]"
-              onClick={toggleDark}
-            >
-              {dark ? "On" : "Off"}
-            </Button>
+            <Toggle
+              size="sm"
+              isSelected={dark}
+              onChange={toggleDark}
+              aria-label="Dark mode"
+            />
           </div>
         </section>
 

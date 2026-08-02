@@ -7,6 +7,8 @@ import {
 } from "../lib/ai";
 import { SessionEditor } from "./SessionEditor";
 import { Button } from "@/components/base/buttons/button";
+import { Checkbox } from "@/components/base/checkbox/checkbox";
+
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
 
@@ -446,16 +448,14 @@ export function MeetingEditor({
               {parsed && !structuring && (
                 <div className="meeting-editor-preview-actions">
                   {parsed.commitments.length > 0 && topicSubjectId && (
-                    <label className="meeting-editor-topics-check">
-                      <input
-                        type="checkbox"
-                        className="accent-teal-600"
-                        checked={createTopics}
-                        onChange={(e) => setCreateTopics(e.target.checked)}
-                      />
-                      Add {parsed.commitments.length} commitment
-                      {parsed.commitments.length === 1 ? "" : "s"} as topics
-                    </label>
+                    <Checkbox
+                      size="sm"
+                      isSelected={createTopics}
+                      onChange={setCreateTopics}
+                      label={`Add ${parsed.commitments.length} commitment${
+                        parsed.commitments.length === 1 ? "" : "s"
+                      } as topics`}
+                    />
                   )}
                   <Button type="button" size="md" onClick={acceptStructured}>
                     Accept into notes
