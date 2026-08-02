@@ -9,13 +9,10 @@ import {
   MBTI,
   THEME_DOMAIN,
 } from "../data/frameworks";
-import {
-  Modal,
-  inputCls,
-  fieldLabelCls,
-  buttonPrimaryCls,
-  buttonGhostCls,
-} from "./ui";
+import { Modal, inputCls, fieldLabelCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -235,9 +232,9 @@ export function AssessmentEditor({
         <div>
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-sm font-medium">Other modalities</span>
-            <button
-              type="button"
-              className="text-xs text-teal-600 hover:underline"
+            <Button
+              size="sm"
+              color="link-color"
               onClick={() =>
                 setModalities((m) => [
                   ...m,
@@ -252,7 +249,7 @@ export function AssessmentEditor({
               }
             >
               + Add modality
-            </button>
+            </Button>
           </div>
           <p className="mb-2 text-[11px] text-stone-400">
             Working Genius, DISC, pastoral style — anything that isn’t Clifton /
@@ -300,16 +297,16 @@ export function AssessmentEditor({
                     <option value="test">Test</option>
                     <option value="inferred">Inferred</option>
                   </select>
-                  <button
-                    type="button"
-                    className="shrink-0 px-1 text-stone-400 hover:text-red-500"
-                    aria-label="Remove modality"
+                  <ButtonUtility
+                    size="xs"
+                    color="tertiary"
+                    icon={X}
+                    tooltip="Remove modality"
+                    className="shrink-0"
                     onClick={() =>
                       setModalities((rows) => rows.filter((_, j) => j !== i))
                     }
-                  >
-                    ✕
-                  </button>
+                  />
                 </div>
                 <input
                   className={`${inputCls} mb-1.5`}
@@ -368,12 +365,12 @@ export function AssessmentEditor({
         </label>
       </div>
       <div className="mt-4 flex justify-end gap-2">
-        <button className={buttonGhostCls} onClick={onClose}>
+        <Button size="md" color="secondary" onClick={onClose}>
           Cancel
-        </button>
-        <button className={buttonPrimaryCls} onClick={save}>
+        </Button>
+        <Button size="md" onClick={save}>
           Save assessments
-        </button>
+        </Button>
       </div>
     </Modal>
   );

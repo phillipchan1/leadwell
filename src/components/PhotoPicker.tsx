@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
 import { AVATAR_THEMES } from "../data/avatars";
 import { Avatar, fileToDataUrl } from "./Avatar";
+import { Button } from "@/components/base/buttons/button";
 
 type Props = {
   name: string;
@@ -79,33 +80,34 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
           </div>
           <p className="mt-0.5 text-xs text-stone-500">
             Drag an image here, or{" "}
-            <button
-              type="button"
-              className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
+            <Button
+              size="sm"
+              color="link-color"
               onClick={() => inputRef.current?.click()}
             >
               browse
-            </button>
+            </Button>
             {" · "}
-            <button
-              type="button"
-              className="text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
+            <Button
+              size="sm"
+              color="link-gray"
               onClick={() => setShowAvatars((v) => !v)}
             >
               {showAvatars ? "hide avatars" : "pick an avatar"}
-            </button>
+            </Button>
           </p>
           {photo && (
-            <button
-              type="button"
-              className="mt-1 text-left text-xs text-stone-400 hover:text-stone-600 hover:underline dark:hover:text-stone-300"
+            <Button
+              size="sm"
+              color="link-destructive"
+              className="mt-1"
               onClick={() => {
                 onChange(undefined);
                 setShowAvatars(true);
               }}
             >
               Remove
-            </button>
+            </Button>
           )}
           {error && (
             <p className="mt-1 text-xs text-rose-600 dark:text-rose-400">{error}</p>

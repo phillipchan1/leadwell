@@ -5,6 +5,7 @@ import {
   signInWithGoogle,
 } from "../lib/auth";
 import { supabaseConfigured } from "../lib/supabase";
+import { Button } from "@/components/base/buttons/button";
 
 /** Full-screen sign-in gate shown when there's no authenticated session. */
 export function Login() {
@@ -52,29 +53,35 @@ export function Login() {
             restart the dev server. See <code>SETUP.md</code>.
           </p>
         ) : (
-          <button
-            type="button"
+          <Button
+            size="lg"
+            color="secondary"
+            iconLeading={<GoogleMark />}
             onClick={onSignIn}
-            disabled={busy}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-60 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-100 dark:hover:bg-stone-700"
+            isDisabled={busy}
+            isLoading={busy}
+            showTextWhileLoading
+            className="mt-6 w-full"
           >
-            <GoogleMark />
             {busy ? "Redirecting…" : "Continue with Google"}
-          </button>
+          </Button>
         )}
 
         {/* Dev only — compiled out of production builds. Lets an agent drive
             the real signed-in app without touching the Google account. */}
         {supabaseConfigured && devTestUserConfigured && (
-          <button
-            type="button"
+          <Button
+            size="md"
+            color="secondary"
             onClick={onTestSignIn}
-            disabled={busy}
+            isDisabled={busy}
+            isLoading={busy}
+            showTextWhileLoading
             data-testid="dev-test-signin"
-            className="mt-3 w-full rounded-lg border border-dashed border-amber-400 px-4 py-2 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-60 dark:border-amber-600 dark:text-amber-400 dark:hover:bg-amber-950/40"
+            className="mt-3 w-full"
           >
             {busy ? "Signing in…" : "Continue as test user (dev)"}
-          </button>
+          </Button>
         )}
 
         {error && <p className="mt-4 text-xs text-red-500">{error}</p>}

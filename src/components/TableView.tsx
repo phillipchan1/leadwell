@@ -44,6 +44,7 @@ import {
 import { Avatar } from "./Avatar";
 import { HealthBar, HealthSelect } from "./Health";
 import { Badge, Card, inputSmCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 
 type ColumnKey = Exclude<SortKey, "name">;
 
@@ -422,8 +423,9 @@ export function TableView() {
           );
         })}
         {(scanning || query || domainFilter || show !== "all" || sort) && (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            color="link-gray"
             onClick={() => {
               setHealthScan([]);
               setQuery("");
@@ -431,10 +433,9 @@ export function TableView() {
               setShow("all");
               setSort(null);
             }}
-            className="rounded-md px-1.5 py-0.5 text-xs text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800"
           >
             Reset view
-          </button>
+          </Button>
         )}
       </div>
 
@@ -792,15 +793,15 @@ function ColumnsMenu({
 
   return (
     <div className="relative" ref={ref}>
-      <button
-        type="button"
+      <Button
+        size="sm"
+        color="secondary"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        className="rounded-lg border border-stone-300 px-2.5 py-1.5 text-xs text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300"
       >
         Columns
         <span className="ml-1 text-stone-400 tabular-nums">{columns.size}</span>
-      </button>
+      </Button>
       {open && (
         <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg dark:border-stone-800 dark:bg-stone-900">
           {COLUMNS.map((c) => (

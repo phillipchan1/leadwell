@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import { SectionTitle, inputCls, inputSmCls } from "./ui";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 
 /**
  * Value banked with someone I report to, in *their* currency — recallable
@@ -68,14 +70,14 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                 <span className="text-[10px] tabular-nums text-stone-400">
                   {w.date}
                 </span>
-                <button
-                  type="button"
-                  className="text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
-                  aria-label="Delete win"
+                <ButtonUtility
+                  size="xs"
+                  color="tertiary"
+                  icon={X}
+                  tooltip="Delete win"
+                  className="opacity-0 group-hover:opacity-100"
                   onClick={() => deleteWin(w.id)}
-                >
-                  ✕
-                </button>
+                />
               </div>
             </div>
           </li>

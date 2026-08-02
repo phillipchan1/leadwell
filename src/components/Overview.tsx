@@ -22,7 +22,8 @@ import {
   rollUpHealth,
 } from "../lib/health";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
-import { Card, SectionTitle, buttonPrimaryCls } from "./ui";
+import { Card, SectionTitle } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 import { Avatar } from "./Avatar";
 import { HealthBar } from "./Health";
 
@@ -127,13 +128,15 @@ export function Overview() {
         <div className="mb-3 flex items-center justify-between">
           <SectionTitle>Executive brief</SectionTitle>
           {keyed && (
-            <button
-              className={buttonPrimaryCls}
+            <Button
+              size="md"
               onClick={generateBrief}
-              disabled={loading}
+              isDisabled={loading}
+              isLoading={loading}
+              showTextWhileLoading
             >
               {loading ? "Thinking…" : brief ? "Regenerate" : "✦ Generate with AI"}
-            </button>
+            </Button>
           )}
         </div>
         {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
@@ -194,16 +197,16 @@ export function Overview() {
         <Card className="p-5">
           <div className="flex items-baseline justify-between gap-2">
             <SectionTitle>Health scan</SectionTitle>
-            <button
-              type="button"
-              className="text-[11px] font-medium text-teal-600 hover:text-teal-700"
+            <Button
+              size="sm"
+              color="link-color"
               onClick={() => {
                 setHealthScan(["strained", "critical"]);
                 setTab("table");
               }}
             >
               Open in table
-            </button>
+            </Button>
           </div>
           {healthRoll.rated === 0 ? (
             <p className="mt-3 text-sm text-stone-400">

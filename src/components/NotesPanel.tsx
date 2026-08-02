@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 import { MarkdownBody } from "./MarkdownBody";
 import { WritingPad } from "./WritingPad";
 
@@ -59,16 +62,15 @@ export function NotesPanel({
             dualMode={false}
           />
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="text-xs text-stone-400 hover:underline"
+            <Button
+              size="sm"
+              color="link-gray"
               onClick={() => setComposing(false)}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="rounded-lg bg-teal-600 px-3 py-1 text-xs font-medium text-white"
+            </Button>
+            <Button
+              size="sm"
               onClick={() => {
                 if (!draft.trim()) return;
                 addNote(subjectId, draft.trim());
@@ -77,7 +79,7 @@ export function NotesPanel({
               }}
             >
               Save note
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -89,14 +91,14 @@ export function NotesPanel({
           <li key={n.id} className="group space-y-1">
             <div className="flex items-center justify-between text-[11px] text-stone-400">
               <span>{n.date}</span>
-              <button
-                type="button"
-                className="opacity-0 hover:text-red-500 group-hover:opacity-100"
-                aria-label="Delete note"
+              <ButtonUtility
+                size="xs"
+                color="tertiary"
+                icon={X}
+                tooltip="Delete note"
+                className="opacity-0 group-hover:opacity-100"
                 onClick={() => deleteNote(n.id)}
-              >
-                ✕
-              </button>
+              />
             </div>
             {editingId === n.id ? (
               <WritingPad

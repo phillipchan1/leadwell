@@ -23,6 +23,9 @@ import {
 } from "./ui";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { SessionTable } from "./SessionTable";
@@ -325,13 +328,13 @@ export function PersonProfile({
               <div className="flex items-baseline justify-between gap-2">
                 <SectionTitle>Assessment profile</SectionTitle>
                 {hasRead && (
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    color="link-color"
                     onClick={() => setEditingAssessments(true)}
-                    className="text-[11px] text-stone-400 hover:text-teal-600"
                   >
                     Edit assessments
-                  </button>
+                  </Button>
                 )}
               </div>
               {!hasRead ? (
@@ -469,12 +472,13 @@ export function PersonProfile({
                     (read.strengths.length > 0 ||
                       read.watchOuts.length > 0 ||
                       person.howToLead) && (
-                      <button
+                      <Button
+                        size="sm"
+                        color="link-color"
                         onClick={() => setEditingAssessments(true)}
-                        className="text-xs text-stone-400 hover:text-teal-600"
                       >
                         + Add formal assessments or other modalities
-                      </button>
+                      </Button>
                     )}
                 </>
               )}
@@ -490,13 +494,14 @@ export function PersonProfile({
                       <span className="text-xs text-stone-400">
                         {Math.round(g.progress)}%
                       </span>
-                      <button
-                        className="text-stone-300 opacity-0 group-hover:opacity-100 hover:text-red-500"
-                        aria-label="Delete goal"
+                      <ButtonUtility
+                        size="xs"
+                        color="tertiary"
+                        icon={X}
+                        tooltip="Delete goal"
+                        className="opacity-0 group-hover:opacity-100"
                         onClick={() => deleteGoal(g.id)}
-                      >
-                        ✕
-                      </button>
+                      />
                     </div>
                     <input
                       type="range"

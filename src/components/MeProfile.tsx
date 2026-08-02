@@ -10,6 +10,7 @@ import {
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
 import { Avatar } from "./Avatar";
 import { Chip, SectionTitle } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { MeModal } from "./forms";
 import { ProfileFillModal } from "./ProfileFillModal";
@@ -25,17 +26,13 @@ function QuickAction({
   danger?: boolean;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
+      color={danger ? "secondary-destructive" : "secondary"}
       onClick={onClick}
-      className={`rounded-md border px-2 py-1 transition-colors ${
-        danger
-          ? "border-stone-200 text-stone-400 hover:border-red-300 hover:text-red-600 dark:border-stone-700"
-          : "border-stone-200 text-stone-600 hover:border-teal-400 hover:text-teal-700 dark:border-stone-700 dark:text-stone-300"
-      }`}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 

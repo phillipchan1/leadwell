@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -57,7 +64,10 @@ import {
   teamsLedBy,
 } from "../lib/teams";
 import { Avatar } from "./Avatar";
-import { Badge, Card, IconButton } from "./ui";
+import { Badge, Card } from "./ui";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { Edit01, Plus } from "@untitledui/icons";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
 import { TriageModal } from "./TriageModal";
 
@@ -436,14 +446,13 @@ export function OrgTree() {
             {d.name}
           </DomainTab>
         ))}
-        <button
-          type="button"
+        <Button
+          size="sm"
+          color="tertiary"
           onClick={() => openModal({ kind: "domains" })}
-          className="rounded-lg border border-dashed border-stone-300 px-2.5 py-1.5 text-sm text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:hover:border-teal-600"
-          title="Add or edit domains"
         >
           Manage domains
-        </button>
+        </Button>
         <ReadinessSummary teams={visibleTeams} reports={visibleReports} />
       </div>
 
@@ -488,25 +497,23 @@ export function OrgTree() {
           />
           <Panel position="top-left" className="flex flex-wrap items-center gap-3">
             <div className="flex flex-wrap gap-2" role="group" aria-label="Add">
-              <button
-                onClick={() => openModal({ kind: "team" })}
-                className="rounded-lg bg-teal-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-teal-700"
-              >
+              <Button size="sm" onClick={() => openModal({ kind: "team" })}>
                 + Add team
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
+                color="secondary"
                 onClick={() => openModal({ kind: "person", teamId: null })}
-                className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 shadow-sm hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:border-teal-500"
-                title="Someone I manage who isn't part of a team I lead"
               >
                 + Direct report
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
+                color="secondary"
                 onClick={() => openModal({ kind: "manager" })}
-                className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-sm font-medium text-stone-700 shadow-sm hover:border-blue-500 hover:text-blue-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-200 dark:hover:border-blue-500"
               >
                 + Manager
-              </button>
+              </Button>
             </div>
             <span
               className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
@@ -517,13 +524,9 @@ export function OrgTree() {
               className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
               aria-hidden
             />
-            <button
-              onClick={resetLayout}
-              className="rounded-lg px-2.5 py-1.5 text-sm text-stone-500 hover:bg-stone-100 hover:text-stone-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-              title="Snap all nodes back to the automatic layout"
-            >
+            <Button size="sm" color="link-gray" onClick={resetLayout}>
               Reset layout
-            </button>
+            </Button>
           </Panel>
           {/* Legend: domains (in All) + capacities */}
           <Panel
@@ -858,13 +861,9 @@ function HealthScan({
         );
       })}
       {filter.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setFilter([])}
-          className="rounded-md px-1.5 py-0.5 text-xs text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800"
-        >
+        <Button size="sm" color="link-gray" onClick={() => setFilter([])}>
           Clear
-        </button>
+        </Button>
       )}
       <span className="ml-auto text-xs text-stone-400">
         {roll.rated === 0 ? (
@@ -1214,12 +1213,13 @@ function ManagerNode({ data }: NodeProps) {
           className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
-          <IconButton
-            label="Edit manager"
+          <ButtonUtility
+            size="xs"
+            color="tertiary"
+            icon={Edit01}
+            tooltip="Edit manager"
             onClick={() => openModal({ kind: "manager", manager })}
-          >
-            ✎
-          </IconButton>
+          />
         </div>
       </Card>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
@@ -1318,18 +1318,20 @@ function DirectReportNode({ data }: NodeProps) {
           className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
-          <IconButton
-            label={`Add a team ${person.name} leads`}
+          <ButtonUtility
+            size="xs"
+            color="tertiary"
+            icon={Plus}
+            tooltip={`Add a team ${person.name} leads`}
             onClick={() => openModal({ kind: "team", leaderId: person.id })}
-          >
-            +
-          </IconButton>
-          <IconButton
-            label="Edit person"
+          />
+          <ButtonUtility
+            size="xs"
+            color="tertiary"
+            icon={Edit01}
+            tooltip="Edit person"
             onClick={() => openModal({ kind: "person", person })}
-          >
-            ✎
-          </IconButton>
+          />
         </div>
       </Card>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
@@ -1477,18 +1479,20 @@ function TeamNode({ data }: NodeProps) {
               className="nodrag flex opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
-              <IconButton
-                label="Add person"
+              <ButtonUtility
+                size="xs"
+                color="tertiary"
+                icon={Plus}
+                tooltip="Add person"
                 onClick={() => openModal({ kind: "person", teamId: team.id })}
-              >
-                +
-              </IconButton>
-              <IconButton
-                label="Edit team"
+              />
+              <ButtonUtility
+                size="xs"
+                color="tertiary"
+                icon={Edit01}
+                tooltip="Edit team"
                 onClick={() => openModal({ kind: "team", team })}
-              >
-                ✎
-              </IconButton>
+              />
             </div>
           </div>
 
@@ -1815,16 +1819,17 @@ function PersonRow({
           </span>
         )
       )}
-      <button
-        className="rounded-md p-1 text-stone-300 opacity-0 transition-opacity group-hover/person:opacity-100 hover:text-stone-600"
-        aria-label={`Edit ${person.name}`}
-        onClick={(e) => {
+      <ButtonUtility
+        size="xs"
+        color="tertiary"
+        icon={Edit01}
+        tooltip="Edit"
+        className="opacity-0 transition-opacity group-hover/person:opacity-100"
+        onClick={(e: MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
           onEdit();
         }}
-      >
-        ✎
-      </button>
+      />
     </div>
   );
 }

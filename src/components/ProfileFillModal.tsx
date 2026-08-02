@@ -19,7 +19,10 @@ import {
   liveReadFromDraft,
 } from "../lib/profileSignals";
 import { ProfileBuildCanvas } from "./ProfileBuildCanvas";
-import { Chip, buttonGhostCls, buttonPrimaryCls, inputCls, inputSmCls } from "./ui";
+import { Chip, inputCls, inputSmCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 
 type RowState = { accepted: boolean; text: string };
 
@@ -345,13 +348,13 @@ export function ProfileFillModal({
                 : "Live build as you type · or guided mapping if you’re still figuring them out."}
             </p>
           </div>
-          <button
+          <ButtonUtility
+            size="sm"
+            color="tertiary"
+            icon={X}
+            tooltip="Close"
             onClick={onClose}
-            aria-label="Close"
-            className="rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
-          >
-            ✕
-          </button>
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
@@ -421,19 +424,22 @@ export function ProfileFillModal({
                   </div>
                 )}
                 <div className="flex justify-between">
-                  <button
-                    className={buttonGhostCls}
+                  <Button
+                    size="md"
+                    color="secondary"
                     onClick={() => setEntry("choose")}
                   >
                     ← Back
-                  </button>
-                  <button
-                    className={buttonPrimaryCls}
+                  </Button>
+                  <Button
+                    size="md"
                     onClick={() => runDraftFromText(brainDump)}
-                    disabled={loading || noKey || !brainDump.trim()}
+                    isDisabled={loading || noKey || !brainDump.trim()}
+                    isLoading={loading}
+                    showTextWhileLoading
                   >
                     {loading ? "Reading…" : "Draft with AI"}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <ProfileBuildCanvas
@@ -478,26 +484,31 @@ export function ProfileFillModal({
                   </div>
                 )}
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <button className={buttonGhostCls} onClick={resetAll}>
+                  <Button size="md" color="secondary" onClick={resetAll}>
                     ← Start over
-                  </button>
+                  </Button>
                   <div className="flex gap-2">
                     {probeTurns.length > 0 && (
-                      <button
-                        className={buttonGhostCls}
+                      <Button
+                        size="md"
+                        color="secondary"
                         onClick={() => submitProbeAnswer(true)}
-                        disabled={loading}
+                        isDisabled={loading}
+                        isLoading={loading}
+                        showTextWhileLoading
                       >
                         {loading ? "Drafting…" : "Draft now"}
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      className={buttonPrimaryCls}
+                    <Button
+                      size="md"
                       onClick={() => submitProbeAnswer(false)}
-                      disabled={loading || !probeAnswer.trim()}
+                      isDisabled={loading || !probeAnswer.trim()}
+                      isLoading={loading}
+                      showTextWhileLoading
                     >
                       {loading ? "…" : "Next"}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -594,16 +605,12 @@ export function ProfileFillModal({
 
         {draft && (
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-stone-200 px-5 py-3 dark:border-stone-800">
-            <button className={buttonGhostCls} onClick={resetAll}>
+            <Button size="md" color="secondary" onClick={resetAll}>
               ← Start over
-            </button>
-            <button
-              className={buttonPrimaryCls}
-              onClick={apply}
-              disabled={acceptedCount === 0}
-            >
+            </Button>
+            <Button size="md" onClick={apply} isDisabled={acceptedCount === 0}>
               Apply {acceptedCount} field{acceptedCount === 1 ? "" : "s"}
-            </button>
+            </Button>
           </div>
         )}
       </div>

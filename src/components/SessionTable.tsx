@@ -1,5 +1,8 @@
+import type { MouseEvent } from "react";
 import type { Session } from "../types";
 import { useStore } from "../store/useStore";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 import {
   sessionStatus,
   sessionStatusLabel,
@@ -128,17 +131,17 @@ function SessionRow({
         >
           {summary || "Empty — click to write"}
         </span>
-        <button
-          type="button"
-          className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-1 text-stone-300 opacity-0 hover:text-red-500 group-hover:opacity-100"
-          aria-label="Delete 1:1"
-          onClick={(e) => {
+        <ButtonUtility
+          size="xs"
+          color="tertiary"
+          icon={X}
+          tooltip="Delete session"
+          className="absolute top-1/2 right-2 -translate-y-1/2 opacity-0 group-hover:opacity-100"
+          onClick={(e: MouseEvent<HTMLButtonElement>) => {
             e.stopPropagation();
             onDelete();
           }}
-        >
-          ✕
-        </button>
+        />
       </td>
     </tr>
   );

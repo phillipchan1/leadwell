@@ -1,4 +1,7 @@
 import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 
 export function Badge({
   color,
@@ -102,48 +105,13 @@ export function ProfileAdminLinks({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-stone-100 pt-4 text-xs dark:border-stone-800">
-      <button
-        type="button"
-        onClick={onEdit}
-        className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-      >
+      <Button size="sm" color="link-gray" onClick={onEdit}>
         Edit
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="text-stone-400 hover:text-red-500"
-      >
+      </Button>
+      <Button size="sm" color="link-destructive" onClick={onRemove}>
         Remove
-      </button>
+      </Button>
     </div>
-  );
-}
-
-export function IconButton({
-  label,
-  onClick,
-  children,
-  danger = false,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={`rounded-md p-1 text-stone-400 transition-colors ${
-        danger
-          ? "hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-          : "hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -181,13 +149,13 @@ export function Modal({
       >
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-          <button
+          <ButtonUtility
+            size="sm"
+            color="tertiary"
+            icon={X}
+            tooltip="Close"
             onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1.5 text-stone-400 transition-colors hover:bg-stone-100 hover:text-stone-700 dark:hover:bg-stone-800"
-          >
-            ✕
-          </button>
+          />
         </div>
         {children}
       </div>
@@ -205,9 +173,3 @@ export const inputSmCls = "field-input field-input--sm";
 export const inputGhostCls = "field-input field-input--ghost";
 
 export const fieldLabelCls = "field-label";
-
-export const buttonPrimaryCls =
-  "rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm shadow-teal-600/20 transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-teal-700 hover:shadow-md hover:shadow-teal-600/25 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none disabled:active:scale-100";
-
-export const buttonGhostCls =
-  "rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-medium text-stone-600 transition-[transform,background-color,border-color] duration-150 ease-out hover:border-stone-400 hover:bg-stone-100 active:scale-[0.98] dark:border-stone-700 dark:text-stone-300 dark:hover:border-stone-600 dark:hover:bg-stone-800 disabled:opacity-50 disabled:active:scale-100";

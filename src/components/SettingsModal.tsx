@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
-import { Modal, buttonGhostCls, buttonPrimaryCls } from "./ui";
+import { Modal } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { userEmail, dark, toggleDark, signOut } = useStore();
@@ -38,14 +39,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               {userEmail ?? "Google account"}
             </p>
           </div>
-          <button
-            type="button"
-            className={`${buttonGhostCls} w-full border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/40`}
+          <Button
+            size="md"
+            color="secondary-destructive"
+            className="w-full"
             onClick={onSignOut}
-            disabled={busy}
+            isDisabled={busy}
+            isLoading={busy}
+            showTextWhileLoading
           >
             {busy ? "Signing out…" : "Sign out"}
-          </button>
+          </Button>
           {error && <p className="text-xs text-red-500">{error}</p>}
         </section>
 
@@ -62,17 +66,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 Preference stays on this device.
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={dark}
+            <Button
+              size="md"
+              color={dark ? "primary" : "secondary"}
+              className="min-w-[4.5rem]"
               onClick={toggleDark}
-              className={`${buttonPrimaryCls} min-w-[4.5rem] ${
-                dark ? "" : "bg-stone-300 text-stone-700 hover:bg-stone-400"
-              }`}
             >
               {dark ? "On" : "Off"}
-            </button>
+            </Button>
           </div>
         </section>
 

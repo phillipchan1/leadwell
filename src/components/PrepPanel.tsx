@@ -14,6 +14,7 @@ import {
   type CheckFix,
 } from "../lib/readiness";
 import { SectionTitle, inputSmCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 
 /** Default tolerance offered when a meeting is switched to as-needed. */
 const DEFAULT_FLOOR_DAYS = 45;
@@ -82,31 +83,30 @@ export function PrepPanel({
               : `Track a ${label} to see whether you're ready for the next one. Nothing is measured until you do.`}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              className="rounded-lg bg-teal-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-teal-700"
+            <Button
+              size="sm"
               onClick={() => trackMeeting(subjectKind, subjectId, "weekly")}
             >
               Track a {label}
-            </button>
+            </Button>
             {!decided && (
-              <button
-                type="button"
-                className="rounded-lg border border-stone-300 px-2.5 py-1 text-[11px] text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300"
+              <Button
+                size="sm"
+                color="secondary"
                 onClick={() => setNoMeeting(subjectKind, subjectId, true)}
-                title="A decision, not a gap — clears them out of the undecided count"
+                aria-label={`No ${label}. A decision, not a gap — clears them out of the undecided count`}
               >
                 No {label}
-              </button>
+              </Button>
             )}
             {decided && (
-              <button
-                type="button"
-                className="rounded-lg px-2.5 py-1 text-[11px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+              <Button
+                size="sm"
+                color="link-gray"
                 onClick={() => setNoMeeting(subjectKind, subjectId, false)}
               >
                 Undo
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -225,13 +225,14 @@ export function PrepPanel({
                 )}
               </div>
               {!check.done && (
-                <button
-                  type="button"
-                  className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/50"
+                <Button
+                  size="sm"
+                  color="link-color"
+                  className="shrink-0"
                   onClick={() => onFix(check.fix, check.sessionId)}
                 >
                   {FIX_LABEL[check.fix]}
-                </button>
+                </Button>
               )}
             </li>
           ))}
@@ -262,11 +263,11 @@ export function PrepPanel({
               {sessionCount} logged
             </span>
           )}
-          <button
-            type="button"
-            className="rounded-md px-1.5 py-0.5 text-[10px] text-stone-400 enabled:hover:text-stone-600 disabled:opacity-40 dark:enabled:hover:text-stone-300"
-            disabled={sessionCount > 0}
-            title={
+          <Button
+            size="sm"
+            color="link-gray"
+            isDisabled={sessionCount > 0}
+            aria-label={
               sessionCount > 0
                 ? "Can't untrack — it has history. Switch to As needed instead."
                 : "Stop tracking this meeting"
@@ -274,7 +275,7 @@ export function PrepPanel({
             onClick={() => untrackMeeting(meeting.id)}
           >
             Stop tracking
-          </button>
+          </Button>
         </div>
       </div>
     </section>

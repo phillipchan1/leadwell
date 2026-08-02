@@ -6,7 +6,8 @@ import {
   type StructuredMeeting,
 } from "../lib/ai";
 import { SessionEditor } from "./SessionEditor";
-import { buttonGhostCls, buttonPrimaryCls, fieldLabelCls, inputCls } from "./ui";
+import { fieldLabelCls, inputCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -457,23 +458,20 @@ export function MeetingEditor({
                       {parsed.commitments.length === 1 ? "" : "s"} as topics
                     </label>
                   )}
-                  <button
-                    type="button"
-                    className={buttonPrimaryCls}
-                    onClick={acceptStructured}
-                  >
+                  <Button type="button" size="md" onClick={acceptStructured}>
                     Accept into notes
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
-                    className={buttonGhostCls}
+                    size="md"
+                    color="secondary"
                     onClick={() => {
                       setPreview(null);
                       setParsed(null);
                     }}
                   >
                     Discard
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>

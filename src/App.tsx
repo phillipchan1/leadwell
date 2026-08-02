@@ -104,7 +104,6 @@ export default function App() {
     teams,
     dark,
     toggleDark,
-    userEmail,
     focused,
     sessionId,
     askAIOpen,
@@ -161,7 +160,6 @@ export default function App() {
             size="sm"
             color="secondary"
             onClick={() => setSettingsOpen(true)}
-            aria-label={userEmail ?? "Settings"}
           >
             Settings
           </Button>

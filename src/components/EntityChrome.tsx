@@ -1,5 +1,15 @@
 import { useEffect, useMemo } from "react";
 import { useStore, useActiveTeamId } from "../store/useStore";
+import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Expand01,
+  Minimize01,
+  X,
+} from "@untitledui/icons";
 
 /**
  * The navigation bar every entity surface shares: breadcrumb up, pager
@@ -149,15 +159,13 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-stone-200 bg-stone-50 px-4 py-2 dark:border-stone-800 dark:bg-stone-950/60">
       {mode === "focus" && (
-        <button
-          type="button"
+        <ButtonUtility
+          size="xs"
+          color="tertiary"
+          icon={ArrowLeft}
+          tooltip="Back to split view"
           onClick={closeFocus}
-          title="Back to split view"
-          className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-stone-700 dark:hover:bg-stone-800"
-          aria-label="Back to split view"
-        >
-          ←
-        </button>
+        />
       )}
 
       {/* Breadcrumb */}
@@ -167,13 +175,14 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       >
         {trail.parent && (
           <>
-            <button
-              type="button"
+            <Button
+              size="sm"
+              color="link-gray"
+              className="max-w-[45%] truncate"
               onClick={trail.parent.go}
-              className="max-w-[45%] truncate rounded-md px-1.5 py-1 text-stone-500 hover:bg-white hover:text-teal-700 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-teal-300"
             >
               {trail.parent.label}
-            </button>
+            </Button>
             <span className="shrink-0 text-stone-300 dark:text-stone-600">
               ›
             </span>
@@ -191,9 +200,8 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             label={prev ? `Previous — ${prev.name}` : "Previous"}
             disabled={!prev}
             onClick={() => prev && trail.select(prev.id)}
-          >
-            ‹
-          </PagerButton>
+            icon={ChevronLeft}
+          />
           <span className="text-[10px] tabular-nums text-stone-400">
             {index + 1}/{trail.siblings.length}
           </span>
@@ -201,43 +209,36 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             label={next ? `Next — ${next.name}` : "Next"}
             disabled={!next}
             onClick={() => next && trail.select(next.id)}
-          >
-            ›
-          </PagerButton>
+            icon={ChevronRight}
+          />
         </div>
       )}
 
       <div className="ml-1 flex shrink-0 items-center gap-0.5">
         {mode === "peek" ? (
-          <button
-            type="button"
+          <ButtonUtility
+            size="xs"
+            color="tertiary"
+            icon={Expand01}
+            tooltip="Expand to full page (⌘↵)"
             onClick={openFocus}
-            title="Expand to full page (⌘↵)"
-            aria-label="Expand to full page"
-            className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-teal-700 dark:hover:bg-stone-800 dark:hover:text-teal-300"
-          >
-            ⤢
-          </button>
+          />
         ) : (
-          <button
-            type="button"
+          <ButtonUtility
+            size="xs"
+            color="tertiary"
+            icon={Minimize01}
+            tooltip="Back to split view (⌘↵)"
             onClick={closeFocus}
-            title="Back to split view (⌘↵)"
-            aria-label="Back to split view"
-            className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-teal-700 dark:hover:bg-stone-800 dark:hover:text-teal-300"
-          >
-            ⤡
-          </button>
+          />
         )}
-        <button
-          type="button"
+        <ButtonUtility
+          size="xs"
+          color="tertiary"
+          icon={X}
+          tooltip="Close"
           onClick={close}
-          title="Close"
-          aria-label="Close"
-          className="rounded-md px-1.5 py-1 text-sm text-stone-400 hover:bg-white hover:text-stone-700 dark:hover:bg-stone-800"
-        >
-          ✕
-        </button>
+        />
       </div>
     </div>
   );
@@ -247,23 +248,21 @@ function PagerButton({
   label,
   disabled,
   onClick,
-  children,
+  icon,
 }: {
   label: string;
   disabled: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  icon: typeof ChevronLeft;
 }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
+    <ButtonUtility
+      size="xs"
+      color="tertiary"
+      icon={icon}
+      tooltip={label}
+      isDisabled={disabled}
       onClick={onClick}
-      aria-label={label}
-      title={label}
-      className="rounded-md px-1.5 py-1 text-sm text-stone-400 enabled:hover:bg-white enabled:hover:text-stone-700 disabled:opacity-30 dark:enabled:hover:bg-stone-800"
-    >
-      {children}
-    </button>
+    />
   );
 }

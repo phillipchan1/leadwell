@@ -8,7 +8,8 @@ import {
 } from "../lib/readiness";
 import { delegatedTeamIds } from "../lib/teams";
 import { Avatar } from "./Avatar";
-import { Modal, buttonGhostCls, inputSmCls } from "./ui";
+import { Modal, inputSmCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 
 type Row = {
   kind: MeetingSubjectKind;
@@ -118,13 +119,9 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
                 ))}
               </select>
             </label>
-            <button
-              type="button"
-              className="rounded-lg px-2 py-1 text-[11px] text-stone-500 hover:bg-white hover:text-stone-700 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-              onClick={clearAll}
-            >
+            <Button size="sm" color="link-gray" onClick={clearAll}>
               No meeting with any of these ({rows.length})
-            </button>
+            </Button>
           </div>
 
           <ul className="max-h-80 divide-y divide-stone-100 overflow-y-auto dark:divide-stone-800">
@@ -148,20 +145,21 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-lg bg-teal-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-teal-700"
+                <Button
+                  size="sm"
+                  className="shrink-0"
                   onClick={() => trackMeeting(row.kind, row.id, rhythm)}
                 >
                   Track
-                </button>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-lg border border-stone-300 px-2 py-1 text-[11px] text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-300"
+                </Button>
+                <Button
+                  size="sm"
+                  color="secondary"
+                  className="shrink-0"
                   onClick={() => setNoMeeting(row.kind, row.id, true)}
                 >
                   No meeting
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -169,9 +167,9 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
       )}
 
       <div className="flex justify-end pt-4">
-        <button type="button" className={buttonGhostCls} onClick={onClose}>
+        <Button size="md" color="secondary" onClick={onClose}>
           Done
-        </button>
+        </Button>
       </div>
     </Modal>
   );

@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { Action, ActionColumn } from "../types";
 import { useStore } from "../store/useStore";
 import { inputSmCls } from "./ui";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { X } from "@untitledui/icons";
 
 const COLUMNS: ActionColumn[] = ["backlog", "this_1on1", "parking", "done"];
 
@@ -155,14 +157,14 @@ function TopicCard({
         value={action.text}
         onChange={(e) => onText(e.target.value)}
       />
-      <button
-        type="button"
-        className="absolute top-1 right-1 rounded p-0.5 text-[10px] text-stone-300 opacity-0 hover:text-red-500 group-hover:opacity-100"
-        aria-label="Delete topic"
+      <ButtonUtility
+        size="xs"
+        color="tertiary"
+        icon={X}
+        tooltip="Delete topic"
+        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100"
         onClick={onDelete}
-      >
-        ✕
-      </button>
+      />
     </li>
   );
 }

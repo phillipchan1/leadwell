@@ -12,7 +12,8 @@ import {
   teamCoachPresets,
   teamSystemPrompt,
 } from "../lib/ai";
-import { buttonPrimaryCls, inputCls } from "./ui";
+import { inputCls } from "./ui";
+import { Button } from "@/components/base/buttons/button";
 
 /**
  * Chat panel. Scoped to a person, a manager, or a team when given, otherwise
@@ -154,21 +155,25 @@ export function AICoach({
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
-        <button
+        <Button
           type="submit"
-          disabled={!input.trim() || streaming !== null}
-          className={buttonPrimaryCls}
+          size="md"
+          isDisabled={!input.trim() || streaming !== null}
+          isLoading={streaming !== null}
+          showTextWhileLoading
         >
           {streaming !== null ? "…" : "Send"}
-        </button>
+        </Button>
       </form>
       {history.length > 0 && (
-        <button
-          className="self-start text-[11px] text-stone-400 hover:underline"
+        <Button
+          size="sm"
+          color="link-gray"
+          className="self-start"
           onClick={() => clearChat(chatKey)}
         >
           Clear conversation
-        </button>
+        </Button>
       )}
     </div>
   );
