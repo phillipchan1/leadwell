@@ -5,6 +5,7 @@ import { hasLeadershipRead, topDomain } from "../lib/derive";
 import { HEALTH_SCORE } from "../lib/health";
 import { meetingFor } from "../lib/readiness";
 import { Avatar } from "./Avatar";
+import { Th } from "./Th";
 import { HealthSelect } from "./Health";
 import { TintBadge, Card } from "./ui";
 import { Input } from "@/components/base/input/input";
@@ -82,8 +83,8 @@ export function PeopleTable() {
     }
   };
 
-  const arrow = (key: SortKey) =>
-    sortKey === key ? (asc ? " ↑" : " ↓") : "";
+  const sortedDir = (key: SortKey) =>
+    sortKey === key ? (asc ? ("asc" as const) : ("desc" as const)) : undefined;
 
   return (
     <div className="space-y-4">
@@ -115,18 +116,21 @@ export function PeopleTable() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-stone-200 text-left text-xs text-stone-400 dark:border-stone-800">
-              <Th onClick={() => sortBy("name")}>Name{arrow("name")}</Th>
-              <Th onClick={() => sortBy("team")}>Team{arrow("team")}</Th>
+              <Th onClick={() => sortBy("name")} sorted={sortedDir("name")}>Name</Th>
+              <Th onClick={() => sortBy("team")} sorted={sortedDir("team")}>Team</Th>
               <Th>Capacity</Th>
-              <Th onClick={() => sortBy("health")}>Health{arrow("health")}</Th>
-              <Th onClick={() => sortBy("coverage")}>
-                Coverage{arrow("coverage")}
+              <Th onClick={() => sortBy("health")} sorted={sortedDir("health")}>Health</Th>
+              <Th onClick={() => sortBy("coverage")} sorted={sortedDir("coverage")}>
+                Coverage
               </Th>
               <Th>Top domain</Th>
               <Th>Enneagram</Th>
               <Th>MBTI</Th>
-              <Th onClick={() => sortBy("nextSession")}>
-                Next 1:1{arrow("nextSession")}
+              <Th
+                onClick={() => sortBy("nextSession")}
+                sorted={sortedDir("nextSession")}
+              >
+                Next 1:1
               </Th>
             </tr>
           </thead>
@@ -214,19 +218,3 @@ export function PeopleTable() {
   );
 }
 
-function Th({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <th
-      className={`px-4 py-2.5 font-medium ${onClick ? "cursor-pointer select-none hover:text-stone-600" : ""}`}
-      onClick={onClick}
-    >
-      {children}
-    </th>
-  );
-}

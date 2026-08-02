@@ -42,6 +42,7 @@ import {
 } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { ReadinessChip } from "./ReadinessChip";
+import { Th } from "./Th";
 import { HealthBar, HealthSelect } from "./Health";
 import { TintBadge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
@@ -291,8 +292,8 @@ export function TableView() {
         : { key, asc: !descFirst }
     );
 
-  const arrow = (key: SortKey) =>
-    sort?.key === key ? (sort.asc ? " ↑" : " ↓") : "";
+  const sortedDir = (key: SortKey) =>
+    sort?.key === key ? (sort.asc ? ("asc" as const) : ("desc" as const)) : undefined;
 
   const scanning = healthScan.length > 0;
   const weakScan =
@@ -447,13 +448,20 @@ export function TableView() {
         <table className="w-full min-w-[52rem] text-sm">
           <thead className="sticky top-0 z-10 bg-white dark:bg-stone-900">
             <tr className="border-b border-stone-200 text-left text-xs text-stone-400 dark:border-stone-800">
-              <Th onClick={() => sortBy("name")} className="min-w-[16rem]">
-                Name{arrow("name")}
+              <Th
+                onClick={() => sortBy("name")}
+                sorted={sortedDir("name")}
+                className="min-w-[16rem]"
+              >
+                Name
               </Th>
               {visible.map((c) => (
-                <Th key={c.key} onClick={() => sortBy(c.key, c.descFirst)}>
+                <Th
+                  key={c.key}
+                  onClick={() => sortBy(c.key, c.descFirst)}
+                  sorted={sortedDir(c.key)}
+                >
                   {c.label}
-                  {arrow(c.key)}
                 </Th>
               ))}
             </tr>
@@ -823,23 +831,3 @@ function ColumnsMenu({
   );
 }
 
-function Th({
-  children,
-  onClick,
-  className = "",
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  className?: string;
-}) {
-  return (
-    <th
-      className={`px-4 py-2.5 font-medium ${
-        onClick ? "cursor-pointer select-none hover:text-stone-600" : ""
-      } ${className}`}
-      onClick={onClick}
-    >
-      {children}
-    </th>
-  );
-}
