@@ -3,7 +3,12 @@ import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 
-export function Badge({
+/**
+ * Pill badge tinted by an arbitrary runtime color (domain and capacity colors
+ * are user data, so the token-based design-system Badge can't render them).
+ * Geometry mirrors the system Badge's sm pill-with-dot.
+ */
+export function TintBadge({
   color,
   children,
 }: {
@@ -12,33 +17,13 @@ export function Badge({
 }) {
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
       style={{ backgroundColor: color + "1f", color }}
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
         style={{ backgroundColor: color }}
       />
-      {children}
-    </span>
-  );
-}
-
-export function Chip({
-  children,
-  tone = "neutral",
-}: {
-  children: ReactNode;
-  tone?: "positive" | "warning" | "neutral";
-}) {
-  const cls =
-    tone === "positive"
-      ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
-      : tone === "warning"
-        ? "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300"
-        : "bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300";
-  return (
-    <span className={`inline-block rounded-md px-2 py-0.5 text-xs ${cls}`}>
       {children}
     </span>
   );

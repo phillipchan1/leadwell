@@ -6,7 +6,7 @@ import { HEALTH_SCORE } from "../lib/health";
 import { meetingFor } from "../lib/readiness";
 import { Avatar } from "./Avatar";
 import { HealthSelect } from "./Health";
-import { Badge, Card } from "./ui";
+import { TintBadge, Card } from "./ui";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SearchLg } from "@untitledui/icons";
@@ -164,7 +164,7 @@ export function PeopleTable() {
                 </td>
                 <td className="px-4 py-2.5">
                   {capacity && (
-                    <Badge color={capacity.color}>{capacity.label}</Badge>
+                    <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
                   )}
                 </td>
                 <td className="px-4 py-2.5">

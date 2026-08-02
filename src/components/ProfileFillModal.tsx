@@ -19,7 +19,7 @@ import {
   liveReadFromDraft,
 } from "../lib/profileSignals";
 import { ProfileBuildCanvas } from "./ProfileBuildCanvas";
-import { Chip } from "./ui";
+import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
@@ -28,10 +28,10 @@ import { X } from "@untitledui/icons";
 
 type RowState = { accepted: boolean; text: string };
 
-const CONFIDENCE_TONE = {
-  high: "positive",
+const CONFIDENCE_COLOR = {
+  high: "success",
   medium: "warning",
-  low: "neutral",
+  low: "gray",
 } as const;
 
 const GROUP_ORDER = ["leadUp", "traits", "known", "custom"] as const;
@@ -656,9 +656,9 @@ function SuggestionRow({
           />
           {label}
         </label>
-        <Chip tone={CONFIDENCE_TONE[suggestion.confidence]}>
+        <Badge size="sm" color={CONFIDENCE_COLOR[suggestion.confidence]}>
           {suggestion.confidence}
-        </Chip>
+        </Badge>
       </div>
       <TextArea
         aria-label={label}
@@ -710,9 +710,9 @@ function ModalityRow({
           />
           Custom modality
         </label>
-        <Chip tone={CONFIDENCE_TONE[suggestion.confidence]}>
+        <Badge size="sm" color={CONFIDENCE_COLOR[suggestion.confidence]}>
           {suggestion.confidence}
-        </Chip>
+        </Badge>
       </div>
       <Input
         size="sm"

@@ -37,13 +37,13 @@ import {
   type SortKey,
 } from "../lib/orgTable";
 import {
-  STATE_COLOR,
   STATE_LABEL,
   formatCountdown,
 } from "../lib/readiness";
 import { Avatar } from "./Avatar";
+import { ReadinessChip } from "./ReadinessChip";
 import { HealthBar, HealthSelect } from "./Health";
-import { Badge, Card } from "./ui";
+import { TintBadge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
@@ -657,13 +657,13 @@ function Cell({
       return <span className="truncate text-xs">{record.underName}</span>;
     case "domain":
       return record.domain ? (
-        <Badge color={record.domain.color}>{record.domain.name}</Badge>
+        <TintBadge color={record.domain.color}>{record.domain.name}</TintBadge>
       ) : (
         dash
       );
     case "capacity":
       return record.capacity ? (
-        <Badge color={record.capacity.color}>{record.capacity.label}</Badge>
+        <TintBadge color={record.capacity.color}>{record.capacity.label}</TintBadge>
       ) : (
         dash
       );
@@ -692,16 +692,12 @@ function Cell({
       return <NoteCell record={record} onNote={onNote} />;
     case "ready":
       return record.readiness ? (
-        <span
-          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
-          style={{
-            backgroundColor: STATE_COLOR[record.readiness.state] + "1f",
-            color: STATE_COLOR[record.readiness.state],
-          }}
+        <ReadinessChip
+          state={record.readiness.state}
+          text={formatCountdown(record.readiness)}
           title={`${STATE_LABEL[record.readiness.state]} — ${record.readiness.headline}`}
-        >
-          {formatCountdown(record.readiness)}
-        </span>
+          dot={false}
+        />
       ) : (
         <span className="text-[11px] text-stone-300 dark:text-stone-600">
           untracked

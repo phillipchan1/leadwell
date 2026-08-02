@@ -64,7 +64,8 @@ import {
   teamsLedBy,
 } from "../lib/teams";
 import { Avatar } from "./Avatar";
-import { Badge, Card } from "./ui";
+import { ReadinessChip } from "./ReadinessChip";
+import { TintBadge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Edit01, Plus } from "@untitledui/icons";
@@ -1019,34 +1020,6 @@ function GiftMixBar({ people }: { people: Person[] }) {
 }
 
 /** Readiness state as a small colored chip — the glanceable "am I ready". */
-function ReadinessChip({
-  state,
-  text,
-  title,
-}: {
-  state: Readiness["state"];
-  text: string;
-  title?: string;
-}) {
-  const color = STATE_COLOR[state];
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
-      style={{ backgroundColor: color + "1f", color }}
-      title={title ?? STATE_LABEL[state]}
-    >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{
-          backgroundColor: state === "drifting" ? "transparent" : color,
-          boxShadow: state === "drifting" ? `inset 0 0 0 1.5px ${color}` : undefined,
-        }}
-      />
-      {text}
-    </span>
-  );
-}
-
 /** Proportional bar of member readiness states, worst-first. */
 function ReadinessBar({ readings }: { readings: Readiness[] }) {
   const roll = rollUp(readings);
@@ -1462,9 +1435,9 @@ function TeamNode({ data }: NodeProps) {
                 {showHealth && health && (
                   <HealthChip health={health.health} derived={health.derived} />
                 )}
-                {domain && <Badge color={domain.color}>{domain.name}</Badge>}
+                {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
                 {capacity && (
-                  <Badge color={capacity.color}>{capacity.label}</Badge>
+                  <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
                 )}
                 {showReadiness && teamReading && teamMeeting && (
                   <ReadinessChip

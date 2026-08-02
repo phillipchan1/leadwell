@@ -9,7 +9,8 @@ import {
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
 import { Avatar } from "./Avatar";
-import { Chip, SectionTitle } from "./ui";
+import { SectionTitle } from "./ui";
+import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { MeModal } from "./forms";
@@ -187,18 +188,18 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                   {read.strengths.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {read.strengths.map((s) => (
-                        <Chip key={s} tone="positive">
+                        <Badge key={s} size="sm" color="success">
                           {s}
-                        </Chip>
+                        </Badge>
                       ))}
                     </div>
                   )}
                   {read.watchOuts.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {read.watchOuts.map((s) => (
-                        <Chip key={s} tone="warning">
+                        <Badge key={s} size="sm" color="warning">
                           ⚠ {s}
-                        </Chip>
+                        </Badge>
                       ))}
                     </div>
                   )}

@@ -1,6 +1,7 @@
 import type { MouseEvent } from "react";
 import type { Session } from "../types";
 import { useStore } from "../store/useStore";
+import { Badge } from "@/components/base/badges/badges";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import {
@@ -9,12 +10,10 @@ import {
   sessionSummary,
 } from "../lib/session";
 
-const STATUS_CLS: Record<string, string> = {
-  scheduled:
-    "bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300",
-  needs_notes:
-    "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300",
-  done: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300",
+const STATUS_COLOR: Record<string, "sky" | "warning" | "success"> = {
+  scheduled: "sky",
+  needs_notes: "warning",
+  done: "success",
 };
 
 export function SessionTable({
@@ -115,11 +114,9 @@ function SessionRow({
         />
       </td>
       <td className="px-2.5 py-2">
-        <span
-          className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-medium ${STATUS_CLS[status]}`}
-        >
+        <Badge size="sm" color={STATUS_COLOR[status]}>
           {sessionStatusLabel(status)}
-        </span>
+        </Badge>
       </td>
       <td className="relative px-2.5 py-2">
         <span

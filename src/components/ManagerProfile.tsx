@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { Manager } from "../types";
 import { Avatar } from "./Avatar";
-import { Badge, ProfileAdminLinks, SectionTitle } from "./ui";
+import { TintBadge, ProfileAdminLinks, SectionTitle } from "./ui";
 import { ManagerModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
@@ -144,8 +144,8 @@ export function ManagerProfile({
               {manager.role ?? "Leader I report to"}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <Badge color="#3B82F6">Leading up</Badge>
-              {domain && <Badge color={domain.color}>{domain.name}</Badge>}
+              <TintBadge color="#3B82F6">Leading up</TintBadge>
+              {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
             </div>
             <div className="mt-1 text-[11px] text-stone-400">
               {nextSession && `Next check-in ${nextSession}`}

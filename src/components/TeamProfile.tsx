@@ -5,7 +5,7 @@ import { hasLeadershipRead } from "../lib/derive";
 import { hasApiKey, refineTeamMandate } from "../lib/ai";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import { Badge, ProgressBar, SectionTitle } from "./ui";
+import { TintBadge, ProgressBar, SectionTitle } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Input } from "@/components/base/input/input";
@@ -211,8 +211,8 @@ export function TeamProfile({
               aria-label="Team name"
             />
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {domain && <Badge color={domain.color}>{domain.name}</Badge>}
-              {capacity && <Badge color={capacity.color}>{capacity.label}</Badge>}
+              {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
+              {capacity && <TintBadge color={capacity.color}>{capacity.label}</TintBadge>}
               {team.direction === "up" && (
                 <span className="text-[11px] text-stone-400">Reports up</span>
               )}

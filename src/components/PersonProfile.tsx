@@ -14,8 +14,7 @@ import { teamsLedBy } from "../lib/teams";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
 import {
-  Badge,
-  Chip,
+  TintBadge,
   ProgressBar,
   ProfileAdminLinks,
   SectionTitle,
@@ -23,6 +22,7 @@ import {
 import { Input } from "@/components/base/input/input";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
+import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
@@ -227,7 +227,7 @@ export function PersonProfile({
             )}
             {capacity && (
               <div className="mt-1">
-                <Badge color={capacity.color}>{capacity.label}</Badge>
+                <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
               </div>
             )}
             <div className="mt-1 text-[11px] text-stone-400">
@@ -442,18 +442,18 @@ export function PersonProfile({
                       {read.strengths.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {read.strengths.map((s) => (
-                            <Chip key={s} tone="positive">
+                            <Badge key={s} size="sm" color="success">
                               {s}
-                            </Chip>
+                            </Badge>
                           ))}
                         </div>
                       )}
                       {read.watchOuts.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {read.watchOuts.map((s) => (
-                            <Chip key={s} tone="warning">
+                            <Badge key={s} size="sm" color="warning">
                               ⚠ {s}
-                            </Chip>
+                            </Badge>
                           ))}
                         </div>
                       )}
