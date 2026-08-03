@@ -23,9 +23,14 @@ export const styles = sortCx({
         icon: "pointer-events-none size-5 shrink-0 transition-inherit-all",
     },
     sizes: {
+        // xs/sm/md compute to 32/36/40px tall from their padding alone, so each
+        // carries a touch floor. lg and xl already clear 44px. The icon-only
+        // variants are square, so they need the width floor too or they end up
+        // 44 tall and 36 wide.
         xs: {
             root: [
                 "gap-1 rounded-lg px-2.5 py-1.5 text-sm font-semibold before:rounded-[7px] data-icon-only:p-2",
+                "touch:min-h-11 touch:data-icon-only:min-w-11",
                 "in-data-input-wrapper:px-3.5 in-data-input-wrapper:py-2.5 in-data-input-wrapper:data-icon-only:p-2.5",
                 "*:data-icon:size-4 *:data-icon:stroke-[2.25px]",
             ].join(" "),
@@ -34,6 +39,7 @@ export const styles = sortCx({
         sm: {
             root: [
                 "gap-1 rounded-lg px-3 py-2 text-sm font-semibold before:rounded-[7px] data-icon-only:p-2",
+                "touch:min-h-11 touch:data-icon-only:min-w-11",
                 "in-data-input-wrapper:px-3.5 in-data-input-wrapper:py-2.5 in-data-input-wrapper:data-icon-only:p-2.5",
             ].join(" "),
             linkRoot: "gap-1 *:data-text:underline-offset-3",
@@ -41,6 +47,7 @@ export const styles = sortCx({
         md: {
             root: [
                 "gap-1 rounded-lg px-3.5 py-2.5 text-sm font-semibold before:rounded-[7px] data-icon-only:p-2.5",
+                "touch:min-h-11 touch:data-icon-only:min-w-11",
                 "in-data-input-wrapper:gap-1.5 in-data-input-wrapper:px-4 in-data-input-wrapper:text-md in-data-input-wrapper:data-icon-only:p-3",
             ].join(" "),
             linkRoot: "gap-1 *:data-text:underline-offset-4",

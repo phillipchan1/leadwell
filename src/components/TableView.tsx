@@ -52,6 +52,7 @@ import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SearchLg } from "@untitledui/icons";
+import { cx } from "@/utils/cx";
 
 type ColumnKey = Exclude<SortKey, "name">;
 
@@ -98,7 +99,18 @@ type Line =
       context: boolean;
     };
 
-export function TableView() {
+/**
+ * Which job this instance is doing.
+ *
+ * `table` is the pivot: group by anything, show anything, pick columns. `tree`
+ * is the Org tree tab's sub-lg surface, where the canvas can't be read on a
+ * phone — it answers the tree's question instead ("who sits under what"), so
+ * it's locked to the outline and drops the controls that would flatten it.
+ * Without this the two tabs rendered the identical screen.
+ */
+export type TableVariant = "table" | "tree";
+
+export function TableView({ variant = "table" }: { variant?: TableVariant } = {}) {
   const {
     teams,
     people,
@@ -117,12 +129,23 @@ export function TableView() {
     selectPerson,
     selectedTeamId,
     selectedPersonId,
+    treeDomainId,
   } = useStore();
 
+  const isTree = variant === "tree";
+
   const [query, setQuery] = useState("");
-  const [groupBy, setGroupBy] = useState<GroupBy>("team");
+  // The outline *is* the hierarchy, so tree mode pins the grouping there —
+  // any other value would flatten the one thing this surface exists to show.
+  const [ownGroupBy, setOwnGroupBy] = useState<GroupBy>("team");
+  const groupBy: GroupBy = isTree ? "team" : ownGroupBy;
+  const setGroupBy = setOwnGroupBy;
   const [show, setShow] = useState<ShowKind>("all");
-  const [domainFilter, setDomainFilter] = useState("");
+  const [ownDomainFilter, setOwnDomainFilter] = useState("");
+  // In tree mode the domain chips above the outline are the filter, so this
+  // instance follows them instead of carrying a second, conflicting control.
+  const domainFilter = isTree ? (treeDomainId ?? "") : ownDomainFilter;
+  const setDomainFilter = setOwnDomainFilter;
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [columns, setColumns] = useState<Set<ColumnKey>>(
@@ -315,44 +338,50 @@ export function TableView() {
           value={query}
           onChange={setQuery}
         />
-        <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-          Group
-          <NativeSelect
-            size="sm"
-            className="max-w-40"
-            value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value as GroupBy)}
-            aria-label="Group by"
-            options={GROUP_OPTIONS}
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
-          Show
-          <NativeSelect
-            size="sm"
-            className="max-w-36"
-            value={show}
-            onChange={(e) => setShow(e.target.value as ShowKind)}
-            aria-label="Show"
-            options={[
-              { label: "Teams & people", value: "all" },
-              { label: "Teams only", value: "teams" },
-              { label: "People only", value: "people" },
-            ]}
-          />
-        </label>
-        <NativeSelect
-          size="sm"
-          className="max-w-40"
-          value={domainFilter}
-          onChange={(e) => setDomainFilter(e.target.value)}
-          aria-label="Filter by domain"
-          options={[
-            { label: "All domains", value: "" },
-            ...domains.map((d) => ({ label: d.name, value: d.id })),
-            { label: "No domain", value: "none" },
-          ]}
-        />
+        {/* Pivot controls belong to the Table tab. The tree keeps its own
+            domain chips and would only contradict them. */}
+        {!isTree && (
+          <>
+            <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+              Group
+              <NativeSelect
+                size="sm"
+                className="max-w-40"
+                value={groupBy}
+                onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+                aria-label="Group by"
+                options={GROUP_OPTIONS}
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+              Show
+              <NativeSelect
+                size="sm"
+                className="max-w-36 touch:max-w-52"
+                value={show}
+                onChange={(e) => setShow(e.target.value as ShowKind)}
+                aria-label="Show"
+                options={[
+                  { label: "Teams & people", value: "all" },
+                  { label: "Teams only", value: "teams" },
+                  { label: "People only", value: "people" },
+                ]}
+              />
+            </label>
+            <NativeSelect
+              size="sm"
+              className="max-w-40"
+              value={domainFilter}
+              onChange={(e) => setDomainFilter(e.target.value)}
+              aria-label="Filter by domain"
+              options={[
+                { label: "All domains", value: "" },
+                ...domains.map((d) => ({ label: d.name, value: d.id })),
+                { label: "No domain", value: "none" },
+              ]}
+            />
+          </>
+        )}
 
         <div className="max-lg:hidden">
         <ColumnsMenu
@@ -375,8 +404,10 @@ export function TableView() {
         </span>
       </div>
 
-      {/* Health scan — the same filter the org tree is using */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* Health scan — the same filter the org tree is using. In tree mode the
+          tree renders its own layer-aware copy directly above this one, so
+          showing both would be two identical rows driving one store value. */}
+      <div className={cx("flex flex-wrap items-center gap-1.5", isTree && "hidden")}>
         <Explain text="Shared with the org tree, so a scan follows you between the two views">
           <span className="text-[11px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
             Health
@@ -386,7 +417,7 @@ export function TableView() {
           type="button"
           onClick={() => setHealthScan(weakScan ? [] : [...WEAK_LEVELS])}
           aria-pressed={weakScan}
-          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+          className={`rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 ${
             weakScan
               ? "border-transparent bg-amber-500 font-medium text-white"
               : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
@@ -407,7 +438,7 @@ export function TableView() {
               type="button"
               aria-pressed={active}
               onClick={() => toggleHealthScan(value)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 ${
                 active
                   ? "border-transparent font-medium text-white"
                   : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
@@ -929,9 +960,10 @@ function MobileRecordCard({
       style={{ marginLeft: Math.min(depth, 3) * 12 }}
     >
       <div className="flex items-start gap-2 p-3">
+        {/* Negative margin keeps the 44px touch box from padding the row out. */}
         <button
           type="button"
-          className={`-m-1 flex size-8 shrink-0 items-center justify-center text-stone-500 dark:text-stone-400 ${
+          className={`-m-1 flex size-8 shrink-0 items-center justify-center text-stone-500 touch:-m-1.5 touch:size-11 dark:text-stone-400 ${
             hasChildren ? "" : "invisible"
           }`}
           aria-label={expanded ? "Collapse" : "Expand"}
@@ -943,7 +975,7 @@ function MobileRecordCard({
         <button
           type="button"
           onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left touch:min-h-11"
         >
           {isTeam ? (
             <span

@@ -73,7 +73,12 @@ export function Explain({
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="inline-flex cursor-help items-center text-left"
+        /* These wrap inline labels and chips as short as 17px, and a 44px box
+           would break the rows they sit in. A pseudo-element grows the hit
+           area instead, without touching layout: ~33px, past the WCAG 2.2 AA
+           24px floor. Kept at inset-2 deliberately — the chip rows are gap-1.5,
+           so a larger halo would overlap the neighbouring trigger. */
+        className="relative inline-flex cursor-help items-center text-left after:absolute after:-inset-2 after:content-['']"
       >
         {children}
       </button>

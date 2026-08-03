@@ -220,8 +220,12 @@ export default function App() {
             <main
               className={cx(
                 "pad-safe-x flex-[2] p-4 sm:p-6 lg:min-w-[22.5rem]",
+                // The tree pane clips only where it holds the canvas, which
+                // does its own pan/zoom. Below lg it renders an outline — an
+                // ordinary tall document that has to scroll like every other
+                // tab, so the clip is scoped to lg and up.
                 tab === "tree"
-                  ? "flex flex-col overflow-hidden"
+                  ? "scroll-contain overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden"
                   : "scroll-contain overflow-y-auto",
                 // The entity takes the whole viewport on a phone.
                 selected && "max-lg:hidden"

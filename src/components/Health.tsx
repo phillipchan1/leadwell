@@ -55,7 +55,10 @@ export function HealthSelect({
         value={value ?? ""}
         onChange={(e) => onChange((e.target.value || null) as HealthLevel | null)}
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 ${
+        /* Hand-rolled rather than the design-system select, so it carries the
+           touch floors itself: 16px keeps iOS from zooming the page on focus,
+           and min-h-11 makes a 26px row control a real target. */
+        className={`w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 touch:min-h-11 touch:text-md ${
           value ? "" : "text-stone-500 dark:text-stone-400"
         } ${className}`}
         style={

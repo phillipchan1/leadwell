@@ -14,17 +14,21 @@ interface NativeSelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>
     options: { label: string; value: string; disabled?: boolean }[];
 }
 
+// The chevron is absolutely positioned, so the select needs right padding to
+// keep a long option out from under it — at `touch:text-md` the selected text
+// grows ~14%, which is enough for values like "Team outline" to collide.
+// `touch:min-h-11` gives the control a finger-sized box at the same time.
 const styles = {
     sm: {
-        root: "py-2 pl-3 text-sm touch:text-md",
+        root: "py-2 pl-3 pr-8 text-sm touch:min-h-11 touch:pr-9 touch:text-md",
         icon: "size-4 right-2.5 stroke-[2.25px]",
     },
     md: {
-        root: "py-2 pl-3 text-md",
+        root: "py-2 pl-3 pr-9 text-md touch:min-h-11",
         icon: "size-4 stroke-[2.25px] right-3",
     },
     lg: {
-        root: "py-2.5 px-3.5 text-md",
+        root: "py-2.5 pl-3.5 pr-10 text-md touch:min-h-11",
         icon: "size-5 right-3",
     },
 };

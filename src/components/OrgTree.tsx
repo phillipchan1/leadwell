@@ -424,18 +424,11 @@ export function OrgTree() {
     return [...teamEdges, ...reportEdges, ...managerEdges];
   }, [visibleTeams, visibleManagers, visibleReports, capacities, domains]);
 
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      {/* A fitted canvas renders 320px team cards at 1–3px of text on a phone,
-          and one-finger pan swallows both page scroll and the iOS edge-back
-          gesture. Below lg the same org is the outline instead — same records,
-          same health calls, readable without pinching. */}
-      <div className="flex min-h-0 flex-1 flex-col lg:hidden">
-        <TableView />
-      </div>
-
-      <div className="hidden min-h-0 flex-1 flex-col gap-2 lg:flex">
-      {/* Domain filter: All = full tree; pick a domain for a focused view */}
+  /* Domain filter: All = full tree; pick a domain for a focused view. Shared
+     by both surfaces — the outline is the same view of the same org, so it
+     filters by the same control rather than growing a second one. */
+  const filterRow = (
+    <>
       <div
         className="flex flex-wrap items-center gap-1.5"
         role="tablist"
@@ -470,6 +463,24 @@ export function OrgTree() {
       </div>
 
       <HealthScan teams={visibleTeams} reports={visibleReports} />
+    </>
+  );
+
+  return (
+    <div className="flex flex-col gap-2 lg:h-full lg:min-h-0">
+      {/* A fitted canvas renders 320px team cards at 1–3px of text on a phone,
+          and one-finger pan swallows both page scroll and the iOS edge-back
+          gesture. Below lg the same org is the hierarchy as an outline —
+          readable without pinching, and still the tree's question ("who sits
+          under what"), which is why it keeps the tree's own filters and
+          readiness scan and drops the Table tab's pivot controls. */}
+      <div className="flex flex-col gap-2 lg:hidden">
+        {filterRow}
+        <TableView variant="tree" />
+      </div>
+
+      <div className="hidden min-h-0 flex-1 flex-col gap-2 lg:flex">
+      {filterRow}
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
         {/* React Flow captures one-finger drag to pan, which swallows the iOS
@@ -635,7 +646,7 @@ function DomainTab({
       aria-selected={active}
       onClick={onClick}
       title={shortcut ? `Filter (${shortcut})` : undefined}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors touch:min-h-11 touch:min-w-11 ${
         active
           ? "border-transparent font-medium text-white"
           : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
@@ -749,7 +760,7 @@ function ReadinessSummary({
     )[0];
 
   return (
-    <div className="ml-auto flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500 lg:ml-auto lg:flex-nowrap dark:text-stone-400">
       {entries.length > 0 && (
         <span>
           <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
@@ -772,7 +783,7 @@ function ReadinessSummary({
                 ? selectPerson(worst.id)
                 : selectTeam(worst.id)
             }
-            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 hover:bg-stone-100 dark:hover:bg-stone-800"
+            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left whitespace-nowrap touch:min-h-11 hover:bg-stone-100 dark:hover:bg-stone-800"
             title={worst.readiness.headline}
           >
             <span
@@ -792,7 +803,7 @@ function ReadinessSummary({
           <button
             type="button"
             onClick={() => openModal({ kind: "triage" })}
-            className="rounded-md px-1.5 py-0.5 text-stone-500 dark:text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-400"
+            className="rounded-md px-1.5 py-0.5 whitespace-nowrap text-stone-500 touch:min-h-11 dark:text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-400"
             title="Not a backlog — decide once and they leave this count for good"
           >
             <span className="tabular-nums">{undecided}</span> undecided
@@ -860,7 +871,7 @@ function HealthScan({
                 ? `Nothing rated ${filterLabel(value).toLowerCase()} in view`
                 : `Scan for ${filterLabel(value).toLowerCase()} (${count})`
             }
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors disabled:opacity-40 ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 disabled:opacity-40 ${
               active
                 ? "border-transparent font-medium text-white"
                 : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
@@ -983,7 +994,7 @@ function ViewLayers() {
             onClick={() => toggleTreeLayer(layer.id)}
             aria-pressed={on}
             title={`${layer.title} (${layer.shortcut})`}
-            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm shadow-sm ${
+            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm shadow-sm touch:min-h-11 ${
               on
                 ? "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
                 : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
