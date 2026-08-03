@@ -14,6 +14,7 @@ import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
 import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
+import { TrackerLink } from "./TrackerLink";
 import { NotesPanel } from "./NotesPanel";
 import { TopicKanban } from "./TopicKanban";
 import { meetingFor, type CheckFix } from "../lib/readiness";
@@ -222,7 +223,10 @@ export function ManagerProfile({
         )}
 
         {tab === "sessions" && (
-          <div className={pad}>
+          <div className={`space-y-3 ${pad}`}>
+            {/* If the check-in notes already live in a doc, that link is the
+                first thing you want here — not a list of empty rows. */}
+            <TrackerLink subjectKind="manager" subjectId={manager.id} />
             {checkIn ? (
               <SessionTable
                 meetingId={checkIn.id}

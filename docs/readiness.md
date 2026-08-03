@@ -384,6 +384,39 @@ to teams and managers as the same explicit opt-out.
 One smaller cost, acceptable: **Depth stays on the Person**, outside meeting
 prep. Already the design — a leadership read isn't prep for a specific meeting.
 
+### The notes already live somewhere else
+
+Plenty of relationships arrive with a system: a Notion page for one report, a
+Word doc in OneDrive for another, a Google Doc a third person edits too. That
+isn't a fourth triage state — it's a **tracked** meeting whose write-up happens
+elsewhere — so it rides on the meeting as `trackerUrl` rather than adding a
+branch to the ladder.
+
+The decision it forces is whether the tracker replaces LeadWell's 1:1s or sits
+beside them. **Beside**: the rhythm, the topic board, the health read and three
+of the four checks are things a shared doc can't do, and asking someone to
+abandon a page their report also writes in is how you lose the report, not how
+you win the page. Sessions can still be logged here as well; the link declares
+where the source of truth is, it doesn't lock anything.
+
+Exactly one thing changes, and it has to: **the write-up check stops
+asserting.** LeadWell can't read a Notion page, so "Last one written up" becomes
+"Written up in Notion — kept outside LeadWell, not checked here". The
+alternative is a check that can never pass, which parks everyone who uses a
+tracker in permanent **Loose end** — and a dashboard that can't go clean is a
+dashboard nobody reads, which takes the one real alarm down with it. Same
+reason the empty session row reads *Notes elsewhere* rather than *Needs notes*.
+
+Two consequences worth naming:
+
+- **Linking a tracker is a decision**, so it starts tracking the meeting
+  as-needed if nothing was tracked yet. "I do these, they're in Notion" should
+  leave the undecided count, not sit in it.
+- **The link isn't always a URL.** "It's in Word" often means a path or a
+  filename. Those are kept as text rather than rejected — a pointer you can't
+  click still answers *where are the notes*. Only allowlisted schemes are ever
+  turned into an anchor ([`src/lib/tracker.ts`](../src/lib/tracker.ts)).
+
 ### Migration
 
 `OneOnOne` is already a meeting occurrence — it just hardcodes its subject. So:

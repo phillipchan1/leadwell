@@ -120,6 +120,11 @@ body {
 /* Safe areas. The shell is edge-to-edge under viewport-fit=cover, so each
    chrome surface pads itself rather than insetting the whole app — that keeps
    backgrounds bleeding into the notch and home-indicator regions. */
+/* These own the padding on the axis they name — don't pair one with `p-*` or
+   `px-*` on the same element. Same property, same specificity, so the winner
+   is whichever Tailwind happens to emit last: `pad-safe-x` sorts after `p-4`
+   but before `sm:p-6`, which silently flattened the main pane against both
+   screen edges below `sm`. Set `--pad-safe-*` for the base padding instead. */
 @utility pad-safe-top {
   padding-top: max(var(--pad-safe-top, 0px), env(safe-area-inset-top));
 }

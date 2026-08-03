@@ -11,10 +11,11 @@ import {
   sessionSummary,
 } from "../lib/session";
 
-const STATUS_COLOR: Record<string, "sky" | "warning" | "success"> = {
+const STATUS_COLOR: Record<string, "sky" | "warning" | "success" | "gray"> = {
   scheduled: "sky",
   needs_notes: "warning",
   done: "success",
+  elsewhere: "gray",
 };
 
 export function SessionTable({
@@ -26,10 +27,16 @@ export function SessionTable({
   onOpen: (id: string) => void;
   onCreated?: (id: string) => void;
 }) {
-  const { sessions, addSession, updateSession, deleteSession } = useStore();
+  const { sessions, meetings, addSession, updateSession, deleteSession } =
+    useStore();
   const rows = sessions
     .filter((o) => o.meetingId === meetingId)
     .sort((a, b) => b.date.localeCompare(a.date));
+  // With an external tracker the write-up isn't missing, it's somewhere else —
+  // an empty row shouldn't wear a warning badge for that.
+  const notesElsewhere = Boolean(
+    meetings.find((m) => m.id === meetingId)?.trackerUrl?.trim()
+  );
 
   const createNew = () => {
     const id = addSession({
@@ -49,6 +56,7 @@ export function SessionTable({
           <SessionCard
             key={o.id}
             row={o}
+            notesElsewhere={notesElsewhere}
             onOpen={() => onOpen(o.id)}
             onPatch={(patch) => updateSession(o.id, patch)}
             onDelete={async () => {
@@ -78,6 +86,7 @@ export function SessionTable({
             <SessionRow
               key={o.id}
               row={o}
+              notesElsewhere={notesElsewhere}
               onOpen={() => onOpen(o.id)}
               onPatch={(patch) => updateSession(o.id, patch)}
               onDelete={async () => {
@@ -107,16 +116,18 @@ export function SessionTable({
 
 function SessionRow({
   row,
+  notesElsewhere,
   onOpen,
   onPatch,
   onDelete,
 }: {
   row: Session;
+  notesElsewhere: boolean;
   onOpen: () => void;
   onPatch: (patch: Partial<Session>) => void;
   onDelete: () => void;
 }) {
-  const status = sessionStatus(row);
+  const status = sessionStatus(row, notesElsewhere);
   const summary = sessionSummary(row);
 
   return (
@@ -180,16 +191,18 @@ function SessionRow({
  */
 function SessionCard({
   row,
+  notesElsewhere,
   onOpen,
   onPatch,
   onDelete,
 }: {
   row: Session;
+  notesElsewhere: boolean;
   onOpen: () => void;
   onPatch: (patch: Partial<Session>) => void;
   onDelete: () => void;
 }) {
-  const status = sessionStatus(row);
+  const status = sessionStatus(row, notesElsewhere);
   const summary = sessionSummary(row);
 
   return (

@@ -344,6 +344,8 @@ const map = {
       floor_days: nn(m.floorDays),
       next_date: nn(m.nextDate),
       role: nn(m.role),
+      tracker_url: nn(m.trackerUrl),
+      tracker_name: nn(m.trackerName),
     }),
     fromRow: (r: Row): TrackedMeeting => ({
       id: r.id as string,
@@ -354,6 +356,8 @@ const map = {
       floorDays: opt(r.floor_days as number | null),
       nextDate: opt(r.next_date as string | null),
       role: opt(r.role as TrackedMeeting["role"] | null),
+      trackerUrl: opt(r.tracker_url as string | null),
+      trackerName: opt(r.tracker_name as string | null),
     }),
   },
   sessions: {

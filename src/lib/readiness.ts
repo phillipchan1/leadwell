@@ -35,6 +35,7 @@ import type {
   TeamAction,
   TrackedMeeting,
 } from "../types";
+import { trackerName } from "./tracker";
 
 export type ReadinessState =
   /** Tracked, but nothing is expected and nothing is booked. No guilt. */
@@ -97,6 +98,13 @@ export const RHYTHM_LABEL: Record<MeetingRhythm, string> = {
   monthly: "Monthly",
   quarterly: "Quarterly",
   as_needed: "As needed",
+};
+
+/** What to call a tracked meeting in copy — you don't have a "1:1" with your boss. */
+export const MEETING_LABEL: Record<MeetingSubjectKind, string> = {
+  person: "1:1",
+  team: "meeting",
+  manager: "check-in",
 };
 
 export const RHYTHM_OPTIONS: MeetingRhythm[] = [
@@ -277,7 +285,15 @@ export function meetingReadiness(
   // you in red.
   const rhythmOnTrack = Boolean(explicit) || (!missed && !overdue);
 
-  const writtenUp = !lastSession || Boolean(lastSession.notes?.trim());
+  // The write-up is the one check an external tracker takes over. LeadWell
+  // can't read a Notion page or a Word doc, and a check that can never pass
+  // would park everyone who uses one in Loose end forever — which is exactly
+  // how a dashboard stops being read. So it stops asserting instead of
+  // guessing, and says where the notes went.
+  const trackerUrl = meeting.trackerUrl?.trim();
+  const notesHere = !lastSession || Boolean(lastSession.notes?.trim());
+  const writtenUp = notesHere || Boolean(trackerUrl);
+  const notesElsewhere = Boolean(trackerUrl) && !notesHere;
 
   const open = agenda.filter((a) => !a.done);
   const queued = open.filter((a) => a.queued);
@@ -301,9 +317,15 @@ export function meetingReadiness(
     },
     {
       id: "writeUp",
-      label: "Last one written up",
+      label: notesElsewhere
+        ? `Written up in ${meeting.trackerName?.trim() || trackerName(trackerUrl!)}`
+        : "Last one written up",
       done: writtenUp,
-      detail: writtenUp ? undefined : `${lastSession!.date} has no notes`,
+      detail: notesElsewhere
+        ? "Kept outside LeadWell — not checked here"
+        : writtenUp
+          ? undefined
+          : `${lastSession!.date} has no notes`,
       fix: "writeUp",
       sessionId: lastSession?.id,
     },

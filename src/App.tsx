@@ -174,8 +174,11 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header — pads past the status bar / Dynamic Island in standalone. */}
-      <header className="pad-safe-top pad-safe-x chrome-compact flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3 sm:px-6 dark:border-stone-800 dark:bg-stone-900 [--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]">
+      {/* Header — pads past the status bar / Dynamic Island in standalone.
+          `pad-safe-x` owns the horizontal padding outright: it and `px-*` set
+          the same property with the same specificity, so pairing them means
+          whichever Tailwind emits last silently wins. */}
+      <header className="pad-safe-top pad-safe-x chrome-compact flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 bg-white py-3 dark:border-stone-800 dark:bg-stone-900 [--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]">
         <div className="flex min-w-0 items-baseline gap-4">
           <h1 className="text-lg font-bold tracking-tight">
             Lead<span className="text-teal-600">Well</span>
@@ -219,7 +222,11 @@ export default function App() {
           <div className="flex min-h-0 flex-1">
             <main
               className={cx(
-                "pad-safe-x flex-[2] p-4 sm:p-6 lg:min-w-[22.5rem]",
+                // Horizontal padding is `pad-safe-x`'s alone — `p-4` sets the
+                // same property and lost to it, which flattened every tab
+                // against both screen edges below `sm`.
+                "pad-safe-x flex-[2] py-4 sm:py-6 lg:min-w-[22.5rem]",
+                "[--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]",
                 // The tree pane clips only where it holds the canvas, which
                 // does its own pan/zoom. Below lg it renders an outline — an
                 // ordinary tall document that has to scroll like every other

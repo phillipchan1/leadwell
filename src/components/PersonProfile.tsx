@@ -35,6 +35,7 @@ import { X } from "@untitledui/icons";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { SessionTable } from "./SessionTable";
+import { TrackerLink } from "./TrackerLink";
 import { TopicKanban } from "./TopicKanban";
 import { NotesPanel } from "./NotesPanel";
 import { LeadUpManual } from "./LeadUpManual";
@@ -590,7 +591,10 @@ export function PersonProfile({
         )}
 
         {tab === "sessions" && (
-          <div className="p-4">
+          <div className="space-y-3 p-4">
+            {/* Where the notes live comes first: if they're in Notion or a
+                Word doc, that's the answer to "open our 1:1", not this list. */}
+            <TrackerLink subjectKind="person" subjectId={person.id} />
             {meeting ? (
               <SessionTable
                 meetingId={meeting.id}

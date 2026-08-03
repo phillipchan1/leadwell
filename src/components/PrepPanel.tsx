@@ -1,6 +1,7 @@
 import type { MeetingRhythm, MeetingSubjectKind } from "../types";
 import { useStore } from "../store/useStore";
 import {
+  MEETING_LABEL,
   RHYTHM_LABEL,
   RHYTHM_OPTIONS,
   STATE_COLOR,
@@ -14,19 +15,13 @@ import {
   type CheckFix,
 } from "../lib/readiness";
 import { SectionTitle } from "./ui";
+import { TrackerLink } from "./TrackerLink";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 
 /** Default tolerance offered when a meeting is switched to as-needed. */
 const DEFAULT_FLOOR_DAYS = 45;
-
-/** What to call the meeting in copy — you don't have a "1:1" with your boss. */
-const SUBJECT_LABEL: Record<MeetingSubjectKind, string> = {
-  person: "1:1",
-  team: "meeting",
-  manager: "check-in",
-};
 
 /**
  * Prep for one tracked meeting — the checklist *is* the score. No hidden
@@ -70,7 +65,7 @@ export function PrepPanel({
         ? teams.find((t) => t.id === subjectId)
         : managers.find((m) => m.id === subjectId);
   const firstName = subjectName.split(" ")[0] ?? subjectName;
-  const label = SUBJECT_LABEL[subjectKind];
+  const label = MEETING_LABEL[subjectKind];
 
   // ── Not tracked: the opt-in, and nothing else ───────────────────────────
   if (!meeting) {
@@ -110,6 +105,11 @@ export function PrepPanel({
                 Undo
               </Button>
             )}
+          </div>
+          {/* The third answer, for anyone who arrived with a system already:
+              the notes are in Notion or a Word doc, and that's fine. */}
+          <div className="mt-1">
+            <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
           </div>
         </div>
       </section>
@@ -268,11 +268,13 @@ export function PrepPanel({
           <Button
             size="sm"
             color="link-gray"
-            isDisabled={sessionCount > 0}
+            isDisabled={sessionCount > 0 || Boolean(meeting.trackerUrl)}
             aria-label={
               sessionCount > 0
                 ? "Can't untrack — it has history. Switch to As needed instead."
-                : "Stop tracking this meeting"
+                : meeting.trackerUrl
+                  ? "Can't untrack — remove the tracker link first, or it goes with it."
+                  : "Stop tracking this meeting"
             }
             onClick={() => untrackMeeting(meeting.id)}
           >
@@ -280,6 +282,8 @@ export function PrepPanel({
           </Button>
         </div>
       </div>
+
+      <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
     </section>
   );
 }

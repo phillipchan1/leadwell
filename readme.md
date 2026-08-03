@@ -132,6 +132,8 @@ type TrackedMeeting = {
   floorDays?: number;                   // as_needed only — a tolerance, not a rhythm
   nextDate?: string;                    // an explicit booking always wins
   role?: "convene" | "attend";
+  trackerUrl?: string;                  // notes live outside LeadWell (Notion, a Word doc…)
+  trackerName?: string;                 // what to call it; derived from the link otherwise
 };
 
 type Person = {
@@ -184,6 +186,18 @@ at you, in a number that empties as you triage it
 ([`TriageModal.tsx`](src/components/TriageModal.tsx), bulk by design). That
 closes the one hole opt-in creates: you can't go green by ignoring people, only
 by deciding about them.
+
+**Notes that already live somewhere else stay there.** A meeting can carry a
+`trackerUrl` — the Notion page, the Word doc in OneDrive, the shared Google Doc
+you and that report have used for years — and it's an *and*, not an *or*: the
+rhythm, the topic board and the health read stay in LeadWell, and sessions can
+still be logged here alongside it. Only the write-up moves. Readiness stops
+claiming to know whether the last one was written up (it can't see the page)
+and says where it went instead, rather than parking that person in permanent
+**Loose end**. Linking a tracker starts tracking the meeting as-needed, because
+"they're in Notion" is a decision. Not every link is a URL — a path or a
+`.docx` filename is kept as a pointer, and only allowlisted schemes ever become
+a clickable anchor ([`src/lib/tracker.ts`](src/lib/tracker.ts)).
 
 The engine lives in [`src/lib/readiness.ts`](src/lib/readiness.ts); layer **`R`**
 on the canvas shows the rail, countdown chip and distribution bar, and
