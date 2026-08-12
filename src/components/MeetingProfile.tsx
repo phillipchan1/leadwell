@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
+import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import type { MeetingRhythm, MeetingRole, TrackedMeeting } from "../types";
 import {
   Tab as TabItem,
@@ -81,6 +83,21 @@ export function MeetingProfile({
 
   const tab: MeetingTab = isMeetingTab(section) ? section : "plan";
   const pad = density === "focus" ? "p-6" : "p-4";
+  const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
+
+  const closeNotes = useCallback(() => setSelectedSlotKey(null), []);
+
+  const openSessionNotes = useCallback((sessionId: string) => {
+    setSelectedSlotKey(`s:${sessionId}`);
+  }, []);
+
+  const onSelectWeek = useCallback((slotKey: string) => {
+    setSelectedSlotKey(slotKey);
+  }, []);
+
+  useEffect(() => {
+    setSelectedSlotKey(null);
+  }, [tab]);
 
   const subjectName = meetingSubjectName(meeting, { people, teams, managers });
   const title = meetingTitle(meeting, subjectName);
@@ -140,18 +157,44 @@ export function MeetingProfile({
         </TabList>
       </Tabs>
 
-      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
+      <div className="scroll-contain relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {tab === "plan" && (
-          <div className={`space-y-3 ${pad}`}>
-            <MeetingPlanner meeting={meeting} onOpenSession={openSession} />
+          <div className={`flex min-h-0 flex-1 flex-col ${pad}`}>
+            <MeetingPlanner
+              meeting={meeting}
+              selectedSlotKey={selectedSlotKey}
+              onSelectWeek={onSelectWeek}
+              onCloseNotes={closeNotes}
+              onOpenSession={openSession}
+            />
           </div>
         )}
 
         {tab === "notes" && (
-          <div className={`space-y-3 ${pad}`}>
-            <TrackerLink meetingId={meeting.id} />
-            <SessionHistoryTable meetingId={meeting.id} onOpen={openSession} />
+          <div className={`min-h-0 flex-1 overflow-y-auto ${pad}`}>
+            <div className="space-y-3">
+              <TrackerLink meetingId={meeting.id} />
+              <SessionHistoryTable
+                meetingId={meeting.id}
+                onOpen={openSessionNotes}
+              />
+            </div>
           </div>
+        )}
+
+        {tab === "notes" && selectedSlotKey && (
+          <OccurrenceNotesSheet
+            open
+            onClose={closeNotes}
+            label="Meeting notes"
+          >
+            <OccurrenceNotesPanel
+              meeting={meeting}
+              slotKey={selectedSlotKey}
+              onClose={closeNotes}
+              onOpenFullEditor={openSession}
+            />
+          </OccurrenceNotesSheet>
         )}
 
         {tab === "settings" && (

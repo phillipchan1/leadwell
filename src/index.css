@@ -1125,6 +1125,16 @@ label:focus-within > .field-label,
   }
 }
 
+/* Occurrence notes side panel */
+
+.occurrence-notes-panel .notion-block-editor {
+  @apply min-h-[40vh];
+}
+
+.occurrence-notes-aside {
+  @apply flex min-h-0 flex-col bg-white dark:bg-stone-900;
+}
+
 /* ── Full-screen session editor (Notion-like) ── */
 
 .session-editor-view {

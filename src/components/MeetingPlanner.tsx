@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { TrackedMeeting } from "../types";
+import { useStore } from "../store/useStore";
+import { ensureSessionId, type Slot } from "../lib/topics";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { TopicBoard, type BoardDirection } from "./TopicBoard";
 import { MeetingCalendar } from "./MeetingCalendar";
+import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
+import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { cx } from "@/utils/cx";
 
 export type PlanView = "board" | "calendar";
@@ -17,18 +22,63 @@ const VIEWS: { id: PlanView; label: string }[] = [
 export function MeetingPlanner({
   meeting,
   direction = "down",
+  selectedSlotKey,
+  onSelectWeek,
+  onCloseNotes,
   onOpenSession,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
+  selectedSlotKey: string | null;
+  onSelectWeek: (slotKey: string, slot: Slot) => void;
+  onCloseNotes: () => void;
   onOpenSession?: (sessionId: string) => void;
 }) {
+  const { sessions, addSession } = useStore();
   const [view, setView] = useState<PlanView>("board");
+  const isMobile = useMediaQuery("(max-width: 767px)");
+
+  const openWeek = useCallback(
+    (slotKeyArg: string, slot: Slot) => {
+      const sessionId = ensureSessionId(
+        meeting.id,
+        slot,
+        sessions,
+        addSession
+      );
+      const canonicalKey = `s:${sessionId}`;
+      if (
+        selectedSlotKey === canonicalKey ||
+        selectedSlotKey === slotKeyArg
+      ) {
+        onCloseNotes();
+        return;
+      }
+      onSelectWeek(canonicalKey, slot);
+    },
+    [addSession, meeting.id, onCloseNotes, onSelectWeek, selectedSlotKey, sessions]
+  );
+
+  const boardOrCalendar =
+    view === "board" ? (
+      <TopicBoard
+        meeting={meeting}
+        direction={direction}
+        selectedSlotKey={selectedSlotKey}
+        onSelectWeek={openWeek}
+      />
+    ) : (
+      <MeetingCalendar
+        meeting={meeting}
+        selectedSlotKey={selectedSlotKey}
+        onSelectWeek={openWeek}
+      />
+    );
 
   return (
-    <div className="space-y-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div
-        className="inline-flex rounded-lg bg-stone-100 p-0.5 dark:bg-stone-800"
+        className="inline-flex shrink-0 rounded-lg bg-stone-100 p-0.5 dark:bg-stone-800"
         role="tablist"
         aria-label="Plan view"
       >
@@ -51,14 +101,48 @@ export function MeetingPlanner({
         ))}
       </div>
 
-      {view === "board" ? (
-        <TopicBoard
-          meeting={meeting}
-          direction={direction}
-          onOpenSession={onOpenSession}
-        />
-      ) : (
-        <MeetingCalendar meeting={meeting} onOpenSession={onOpenSession} />
+      <div
+        className={cx(
+          "flex min-h-0 flex-1",
+          selectedSlotKey && !isMobile && "gap-0 overflow-hidden"
+        )}
+      >
+        <div
+          className={cx(
+            "min-h-0 min-w-0",
+            selectedSlotKey && !isMobile
+              ? "flex-1 overflow-y-auto"
+              : "flex-1"
+          )}
+        >
+          {boardOrCalendar}
+        </div>
+
+        {selectedSlotKey && !isMobile && (
+          <aside className="occurrence-notes-aside w-[min(42%,28rem)] shrink-0 border-l border-stone-200 dark:border-stone-800">
+            <OccurrenceNotesPanel
+              meeting={meeting}
+              slotKey={selectedSlotKey}
+              onClose={onCloseNotes}
+              onOpenFullEditor={onOpenSession}
+            />
+          </aside>
+        )}
+      </div>
+
+      {selectedSlotKey && isMobile && (
+        <OccurrenceNotesSheet
+          open
+          onClose={onCloseNotes}
+          label="Meeting notes"
+        >
+          <OccurrenceNotesPanel
+            meeting={meeting}
+            slotKey={selectedSlotKey}
+            onClose={onCloseNotes}
+            onOpenFullEditor={onOpenSession}
+          />
+        </OccurrenceNotesSheet>
       )}
     </div>
   );

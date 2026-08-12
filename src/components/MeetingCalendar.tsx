@@ -3,15 +3,15 @@ import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import {
   calendarGrid,
-  ensureSessionId,
+  slotKey,
   slotLabel,
   topicsFor,
   type CalendarDay,
+  type Slot,
 } from "../lib/topics";
 import { todayISO } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { OccurrencePanel } from "./OccurrencePanel";
 import { Input } from "@/components/base/input/input";
 import { ChevronLeft, ChevronRight } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
@@ -49,15 +49,17 @@ function dayNumber(iso: string): number {
  */
 export function MeetingCalendar({
   meeting,
-  onOpenSession,
+  selectedSlotKey,
+  onSelectWeek,
 }: {
   meeting: TrackedMeeting;
-  onOpenSession?: (sessionId: string) => void;
+  selectedSlotKey?: string | null;
+  onSelectWeek?: (slotKey: string, slot: Slot) => void;
 }) {
   const { sessions, topics, addTopic, addSession, placeTopic } = useStore();
   const today = todayISO();
   const [month, setMonth] = useState(() => currentMonth(today));
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   const grid = useMemo(
@@ -73,7 +75,9 @@ export function MeetingCalendar({
     };
   }, [topics, meeting.id]);
 
-  const selectedDay = selected ? grid.find((d) => d.date === selected) : null;
+  const selectedDay = selectedDate
+    ? grid.find((d) => d.date === selectedDate)
+    : null;
 
   const addToDay = (day: CalendarDay) => {
     const text = draft.trim();
@@ -132,34 +136,29 @@ export function MeetingCalendar({
           </div>
         ))}
 
-        {grid.map((day) => (
-          <CalendarCell
-            key={day.date}
-            day={day}
-            today={today}
-            selected={selected === day.date}
-            onSelect={() => {
-              if (selected === day.date) {
-                setSelected(null);
-                return;
-              }
-              if (day.slot) {
-                ensureSessionId(meeting.id, day.slot, sessions, addSession);
-              }
-              setSelected(day.date);
-            }}
-          />
-        ))}
+        {grid.map((day) => {
+          const key = day.slot ? slotKey(day.slot) : null;
+          const notesSelected = Boolean(
+            key && selectedSlotKey && key === selectedSlotKey
+          );
+          return (
+            <CalendarCell
+              key={day.date}
+              day={day}
+              today={today}
+              selected={selectedDate === day.date || notesSelected}
+              onSelect={() => {
+                if (day.slot && onSelectWeek) {
+                  onSelectWeek(key!, day.slot);
+                  setSelectedDate(day.date);
+                  return;
+                }
+                setSelectedDate(selectedDate === day.date ? null : day.date);
+              }}
+            />
+          );
+        })}
       </div>
-
-      {selectedDay?.slot && (
-        <OccurrencePanel
-          meeting={meeting}
-          slot={selectedDay.slot}
-          onOpenSession={onOpenSession}
-          onClose={() => setSelected(null)}
-        />
-      )}
 
       {selectedDay && !selectedDay.slot && (
         <form

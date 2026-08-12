@@ -8,12 +8,12 @@ import {
   nextSlotAfter,
   parseColumnKey,
   plannedSlots,
-  ensureSessionId,
+  slotKey,
   type BoardColumn,
+  type Slot,
 } from "../lib/topics";
 import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
-import { OccurrencePanel } from "./OccurrencePanel";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -53,12 +53,13 @@ const ADD_PLACEHOLDER: Record<BoardDirection, string> = {
 export function TopicBoard({
   meeting,
   direction = "down",
-  onOpenSession,
+  selectedSlotKey,
+  onSelectWeek,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
-  /** Promote a write-up to the full-page editor. */
-  onOpenSession?: (sessionId: string) => void;
+  selectedSlotKey?: string | null;
+  onSelectWeek?: (slotKey: string, slot: Slot) => void;
 }) {
   const {
     sessions,
@@ -74,7 +75,6 @@ export function TopicBoard({
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [allCovered, setAllCovered] = useState(false);
-  const [activeSlotKey, setActiveSlotKey] = useState<string | null>(null);
   const today = todayISO();
 
   const columns = useMemo(
@@ -157,19 +157,6 @@ export function TopicBoard({
 
   const moveOptions = columns.map((c) => ({ key: c.key, label: c.label }));
 
-  const activeColumn = columns.find((c) => c.key === activeSlotKey);
-  const activeSlot = activeColumn?.slot;
-
-  const openSlot = (col: BoardColumn) => {
-    if (!col.slot) return;
-    if (activeSlotKey === col.key) {
-      setActiveSlotKey(null);
-      return;
-    }
-    ensureSessionId(meeting.id, col.slot, sessions, addSession);
-    setActiveSlotKey(col.key);
-  };
-
   const sessionForColumn = (col: BoardColumn) => {
     if (!col.slot?.sessionId) return null;
     return sessions.find((s) => s.id === col.slot!.sessionId) ?? null;
@@ -207,7 +194,9 @@ export function TopicBoard({
           const past = Boolean(col.slot?.past);
           const canAdd = !col.covered;
           const isWeek = Boolean(col.slot);
-          const isActive = activeSlotKey === col.key;
+          const isActive = col.slot
+            ? selectedSlotKey === slotKey(col.slot)
+            : false;
           const session = sessionForColumn(col);
           const notesPreview = session ? sessionSummary(session) : "";
           return (
@@ -230,7 +219,7 @@ export function TopicBoard({
               {isWeek ? (
                 <button
                   type="button"
-                  onClick={() => openSlot(col)}
+                  onClick={() => col.slot && onSelectWeek?.(col.key, col.slot)}
                   aria-expanded={isActive}
                   className="px-2.5 pt-2 pb-1 text-left transition-colors hover:bg-white/50 dark:hover:bg-stone-900/40"
                 >
@@ -261,9 +250,11 @@ export function TopicBoard({
                       {col.hint}
                     </div>
                   )}
-                  <div className="mt-0.5 truncate text-[10px] text-teal-700 dark:text-teal-400">
-                    {notesPreview || (isActive ? "Writing…" : "Tap for notes")}
-                  </div>
+                  {notesPreview && (
+                    <div className="mt-0.5 truncate text-[10px] text-teal-700 dark:text-teal-400">
+                      {notesPreview}
+                    </div>
+                  )}
                 </button>
               ) : (
                 <div className="px-2.5 pt-2 pb-1">
@@ -290,7 +281,7 @@ export function TopicBoard({
                     topic={t}
                     columnKey={col.key}
                     past={past}
-                    inSlot={Boolean(col.slot && (col.slot.sessionId || isActive))}
+                    inSlot={Boolean(col.slot?.sessionId)}
                     covered={t.status !== "open"}
                     isDragging={drag?.id === t.id}
                     moveOptions={moveOptions}
@@ -340,16 +331,6 @@ export function TopicBoard({
           );
         })}
       </div>
-
-      {activeSlot && (
-        <OccurrencePanel
-          meeting={meeting}
-          slot={activeSlot}
-          onOpenSession={onOpenSession}
-          onClose={() => setActiveSlotKey(null)}
-          autoFocus
-        />
-      )}
 
       {/* The card under the pointer, lifted out of the strip so it can cross
           column boundaries and the scroll container's clipping. */}

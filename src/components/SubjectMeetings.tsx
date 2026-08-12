@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
@@ -15,6 +15,8 @@ import {
 import { topicsFor } from "../lib/topics";
 import { MeetingPlanner } from "./MeetingPlanner";
 import type { BoardDirection } from "./TopicBoard";
+import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
+import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { TintBadge } from "./ui";
@@ -148,6 +150,17 @@ function MeetingBlock({
   const openCount = topicsFor(topics, meeting.id).filter(
     (t) => t.status === "open"
   ).length;
+  const [planSlotKey, setPlanSlotKey] = useState<string | null>(null);
+  const [historySlotKey, setHistorySlotKey] = useState<string | null>(null);
+
+  const closePlanNotes = useCallback(() => setPlanSlotKey(null), []);
+  const closeHistoryNotes = useCallback(() => setHistorySlotKey(null), []);
+  const openSessionNotes = useCallback((sessionId: string) => {
+    setHistorySlotKey(`s:${sessionId}`);
+  }, []);
+  const onSelectWeek = useCallback((slotKey: string) => {
+    setPlanSlotKey(slotKey);
+  }, []);
 
   return (
     <section className="space-y-3">
@@ -232,6 +245,9 @@ function MeetingBlock({
         <MeetingPlanner
           meeting={meeting}
           direction={direction}
+          selectedSlotKey={planSlotKey}
+          onSelectWeek={onSelectWeek}
+          onCloseNotes={closePlanNotes}
           onOpenSession={onOpenSession}
         />
       </div>
@@ -240,8 +256,23 @@ function MeetingBlock({
         <span className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
           History
         </span>
-        <SessionHistoryTable meetingId={meeting.id} onOpen={onOpenSession} />
+        <SessionHistoryTable meetingId={meeting.id} onOpen={openSessionNotes} />
       </div>
+
+      {historySlotKey && (
+        <OccurrenceNotesSheet
+          open
+          onClose={closeHistoryNotes}
+          label="Meeting notes"
+        >
+          <OccurrenceNotesPanel
+            meeting={meeting}
+            slotKey={historySlotKey}
+            onClose={closeHistoryNotes}
+            onOpenFullEditor={onOpenSession}
+          />
+        </OccurrenceNotesSheet>
+      )}
     </section>
   );
 }
