@@ -41,6 +41,9 @@ const TableView = lazy(() =>
 const PeopleTable = lazy(() =>
   import("./components/PeopleTable").then((m) => ({ default: m.PeopleTable }))
 );
+const MeetingsTable = lazy(() =>
+  import("./components/MeetingsTable").then((m) => ({ default: m.MeetingsTable }))
+);
 const SessionEditorView = lazy(() =>
   import("./components/SessionEditorView").then((m) => ({
     default: m.SessionEditorView,
@@ -100,8 +103,12 @@ function useDropStaleSelection() {
   const selected = useSelectedEntity();
   const hasSelectionInUrl = useStore(
     (s) =>
-      Boolean(s.selectedPersonId || s.selectedTeamId || s.selectedManagerId) ||
-      s.selectedMe
+      Boolean(
+        s.selectedPersonId ||
+          s.selectedTeamId ||
+          s.selectedManagerId ||
+          s.selectedMeetingId
+      ) || s.selectedMe
   );
 
   useEffect(() => {
@@ -241,6 +248,7 @@ export default function App() {
               <Suspense fallback={<PaneFallback />}>
                 {tab === "overview" && <Overview />}
                 {tab === "tree" && <OrgTree />}
+                {tab === "meetings" && <MeetingsTable />}
                 {tab === "table" && <TableView />}
                 {tab === "people" && <PeopleTable />}
               </Suspense>

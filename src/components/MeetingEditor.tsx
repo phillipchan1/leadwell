@@ -6,6 +6,7 @@ import {
   type StructuredMeeting,
 } from "../lib/ai";
 import { SessionEditor } from "./SessionEditor";
+import { SessionAgenda } from "./SessionAgenda";
 import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 
@@ -71,7 +72,7 @@ export function MeetingEditor({
     managers,
     updateSession,
     deleteSession,
-    addAction,
+    addTopic,
   } = useStore();
   const session = sessions.find((o) => o.id === sessionId);
   const meeting = meetings.find((m) => m.id === session?.meetingId);
@@ -89,7 +90,6 @@ export function MeetingEditor({
       : undefined;
   const subjectName =
     person?.name ?? team?.name ?? manager?.name ?? "this meeting";
-  const topicSubjectId = person?.id ?? manager?.id;
   const meetingLabel =
     meeting?.name ??
     (person ? `1:1 with ${person.name}` : (team?.name ?? manager?.name ?? "meeting"));
@@ -280,9 +280,12 @@ export function MeetingEditor({
         nextDate: parsed.suggestedNextDate,
       });
     }
-    if (createTopics && topicSubjectId && parsed.commitments.length) {
+    // Onto the meeting's board, not a person's — which is what makes this
+    // work for a staff meeting, where there is no person to hang it on and the
+    // commitments used to be quietly dropped.
+    if (createTopics && parsed.commitments.length) {
       for (const text of parsed.commitments) {
-        addAction(topicSubjectId, text, undefined, "backlog");
+        addTopic(meeting.id, text, { lane: "backlog" });
       }
     }
     setParsed(null);
@@ -466,7 +469,7 @@ export function MeetingEditor({
               />
               {parsed && !structuring && (
                 <div className="meeting-editor-preview-actions">
-                  {parsed.commitments.length > 0 && topicSubjectId && (
+                  {parsed.commitments.length > 0 && (
                     <Checkbox
                       size="sm"
                       isSelected={createTopics}
@@ -494,13 +497,18 @@ export function MeetingEditor({
               )}
             </div>
           ) : (
-            <SessionEditor
-              sessionId={session.id}
-              value={notes}
-              onChange={saveNotes}
-              placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
-              autoFocus={!notes.trim() && autoFocusUnlessTouch()}
-            />
+            <>
+              {/* What we planned to cover, where ticking it off is a tick and
+                  not a trip back to the board. */}
+              <SessionAgenda session={session} meeting={meeting} />
+              <SessionEditor
+                sessionId={session.id}
+                value={notes}
+                onChange={saveNotes}
+                placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
+                autoFocus={!notes.trim() && autoFocusUnlessTouch()}
+              />
+            </>
           )}
         </div>
       </div>

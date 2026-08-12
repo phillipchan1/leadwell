@@ -10,10 +10,9 @@ import {
   STATE_COLOR,
   STATE_ORDER,
   isBehind,
-  meetingFor,
-  meetingReadiness,
-  personAgenda,
+  readinessFor,
 } from "../lib/readiness";
+import { allLooseTopics } from "../lib/topics";
 import {
   HEALTH_COLOR,
   HEALTH_LABEL,
@@ -43,7 +42,7 @@ export function Overview() {
     teams,
     meetings,
     sessions,
-    actions,
+    topics,
     managers,
     prayers,
     selectPerson,
@@ -60,9 +59,12 @@ export function Overview() {
   const unassessed = people.filter((p) => !hasLeadershipRead(p));
   const spots = blindSpots(people);
   const counts = domainCounts(people);
-  const openActions = actions.filter((a) => !a.done);
+  const openTopics = topics.filter((t) => t.status === "open");
 
   const today = new Date().toISOString().slice(0, 10);
+  // Planned into a meeting that's already been and gone. The one number worth
+  // putting on the dashboard, because nothing else surfaces it.
+  const loose = allLooseTopics(topics, sessions, today);
   const upcoming = sessions
     .filter((o) => o.nextDate && o.nextDate >= today)
     .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
@@ -70,13 +72,14 @@ export function Overview() {
   // neglected at day 31, and someone weekly is already behind by then.
   const needAttention = people
     .flatMap((p) => {
-      const meeting = meetingFor(meetings, "person", p.id);
-      if (!meeting) return [];
-      const readiness = meetingReadiness(
-        meeting,
+      // Worst-of when they have more than one meeting — one row per person,
+      // showing the one that's actually in trouble.
+      const readiness = readinessFor("person", p.id, {
+        meetings,
         sessions,
-        personAgenda(actions, p.id)
-      );
+        topics,
+      });
+      if (!readiness) return [];
       return isBehind(readiness.state) ? [{ person: p, readiness }] : [];
     })
     .sort(
@@ -250,7 +253,9 @@ export function Overview() {
               </p>
             )}
             <p>
-              {openActions.length} open action{openActions.length === 1 ? "" : "s"}
+              {openTopics.length} open topic{openTopics.length === 1 ? "" : "s"}
+              {loose.length > 0 &&
+                ` · ${loose.length} planned and never covered`}
               {upcoming.length > 0 &&
                 ` · next 1:1 on ${upcoming[0].nextDate}`}
               .

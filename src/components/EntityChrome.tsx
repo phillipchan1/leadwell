@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useStore, useActiveTeamId } from "../store/useStore";
+import { meetingSubjectName, meetingTitle } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import {
@@ -21,13 +22,16 @@ export function useEntityTrail() {
     people,
     teams,
     managers,
+    meetings,
     me,
     selectedPersonId,
     selectedManagerId,
+    selectedMeetingId,
     selectedMe,
     selectPerson,
     selectTeam,
     selectManager,
+    selectMeeting,
     clearSelection,
     openFocus,
     closeFocus,
@@ -40,6 +44,17 @@ export function useEntityTrail() {
   const person = people.find((p) => p.id === selectedPersonId);
   const team = teams.find((t) => t.id === activeTeamId);
   const manager = managers.find((m) => m.id === selectedManagerId);
+  const meeting = meetings.find((m) => m.id === selectedMeetingId);
+
+  /** The subject a meeting is about, whichever kind of thing it is. */
+  const meetingSubject = useMemo(() => {
+    if (!meeting) return null;
+    if (meeting.subjectKind === "person")
+      return people.find((p) => p.id === meeting.subjectId) ?? null;
+    if (meeting.subjectKind === "team")
+      return teams.find((t) => t.id === meeting.subjectId) ?? null;
+    return managers.find((m) => m.id === meeting.subjectId) ?? null;
+  }, [meeting, people, teams, managers]);
 
   /**
    * Crumb up, label here, and the sibling list to page through — one shape for
@@ -80,6 +95,33 @@ export function useEntityTrail() {
         select: selectManager,
       };
     }
+    if (meeting) {
+      const subjectName = meetingSubject?.name;
+      // Crumb up to whoever the meeting is *with* — that's where you came from
+      // if you didn't arrive from the Meetings tab, and it's the more useful
+      // place to land either way.
+      const parent = meetingSubject
+        ? {
+            label: subjectName ?? "Subject",
+            go: () =>
+              meeting.subjectKind === "person"
+                ? selectPerson(meeting.subjectId)
+                : meeting.subjectKind === "team"
+                  ? selectTeam(meeting.subjectId)
+                  : selectManager(meeting.subjectId),
+          }
+        : null;
+      return {
+        parent,
+        label: meetingTitle(meeting, subjectName),
+        siblings: meetings.map((m) => ({
+          id: m.id,
+          name: meetingTitle(m, meetingSubjectName(m, { people, teams, managers })),
+        })),
+        currentId: meeting.id,
+        select: selectMeeting,
+      };
+    }
     if (selectedMe) {
       return {
         parent: null,
@@ -94,6 +136,9 @@ export function useEntityTrail() {
     person,
     team,
     manager,
+    meeting,
+    meetingSubject,
+    meetings,
     selectedMe,
     me.name,
     people,
@@ -102,6 +147,7 @@ export function useEntityTrail() {
     selectPerson,
     selectTeam,
     selectManager,
+    selectMeeting,
   ]);
 
   const index = trail

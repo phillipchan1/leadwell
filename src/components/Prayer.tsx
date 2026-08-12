@@ -14,7 +14,7 @@
  *    palette stays outside the traffic-light colors health and readiness share:
  *    nothing here is a warning, and none of it is scored.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { HeartHand } from "@untitledui/icons";
 import { useStore } from "../store/useStore";
 import type { PrayerEntry, PrayerEntryKind, PrayerSubjectKind } from "../types";
@@ -78,6 +78,221 @@ export function PrayerMark({
       <HeartHand className={size === "sm" ? "size-3" : "size-3.5"} />
       {shortSincePrayed(prayer)}
     </span>
+  );
+}
+
+/**
+ * Inline prayer block for org-tree cards — the same take-up / lay-down loop as
+ * the profile tab, but sized for the canvas. A heading marks the section; the
+ * controls stay quiet so it reads as a list of names you're holding, not tasks.
+ */
+export function CardPrayer({
+  subjectKind,
+  subjectId,
+  subjectName,
+}: {
+  subjectKind: PrayerSubjectKind;
+  subjectId: string;
+  subjectName: string;
+}) {
+  const setPrayer = useStore((s) => s.setPrayer);
+  const setPrayerFocus = useStore((s) => s.setPrayerFocus);
+  const markPrayed = useStore((s) => s.markPrayed);
+  const prayer = useStore((s) => {
+    if (subjectKind === "team")
+      return s.teams.find((t) => t.id === subjectId)?.prayer;
+    if (subjectKind === "manager")
+      return s.managers.find((m) => m.id === subjectId)?.prayer;
+    return s.people.find((p) => p.id === subjectId)?.prayer;
+  });
+
+  const [focusDraft, setFocusDraft] = useState(prayer?.focus ?? "");
+  const [editingFocus, setEditingFocus] = useState(false);
+
+  useEffect(() => {
+    setFocusDraft(prayer?.focus ?? "");
+    setEditingFocus(false);
+  }, [subjectKind, subjectId, prayer?.focus]);
+
+  const state = prayerState(prayer);
+  const prayedToday = prayer?.lastPrayedOn === todayISO();
+
+  const commitFocus = () => {
+    setEditingFocus(false);
+    if ((prayer?.focus ?? "") !== focusDraft.trim())
+      setPrayerFocus(subjectKind, subjectId, focusDraft);
+  };
+
+  const layDown = async () => {
+    if (
+      await confirmAction({
+        title: `Lay ${subjectName} down?`,
+        body: "They come off the prayer list. Everything you've written stays.",
+        confirmLabel: "Lay down",
+        destructive: false,
+      })
+    )
+      setPrayer(subjectKind, subjectId, false);
+  };
+
+  return (
+    <div
+      className={`rounded-lg px-2 py-1.5 transition-colors ${
+        prayer
+          ? "bg-violet-50/80 dark:bg-violet-950/30"
+          : "bg-stone-50 dark:bg-stone-950/60"
+      }`}
+    >
+      <div className="text-[10px] font-medium tracking-wide text-violet-700/70 uppercase dark:text-violet-300/70">
+        Prayer
+      </div>
+
+      {prayer ? (
+        <div className="mt-1 space-y-1.5">
+          {editingFocus ? (
+            <input
+              className="prayer-focus-input w-full bg-transparent text-xs outline-none"
+              value={focusDraft}
+              autoFocus={autoFocusUnlessTouch()}
+              placeholder="What are you holding for them?"
+              onChange={(e) => setFocusDraft(e.target.value)}
+              onBlur={commitFocus}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") {
+                  setFocusDraft(prayer.focus ?? "");
+                  setEditingFocus(false);
+                }
+              }}
+              aria-label="Prayer focus"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingFocus(true)}
+              className="block w-full text-left"
+            >
+              {prayer.focus ? (
+                <span className="prayer-text line-clamp-2 !text-[12px]">
+                  {prayer.focus}
+                </span>
+              ) : (
+                <span className="text-xs text-stone-500 italic dark:text-stone-400">
+                  Name what you're holding…
+                </span>
+              )}
+            </button>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <button
+              type="button"
+              disabled={prayedToday}
+              onClick={() => markPrayed(subjectKind, subjectId)}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-700 transition-colors touch:min-h-9 disabled:text-violet-400 hover:bg-violet-100/80 disabled:hover:bg-transparent dark:text-violet-300 dark:hover:bg-violet-950/60 dark:disabled:text-violet-500"
+              title={PRAYER_HINT[state]}
+            >
+              <HeartHand className="size-3" style={{ color: PRAYER_COLOR[state] }} />
+              {prayedToday ? "Prayed today" : "Mark prayed"}
+            </button>
+            {prayer.times ? (
+              <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+                {prayer.times}d marked
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={layDown}
+              className="ml-auto text-[11px] text-stone-500 touch:min-h-9 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+            >
+              Lay down
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setPrayer(subjectKind, subjectId, true)}
+          className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 touch:min-h-9 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200"
+        >
+          <HeartHand className="size-3.5 text-stone-400 dark:text-stone-500" />
+          Take up in prayer
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The lightest add/remove there is — one hand on a person row. Carrying opens
+ * the prayer tab; not carrying takes them up in one tap.
+ */
+export function PrayerCarryToggle({
+  subjectKind,
+  subjectId,
+  subjectName,
+  prayer,
+  onOpen,
+}: {
+  subjectKind: PrayerSubjectKind;
+  subjectId: string;
+  subjectName: string;
+  prayer?: Prayer;
+  onOpen: () => void;
+}) {
+  const setPrayer = useStore((s) => s.setPrayer);
+
+  const layDown = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (
+      await confirmAction({
+        title: `Lay ${subjectName} down?`,
+        body: "They come off the prayer list. Everything you've written stays.",
+        confirmLabel: "Lay down",
+        destructive: false,
+      })
+    )
+      setPrayer(subjectKind, subjectId, false);
+  };
+
+  if (prayer) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          className="shrink-0"
+          aria-label={`Prayer for ${subjectName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+        >
+          <PrayerDot prayer={prayer} />
+        </button>
+        <button
+          type="button"
+          aria-label={`Lay ${subjectName} down`}
+          onClick={layDown}
+          className="rounded px-1 text-[10px] text-stone-400 opacity-0 transition-opacity touch:opacity-100 group-hover/person:opacity-100 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-400"
+        >
+          ×
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={`Take ${subjectName} up in prayer`}
+      onClick={(e) => {
+        e.stopPropagation();
+        setPrayer(subjectKind, subjectId, true);
+      }}
+      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-violet-600 opacity-0 transition-opacity touch:opacity-100 group-hover/person:opacity-100 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40"
+    >
+      Take up
+    </button>
   );
 }
 

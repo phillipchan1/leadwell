@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { useStore } from "../store/useStore";
-import type { Health, HealthLevel, Manager, Person, Team } from "../types";
+import type {
+  Health,
+  HealthLevel,
+  Manager,
+  MeetingRhythm,
+  MeetingRole,
+  MeetingSubjectKind,
+  Person,
+  Team,
+} from "../types";
 import { todayISO } from "../lib/health";
+import { RHYTHM_LABEL, RHYTHM_OPTIONS } from "../lib/readiness";
 import { directReports, eligibleParents } from "../lib/teams";
 import { HealthField } from "./Health";
 import { Modal } from "./ui";
@@ -811,6 +821,126 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
         <Button size="md" color="secondary" onClick={onClose}>
           Done
         </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * Create a recurring meeting.
+ *
+ * The subject picker is the whole point: the same form makes a 1:1 with a
+ * person, a staff meeting for a team, or a check-in with a leader I report to.
+ * A name is optional — unnamed it just goes by what it is — but it's offered
+ * first because "Staff meeting" is the thing you actually came here to type.
+ */
+export function MeetingModal({
+  onClose,
+  onCreated,
+  subjectKind: fixedKind,
+  subjectId: fixedId,
+}: {
+  onClose: () => void;
+  onCreated?: (id: string) => void;
+  /** Pre-bound subject, when opened from a profile rather than the index. */
+  subjectKind?: MeetingSubjectKind;
+  subjectId?: string;
+}) {
+  const { people, teams, managers, createMeeting } = useStore();
+  const [name, setName] = useState("");
+  const [kind, setKind] = useState<MeetingSubjectKind>(fixedKind ?? "person");
+  const [subjectId, setSubjectId] = useState(fixedId ?? "");
+  const [rhythm, setRhythm] = useState<MeetingRhythm>("weekly");
+  const [role, setRole] = useState<MeetingRole>("convene");
+
+  const subjects =
+    kind === "person"
+      ? people.map((p) => ({ value: p.id, label: p.name }))
+      : kind === "team"
+        ? teams.map((t) => ({ value: t.id, label: t.name }))
+        : managers.map((m) => ({ value: m.id, label: m.name }));
+
+  const save = () => {
+    if (!subjectId) return;
+    const id = createMeeting(kind, subjectId, {
+      name: name.trim() || undefined,
+      rhythm,
+      role,
+      floorDays: rhythm === "as_needed" ? 45 : undefined,
+    });
+    onCreated?.(id);
+    onClose();
+  };
+
+  return (
+    <Modal title="New recurring meeting" onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-xs text-stone-500">
+          Something that comes round again — a 1:1, a staff meeting, a check-in.
+          Each one gets its own topic board and its own history.
+        </p>
+        <Input
+          label="Name (optional)"
+          size="md"
+          value={name}
+          onChange={setName}
+          placeholder="e.g. Staff meeting, 1:1, Practice"
+          hint="Left blank it goes by what it is — a 1:1, a meeting, a check-in."
+          autoFocus={autoFocusUnlessTouch()}
+        />
+        {!fixedKind && (
+          <NativeSelect
+            label="With"
+            size="md"
+            value={kind}
+            onChange={(e) => {
+              setKind(e.target.value as MeetingSubjectKind);
+              // The old id belongs to a different collection entirely.
+              setSubjectId("");
+            }}
+            options={[
+              { label: "A person I lead", value: "person" },
+              { label: "A team", value: "team" },
+              { label: "A leader I report to", value: "manager" },
+            ]}
+          />
+        )}
+        <NativeSelect
+          label={kind === "team" ? "Which team" : "Who"}
+          size="md"
+          value={subjectId}
+          onChange={(e) => setSubjectId(e.target.value)}
+          disabled={Boolean(fixedId)}
+          options={[{ label: "Choose…", value: "" }, ...subjects]}
+        />
+        <NativeSelect
+          label="How often"
+          size="md"
+          value={rhythm}
+          onChange={(e) => setRhythm(e.target.value as MeetingRhythm)}
+          options={RHYTHM_OPTIONS.map((r) => ({
+            label: RHYTHM_LABEL[r],
+            value: r,
+          }))}
+        />
+        <NativeSelect
+          label="My part in it"
+          size="md"
+          value={role}
+          onChange={(e) => setRole(e.target.value as MeetingRole)}
+          options={[
+            { label: "I convene it", value: "convene" },
+            { label: "I attend it", value: "attend" },
+          ]}
+        />
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button size="md" color="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="md" onClick={save} isDisabled={!subjectId}>
+            Add meeting
+          </Button>
+        </div>
       </div>
     </Modal>
   );

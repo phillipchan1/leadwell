@@ -25,17 +25,25 @@ import { Link03, LinkExternal01 } from "@untitledui/icons";
  * Linking one on an untracked subject starts tracking it as-needed — the same
  * bargain as logging the first session. "I do these, they're in Notion" *is* a
  * decision, so it shouldn't leave them sitting in the undecided count.
+ *
+ * Takes a `meetingId` where the meeting already exists — a subject can have
+ * several, and each keeps its notes somewhere different — or a subject, for
+ * the opt-in surfaces where there's no meeting to point at yet.
  */
+type TrackerLinkProps =
+  | { meetingId: string; subjectKind?: never; subjectId?: never }
+  | { meetingId?: never; subjectKind: MeetingSubjectKind; subjectId: string };
+
 export function TrackerLink({
+  meetingId,
   subjectKind,
   subjectId,
-}: {
-  subjectKind: MeetingSubjectKind;
-  subjectId: string;
-}) {
+}: TrackerLinkProps) {
   const { meetings, trackMeeting, updateMeeting } = useStore();
-  const meeting = meetingFor(meetings, subjectKind, subjectId);
-  const label = MEETING_LABEL[subjectKind];
+  const meeting = meetingId
+    ? meetings.find((m) => m.id === meetingId)
+    : meetingFor(meetings, subjectKind!, subjectId!);
+  const label = MEETING_LABEL[meeting?.subjectKind ?? subjectKind!];
 
   const url = meeting?.trackerUrl?.trim() ?? "";
   const [editing, setEditing] = useState(false);
@@ -56,7 +64,7 @@ export function TrackerLink({
       setEditing(false);
       return;
     }
-    const id = meeting?.id ?? trackMeeting(subjectKind, subjectId, "as_needed");
+    const id = meeting?.id ?? trackMeeting(subjectKind!, subjectId!, "as_needed");
     updateMeeting(id, {
       trackerUrl: next || undefined,
       trackerName: (next && draftName.trim()) || undefined,

@@ -35,6 +35,7 @@ import type {
   Session,
   Person,
   Team,
+  Topic,
   TrackedMeeting,
   TeamAction,
   TeamGoal,
@@ -52,8 +53,11 @@ export type PersistedData = {
   managers: Manager[];
   teams: Team[];
   people: Person[];
+  /** @deprecated Superseded by `topics`. Round-tripped, never read. */
   actions: Action[];
   meetings: TrackedMeeting[];
+  /** What there is to talk about, keyed by meeting. */
+  topics: Topic[];
   sessions: Session[];
   goals: Goal[];
   notes: Note[];
@@ -370,6 +374,39 @@ const map = {
       trackerName: opt(r.tracker_name as string | null),
     }),
   },
+  topics: {
+    table: "topics",
+    toRow: (u: string, t: Topic): Row => ({
+      user_id: u,
+      id: t.id,
+      meeting_id: t.meetingId,
+      text: t.text,
+      detail: nn(t.detail),
+      status: t.status,
+      lane: t.lane,
+      session_id: nn(t.sessionId),
+      carried: t.carried,
+      due_date: nn(t.dueDate),
+      created_on: t.createdOn,
+      closed_on: nn(t.closedOn),
+      sort_order: t.order,
+    }),
+    fromRow: (r: Row): Topic => ({
+      id: r.id as string,
+      meetingId: r.meeting_id as string,
+      text: r.text as string,
+      detail: opt(r.detail as string | null),
+      status: (r.status as Topic["status"]) ?? "open",
+      lane: (r.lane as Topic["lane"]) ?? "backlog",
+      sessionId: opt(r.session_id as string | null),
+      carried: (r.carried as number) ?? 0,
+      dueDate: opt(r.due_date as string | null),
+      // Backfilled rows have no creation date — the old table never kept one.
+      createdOn: (r.created_on as string | null) ?? "",
+      closedOn: opt(r.closed_on as string | null),
+      order: (r.sort_order as number) ?? 0,
+    }),
+  },
   sessions: {
     // Still the one_on_ones table — it was always a meeting occurrence, it just
     // used to hardcode its subject. Migration 0007 backfills meeting_id.
@@ -595,6 +632,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     people,
     actions,
     meetings,
+    topics,
     sessions,
     goals,
     notes,
@@ -613,6 +651,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     grab("people"),
     grab("actions"),
     grab("meetings"),
+    grab("topics"),
     grab("one_on_ones"),
     grab("goals"),
     grab("notes"),
@@ -634,6 +673,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     people: people.map(map.people.fromRow),
     actions: actions.map(map.actions.fromRow),
     meetings: meetings.map(map.meetings.fromRow),
+    topics: topics.map(map.topics.fromRow).sort((a, b) => a.order - b.order),
     sessions: sessions.map(map.sessions.fromRow),
     goals: goals.map(map.goals.fromRow),
     notes: notes.map(map.notes.fromRow),

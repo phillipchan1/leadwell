@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   BarChartSquare02,
+  CalendarCheck01,
   Dataflow03,
   DotsVertical,
   Moon01,
@@ -25,6 +26,7 @@ export const TABS: {
 }[] = [
   { id: "overview", label: "Overview", short: "Overview", icon: BarChartSquare02 },
   { id: "tree", label: "Org tree", short: "Tree", icon: Dataflow03 },
+  { id: "meetings", label: "Meetings", short: "Meetings", icon: CalendarCheck01 },
   { id: "table", label: "Table", short: "Table", icon: Table },
   { id: "people", label: "People table", short: "People", icon: Users01 },
 ];

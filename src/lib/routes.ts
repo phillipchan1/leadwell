@@ -11,11 +11,17 @@
  *   /team/t1                     team in focus
  *   /person/p3/sessions          person in focus, 1:1s section
  *   /person/p3/sessions/s42      full-screen editor for session s42
+ *   /meetings                    every recurring meeting
+ *   /meeting/m4/plan             the planner for one recurring meeting
  *   /me                          my own profile in focus
+ *
+ * A meeting is an entity kind rather than a page of its own, so it inherits
+ * peek, focus, the breadcrumb, the sibling pager and swipe paging without a
+ * second implementation of any of them.
  */
 
-export type Tab = "overview" | "tree" | "table" | "people";
-export type EntityKind = "team" | "person" | "manager" | "me";
+export type Tab = "overview" | "tree" | "table" | "people" | "meetings";
+export type EntityKind = "team" | "person" | "manager" | "meeting" | "me";
 
 export type Selection = {
   kind: EntityKind;
@@ -31,9 +37,9 @@ export type Route =
   | { view: "tab"; tab: Tab; peek: Selection | null }
   | { view: "focus"; target: Selection };
 
-const TABS: Tab[] = ["overview", "tree", "table", "people"];
+const TABS: Tab[] = ["overview", "tree", "table", "people", "meetings"];
 /** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
-const ID_KINDS: EntityKind[] = ["team", "person", "manager"];
+const ID_KINDS: EntityKind[] = ["team", "person", "manager", "meeting"];
 
 export const DEFAULT_TAB: Tab = "tree";
 
