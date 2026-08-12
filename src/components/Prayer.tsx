@@ -1,20 +1,20 @@
 /**
  * The prayer dimension, in every density it's needed at.
  *
- * Two deliberate departures from the rest of the app:
+ * It keeps exactly one thing of its own: **the open hand and a muted violet**.
+ * The hand (`HeartHand`) marks this mode everywhere it appears — the tab, the
+ * canvas layer, the scan bar, the chip on a card — and the violet stays outside
+ * the traffic-light colors health and readiness share, because nothing here is
+ * a warning and none of it is scored.
  *
- * 1. **It doesn't read like a task list.** No checkboxes, no add row, no
- *    hover-X on every line. Entries are written down, and the only motion out
- *    of the list is *answered* — a transition that keeps the words and adds a
- *    date. Controls sit behind a click on the entry itself, so the resting
- *    state of the panel is just the things you're carrying, in your own words.
- * 2. **One anchor icon and a muted violet.** The open hand (`HeartHand`) marks
- *    this mode everywhere it appears — the tab, the canvas layer, the scan bar,
- *    the chip on a card — so switching into it is felt before it's read. The
- *    palette stays outside the traffic-light colors health and readiness share:
- *    nothing here is a warning, and none of it is scored.
+ * Everything else is the app's ordinary language. This used to be set in a
+ * serif with italic placeholders and a bespoke violet button, and writing a
+ * line cost four interactions through a full journal pad. A different typeface
+ * doesn't make a prayer more sincere; it just made this the one screen you
+ * couldn't type into quickly. Now every field is the same quick-add the rest of
+ * the app uses: it's always open, and Enter saves it.
  */
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { HeartHand } from "@untitledui/icons";
 import { useStore } from "../store/useStore";
 import type { PrayerEntry, PrayerEntryKind, PrayerSubjectKind } from "../types";
@@ -33,7 +33,7 @@ import {
   todayISO,
 } from "../lib/prayer";
 import { Button } from "@/components/base/buttons/button";
-import { WritingPad } from "./WritingPad";
+import { Input } from "@/components/base/input/input";
 import { Explain } from "./Explain";
 import { SectionTitle } from "./ui";
 import { confirmAction } from "./ConfirmDialog";
@@ -41,6 +41,17 @@ import { autoFocusUnlessTouch } from "../lib/pointer";
 
 /** The one anchor. Imported from here so the mode has a single icon. */
 export { HeartHand as PrayerIcon };
+
+/** Burden is the default; scripture is the one variation worth a toggle. */
+const KIND_LABEL: Record<PrayerEntryKind, string> = {
+  burden: "Burden",
+  scripture: "Scripture",
+};
+
+const ADD_PLACEHOLDER: Record<PrayerEntryKind, string> = {
+  burden: "What are you asking for them? ↵",
+  scripture: "A verse you're praying over them… ↵",
+};
 
 // --- glanceable reads -------------------------------------------------------
 
@@ -82,9 +93,12 @@ export function PrayerMark({
 }
 
 /**
- * Inline prayer block for org-tree cards — the same take-up / lay-down loop as
- * the profile tab, but sized for the canvas. A heading marks the section; the
- * controls stay quiet so it reads as a list of names you're holding, not tasks.
+ * Inline prayer block for org-tree cards.
+ *
+ * The canvas is where you actually pray through the org — one pass down the
+ * chart, a line each. So this carries the whole loop, not a link to it: the
+ * focus is a live field, there's a box to write a burden into, and marking is
+ * one tap. Nothing here opens a panel first.
  */
 export function CardPrayer({
   subjectKind,
@@ -98,6 +112,8 @@ export function CardPrayer({
   const setPrayer = useStore((s) => s.setPrayer);
   const setPrayerFocus = useStore((s) => s.setPrayerFocus);
   const markPrayed = useStore((s) => s.markPrayed);
+  const addPrayerEntry = useStore((s) => s.addPrayerEntry);
+  const prayers = useStore((s) => s.prayers);
   const prayer = useStore((s) => {
     if (subjectKind === "team")
       return s.teams.find((t) => t.id === subjectId)?.prayer;
@@ -107,20 +123,31 @@ export function CardPrayer({
   });
 
   const [focusDraft, setFocusDraft] = useState(prayer?.focus ?? "");
-  const [editingFocus, setEditingFocus] = useState(false);
+  const [entryDraft, setEntryDraft] = useState("");
 
   useEffect(() => {
     setFocusDraft(prayer?.focus ?? "");
-    setEditingFocus(false);
+    setEntryDraft("");
   }, [subjectKind, subjectId, prayer?.focus]);
 
   const state = prayerState(prayer);
   const prayedToday = prayer?.lastPrayedOn === todayISO();
+  const openCount = openEntries(
+    entriesFor(prayers, subjectKind, subjectId)
+  ).length;
 
   const commitFocus = () => {
-    setEditingFocus(false);
     if ((prayer?.focus ?? "") !== focusDraft.trim())
       setPrayerFocus(subjectKind, subjectId, focusDraft);
+  };
+
+  const writeEntry = () => {
+    const text = entryDraft.trim();
+    if (!text) return;
+    // Writing a burden for someone is the decision — no need to take them up
+    // first, the store does it.
+    addPrayerEntry(subjectKind, subjectId, text);
+    setEntryDraft("");
   };
 
   const layDown = async () => {
@@ -143,56 +170,64 @@ export function CardPrayer({
           : "bg-stone-50 dark:bg-stone-950/60"
       }`}
     >
-      <div className="text-[10px] font-medium tracking-wide text-violet-700/70 uppercase dark:text-violet-300/70">
-        Prayer
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-medium tracking-wide text-violet-700/70 uppercase dark:text-violet-300/70">
+          Prayer
+        </span>
+        {openCount > 0 && (
+          <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+            {openCount} written
+          </span>
+        )}
       </div>
 
       {prayer ? (
         <div className="mt-1 space-y-1.5">
-          {editingFocus ? (
-            <input
-              className="prayer-focus-input w-full bg-transparent text-xs outline-none"
-              value={focusDraft}
-              autoFocus={autoFocusUnlessTouch()}
-              placeholder="What are you holding for them?"
-              onChange={(e) => setFocusDraft(e.target.value)}
-              onBlur={commitFocus}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                if (e.key === "Escape") {
-                  setFocusDraft(prayer.focus ?? "");
-                  setEditingFocus(false);
-                }
-              }}
-              aria-label="Prayer focus"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setEditingFocus(true)}
-              className="block w-full text-left"
-            >
-              {prayer.focus ? (
-                <span className="prayer-text line-clamp-2 !text-[12px]">
-                  {prayer.focus}
-                </span>
-              ) : (
-                <span className="text-xs text-stone-500 italic dark:text-stone-400">
-                  Name what you're holding…
-                </span>
-              )}
-            </button>
-          )}
+          {/* Live, not click-to-edit: on the canvas the whole point is to jot
+              and move on, and a reveal click is a click you shouldn't need. */}
+          <input
+            className="prayer-card-field w-full"
+            value={focusDraft}
+            placeholder="What are you holding for them?"
+            onChange={(e) => setFocusDraft(e.target.value)}
+            onBlur={commitFocus}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") {
+                setFocusDraft(prayer.focus ?? "");
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            aria-label={`Prayer focus for ${subjectName}`}
+          />
+
+          <input
+            className="prayer-card-field w-full"
+            value={entryDraft}
+            placeholder="Write a burden… ↵"
+            onChange={(e) => setEntryDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                writeEntry();
+              }
+              if (e.key === "Escape") setEntryDraft("");
+            }}
+            aria-label={`Write a prayer for ${subjectName}`}
+          />
 
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <button
               type="button"
               disabled={prayedToday}
               onClick={() => markPrayed(subjectKind, subjectId)}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-700 transition-colors touch:min-h-9 disabled:text-violet-400 hover:bg-violet-100/80 disabled:hover:bg-transparent dark:text-violet-300 dark:hover:bg-violet-950/60 dark:disabled:text-violet-500"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-700 transition-colors touch:min-h-9 hover:bg-violet-100/80 disabled:text-violet-400 disabled:hover:bg-transparent dark:text-violet-300 dark:hover:bg-violet-950/60 dark:disabled:text-violet-500"
               title={PRAYER_HINT[state]}
             >
-              <HeartHand className="size-3" style={{ color: PRAYER_COLOR[state] }} />
+              <HeartHand
+                className="size-3"
+                style={{ color: PRAYER_COLOR[state] }}
+              />
               {prayedToday ? "Prayed today" : "Mark prayed"}
             </button>
             {prayer.times ? (
@@ -312,47 +347,7 @@ export function PrayerDot({ prayer }: { prayer?: Prayer }) {
   );
 }
 
-/**
- * The mode's own action button. The design-system primary is the app's teal,
- * which is the color of *doing* something here — and marking a prayer isn't
- * that. Violet keeps the whole mode in one register.
- */
-function PrayerButton({
-  children,
-  onClick,
-  disabled,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-medium text-white transition-colors touch:min-h-11 hover:bg-violet-700 disabled:bg-violet-100 disabled:text-violet-500 dark:bg-violet-600 dark:hover:bg-violet-500 dark:disabled:bg-violet-950/60 dark:disabled:text-violet-300"
-    >
-      <HeartHand className="size-4" />
-      {children}
-    </button>
-  );
-}
-
 // --- the panel --------------------------------------------------------------
-
-const KINDS: { id: PrayerEntryKind; label: string; placeholder: string }[] = [
-  {
-    id: "burden",
-    label: "Burden",
-    placeholder: "What are you asking for them?",
-  },
-  {
-    id: "scripture",
-    label: "Scripture",
-    placeholder: "A verse you're praying over them…",
-  },
-];
 
 /**
  * The prayer tab for one subject — a person, a team, or the leader I report to.
@@ -391,16 +386,14 @@ export function PrayerPanel({
   const open = openEntries(mine);
   const answered = answeredEntries(mine);
 
-  const [composing, setComposing] = useState<PrayerEntryKind | null>(null);
   const [draft, setDraft] = useState("");
+  const [kind, setKind] = useState<PrayerEntryKind>("burden");
   const [focusDraft, setFocusDraft] = useState(prayer?.focus ?? "");
-  const [editingFocus, setEditingFocus] = useState(false);
 
   // Everything here is per-subject; switching subjects must not carry a draft.
   useEffect(() => {
-    setComposing(null);
     setDraft("");
-    setEditingFocus(false);
+    setKind("burden");
   }, [subjectKind, subjectId]);
 
   useEffect(() => {
@@ -412,14 +405,12 @@ export function PrayerPanel({
 
   const write = () => {
     const text = draft.trim();
-    if (!text || !composing) return;
-    addPrayerEntry(subjectKind, subjectId, text, composing);
+    if (!text) return;
+    addPrayerEntry(subjectKind, subjectId, text, kind);
     setDraft("");
-    setComposing(null);
   };
 
   const commitFocus = () => {
-    setEditingFocus(false);
     if ((prayer?.focus ?? "") !== focusDraft.trim())
       setPrayerFocus(subjectKind, subjectId, focusDraft);
   };
@@ -462,46 +453,36 @@ export function PrayerPanel({
               </span>
             </div>
 
-            {/* The one line of what I'm holding, written in place. */}
-            {editingFocus ? (
-              <input
-                className="prayer-focus-input mt-2 w-full bg-transparent outline-none"
+            {/* The one line of what I'm holding — always a field. */}
+            <div className="mt-2">
+              <Input
+                size="md"
+                aria-label="Prayer focus"
+                placeholder="Name the one thing you're holding for them…"
                 value={focusDraft}
-                autoFocus={autoFocusUnlessTouch()}
-                placeholder="What are you holding for them?"
-                onChange={(e) => setFocusDraft(e.target.value)}
+                onChange={setFocusDraft}
                 onBlur={commitFocus}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   if (e.key === "Escape") {
                     setFocusDraft(prayer.focus ?? "");
-                    setEditingFocus(false);
+                    (e.target as HTMLInputElement).blur();
                   }
                 }}
-                aria-label="Prayer focus"
               />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setEditingFocus(true)}
-                className="prayer-focus mt-2 block w-full text-left"
-              >
-                {prayer.focus || (
-                  <span className="text-stone-500 dark:text-stone-400">
-                    Name the one thing you're holding for them…
-                  </span>
-                )}
-              </button>
-            )}
+            </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               {/* The whole interaction loop, in one button. */}
-              <PrayerButton
-                disabled={prayedToday}
+              <Button
+                size="sm"
+                color="secondary"
+                iconLeading={HeartHand}
+                isDisabled={prayedToday}
                 onClick={() => markPrayed(subjectKind, subjectId)}
               >
                 {prayedToday ? "Prayed today" : "Mark prayed"}
-              </PrayerButton>
+              </Button>
               {prayer.times ? (
                 <span className="text-[11px] text-stone-500 dark:text-stone-400">
                   <span className="tabular-nums">{prayer.times}</span>{" "}
@@ -528,14 +509,16 @@ export function PrayerPanel({
             </div>
             <p className="text-[11px] text-stone-500 dark:text-stone-400">
               Taking someone up is a decision, so it's yours to make — nothing
-              here counts a gap at you. Writing anything down below takes them
-              up too.
+              here counts a gap at you. Writing anything down below takes them up
+              too.
             </p>
-            <PrayerButton
+            <Button
+              size="sm"
+              iconLeading={HeartHand}
               onClick={() => setPrayer(subjectKind, subjectId, true)}
             >
               Take up in prayer
-            </PrayerButton>
+            </Button>
           </div>
         )}
       </section>
@@ -543,8 +526,34 @@ export function PrayerPanel({
       {/* What I'm carrying, in the words I wrote it in. */}
       <section className="space-y-3">
         <SectionTitle>Carrying</SectionTitle>
+
+        {/* Always open, Enter saves — the same quick-add as topics, to-dos and
+            goals. Writing one down should cost exactly one thought. */}
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            write();
+          }}
+        >
+          {/* Focused on arrival. Praying through the org is a pass: click the
+              hand on a card, type, Enter, next person — and a cursor you have
+              to place yourself is the thing that breaks that rhythm. */}
+          <Input
+            size="md"
+            className="flex-1"
+            aria-label="Write something down"
+            placeholder={ADD_PLACEHOLDER[kind]}
+            value={draft}
+            onChange={setDraft}
+            enterKeyHint="done"
+            autoFocus={autoFocusUnlessTouch()}
+          />
+          <KindToggle kind={kind} onKind={setKind} />
+        </form>
+
         {open.length === 0 ? (
-          <p className="prayer-empty">
+          <p className="text-sm text-stone-500 dark:text-stone-400">
             Nothing written down yet. What would you pray for {subjectName} if
             someone asked you right now?
           </p>
@@ -554,70 +563,6 @@ export function PrayerPanel({
               <PrayerLine key={entry.id} entry={entry} />
             ))}
           </ul>
-        )}
-
-        {composing ? (
-          <div className="space-y-2">
-            <div
-              className="flex gap-1"
-              role="group"
-              aria-label="What kind of entry"
-            >
-              {KINDS.map((k) => (
-                <button
-                  key={k.id}
-                  type="button"
-                  aria-pressed={composing === k.id}
-                  onClick={() => setComposing(k.id)}
-                  className={`rounded-full border px-3 py-1 text-xs transition-colors touch:min-h-11 ${
-                    composing === k.id
-                      ? "border-transparent bg-violet-100 font-medium text-violet-800 dark:bg-violet-950/60 dark:text-violet-200"
-                      : "border-stone-300 text-stone-500 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
-                  }`}
-                >
-                  {k.label}
-                </button>
-              ))}
-            </div>
-            <WritingPad
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={
-                KINDS.find((k) => k.id === composing)?.placeholder ?? ""
-              }
-              autoFocus={autoFocusUnlessTouch()}
-              startEditing
-              dualMode={false}
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                size="sm"
-                color="link-gray"
-                onClick={() => {
-                  setComposing(null);
-                  setDraft("");
-                }}
-              >
-                Cancel
-              </Button>
-              <PrayerButton disabled={!draft.trim()} onClick={write}>
-                Write it down
-              </PrayerButton>
-            </div>
-          </div>
-        ) : (
-          /* A quiet line rather than a "+ Add" row: writing a prayer down
-             should feel like picking up a pen, not filing a ticket. */
-          <button
-            type="button"
-            onClick={() => {
-              setComposing("burden");
-              setDraft("");
-            }}
-            className="prayer-write"
-          >
-            Write something down…
-          </button>
         )}
       </section>
 
@@ -635,20 +580,75 @@ export function PrayerPanel({
   );
 }
 
+/** Burden or scripture, as two small pills beside the field it applies to. */
+function KindToggle({
+  kind,
+  onKind,
+}: {
+  kind: PrayerEntryKind;
+  onKind: (kind: PrayerEntryKind) => void;
+}) {
+  return (
+    <div
+      className="flex shrink-0 gap-1"
+      role="group"
+      aria-label="What kind of entry"
+    >
+      {(Object.keys(KIND_LABEL) as PrayerEntryKind[]).map((k) => (
+        <button
+          key={k}
+          type="button"
+          aria-pressed={kind === k}
+          onClick={() => onKind(k)}
+          className={`rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 ${
+            kind === k
+              ? "border-transparent bg-violet-100 font-medium text-violet-800 dark:bg-violet-950/60 dark:text-violet-200"
+              : "border-stone-300 text-stone-500 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
+          }`}
+        >
+          {KIND_LABEL[k]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
- * One written line. Clicking it opens its controls rather than parking them in
- * the margin — the resting state of this list is words, not affordances.
+ * One written line. The text edits in place — the same as a topic card or a
+ * to-do — and the controls that aren't typing stay out of the way until you
+ * hover or focus the line.
  */
 function PrayerLine({ entry }: { entry: PrayerEntry }) {
+  const updatePrayerEntry = useStore((s) => s.updatePrayerEntry);
   const answerPrayerEntry = useStore((s) => s.answerPrayerEntry);
   const reopenPrayerEntry = useStore((s) => s.reopenPrayerEntry);
   const deletePrayerEntry = useStore((s) => s.deletePrayerEntry);
 
-  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(entry.text);
   const [answering, setAnswering] = useState(false);
   const [note, setNote] = useState("");
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => setText(entry.text), [entry.text]);
+
+  // Auto-grow rather than clipping at one line.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [text]);
 
   const answered = Boolean(entry.answeredOn);
+
+  const commit = () => {
+    const next = text.trim();
+    if (!next) {
+      setText(entry.text);
+      return;
+    }
+    if (next !== entry.text) updatePrayerEntry(entry.id, { text: next });
+  };
 
   const remove = async () => {
     if (
@@ -664,80 +664,83 @@ function PrayerLine({ entry }: { entry: PrayerEntry }) {
   };
 
   return (
-    <li className={`prayer-line ${answered ? "is-answered" : ""}`}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="block w-full text-left"
-      >
-        <span
-          className={
-            entry.kind === "scripture" ? "prayer-text is-scripture" : "prayer-text"
+    <li className={`prayer-line group ${answered ? "is-answered" : ""}`}>
+      <textarea
+        ref={ref}
+        rows={1}
+        className={`prayer-text w-full resize-none bg-transparent outline-none ${
+          entry.kind === "scripture" ? "is-scripture" : ""
+        }`}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            (e.target as HTMLTextAreaElement).blur();
           }
-        >
-          {entry.text}
-        </span>
-        {entry.answerNote && (
-          <span className="prayer-answer">{entry.answerNote}</span>
-        )}
-      </button>
-
-      {open && (
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
-            {answered ? `answered ${entry.answeredOn}` : `written ${entry.date}`}
-          </span>
-          {answered ? (
-            <Button
-              size="sm"
-              color="link-gray"
-              onClick={() => reopenPrayerEntry(entry.id)}
-            >
-              Still carrying it
-            </Button>
-          ) : (
-            <button
-              type="button"
-              className="text-sm font-medium text-violet-700 touch:min-h-11 hover:underline dark:text-violet-300"
-              onClick={() => setAnswering((v) => !v)}
-            >
-              Mark answered
-            </button>
-          )}
-          <Button size="sm" color="link-gray" className="ml-auto" onClick={remove}>
-            Remove
-          </Button>
-        </div>
+        }}
+        aria-label="Prayer"
+      />
+      {entry.answerNote && (
+        <span className="prayer-answer">{entry.answerNote}</span>
       )}
+
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 opacity-0 transition-opacity touch:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100">
+        <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+          {answered ? `answered ${entry.answeredOn}` : `written ${entry.date}`}
+        </span>
+        {answered ? (
+          <Button
+            size="sm"
+            color="link-gray"
+            onClick={() => reopenPrayerEntry(entry.id)}
+          >
+            Still carrying it
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            color="link-color"
+            onClick={() => setAnswering((v) => !v)}
+          >
+            Mark answered
+          </Button>
+        )}
+        <Button size="sm" color="link-gray" className="ml-auto" onClick={remove}>
+          Remove
+        </Button>
+      </div>
 
       {answering && !answered && (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-          <input
-            className="prayer-focus-input min-w-0 flex-1 bg-transparent outline-none"
-            placeholder="What happened? (optional)"
+          <Input
+            size="sm"
+            className="min-w-0 flex-1"
+            aria-label="What happened"
+            placeholder="What happened? (optional) ↵"
             value={note}
+            onChange={setNote}
             autoFocus={autoFocusUnlessTouch()}
-            onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 answerPrayerEntry(entry.id, note);
                 setAnswering(false);
-                setOpen(false);
               }
               if (e.key === "Escape") setAnswering(false);
             }}
-            aria-label="What happened"
           />
-          <PrayerButton
+          <Button
+            size="sm"
+            color="secondary"
+            className="shrink-0"
             onClick={() => {
               answerPrayerEntry(entry.id, note);
               setAnswering(false);
-              setOpen(false);
             }}
           >
             Answered
-          </PrayerButton>
+          </Button>
         </div>
       )}
     </li>
