@@ -78,7 +78,7 @@ export function MeetingPlanner({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div
-        className="inline-flex shrink-0 rounded-lg bg-stone-100 p-0.5 dark:bg-stone-800"
+        className="inline-flex shrink-0 gap-0.5 rounded-lg bg-stone-100 p-0.5 touch:gap-2 dark:bg-stone-800"
         role="tablist"
         aria-label="Plan view"
       >
@@ -90,6 +90,9 @@ export function MeetingPlanner({
             aria-selected={view === v.id}
             className={cx(
               "rounded-md px-3 py-1 text-xs font-semibold transition",
+              // Hand-rolled rather than the design system's tabs, so it needs
+              // the touch floor spelled out.
+              "touch:min-h-11 touch:min-w-11",
               view === v.id
                 ? "bg-white text-stone-800 shadow-sm dark:bg-stone-900 dark:text-stone-100"
                 : "text-stone-500 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-200"

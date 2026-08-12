@@ -457,7 +457,7 @@ function TopicCard({
           <button
             type="button"
             aria-label={`Move "${topic.text || "topic"}"`}
-            className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 opacity-0 active:cursor-grabbing group-hover:opacity-100 hover:text-stone-500 touch:opacity-100 dark:text-stone-600 dark:hover:text-stone-400"
+            className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 opacity-0 select-none active:cursor-grabbing group-hover:opacity-100 hover:text-stone-500 touch:-my-2 touch:size-11 touch:opacity-100 [-webkit-touch-callout:none] dark:text-stone-600 dark:hover:text-stone-400"
             {...handleProps(topic.id, columnKey, ref)}
           >
             <DotsGrid className="size-3.5" />
