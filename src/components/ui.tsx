@@ -8,6 +8,7 @@ import {
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { useHistoryDismiss, useSwipeDismiss } from "@/hooks/use-sheet";
+import { useOverlayGuard } from "@/hooks/use-shortcut";
 
 /**
  * Pill badge tinted by an arbitrary runtime color (domain and capacity colors
@@ -133,6 +134,9 @@ export function Modal({
 }) {
   // Android's Back closes the sheet rather than leaving the app.
   useHistoryDismiss(onClose);
+  // Page-level shortcuts stand down while a dialog has the screen — `c` should
+  // not open a second "Add team" from inside the first one.
+  useOverlayGuard();
   const { offset, dragging, handleProps } = useSwipeDismiss(onClose);
 
   return (

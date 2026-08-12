@@ -95,7 +95,7 @@ export function NotesPanel({
                 color="tertiary"
                 icon={X}
                 tooltip="Delete note"
-                className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                className="opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                 onClick={() => deleteNote(n.id)}
               />
             </div>

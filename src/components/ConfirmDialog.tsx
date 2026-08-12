@@ -63,6 +63,11 @@ export function ConfirmHost() {
           </Button>
           <Button
             size="md"
+            /* Focused on open, so the dialog answers ↵ and needs no reach for
+               the mouse. Confirming is what you came here to do — you already
+               pressed Delete once — and the way out is Esc, which is both the
+               larger target and the one a keyboard user reaches first. */
+            autoFocus
             color={
               request.destructive === false ? "primary" : "primary-destructive"
             }

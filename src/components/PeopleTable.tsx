@@ -11,6 +11,8 @@ import { TintBadge, Card } from "./ui";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SearchLg } from "@untitledui/icons";
+import { tableRowActivationProps } from "@/lib/rowActivation";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 
 type SortKey = "name" | "team" | "coverage" | "nextSession" | "health";
 
@@ -28,6 +30,7 @@ export function PeopleTable() {
   const [teamFilter, setTeamFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [asc, setAsc] = useState(true);
+  const searchRef = useSearchShortcut();
 
   const rows = useMemo(() => {
     const enriched = people.map((p) => {
@@ -93,6 +96,7 @@ export function PeopleTable() {
           size="sm"
           icon={SearchLg}
           className="max-w-xs"
+          ref={searchRef}
           placeholder="Search people…"
           aria-label="Search people"
           value={query}
@@ -203,10 +207,10 @@ export function PeopleTable() {
             {rows.map(({ p, team, capacity, next, coverage, domain }) => (
               <tr
                 key={p.id}
-                className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 active:bg-stone-100 dark:border-stone-800/60 dark:hover:bg-stone-800/40 dark:active:bg-stone-800"
-                onClick={() => {
-                  selectPerson(p.id);
-                }}
+                {...tableRowActivationProps(() => selectPerson(p.id), {
+                  label: `Open ${p.name}`,
+                })}
+                className="cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 focus-visible:bg-stone-50 active:bg-stone-100 dark:border-stone-800/60 dark:hover:bg-stone-800/40 dark:focus-visible:bg-stone-800/40 dark:active:bg-stone-800"
               >
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">

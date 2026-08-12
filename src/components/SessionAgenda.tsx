@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
-import type { Session, TrackedMeeting } from "../types";
+import type { Session, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { nextSlotAfter, plannedSlots, topicsFor } from "../lib/topics";
 import { todayISO } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { Input } from "@/components/base/input/input";
-import { ArrowRight } from "@untitledui/icons";
+import { ArrowRight, DotsGrid } from "@untitledui/icons";
+import {
+  useReorderableRow,
+  type MoveResult,
+} from "@/hooks/use-reorderable-row";
 
 /**
  * What we planned to talk about, at the top of the write-up.
@@ -27,8 +31,16 @@ export function SessionAgenda({
   session: Session;
   meeting: TrackedMeeting;
 }) {
-  const { sessions, topics, addTopic, coverTopic, rollTopic, addSession, placeTopic } =
-    useStore();
+  const {
+    sessions,
+    topics,
+    addTopic,
+    coverTopic,
+    rollTopic,
+    addSession,
+    placeTopic,
+    moveTopic,
+  } = useStore();
   const [draft, setDraft] = useState("");
   const [pulling, setPulling] = useState(false);
   const today = todayISO();
@@ -77,41 +89,13 @@ export function SessionAgenda({
       {mine.length > 0 && (
         <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
           {mine.map((t) => (
-            <li key={t.id} className="flex items-start gap-2.5 px-3 py-2">
-              <Checkbox
-                size="sm"
-                aria-label={`Covered "${t.text}"`}
-                isSelected={t.status !== "open"}
-                onChange={(selected) => coverTopic(t.id, selected)}
-                className="mt-0.5 shrink-0"
-              />
-              <span
-                className={
-                  t.status === "open"
-                    ? "min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200"
-                    : "min-w-0 flex-1 text-sm text-stone-400 line-through dark:text-stone-500"
-                }
-              >
-                {t.text}
-                {t.carried > 1 && t.status === "open" && (
-                  <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500">
-                    pushed {t.carried}×
-                  </span>
-                )}
-              </span>
-              {t.status === "open" && (
-                <Button
-                  size="sm"
-                  color="link-gray"
-                  className="shrink-0"
-                  iconTrailing={ArrowRight}
-                  onClick={() => roll(t.id)}
-                  aria-label={`Didn't get to "${t.text}" — push it to the next one`}
-                >
-                  Next time
-                </Button>
-              )}
-            </li>
+            <AgendaRow
+              key={t.id}
+              topic={t}
+              onCover={(selected) => coverTopic(t.id, selected)}
+              onReorder={(dir) => moveTopic(t.id, dir)}
+              onRoll={() => roll(t.id)}
+            />
           ))}
         </ul>
       )}
@@ -165,5 +149,77 @@ export function SessionAgenda({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * One planned topic.
+ *
+ * The agenda's order is the order you mean to take them in, which makes it
+ * worth changing — and the board's drag handle isn't here, so this row grows a
+ * small one of its own. It exists mostly so ⌥↑/⌥↓ have somewhere labelled to
+ * live; a keyboard affordance nobody can see is one nobody uses.
+ */
+function AgendaRow({
+  topic,
+  onCover,
+  onReorder,
+  onRoll,
+}: {
+  topic: Topic;
+  onCover: (selected: boolean) => void;
+  onReorder: (direction: -1 | 1) => MoveResult;
+  onRoll: () => void;
+}) {
+  const { rowProps, handleProps } = useReorderableRow({
+    label: `“${topic.text}”`,
+    onMove: onReorder,
+  });
+
+  return (
+    <li {...rowProps} className="group flex items-start gap-2 px-3 py-2">
+      <button
+        type="button"
+        {...handleProps}
+        aria-label={`Reorder “${topic.text}” — Alt with up or down arrow`}
+        title="⌥↑ / ⌥↓ to reorder"
+        className="-ml-1 flex size-6 shrink-0 items-center justify-center rounded text-stone-300 opacity-0 transition-opacity touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-stone-500 dark:text-stone-600"
+      >
+        <DotsGrid className="size-3.5" />
+      </button>
+      <Checkbox
+        size="sm"
+        aria-label={`Covered "${topic.text}"`}
+        isSelected={topic.status !== "open"}
+        onChange={onCover}
+        className="mt-0.5 shrink-0"
+      />
+      <span
+        className={
+          topic.status === "open"
+            ? "min-w-0 flex-1 text-sm text-stone-700 dark:text-stone-200"
+            : "min-w-0 flex-1 text-sm text-stone-400 line-through dark:text-stone-500"
+        }
+      >
+        {topic.text}
+        {topic.carried > 1 && topic.status === "open" && (
+          <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500">
+            pushed {topic.carried}×
+          </span>
+        )}
+      </span>
+      {topic.status === "open" && (
+        <Button
+          size="sm"
+          color="link-gray"
+          className="shrink-0"
+          iconTrailing={ArrowRight}
+          onClick={onRoll}
+          aria-label={`Didn't get to "${topic.text}" — push it to the next one`}
+        >
+          Next time
+        </Button>
+      )}
+    </li>
   );
 }

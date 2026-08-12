@@ -76,7 +76,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                   color="tertiary"
                   icon={X}
                   tooltip="Delete win"
-                  className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                  className="opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                   onClick={() => deleteWin(w.id)}
                 />
               </div>

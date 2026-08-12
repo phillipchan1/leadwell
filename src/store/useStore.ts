@@ -159,6 +159,11 @@ type UIState = {
   askAIOpen: boolean;
   modal: ModalState;
   settingsOpen: boolean;
+  /** ⌘K. Lives in the store so any surface can open it, and the palette itself
+      can be reached from the ? panel and vice versa. */
+  paletteOpen: boolean;
+  /** The ? shortcuts sheet. */
+  helpOpen: boolean;
 };
 
 type Store = PersistedData &
@@ -205,6 +210,8 @@ type Store = PersistedData &
     /** Resize the entity panel. Clamped and remembered across sessions. */
     setPanelPct: (pct: number) => void;
     setAskAIOpen: (open: boolean) => void;
+    setPaletteOpen: (open: boolean) => void;
+    setHelpOpen: (open: boolean) => void;
     openModal: (modal: NonNullable<ModalState>) => void;
     closeModal: () => void;
     // canvas
@@ -331,6 +338,17 @@ type Store = PersistedData &
      */
     rollTopic: (id: string, sessionId?: string) => void;
     deleteTopic: (id: string) => void;
+    /**
+     * Move a topic one place up or down among the topics it is shown beside —
+     * the same column on the board, the same agenda. Returns where it landed so
+     * the caller can announce it, or `null` when it was already at the end.
+     */
+    moveTopic: (
+      id: string,
+      direction: -1 | 1
+    ) => { index: number; total: number } | null;
+    /** Put back the last topic deleted through `deleteTopic`. */
+    undoDeleteTopic: () => string | null;
     // tracked meetings — the unit readiness is measured against
     /**
      * Opt in to being ready for a meeting with this subject. Idempotent — it
@@ -390,6 +408,13 @@ type Store = PersistedData &
 
 const DATA_KEY = "data";
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+/**
+ * The last topic removed, held outside state so it survives the re-render that
+ * removed it without becoming a persisted field. One deep on purpose: this is
+ * the undo for a mis-pressed Delete, not a history stack.
+ */
+let lastDeletedTopic: Topic | null = null;
 
 /**
  * Tracking a meeting answers the opt-in question outright, so any lingering
@@ -686,6 +711,8 @@ export const useStore = create<Store>((set, get) => ({
   dark: initialDark(),
   panelPct: initialPanelPct(),
   askAIOpen: false,
+  paletteOpen: false,
+  helpOpen: false,
   modal: null,
   settingsOpen: false,
 
@@ -916,6 +943,8 @@ export const useStore = create<Store>((set, get) => ({
     set({ panelPct: next });
   },
   setAskAIOpen: (open) => set({ askAIOpen: open }),
+  setPaletteOpen: (open) => set({ paletteOpen: open }),
+  setHelpOpen: (open) => set({ helpOpen: open }),
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
   setSettingsOpen: (open) => set({ settingsOpen: open }),
@@ -1418,8 +1447,60 @@ export const useStore = create<Store>((set, get) => ({
           : t
       ),
     })),
-  deleteTopic: (id) =>
-    set((s) => ({ topics: s.topics.filter((t) => t.id !== id) })),
+  deleteTopic: (id) => {
+    // Remembered so a keyboard Delete can be taken back. One deep is enough:
+    // this exists to cover the mis-press, not to be a history.
+    lastDeletedTopic = get().topics.find((t) => t.id === id) ?? null;
+    set((s) => ({ topics: s.topics.filter((t) => t.id !== id) }));
+  },
+  undoDeleteTopic: () => {
+    const topic = lastDeletedTopic;
+    if (!topic) return null;
+    lastDeletedTopic = null;
+    set((s) =>
+      // Guard the double-undo: a second call must not duplicate the row.
+      s.topics.some((t) => t.id === topic.id)
+        ? s
+        : { topics: [...s.topics, topic] }
+    );
+    return topic.text;
+  },
+  moveTopic: (id, direction) => {
+    const topic = get().topics.find((t) => t.id === id);
+    if (!topic) return null;
+
+    // "Beside it" is what the user can see: the same slot on the board, or the
+    // same lane. Reordering against the whole meeting would move a card past
+    // rows that aren't on screen.
+    const siblings = get()
+      .topics.filter(
+        (t) =>
+          t.meetingId === topic.meetingId &&
+          t.sessionId === topic.sessionId &&
+          (t.sessionId ? true : t.lane === topic.lane) &&
+          (topic.status === "open" ? t.status === "open" : t.status !== "open")
+      )
+      .sort((a, b) => a.order - b.order);
+
+    const at = siblings.findIndex((t) => t.id === id);
+    const to = at + direction;
+    if (at === -1 || to < 0 || to >= siblings.length) return null;
+
+    // Renumber the whole run rather than swapping two values. Seeded and
+    // migrated topics can share an `order`, and swapping equal numbers moves
+    // nothing — the row would visibly refuse to budge.
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(at, 1);
+    reordered.splice(to, 0, moved);
+    const orderById = new Map(reordered.map((t, i) => [t.id, i]));
+
+    set((s) => ({
+      topics: s.topics.map((t) =>
+        orderById.has(t.id) ? { ...t, order: orderById.get(t.id)! } : t
+      ),
+    }));
+    return { index: to, total: siblings.length };
+  },
 
   trackMeeting: (subjectKind, subjectId, rhythm, patch) => {
     const existing = get().meetings.find(

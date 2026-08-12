@@ -15,6 +15,7 @@ import { TextArea } from "@/components/base/textarea/textarea";
 import { confirmAction } from "./ConfirmDialog";
 import { autoFocusUnlessTouch } from "../lib/pointer";
 import { ArrowLeft, DotsVertical, Trash01 } from "@untitledui/icons";
+import { useMenu } from "@/hooks/use-menu";
 
 type SpeechRecognitionLike = {
   continuous: boolean;
@@ -522,31 +523,14 @@ export function MeetingEditor({
  */
 function EntryMenu({ onDelete }: { onDelete: () => void }) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  const { triggerProps, menuProps, close } = useMenu(open, setOpen);
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div className="relative">
       <button
+        {...triggerProps}
         type="button"
         aria-label="Entry actions"
-        aria-expanded={open}
-        aria-haspopup="menu"
         onClick={() => setOpen((v) => !v)}
         className="flex size-11 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 active:bg-stone-200 dark:hover:bg-stone-800 dark:active:bg-stone-700"
       >
@@ -554,14 +538,15 @@ function EntryMenu({ onDelete }: { onDelete: () => void }) {
       </button>
       {open && (
         <div
-          role="menu"
+          {...menuProps}
+          aria-label="Entry actions"
           className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900"
         >
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close(false);
               onDelete();
             }}
             className="flex min-h-11 w-full items-center gap-2.5 px-4 text-left text-sm text-red-600 active:bg-red-50 dark:text-red-400 dark:active:bg-red-950/40"

@@ -19,6 +19,8 @@ import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { NewMeetingRow } from "./NewMeetingRow";
 import { SearchLg } from "@untitledui/icons";
+import { tableRowActivationProps } from "@/lib/rowActivation";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 
 type SortKey = "next" | "name" | "planned" | "state";
 
@@ -56,6 +58,7 @@ export function MeetingsTable() {
   const [sortKey, setSortKey] = useState<SortKey>("next");
   const [asc, setAsc] = useState(true);
   const [creating, setCreating] = useState(false);
+  const searchRef = useSearchShortcut();
 
   const rows = useMemo<Row[]>(() => {
     const enriched = meetings.map((meeting) => {
@@ -155,7 +158,8 @@ export function MeetingsTable() {
             size="sm"
             className="w-full sm:w-64"
             icon={SearchLg}
-            placeholder="Find a meeting…"
+            ref={searchRef}
+          placeholder="Find a meeting…"
             aria-label="Find a meeting"
             value={query}
             onChange={setQuery}
@@ -239,8 +243,11 @@ export function MeetingsTable() {
                   {rows.map((r) => (
                     <tr
                       key={r.meeting.id}
-                      onClick={() => selectMeeting(r.meeting.id)}
-                      className="cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-800/40"
+                      {...tableRowActivationProps(
+                        () => selectMeeting(r.meeting.id),
+                        { label: `Open ${r.title}` }
+                      )}
+                      className="cursor-pointer hover:bg-stone-50 focus-visible:bg-stone-50 dark:hover:bg-stone-800/40 dark:focus-visible:bg-stone-800/40"
                     >
                       <td className="px-3 py-2">
                         <div className="flex items-center gap-2">

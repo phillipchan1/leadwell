@@ -35,6 +35,56 @@
     "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 
+/* ── Keyboard focus ──────────────────────────────────────────────────────
+   One visible focus indicator for the whole app, so nothing can be reachable
+   by Tab and invisible when it gets there (WCAG 2.4.7).
+
+   `:focus-visible`, not `:focus` — a mouse click on a card should not leave a
+   ring behind it, which is the reason `outline: none` gets reached for in the
+   first place.
+
+   The design-system controls (Button, ButtonUtility, Checkbox…) draw their own
+   ring and opt out via `.focus-ring-none`; this is the floor under everything
+   hand-built. Two layers — a light halo behind the accent line — so the ring
+   holds its contrast on white cards, on the stone-950 canvas, and on the
+   saturated chips where a single-colour outline would disappear. */
+@layer base {
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+  :where([role="button"], [role="option"], [role="menuitem"], [role="tab"], [role="separator"]):focus-visible {
+    outline: 2px solid var(--color-focus-ring, #0d9488);
+    outline-offset: 2px;
+    border-radius: inherit;
+    box-shadow: 0 0 0 4px rgb(255 255 255 / 0.9);
+  }
+
+  .dark
+    :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
+  .dark
+    :where([role="button"], [role="option"], [role="menuitem"], [role="tab"], [role="separator"]):focus-visible {
+    box-shadow: 0 0 0 4px rgb(12 10 9 / 0.9);
+  }
+
+  /* Text fields style their own focus (border and background shift) and sit
+     flush inside rows, where an offset ring would overlap the neighbour. The
+     shift alone is a weak indicator, so they keep a ring — inset, no offset. */
+  :where(.field-input, .journal-textarea, .notion-markdown-source):focus-visible,
+  .notion-block-editor .ProseMirror:focus-visible {
+    outline: 2px solid var(--color-focus-ring, #0d9488);
+    outline-offset: -2px;
+    box-shadow: none;
+  }
+
+  /* A focused table row draws the ring *inside* itself and skips the halo.
+     A row is not a box in the border model: an offset outline escapes into the
+     rows above and below, and the halo — a 4px spread shadow — paints across
+     the row's own cells and washes the text out. */
+  tr:focus-visible {
+    outline: 2px solid var(--color-focus-ring, #0d9488);
+    outline-offset: -2px;
+    box-shadow: none;
+  }
+}
+
 /* ── Untitled UI base rules & utilities (from its generated globals.css) ── */
 
 @utility scrollbar-hide {
@@ -1336,7 +1386,17 @@ label:focus-within > .field-label,
 }
 
 .slash-menu-item {
-  @apply flex w-full flex-col items-start px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800;
+  @apply flex w-full cursor-pointer flex-col items-start px-3 py-2 text-left transition-colors hover:bg-stone-50 dark:hover:bg-stone-800;
+}
+
+/* The keyboard's highlight. Distinct from hover on purpose: hover is a hint,
+   this is what ↵ will insert. */
+.slash-menu-item.is-active {
+  @apply bg-teal-50 dark:bg-teal-950/50;
+}
+
+.slash-menu-item.is-active .slash-menu-title {
+  @apply text-teal-900 dark:text-teal-100;
 }
 
 .slash-menu-title {

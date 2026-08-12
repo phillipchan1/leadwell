@@ -391,7 +391,7 @@ export function TeamProfile({
                         color="tertiary"
                         icon={X}
                         tooltip="Delete goal"
-                        className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                        className="opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                         onClick={() => deleteTeamGoal(g.id)}
                       />
                     </div>
@@ -670,7 +670,7 @@ export function TeamProfile({
                       color="tertiary"
                       icon={X}
                       tooltip="Delete note"
-                      className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                      className="opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                       onClick={() => deleteTeamNote(n.id)}
                     />
                   </li>
@@ -778,7 +778,7 @@ function ActionRow({
         )}
       </div>
       <button
-        className="mt-0.5 flex items-center justify-center rounded-md px-1.5 py-0.5 text-sm text-stone-400 opacity-0 transition-opacity touch:-my-2.5 touch:mt-0 touch:-mr-1.5 touch:size-11 touch:opacity-100 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-950/40"
+        className="mt-0.5 flex items-center justify-center rounded-md px-1.5 py-0.5 text-sm text-stone-400 opacity-0 transition-opacity touch:-my-2.5 touch:mt-0 touch:-mr-1.5 touch:size-11 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-950/40"
         aria-label="Delete"
         onClick={onDelete}
       >

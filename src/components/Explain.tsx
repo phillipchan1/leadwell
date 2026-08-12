@@ -50,14 +50,6 @@ export function Explain({
     return <Wrapper className={className}>{children}</Wrapper>;
   }
 
-  if (!coarse) {
-    return (
-      <Wrapper className={className} title={text}>
-        {children}
-      </Wrapper>
-    );
-  }
-
   return (
     <Wrapper
       ref={wrapRef as never}
@@ -67,6 +59,14 @@ export function Explain({
         type="button"
         aria-describedby={open ? id : undefined}
         aria-expanded={open}
+        /* The native tooltip is kept on a fine pointer, where hovering is how
+           people expect to read one — but only as a *second* route. The button
+           and the popover below are the first, because `title` appears on
+           hover and nowhere else: on a phone these forty explanations were
+           unreadable, and from a keyboard they still were. Focus opens it. */
+        title={coarse ? undefined : text}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
         onClick={(e) => {
           // These sit inside clickable rows and cards; explaining a value
           // should never also navigate.

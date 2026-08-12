@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
   AlertCircle,
   BarChartSquare02,
@@ -14,6 +14,7 @@ import {
 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import { useStore, type Tab } from "../store/useStore";
+import { useMenu } from "@/hooks/use-menu";
 import { cx } from "@/utils/cx";
 
 export const TABS: {
@@ -75,23 +76,10 @@ export function BottomNav() {
 export function HeaderOverflow() {
   const { dark, toggleDark, setSettingsOpen } = useStore();
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Escape already closed this, but focus stayed wherever it was and ↑/↓ did
+  // nothing — a `role="menu"` that behaved like a stack of buttons. `useMenu`
+  // supplies the rest of the contract, including returning focus to the trigger.
+  const { triggerProps, menuProps, close } = useMenu(open, setOpen);
 
   return (
     <>
@@ -109,26 +97,26 @@ export function HeaderOverflow() {
         />
       </div>
 
-      <div ref={wrapRef} className="relative sm:hidden">
+      <div className="relative sm:hidden">
         <Button
+          {...triggerProps}
           size="sm"
           color="secondary"
           aria-label="More"
-          aria-expanded={open}
-          aria-haspopup="menu"
           onClick={() => setOpen((v) => !v)}
           iconLeading={DotsVertical}
         />
         {open && (
           <div
-            role="menu"
+            {...menuProps}
+            aria-label="More"
             className="absolute right-0 z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900"
           >
             <button
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close(false);
                 setSettingsOpen(true);
               }}
               className="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-stone-700 active:bg-stone-100 dark:text-stone-200 dark:active:bg-stone-800"
@@ -140,7 +128,7 @@ export function HeaderOverflow() {
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close(false);
                 toggleDark();
               }}
               className="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-stone-700 active:bg-stone-100 dark:text-stone-200 dark:active:bg-stone-800"

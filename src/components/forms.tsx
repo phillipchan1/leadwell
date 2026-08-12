@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useStore } from "../store/useStore";
 import type {
   Health,
@@ -20,6 +20,7 @@ import { X } from "@untitledui/icons";
 import { PhotoPicker } from "./PhotoPicker";
 import { confirmAction } from "./ConfirmDialog";
 import { autoFocusUnlessTouch } from "../lib/pointer";
+import { useRovingFocus } from "@/hooks/use-roving-focus";
 
 /**
  * The health value to save from a modal. Re-stamps the date only when the call
@@ -58,6 +59,10 @@ function DomainPicker({
   const { domains, addDomain } = useStore();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  // A single-choice set, so: a radiogroup with roving arrows, rather than a
+  // row of unrelated buttons each taking its own tab stop.
+  const { groupProps, itemProps } = useRovingFocus();
 
   const createDomain = () => {
     const name = newName.trim();
@@ -71,9 +76,17 @@ function DomainPicker({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
+      <div
+        {...groupProps}
+        role="radiogroup"
+        aria-label="Domain"
+        className="flex flex-wrap gap-1.5"
+      >
         <button
           type="button"
+          role="radio"
+          aria-checked={!domainId}
+          {...itemProps(!domainId)}
           onClick={() => onChange(undefined)}
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
             !domainId
@@ -89,6 +102,9 @@ function DomainPicker({
             <button
               key={d.id}
               type="button"
+              role="radio"
+              aria-checked={active}
+              {...itemProps(active)}
               onClick={() => onChange(d.id)}
               className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors"
               style={
@@ -112,6 +128,7 @@ function DomainPicker({
         })}
         {!adding && (
           <button
+            ref={addButtonRef}
             type="button"
             onClick={() => setAdding(true)}
             className="rounded-full border border-dashed border-stone-300 px-2.5 py-1 text-xs text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
@@ -127,15 +144,27 @@ function DomainPicker({
             value={newName}
             onChange={setNewName}
             placeholder="New domain, e.g. Family"
+            aria-label="New domain name"
             autoFocus={autoFocusUnlessTouch()}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 createDomain();
+                return;
+              }
+              // Escape backs out of the sub-form rather than closing the whole
+              // modal underneath it — the caret is in a field this control
+              // opened, so it's the field's Escape to answer first.
+              if (e.key === "Escape") {
+                e.preventDefault();
+                e.stopPropagation();
+                setNewName("");
+                setAdding(false);
+                addButtonRef.current?.focus();
               }
             }}
           />
-          <Button size="sm" onClick={createDomain}>
+          <Button size="sm" onClick={createDomain} isDisabled={!newName.trim()}>
             Add
           </Button>
         </div>
@@ -184,6 +213,8 @@ export function TeamModal({
     team?.health?.level
   );
   const [healthNote, setHealthNote] = useState(team?.health?.note ?? "");
+  const capacityRoving = useRovingFocus();
+  const directionRoving = useRovingFocus();
 
   const parents = eligibleParents(teams, team?.id);
   const nested = Boolean(parentId);
@@ -227,7 +258,17 @@ export function TeamModal({
       }
       onClose={onClose}
     >
-      <div className="space-y-4">
+      {/* A real <form>, so ↵ in any field saves. Three of the four entity
+          modals were plain <div>s and only answered a click on Save — the odd
+          one out being the person modal, which meant ↵ worked or didn't
+          depending on which thing you happened to be adding. */}
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
         <Input
           label="Name"
           size="md"
@@ -297,13 +338,24 @@ export function TeamModal({
           label="Health — my read"
           hint="Your own call on how this team is doing. Filter and sort by it in the tree and the table."
         />
-        <label className="block">
+        {/* Was a `<label>` wrapping a row of buttons — a label with no single
+            control to name. These pick one of a set, so they say so, and get
+            the arrow keys that go with it. */}
+        <div className="block">
           <Label>My capacity</Label>
-          <div className="flex gap-2">
+          <div
+            {...capacityRoving.groupProps}
+            role="radiogroup"
+            aria-label="My capacity"
+            className="flex gap-2"
+          >
             {capacities.map((c) => (
               <button
                 key={c.id}
                 type="button"
+                role="radio"
+                aria-checked={capacityId === c.id}
+                {...capacityRoving.itemProps(capacityId === c.id)}
                 onClick={() => setCapacityId(c.id)}
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-sm transition-colors ${
                   capacityId === c.id
@@ -318,11 +370,16 @@ export function TeamModal({
               </button>
             ))}
           </div>
-        </label>
+        </div>
         {!nested && !delegated && (
-          <label className="block">
+          <div className="block">
             <Label>Position in the tree</Label>
-            <div className="flex gap-2">
+            <div
+              {...directionRoving.groupProps}
+              role="radiogroup"
+              aria-label="Position in the tree"
+              className="flex gap-2"
+            >
               {(
                 [
                   { value: "down", label: "Below me — I lead them" },
@@ -332,6 +389,9 @@ export function TeamModal({
                 <button
                   key={opt.value}
                   type="button"
+                  role="radio"
+                  aria-checked={direction === opt.value}
+                  {...directionRoving.itemProps(direction === opt.value)}
                   onClick={() => setDirection(opt.value)}
                   className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
                     direction === opt.value
@@ -343,7 +403,7 @@ export function TeamModal({
                 </button>
               ))}
             </div>
-          </label>
+          </div>
         )}
         <Input
           label="Description (optional)"
@@ -354,6 +414,7 @@ export function TeamModal({
         <div className="flex items-center justify-between pt-2">
           {team ? (
             <Button
+              type="button"
               size="sm"
               color="link-destructive"
               onClick={async () => {
@@ -379,16 +440,30 @@ export function TeamModal({
             <span />
           )}
           <div className="flex gap-2">
-            <Button size="md" color="secondary" onClick={onClose}>
+            <Button type="button" size="md" color="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button size="md" onClick={save} isDisabled={!name.trim()}>
+            <Button
+              type="submit"
+              size="md"
+              isDisabled={!name.trim()}
+              iconTrailing={<EnterHint />}
+            >
               {team ? "Save" : nested ? "Add sub-team" : "Add team"}
             </Button>
           </div>
         </div>
-      </div>
+      </form>
     </Modal>
+  );
+}
+
+/** The ↵ on a modal's primary action, so the shortcut is on the button. */
+function EnterHint() {
+  return (
+    <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
+      ↵
+    </kbd>
   );
 }
 
@@ -417,7 +492,13 @@ export function ManagerModal({
 
   return (
     <Modal title={manager ? "Edit manager" : "Add manager"} onClose={onClose}>
-      <div className="space-y-4">
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
         <p className="text-xs text-stone-500">
           Someone you report to. They'll appear directly above you in the tree.
         </p>
@@ -447,6 +528,7 @@ export function ManagerModal({
         <div className="flex items-center justify-between pt-2">
           {manager ? (
             <Button
+              type="button"
               size="sm"
               color="link-destructive"
               onClick={async () => {
@@ -468,15 +550,20 @@ export function ManagerModal({
             <span />
           )}
           <div className="flex gap-2">
-            <Button size="md" color="secondary" onClick={onClose}>
+            <Button type="button" size="md" color="secondary" onClick={onClose}>
               Cancel
             </Button>
-            <Button size="md" onClick={save} isDisabled={!name.trim()}>
+            <Button
+              type="submit"
+              size="md"
+              isDisabled={!name.trim()}
+              iconTrailing={<EnterHint />}
+            >
               {manager ? "Save" : "Add manager"}
             </Button>
           </div>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }
@@ -500,7 +587,13 @@ export function MeModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Edit my profile" onClose={onClose}>
-      <div className="space-y-4">
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
         <PhotoPicker name={name} photo={photo} onChange={setPhoto} />
         <Input
           label="Name"
@@ -522,14 +615,19 @@ export function MeModal({ onClose }: { onClose: () => void }) {
           placeholder="e.g. Leader, Pastor, Engineering Manager"
         />
         <div className="flex justify-end gap-2 pt-2">
-          <Button size="md" color="secondary" onClick={onClose}>
+          <Button type="button" size="md" color="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="md" onClick={save} isDisabled={!name.trim()}>
+          <Button
+            type="submit"
+            size="md"
+            isDisabled={!name.trim()}
+            iconTrailing={<EnterHint />}
+          >
             Save
           </Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }

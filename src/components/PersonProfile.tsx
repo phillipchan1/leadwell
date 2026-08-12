@@ -268,7 +268,7 @@ export function PersonProfile({
                           color="tertiary"
                           icon={X}
                           tooltip="Delete goal"
-                          className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                          className="opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                           onClick={() => deleteGoal(g.id)}
                         />
                       </div>

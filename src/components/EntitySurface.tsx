@@ -3,6 +3,7 @@ import { PANEL_PCT_DEFAULT, useStore } from "../store/useStore";
 import type { Manager, Person, Team, TrackedMeeting } from "../types";
 import { EntityChrome, useEntityTrail } from "./EntityChrome";
 import { useSwipePager } from "@/hooks/use-sheet";
+import { keyboardOwner } from "@/lib/keys";
 
 /**
  * The profiles pull in the whole markdown stack, the assessment editors and
@@ -199,6 +200,11 @@ export function PeekPanel() {
         aria-valuemin={35}
         aria-valuemax={80}
         tabIndex={0}
+        /* Claims ←/→ for resizing. Without this the global sibling pager also
+           fired on every press: the panel got wider *and* jumped to the
+           previous teammate, because `preventDefault` doesn't stop a listener
+           on `window` from seeing the same event. */
+        {...keyboardOwner}
         onPointerDown={onHandleDown}
         onDoubleClick={() => setPanelPct(PANEL_PCT_DEFAULT)}
         onKeyDown={(e) => {
