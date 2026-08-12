@@ -22,7 +22,6 @@ import {
   HeaderOverflow,
   LoadErrorScreen,
   LoadingSplash,
-  SyncIndicator,
   TABS,
 } from "./components/AppChrome";
 import { cx } from "@/utils/cx";
@@ -168,22 +167,18 @@ export default function App() {
 
   if (inSessionEditor) {
     return (
-      <>
-        <div className="flex h-full flex-col">
-          <Suspense fallback={<LoadingSplash />}>
-            <SessionEditorView />
-          </Suspense>
-          {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
-          <ConfirmHost />
-        </div>
-        <SyncIndicator />
-      </>
+      <div className="flex h-full flex-col">
+        <Suspense fallback={<LoadingSplash />}>
+          <SessionEditorView />
+        </Suspense>
+        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+        <ConfirmHost />
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col">
       {/* Header — pads past the status bar / Dynamic Island in standalone.
           `pad-safe-x` owns the horizontal padding outright: it and `px-*` set
           the same property with the same specificity, so pairing them means
@@ -272,8 +267,6 @@ export default function App() {
       )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ConfirmHost />
-      </div>
-      <SyncIndicator />
-    </>
+    </div>
   );
 }

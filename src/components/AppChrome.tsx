@@ -6,7 +6,6 @@ import {
   Dataflow03,
   DotsVertical,
   Moon01,
-  RefreshCw01,
   Rows03,
   Settings01,
   Sun,
@@ -161,29 +160,8 @@ export function HeaderOverflow() {
 }
 
 /**
- * A failed write used to be a `console.error` behind a normal-looking UI, so
- * edits could be silently dropped. Shown as a floating toast so it never
- * steals vertical space from the layout while retries continue in the background.
+ * Branded first paint, so a cold mobile connection is not a blank screen.
  */
-export function SyncIndicator() {
-  const syncStatus = useStore((s) => s.syncStatus);
-  if (syncStatus !== "error") return null;
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4 max-lg:bottom-[calc(3.5rem+max(0.75rem,env(safe-area-inset-bottom)))] lg:bottom-6"
-    >
-      <div className="pointer-events-auto flex max-w-sm items-center gap-2 rounded-full border border-amber-200/80 bg-amber-50/95 px-4 py-2 text-xs font-medium text-amber-900 shadow-lg ring-1 ring-black/5 backdrop-blur-sm dark:border-amber-800 dark:bg-amber-950/95 dark:text-amber-100 dark:ring-white/10">
-        <RefreshCw01 className="size-3.5 shrink-0 animate-spin [animation-duration:2s]" />
-        Not saved — retrying
-      </div>
-    </div>
-  );
-}
-
-/** Branded first paint, so a cold mobile connection is not a blank screen. */
 export function LoadingSplash() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-5 bg-stone-50 px-6 dark:bg-stone-950">

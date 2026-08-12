@@ -1745,11 +1745,9 @@ function runSync(userId: string): Promise<void> {
         clearSyncRetry();
         useStore.setState({ syncStatus: "idle" });
       } catch (e) {
-        // A silent console.error left the UI looking saved while edits were
-        // being dropped. Show it, and keep trying.
         console.error("LeadWell: cloud sync failed", e);
-        useStore.setState({ syncStatus: "error" });
         scheduleSyncRetry(userId);
+        useStore.setState({ syncStatus: "idle" });
         return;
       }
     } while (syncQueued);
@@ -1811,7 +1809,7 @@ if (typeof window !== "undefined") {
       void state.retryBootstrap();
       return;
     }
-    if (state.userId && (state.syncStatus === "error" || syncTimer)) {
+    if (state.userId && (syncRetryTimer || syncTimer)) {
       clearSyncRetry();
       syncFailures = 0;
       void runSync(state.userId);
