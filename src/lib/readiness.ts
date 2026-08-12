@@ -189,6 +189,58 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((toUTC(to) - toUTC(from)) / DAY);
 }
 
+/** UTC weekday (0 = Sun … 6 = Sat). */
+export function weekdayUTC(iso: string): number {
+  return new Date(toUTC(iso)).getUTCDay();
+}
+
+/** First date on or after `from` whose UTC weekday equals `day`. */
+export function onOrAfterWeekday(from: string, day: number): string {
+  let cursor = from;
+  for (let i = 0; i < 7; i++) {
+    if (weekdayUTC(cursor) === day) return cursor;
+    cursor = addDays(cursor, 1);
+  }
+  return cursor;
+}
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+export const ANCHOR_WEEKDAY_OPTIONS = WEEKDAY_LABELS.map((label, value) => ({
+  label,
+  value: String(value),
+}));
+
+/**
+ * Next occurrence after `lastMet`, honoring rhythm and optional anchor weekday.
+ * Used by readiness and the topic-board slot projector — one source of truth.
+ */
+export function projectFromLast(
+  meeting: TrackedMeeting,
+  lastMet: string
+): string {
+  const { rhythm } = meeting;
+  if (rhythm === "as_needed") {
+    return addDays(lastMet, meeting.floorDays ?? 14);
+  }
+  const step = CADENCE_DAYS[rhythm];
+  const anchor = meeting.anchorWeekday;
+
+  if (anchor === undefined) return addDays(lastMet, step);
+
+  if (rhythm === "weekly") {
+    let d = onOrAfterWeekday(addDays(lastMet, 1), anchor);
+    if (daysBetween(lastMet, d) < 7) d = addDays(d, 7);
+    return d;
+  }
+  if (rhythm === "biweekly") {
+    let d = onOrAfterWeekday(addDays(lastMet, 1), anchor);
+    if (daysBetween(lastMet, d) < 14) d = addDays(d, 14);
+    return d;
+  }
+  return onOrAfterWeekday(addDays(lastMet, step), anchor);
+}
+
 /**
  * How far ahead prep starts mattering. Two days minimum, longer for slower
  * rhythms — a monthly meeting deserves more than 48 hours of runway.
@@ -265,7 +317,7 @@ export function meetingReadiness(
 
   // As-needed makes no promise about a next date, so it projects nothing.
   const projectedDate =
-    !asNeeded && lastMet ? addDays(lastMet, CADENCE_DAYS[rhythm]) : null;
+    !asNeeded && lastMet ? projectFromLast(meeting, lastMet) : null;
   const nextDate = explicit ?? projectedDate;
   const projected = !explicit && Boolean(projectedDate);
   const daysUntil = nextDate ? daysBetween(today, nextDate) : null;

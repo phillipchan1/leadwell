@@ -26,16 +26,13 @@
  * goes stale overnight, every night.
  */
 import type { Session, Topic, TopicLane, TrackedMeeting } from "../types";
-import { CADENCE_DAYS, addDays, daysBetween, sessionsFor, todayISO } from "./readiness";
+import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast } from "./readiness";
 
 /** How many occurrences ahead the planner offers to scaffold into. */
 export const SLOTS_AHEAD = 3;
 
 /** How far back the Covered column reaches before it needs a "show all". */
 export const COVERED_WINDOW_DAYS = 30;
-
-/** Runway offered for an as-needed meeting, which has no rhythm to project. */
-const AS_NEEDED_SLOT_DAYS = 14;
 
 /** One occurrence on the planner — a real session, or a date we expect. */
 export type Slot = {
@@ -168,21 +165,12 @@ export function plannedSlots(
     mine.filter((s) => s.date <= today).pop()?.date ??
     today;
 
-  const step =
-    meeting.rhythm === "as_needed"
-      ? (meeting.floorDays ?? AS_NEEDED_SLOT_DAYS)
-      : CADENCE_DAYS[meeting.rhythm];
-
-  // As-needed makes no promise about a next date, so it offers one slot to
-  // plan into rather than a runway of dates it can't stand behind.
   const target = meeting.rhythm === "as_needed" ? 1 : ahead;
 
   let cursor = lastKnown;
   while (slots.filter((s) => !s.past).length < target) {
-    cursor = addDays(cursor, step);
-    // A rhythm anchored on an old meeting can project into the past; walk it
-    // up to somewhere you could actually plan for.
-    while (cursor <= today) cursor = addDays(cursor, step);
+    cursor = projectFromLast(meeting, cursor);
+    while (cursor <= today) cursor = projectFromLast(meeting, cursor);
     slots.push({ sessionId: null, date: cursor, projected: true, past: false });
   }
 

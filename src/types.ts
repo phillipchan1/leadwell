@@ -221,6 +221,11 @@ export type TrackedMeeting = {
   floorDays?: number;
   /** An explicit booking always beats the projected date. */
   nextDate?: string;
+  /**
+   * Which day of the week this usually lands on (0 = Sun … 6 = Sat, UTC).
+   * Rhythm projections snap here instead of echoing whatever day you last logged.
+   */
+  anchorWeekday?: number;
   /** Defaults to "convene". Participants aren't scored on the agenda. */
   role?: MeetingRole;
   /**

@@ -20,6 +20,7 @@ import {
   RHYTHM_OPTIONS,
   STATE_COLOR,
   STATE_LABEL,
+  ANCHOR_WEEKDAY_OPTIONS,
   formatCountdown,
   meetingSubjectName,
   meetingTitle,
@@ -27,6 +28,7 @@ import {
 } from "../lib/readiness";
 import { looseTopics, topicsFor } from "../lib/topics";
 import type { Density } from "./EntitySurface";
+import { cx } from "@/utils/cx";
 
 type MeetingTab = "plan" | "notes" | "settings";
 
@@ -116,9 +118,12 @@ export function MeetingProfile({
       <Tabs
         selectedKey={tab}
         onSelectionChange={(key) => setSection(key as MeetingTab)}
-        className="scrollbar-hide shrink-0 overflow-x-auto border-b border-stone-200 px-3 dark:border-stone-800"
+        className={cx(
+          "scrollbar-hide shrink-0 overflow-x-auto dark:border-stone-800",
+          density === "focus" ? "px-6" : "px-4"
+        )}
       >
-        <TabList type="underline" size="sm" items={MEETING_TABS}>
+        <TabList type="underline" size="sm" items={MEETING_TABS} className="gap-4">
           {(t) => (
             <TabItem
               id={t.id}
@@ -246,6 +251,37 @@ function MeetingSettings({
             }
           />
         )}
+        {meeting.rhythm !== "as_needed" && (
+          <NativeSelect
+            size="md"
+            label="Usually on"
+            hint="Projected dates snap here. Leave unset to echo the last logged date."
+            value={
+              meeting.anchorWeekday !== undefined
+                ? String(meeting.anchorWeekday)
+                : ""
+            }
+            onChange={(e) =>
+              onChange({
+                anchorWeekday: e.target.value
+                  ? Number(e.target.value)
+                  : undefined,
+              })
+            }
+            options={[
+              { label: "Not set", value: "" },
+              ...ANCHOR_WEEKDAY_OPTIONS,
+            ]}
+          />
+        )}
+        <Input
+          size="md"
+          type="date"
+          label="Next one is on"
+          hint="An explicit booking beats the rhythm projection."
+          value={meeting.nextDate ?? ""}
+          onChange={(value) => onChange({ nextDate: value || undefined })}
+        />
         <NativeSelect
           size="md"
           label="My part in it"
