@@ -4,53 +4,30 @@ import type { Manager } from "../types";
 import { Avatar } from "./Avatar";
 import { TintBadge, ProfileAdminLinks, SectionTitle } from "./ui";
 import { ManagerModal } from "./forms";
-import {
-  Tab as TabItem,
-  TabList,
-  Tabs,
-} from "@/components/application/tabs/tabs";
+import { EntityModeTabs } from "./EntityModeTabs";
+import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 
 import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
 import { PrepPanel } from "./PrepPanel";
-import { SessionTable } from "./SessionTable";
-import { TrackerLink } from "./TrackerLink";
+import { SubjectMeetings } from "./SubjectMeetings";
 import { NotesPanel } from "./NotesPanel";
-import { SubjectTopics } from "./SubjectTopics";
-import { meetingFor, type CheckFix } from "../lib/readiness";
+import { meetingFor, todayISO, type CheckFix } from "../lib/readiness";
 import { WinsLedger } from "./WinsLedger";
-import { PrayerIcon, PrayerPanel } from "./Prayer";
+import { PrayerPanel } from "./Prayer";
 import type { Density } from "./EntitySurface";
 import { confirmAction } from "./ConfirmDialog";
 
-type ManagerTab = "manual" | "sessions" | "topics" | "notes" | "prayer";
-
-const MANAGER_TABS: {
-  id: ManagerTab;
-  label: string;
-  icon?: typeof PrayerIcon;
-}[] = [
-  { id: "manual", label: "Leading up" },
-  { id: "sessions", label: "Check-ins" },
-  { id: "topics", label: "Topics" },
-  { id: "notes", label: "Notes" },
-  // Praying for the person you report to is the same act as praying for the
-  // person who reports to you, so it's the same panel.
-  { id: "prayer", label: "Prayer", icon: PrayerIcon },
-];
-
-function isManagerTab(value: string | null): value is ManagerTab {
-  return MANAGER_TABS.some((t) => t.id === value);
-}
-
 /**
- * Side panel for a leader I report to. Managers carry no assessments or goals —
- * developing them isn't my job — but everything about *the relationship* works
- * the same as leading down: a tracked check-in, its history, a topic board and
- * notes. Those share the person tables, keyed by the manager's id.
+ * Side panel for a leader I report to, in the five modes every entity shares.
+ *
+ * Managers carry no assessments or goals — developing them isn't my job — but
+ * everything about *the relationship* works the same as leading down: a
+ * tracked check-in with a board and a history, notes, prayer. Those share the
+ * person tables, keyed by the manager's id.
  *
  * What's unique upward is the operating manual and the wins banked in their
- * currency, which is why those lead rather than a profile.
+ * currency, which is why Profile is titled "Leading up".
  */
 export function ManagerProfile({
   manager,
@@ -64,9 +41,8 @@ export function ManagerProfile({
     meetings,
     sessions,
     notes,
-    addSession,
     trackMeeting,
-    openSession,
+    addSession,
     section,
     setSection,
     selectManager,
@@ -79,6 +55,7 @@ export function ManagerProfile({
 
   const domain = domains.find((d) => d.id === manager.domainId);
   const [editing, setEditing] = useState(false);
+  const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
 
   const checkIn = meetingFor(meetings, "manager", manager.id);
   const mySessions = sessions
@@ -89,45 +66,24 @@ export function ManagerProfile({
   const lastSession = mySessions.find((o) => o.notes?.trim());
   const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
-  // The active tab is a URL sub-page, same as a person's — a check-in history
-  // with your boss is a link you can come back to.
-  const tab: ManagerTab = isManagerTab(section) ? section : "manual";
-  const setTab = (next: ManagerTab) =>
-    setSection(next === "manual" ? null : next);
+  const mode = entityMode(section);
+  const setMode = (next: EntityMode) => setSection(modeSection(next));
 
   useEffect(() => {
     setEditing(false);
+    setFocusSessionId(undefined);
   }, [manager.id]);
 
-  /**
-   * Logging a check-in for an untracked manager starts tracking it as-needed,
-   * same bargain as a 1:1: you get the history without being measured, and
-   * setting a rhythm stays the explicit opt-in.
-   */
-  const startNewSession = () => {
-    setTab("sessions");
-    const meetingId =
-      checkIn?.id ?? trackMeeting("manager", manager.id, "as_needed");
-    openSession(
-      addSession({
-        meetingId,
-        date: new Date().toISOString().slice(0, 10),
-      })
-    );
-  };
-
-  /** Send a failing readiness check to wherever it actually gets fixed. */
+  /** Send a failing readiness check to Meetings, where all of it now lives. */
   const goFix = (fix: CheckFix, sessionRowId?: string) => {
-    if (fix === "writeUp" && sessionRowId) {
-      setTab("sessions");
-      openSession(sessionRowId);
-      return;
-    }
     if (fix === "book") {
-      startNewSession();
-      return;
+      const meetingId =
+        checkIn?.id ?? trackMeeting("manager", manager.id, "as_needed");
+      setFocusSessionId(addSession({ meetingId, date: todayISO() }));
+    } else {
+      setFocusSessionId(fix === "writeUp" ? sessionRowId : undefined);
     }
-    setTab("topics");
+    setMode("meetings");
   };
 
   useEffect(() => {
@@ -141,17 +97,13 @@ export function ManagerProfile({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [modal, askAIOpen, settingsOpen, editing, selectManager]);
 
-  const pad = "p-6";
-
   return (
     <aside
       className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900"
-      data-manager-tab={tab}
+      data-manager-mode={mode}
     >
-      {/* Header — identity only; session/topic create lives in their tabs */}
-      <div
-        className={`entity-header shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
-      >
+      {/* Header — identity only; everything else lives in a mode */}
+      <div className="entity-header shrink-0 border-b border-stone-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:border-stone-800 dark:bg-stone-900/90">
         <div className="flex items-start gap-3">
           <Avatar name={manager.name} photo={manager.photo} size={52} />
           <div className="min-w-0 flex-1">
@@ -172,45 +124,47 @@ export function ManagerProfile({
         </div>
       </div>
 
-      {/* Internal tabs — navigation only; sections render below */}
-      <Tabs
-        selectedKey={tab}
-        onSelectionChange={(key) => setTab(key as (typeof MANAGER_TABS)[number]["id"])}
-        className="shrink-0 overflow-x-auto scrollbar-hide border-b border-stone-200 px-3 dark:border-stone-800"
-      >
-        <TabList type="underline" size="sm" items={MANAGER_TABS}>
-          {(t) => (
-            <TabItem
-              id={t.id}
-              label={t.label}
-              icon={t.icon}
-              badge={
-                t.id === "sessions" && mySessions.length > 0
-                  ? mySessions.length
-                  : t.id === "notes" && myNotes.length > 0
-                    ? myNotes.length
-                    : undefined
-              }
-            />
-          )}
-        </TabList>
-      </Tabs>
+      <EntityModeTabs
+        subject="manager"
+        mode={mode}
+        onMode={setMode}
+        counts={{ meetings: mySessions.length, notes: myNotes.length }}
+      />
 
-      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
-        {tab === "manual" && (
-          <div className={`flex flex-col gap-6 ${pad}`}>
+      {/* A container query, not a viewport one: the panel is resizable, so the
+          layout has to answer to how wide *it* is. */}
+      <div className="scroll-contain @container relative min-h-0 flex-1 overflow-y-auto">
+        {mode === "now" && (
+          <div className="grid min-w-0 gap-6 p-4 sm:p-6 @3xl:grid-cols-2 @3xl:items-start">
             <PrepPanel
               subjectKind="manager"
               subjectId={manager.id}
               subjectName={manager.name}
               onFix={goFix}
             />
+            <WinsLedger subjectId={manager.id} />
+          </div>
+        )}
+
+        {mode === "meetings" && (
+          <div className="p-4 sm:p-6">
+            <SubjectMeetings
+              subjectKind="manager"
+              subjectId={manager.id}
+              subjectName={manager.name}
+              direction="up"
+              focusSessionId={focusSessionId}
+            />
+          </div>
+        )}
+
+        {mode === "profile" && (
+          <div className="flex flex-col gap-6 p-4 sm:p-6">
             <LeadUpManual
               key={manager.id}
               subject={manager}
               onChange={(patch) => updateManagerLeadUp(manager.id, patch)}
             />
-            <WinsLedger subjectId={manager.id} />
             <section className="space-y-2">
               <SectionTitle>AI coach</SectionTitle>
               <AICoach manager={manager} />
@@ -231,45 +185,8 @@ export function ManagerProfile({
           </div>
         )}
 
-        {tab === "sessions" && (
-          <div className={`space-y-3 ${pad}`}>
-            {/* If the check-in notes already live in a doc, that link is the
-                first thing you want here — not a list of empty rows. */}
-            <TrackerLink subjectKind="manager" subjectId={manager.id} />
-            {checkIn ? (
-              <SessionTable
-                meetingId={checkIn.id}
-                onOpen={openSession}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={startNewSession}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-              >
-                + Log a check-in with {manager.name.split(" ")[0]}
-                <div className="mt-1 text-xs">
-                  Starts tracking it as-needed — set a rhythm when you want it
-                  measured
-                </div>
-              </button>
-            )}
-          </div>
-        )}
-
-        {tab === "topics" && (
-          <div className={`space-y-3 ${pad}`}>
-            <SubjectTopics
-              subjectKind="manager"
-              subjectId={manager.id}
-              subjectName={manager.name}
-              direction="up"
-            />
-          </div>
-        )}
-
-        {tab === "notes" && (
-          <div className={pad}>
+        {mode === "notes" && (
+          <div className="p-4 sm:p-6">
             <NotesPanel
               subjectId={manager.id}
               placeholder="What they said, what they signalled, what to remember…"
@@ -277,14 +194,13 @@ export function ManagerProfile({
           </div>
         )}
 
-        {tab === "prayer" && (
+        {mode === "prayer" && (
           <PrayerPanel
             subjectKind="manager"
             subjectId={manager.id}
             subjectName={manager.name}
           />
         )}
-
       </div>
 
       {editing && (

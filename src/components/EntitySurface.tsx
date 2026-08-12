@@ -1,5 +1,5 @@
-import { Suspense, lazy } from "react";
-import { useStore } from "../store/useStore";
+import { Suspense, lazy, useCallback, useRef, type CSSProperties } from "react";
+import { PANEL_PCT_DEFAULT, useStore } from "../store/useStore";
 import type { Manager, Person, Team, TrackedMeeting } from "../types";
 import { EntityChrome, useEntityTrail } from "./EntityChrome";
 import { useSwipePager } from "@/hooks/use-sheet";
@@ -131,20 +131,97 @@ export function EntityBody({ density }: { density: Density }) {
 }
 
 /**
- * The peek: a ~55% workspace column beside the canvas showing exactly one
+ * The peek: the workspace column beside the canvas, showing exactly one
  * entity. Anything that needs the full viewport gets promoted to focus.
+ *
+ * It is the larger half by default. The canvas answers "who is there"; this
+ * answers "what do I do about them", and that's where the time goes — five
+ * modes of content do not fit in a strip. The divider drags, and where you
+ * leave it is remembered.
  */
 export function PeekPanel() {
   const { trail, prev, next } = useEntityTrail();
+  const panelPct = useStore((s) => s.panelPct);
+  const setPanelPct = useStore((s) => s.setPanelPct);
+  const ref = useRef<HTMLDivElement>(null);
+
   const swipe = useSwipePager({
     onPrev: prev && trail ? () => trail.select(prev.id) : undefined,
     onNext: next && trail ? () => trail.select(next.id) : undefined,
   });
 
+  /**
+   * Drag from the panel's own edge. Measured against the split's box rather
+   * than the window, so the header, the safe-area padding and the bottom bar
+   * can't skew it.
+   */
+  const onHandleDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const split = ref.current?.parentElement;
+      if (!split) return;
+      e.preventDefault();
+      const handle = e.currentTarget;
+      handle.setPointerCapture(e.pointerId);
+
+      const move = (ev: PointerEvent) => {
+        const box = split.getBoundingClientRect();
+        if (box.width <= 0) return;
+        setPanelPct(((box.right - ev.clientX) / box.width) * 100);
+      };
+      const up = () => {
+        handle.releasePointerCapture(e.pointerId);
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    },
+    [setPanelPct]
+  );
+
   return (
-    /* Below lg this is the only surface on screen, so it takes the full width
-       and drops the divider it would otherwise share with the canvas. */
-    <div className="flex min-w-0 flex-1 shrink-0 flex-col bg-white lg:min-w-[30rem] lg:flex-[2.44] lg:border-l lg:border-stone-200 lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:bg-stone-900 dark:lg:border-stone-800 dark:lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]">
+    /* Below lg this is the only surface on screen, so it takes the full width,
+       ignores the stored percentage and drops the divider entirely. */
+    <div
+      ref={ref}
+      style={{ "--peek-w": `${panelPct}%` } as CSSProperties}
+      className="relative flex min-w-0 flex-1 shrink-0 flex-col bg-white lg:w-[var(--peek-w)] lg:min-w-[32rem] lg:flex-none lg:border-l lg:border-stone-200 lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:bg-stone-900 dark:lg:border-stone-800 dark:lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
+    >
+      {/* The divider. Keyboard-resizable too, because a drag handle that only
+          answers to a mouse is a control half the people here can't reach. */}
+      <div
+        role="separator"
+        aria-label="Resize panel"
+        aria-orientation="vertical"
+        aria-valuenow={Math.round(panelPct)}
+        aria-valuemin={35}
+        aria-valuemax={80}
+        tabIndex={0}
+        onPointerDown={onHandleDown}
+        onDoubleClick={() => setPanelPct(PANEL_PCT_DEFAULT)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            setPanelPct(panelPct + 3);
+          } else if (e.key === "ArrowRight") {
+            e.preventDefault();
+            setPanelPct(panelPct - 3);
+          } else if (e.key === "Home") {
+            e.preventDefault();
+            setPanelPct(PANEL_PCT_DEFAULT);
+          }
+        }}
+        title="Drag to resize · double-click to reset"
+        className="group absolute top-0 -left-1.5 z-20 hidden h-full w-3 cursor-col-resize touch-none outline-none lg:block"
+      >
+        <span
+          aria-hidden
+          className="absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-stone-300 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:bg-teal-500 group-focus-visible:opacity-100 dark:bg-stone-600"
+        />
+      </div>
+
       <EntityChrome mode="peek" />
       {/* Swiping sideways pages to the next teammate — the touch equivalent of
           ←/→, which a phone has no way to press. */}

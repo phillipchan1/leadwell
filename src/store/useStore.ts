@@ -154,6 +154,8 @@ type UIState = {
   sessionId: string | null;
   collapsedTeams: string[];
   dark: boolean;
+  /** Entity panel width beside the canvas, as a percentage of the split. */
+  panelPct: number;
   askAIOpen: boolean;
   modal: ModalState;
   settingsOpen: boolean;
@@ -200,6 +202,8 @@ type Store = PersistedData &
     applyRoute: (route: Route) => void;
     toggleTeamCollapsed: (teamId: string) => void;
     toggleDark: () => void;
+    /** Resize the entity panel. Clamped and remembered across sessions. */
+    setPanelPct: (pct: number) => void;
     setAskAIOpen: (open: boolean) => void;
     openModal: (modal: NonNullable<ModalState>) => void;
     closeModal: () => void;
@@ -563,6 +567,24 @@ function initialDark(): boolean {
 }
 
 /**
+ * How wide the entity panel sits beside the canvas, as a percentage of the
+ * split. The panel is the working surface — the canvas is the index — so the
+ * default gives it the larger share, and dragging the divider is remembered.
+ */
+export const PANEL_PCT_DEFAULT = 62;
+export const PANEL_PCT_MIN = 35;
+export const PANEL_PCT_MAX = 80;
+
+export function clampPanelPct(pct: number): number {
+  return Math.min(PANEL_PCT_MAX, Math.max(PANEL_PCT_MIN, Math.round(pct)));
+}
+
+function initialPanelPct(): number {
+  const saved = storage.load<number>("panelPct");
+  return typeof saved === "number" ? clampPanelPct(saved) : PANEL_PCT_DEFAULT;
+}
+
+/**
  * The team in context: the one selected outright, or the team of the person
  * who is. Derived rather than stored so it stays right no matter what order
  * the route and the cloud data arrive in.
@@ -662,6 +684,7 @@ export const useStore = create<Store>((set, get) => ({
   sessionId: null,
   collapsedTeams: [],
   dark: initialDark(),
+  panelPct: initialPanelPct(),
   askAIOpen: false,
   modal: null,
   settingsOpen: false,
@@ -885,6 +908,12 @@ export const useStore = create<Store>((set, get) => ({
     const dark = !get().dark;
     storage.save("dark", dark);
     set({ dark });
+  },
+  setPanelPct: (pct) => {
+    const next = clampPanelPct(pct);
+    if (next === get().panelPct) return;
+    storage.save("panelPct", next);
+    set({ panelPct: next });
   },
   setAskAIOpen: (open) => set({ askAIOpen: open }),
   openModal: (modal) => set({ modal }),

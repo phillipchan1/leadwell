@@ -17,7 +17,7 @@ import { Th } from "./Th";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
-import { MeetingModal } from "./forms";
+import { NewMeetingRow } from "./NewMeetingRow";
 import { SearchLg } from "@untitledui/icons";
 
 type SortKey = "next" | "name" | "planned" | "state";
@@ -139,10 +139,16 @@ export function MeetingsTable() {
               )}
             </p>
           </div>
-          <Button size="sm" onClick={() => setCreating(true)}>
+          <Button
+            size="sm"
+            color={creating ? "secondary" : "primary"}
+            onClick={() => setCreating((v) => !v)}
+          >
             New recurring meeting
           </Button>
         </div>
+
+        {creating && <NewMeetingRow onDone={() => setCreating(false)} />}
 
         <div className="flex flex-wrap gap-2">
           <Input
@@ -274,16 +280,6 @@ export function MeetingsTable() {
           </>
         )}
       </div>
-
-      {creating && (
-        <MeetingModal
-          onClose={() => setCreating(false)}
-          onCreated={(id) => {
-            setCreating(false);
-            selectMeeting(id);
-          }}
-        />
-      )}
     </div>
   );
 }

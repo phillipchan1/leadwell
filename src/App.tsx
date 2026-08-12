@@ -232,7 +232,9 @@ export default function App() {
                 // Horizontal padding is `pad-safe-x`'s alone — `p-4` sets the
                 // same property and lost to it, which flattened every tab
                 // against both screen edges below `sm`.
-                "pad-safe-x flex-[2] py-4 sm:py-6 lg:min-w-[22.5rem]",
+                // The panel owns the width it was given (see PeekPanel); the
+                // canvas takes what's left, down to a floor that still reads.
+                "pad-safe-x min-w-0 flex-1 py-4 sm:py-6 lg:min-w-[18rem]",
                 "[--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]",
                 // The tree pane clips only where it holds the canvas, which
                 // does its own pan/zoom. Below lg it renders an outline — an

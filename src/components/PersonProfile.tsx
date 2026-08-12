@@ -9,35 +9,25 @@ import {
   THEME_DOMAIN,
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "../lib/derive";
-import { meetingFor, type CheckFix } from "../lib/readiness";
+import { meetingFor, todayISO, type CheckFix } from "../lib/readiness";
 import { teamsLedBy } from "../lib/teams";
+import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import {
-  TintBadge,
-  ProgressBar,
-  ProfileAdminLinks,
-  SectionTitle,
-} from "./ui";
+import { TintBadge, ProgressBar, ProfileAdminLinks, SectionTitle } from "./ui";
 import { Input } from "@/components/base/input/input";
-import {
-  Tab as TabItem,
-  TabList,
-  Tabs,
-} from "@/components/application/tabs/tabs";
+import { EntityModeTabs } from "./EntityModeTabs";
 
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
-import { PrayerIcon, PrayerPanel } from "./Prayer";
+import { PrayerPanel } from "./Prayer";
 import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
-import { SessionTable } from "./SessionTable";
-import { TrackerLink } from "./TrackerLink";
-import { SubjectTopics } from "./SubjectTopics";
+import { SubjectMeetings } from "./SubjectMeetings";
 import { NotesPanel } from "./NotesPanel";
 import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
@@ -45,38 +35,15 @@ import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
 import { confirmAction } from "./ConfirmDialog";
 
-type PersonTab = "profile" | "sessions" | "topics" | "notes" | "prayer";
-
-const PERSON_TAB_IDS: PersonTab[] = [
-  "profile",
-  "sessions",
-  "topics",
-  "notes",
-  "prayer",
-];
-
-function isPersonTab(value: string | null): value is PersonTab {
-  return PERSON_TAB_IDS.includes(value as PersonTab);
-}
-
-function personTabs(
-  isLeadUp: boolean
-): { id: PersonTab; label: string; icon?: typeof PrayerIcon }[] {
-  return [
-    { id: "profile", label: isLeadUp ? "Leading up" : "Profile" },
-    { id: "sessions", label: isLeadUp ? "Check-ins" : "1:1s" },
-    { id: "topics", label: "Topics" },
-    { id: "notes", label: "Notes" },
-    // The hand carries the label here — the tab is a different mode, not
-    // another list, and it should look like one before it's read.
-    { id: "prayer", label: "Prayer", icon: PrayerIcon },
-  ];
-}
-
 /**
- * Person panel. Its tabs are sub-pages in the URL, so a teammate's 1:1 history
- * is a link you can send someone. Breadcrumb, teammate pager, close and the
- * promotion to focus live in EntityChrome.
+ * Person panel, in the five modes every entity shares (see lib/entityModes).
+ *
+ * Now is where you stand with them, Meetings is the 1:1 itself, Profile is who
+ * they are, Notes is your record and Prayer is your posture. The mode is a URL
+ * sub-page, so a teammate's 1:1 history stays a link you can send someone.
+ *
+ * Breadcrumb, teammate pager, close and the promotion to focus live in
+ * EntityChrome; this owns content only.
  */
 export function PersonProfile({
   person,
@@ -101,14 +68,13 @@ export function PersonProfile({
     settingsOpen,
     meetings,
     sessions,
-    addSession,
-    trackMeeting,
-    openSession,
     goals,
     addGoal,
     updateGoal,
     deleteGoal,
     notes,
+    trackMeeting,
+    addSession,
   } = useStore();
 
   const team = teams.find((t) => t.id === person.teamId);
@@ -130,27 +96,25 @@ export function PersonProfile({
     .filter((o) => meeting && o.meetingId === meeting.id)
     .sort((a, b) => b.date.localeCompare(a.date));
   const myGoals = goals.filter((g) => g.personId === person.id);
-  const myNotes = notes
-    .filter((n) => n.personId === person.id)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const myNotes = notes.filter((n) => n.personId === person.id);
 
   const lastSession = mySessions.find((o) => o.notes?.trim());
   const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
-  // The active tab is a URL sub-page, not local state — that's what makes it
-  // linkable. An unknown section falls back to the profile.
-  const tab: PersonTab = isPersonTab(section) ? section : "profile";
-  const setTab = (next: PersonTab) =>
-    setSection(next === "profile" ? null : next);
+  const mode = entityMode(section);
+  const setMode = (next: EntityMode) => setSection(modeSection(next));
 
   const [editingAssessments, setEditingAssessments] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
   const [fillingProfile, setFillingProfile] = useState(false);
   const [newGoal, setNewGoal] = useState("");
+  // Set when a readiness check sends you to Meetings for a specific write-up.
+  const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
 
-  // Editors are per-person; the tab resets itself via the route.
+  // Editors are per-person; the mode resets itself via the route.
   useEffect(() => {
     setFillingProfile(false);
+    setFocusSessionId(undefined);
   }, [person.id]);
 
   useEffect(() => {
@@ -181,46 +145,31 @@ export function PersonProfile({
   ]);
 
   /**
-   * Logging a 1:1 for someone untracked starts tracking it as-needed rather
-   * than refusing: you get the history without being measured, and setting a
-   * rhythm stays the explicit opt-in.
+   * Send a failing readiness check where it gets fixed. Every fix now lands in
+   * Meetings rather than on a full-page editor — the write-up, the agenda and
+   * the commitments are all one mode away, and none of them costs a route.
    */
-  const startNewSession = () => {
-    setTab("sessions");
-    const meetingId =
-      meeting?.id ?? trackMeeting("person", person.id, "as_needed");
-    const id = addSession({
-      meetingId,
-      date: new Date().toISOString().slice(0, 10),
-    });
-    openSession(id);
-  };
-
-  /** Send a failing readiness check to wherever it actually gets fixed. */
   const goFix = (fix: CheckFix, sessionRowId?: string) => {
-    if (fix === "writeUp" && sessionRowId) {
-      setTab("sessions");
-      openSession(sessionRowId);
-      return;
-    }
     if (fix === "book") {
-      startNewSession();
-      return;
+      // Logging for someone untracked starts tracking it as-needed rather than
+      // refusing: you get the history without being measured, and setting a
+      // rhythm stays the explicit opt-in.
+      const meetingId =
+        meeting?.id ?? trackMeeting("person", person.id, "as_needed");
+      setFocusSessionId(addSession({ meetingId, date: todayISO() }));
+    } else {
+      setFocusSessionId(fix === "writeUp" ? sessionRowId : undefined);
     }
-    setTab("topics");
+    setMode("meetings");
   };
-
-  const pad = "p-6";
 
   return (
     <aside
       className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900"
-      data-person-tab={tab}
+      data-person-mode={mode}
     >
       {/* Header */}
-      <div
-        className={`entity-header shrink-0 border-b border-stone-200 bg-white/90 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90 ${pad}`}
-      >
+      <div className="entity-header shrink-0 border-b border-stone-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:border-stone-800 dark:bg-stone-900/90">
         <div className="flex items-start gap-3">
           <Avatar
             name={person.name}
@@ -237,7 +186,9 @@ export function PersonProfile({
             </div>
             {led.length > 0 && (
               <div className="entity-header-secondary mt-1 flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-stone-500 dark:text-stone-400">Leads</span>
+                <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                  Leads
+                </span>
                 {led.map((t) => (
                   <button
                     key={t.id}
@@ -265,326 +216,298 @@ export function PersonProfile({
         </div>
       </div>
 
-      {/* Internal tabs — navigation only; sections render below */}
-      <Tabs
-        selectedKey={tab}
-        onSelectionChange={(key) => setTab(key as ReturnType<typeof personTabs>[number]["id"])}
-        className="shrink-0 overflow-x-auto scrollbar-hide border-b border-stone-200 px-3 dark:border-stone-800"
-      >
-        <TabList type="underline" size="sm" items={personTabs(isLeadUp)}>
-          {(t) => (
-            <TabItem
-              id={t.id}
-              label={t.label}
-              icon={t.icon}
-              badge={
-                t.id === "sessions" && mySessions.length > 0
-                  ? mySessions.length
-                  : t.id === "notes" && myNotes.length > 0
-                    ? myNotes.length
-                    : undefined
-              }
-            />
-          )}
-        </TabList>
-      </Tabs>
+      <EntityModeTabs
+        subject={isLeadUp ? "leadUpPerson" : "person"}
+        mode={mode}
+        onMode={setMode}
+        counts={{
+          meetings: mySessions.length,
+          notes: myNotes.length,
+        }}
+      />
 
-      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
-        {tab === "profile" && isLeadUp && (
-          <div className="flex flex-col gap-6 p-4">
-            {/* Upward, this rates the relationship rather than the person. */}
-            <section className="max-w-sm">
-              <HealthField
-                key={person.id}
-                health={person.health}
-                onLevel={(level) => setHealth("person", person.id, level)}
-                onNote={(note) => setHealthNote("person", person.id, note)}
-                label="Health — my read"
+      {/* A container query, not a viewport one: the panel is resizable, so the
+          layout has to answer to how wide *it* is. */}
+      <div className="scroll-contain @container relative min-h-0 flex-1 overflow-y-auto">
+        {/* ── Now: where we stand, and what I owe them ──────────────────── */}
+        {mode === "now" && (
+          <div className="grid gap-6 p-4 sm:p-6 @3xl:grid-cols-2 @3xl:items-start">
+            <div className="flex min-w-0 flex-col gap-6">
+              {/* My call, not a read of their assessments. */}
+              <section className="max-w-sm">
+                <HealthField
+                  key={person.id}
+                  health={person.health}
+                  onLevel={(level) => setHealth("person", person.id, level)}
+                  onNote={(note) => setHealthNote("person", person.id, note)}
+                  label="Health — my read"
+                />
+              </section>
+
+              <PrepPanel
+                subjectKind="person"
+                subjectId={person.id}
+                subjectName={person.name}
+                onFix={goFix}
               />
-            </section>
-            <PrepPanel
-              subjectKind="person"
-              subjectId={person.id}
-              subjectName={person.name}
-              onFix={goFix}
-            />
-            <LeadUpManual
-              key={person.id}
-              subject={person}
-              onChange={(patch) => updateLeadUp(person.id, patch)}
-            />
-            <WinsLedger subjectId={person.id} />
-            <section className="space-y-2">
-              <SectionTitle>AI coach</SectionTitle>
-              <AICoach person={person} />
-            </section>
-            <ProfileAdminLinks
-              onEdit={() => setEditingPerson(true)}
-              onRemove={async () => {
-                if (
-                  await confirmAction({
-                    title: `Remove ${person.name}?`,
-                    body: "Their profile, notes and 1:1 history are removed.",
-                    confirmLabel: "Remove",
-                  })
-                )
-                  deletePerson(person.id);
-              }}
-            />
-          </div>
-        )}
+            </div>
 
-        {tab === "profile" && !isLeadUp && (
-          <div className="flex flex-col gap-6 p-4">
-            {/* How they're doing — my call, not a read of their assessments. */}
-            <section className="max-w-sm">
-              <HealthField
-                key={person.id}
-                health={person.health}
-                onLevel={(level) => setHealth("person", person.id, level)}
-                onNote={(note) => setHealthNote("person", person.id, note)}
-                label="Health — my read"
-              />
-            </section>
-            <PrepPanel
-              subjectKind="person"
-              subjectId={person.id}
-              subjectName={person.name}
-              onFix={goFix}
-            />
-            <section className="space-y-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <SectionTitle>Assessment profile</SectionTitle>
-                {hasRead && (
-                  <Button
-                    size="sm"
-                    color="link-color"
-                    onClick={() => setEditingAssessments(true)}
-                  >
-                    Edit assessments
-                  </Button>
-                )}
-              </div>
-              {!hasRead ? (
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setFillingProfile(true)}
-                    className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-                  >
-                    ✨ AI fill from a brain dump
-                    <div className="mt-1 text-xs">
-                      Free text or guided mapping → traits & modalities
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setEditingAssessments(true)}
-                    className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-                  >
-                    Or enter assessments manually
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {top5.length > 0 && (
-                    <div>
-                      <ol className="flex flex-wrap gap-1.5">
-                        {top5.map((t, i) => (
-                          <li
-                            key={t}
-                            className="rounded-full px-2.5 py-1 text-xs font-medium text-white"
-                            style={{
-                              backgroundColor: DOMAIN_COLOR[THEME_DOMAIN[t]],
-                            }}
-                          >
-                            {i + 1}. {t}
-                          </li>
-                        ))}
-                      </ol>
-                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                        {DOMAINS.map((d) => (
-                          <span
-                            key={d}
-                            className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
-                          >
-                            <span
-                              className="h-1.5 w-1.5 rounded-full"
-                              style={{ backgroundColor: DOMAIN_COLOR[d] }}
-                            />
-                            {d}
-                          </span>
-                        ))}
+            <div className="flex min-w-0 flex-col gap-6">
+            {!isLeadUp && (
+              <section className="space-y-2">
+                <SectionTitle>Goals & progress</SectionTitle>
+                <div className="space-y-2.5">
+                  {myGoals.map((g) => (
+                    <div key={g.id} className="group">
+                      <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+                        <span className="flex-1">{g.title}</span>
+                        <span className="text-xs text-stone-500 dark:text-stone-400">
+                          {Math.round(g.progress)}%
+                        </span>
+                        <ButtonUtility
+                          size="xs"
+                          color="tertiary"
+                          icon={X}
+                          tooltip="Delete goal"
+                          className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                          onClick={() => deleteGoal(g.id)}
+                        />
                       </div>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 gap-2">
-                    {enn && (
-                      <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                        <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
-                          Enneagram
-                        </div>
-                        <div className="text-sm font-semibold">
-                          {person.assessments.enneagram}
-                        </div>
-                        <div className="text-xs text-stone-500">{enn.name}</div>
-                      </div>
-                    )}
-                    {mbtiKey && MBTI[mbtiKey] && (
-                      <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                        <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
-                          MBTI
-                        </div>
-                        <div className="text-sm font-semibold">{mbtiKey}</div>
-                        <div className="text-xs text-stone-500">
-                          {MBTI[mbtiKey].split("—")[0].trim()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {customMods.length > 0 && (
-                    <div className="space-y-2">
-                      {customMods.map((m) => (
-                        <div
-                          key={m.id}
-                          className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
-                        >
-                          <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
-                            {m.name}
-                            {m.source !== "self-report" && (
-                              <span className="ml-1.5 font-normal normal-case tracking-normal">
-                                · {m.source}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-sm font-semibold">{m.result}</div>
-                          {m.notes && (
-                            <div className="mt-0.5 text-xs text-stone-500">
-                              {m.notes}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {(read.strengths.length > 0 || read.watchOuts.length > 0) && (
-                    <div className="space-y-2">
-                      {read.strengths.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {read.strengths.map((s) => (
-                            <Badge key={s} size="sm" color="success">
-                              {s}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {read.watchOuts.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {read.watchOuts.map((s) => (
-                            <Badge key={s} size="sm" color="warning">
-                              ⚠ {s}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {person.howToLead && (
-                    <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-400">
-                      <span className="font-medium text-teal-700 dark:text-teal-400">
-                        How to lead:{" "}
-                      </span>
-                      {person.howToLead}
-                    </div>
-                  )}
-                  {!hasAssessments &&
-                    customMods.length === 0 &&
-                    (read.strengths.length > 0 ||
-                      read.watchOuts.length > 0 ||
-                      person.howToLead) && (
-                      <Button
-                        size="sm"
-                        color="link-color"
-                        onClick={() => setEditingAssessments(true)}
-                      >
-                        + Add formal assessments or other modalities
-                      </Button>
-                    )}
-                </>
-              )}
-            </section>
-
-            <section className="space-y-2">
-              <SectionTitle>Goals & progress</SectionTitle>
-              <div className="space-y-2.5">
-                {myGoals.map((g) => (
-                  <div key={g.id} className="group">
-                    <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                      <span className="flex-1">{g.title}</span>
-                      <span className="text-xs text-stone-500 dark:text-stone-400">
-                        {Math.round(g.progress)}%
-                      </span>
-                      <ButtonUtility
-                        size="xs"
-                        color="tertiary"
-                        icon={X}
-                        tooltip="Delete goal"
-                        className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                        onClick={() => deleteGoal(g.id)}
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={g.progress}
+                        onChange={(e) =>
+                          updateGoal(g.id, { progress: Number(e.target.value) })
+                        }
+                        className="goal-range mb-0.5 w-full"
                       />
+                      <ProgressBar value={g.progress} />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={g.progress}
-                      onChange={(e) =>
-                        updateGoal(g.id, { progress: Number(e.target.value) })
-                      }
-                      className="goal-range mb-0.5 w-full"
-                    />
-                    <ProgressBar value={g.progress} />
-                  </div>
-                ))}
-              </div>
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newGoal.trim()) return;
-                  addGoal({
-                    personId: person.id,
-                    title: newGoal.trim(),
-                    progress: 0,
-                  });
-                  setNewGoal("");
-                }}
-              >
-                {/* Implicit submit via the return key is undiscoverable on a
-                    touch keyboard, so the action is visible. */}
-                <div className="flex items-center gap-2">
+                  ))}
+                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newGoal.trim()) return;
+                    addGoal({
+                      personId: person.id,
+                      title: newGoal.trim(),
+                      progress: 0,
+                    });
+                    setNewGoal("");
+                  }}
+                >
                   <Input
                     size="md"
-                    className="flex-1"
-                    placeholder="Add a goal…"
+                    placeholder="Add a goal… ↵"
                     value={newGoal}
                     onChange={setNewGoal}
                     enterKeyHint="done"
                   />
-                  <Button
-                    type="submit"
-                    size="md"
-                    color="secondary"
-                    isDisabled={!newGoal.trim()}
-                  >
-                    Add
-                  </Button>
+                </form>
+              </section>
+            )}
+
+            {isLeadUp && <WinsLedger subjectId={person.id} />}
+            </div>
+          </div>
+        )}
+
+        {/* ── Meetings: plan and history, together ──────────────────────── */}
+        {mode === "meetings" && (
+          <div className="p-4 sm:p-6">
+            <SubjectMeetings
+              subjectKind="person"
+              subjectId={person.id}
+              subjectName={person.name}
+              direction={isLeadUp ? "up" : "down"}
+              focusSessionId={focusSessionId}
+            />
+          </div>
+        )}
+
+        {/* ── Profile: who they are, and how to lead them ───────────────── */}
+        {mode === "profile" && (
+          <div className="flex flex-col gap-6 p-4 sm:p-6">
+            {isLeadUp ? (
+              <LeadUpManual
+                key={person.id}
+                subject={person}
+                onChange={(patch) => updateLeadUp(person.id, patch)}
+              />
+            ) : (
+              <section className="space-y-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <SectionTitle>Assessment profile</SectionTitle>
+                  {hasRead && (
+                    <Button
+                      size="sm"
+                      color="link-color"
+                      onClick={() => setEditingAssessments(true)}
+                    >
+                      Edit assessments
+                    </Button>
+                  )}
                 </div>
-              </form>
-            </section>
+                {!hasRead ? (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setFillingProfile(true)}
+                      className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-400"
+                    >
+                      ✨ AI fill from a brain dump
+                      <div className="mt-1 text-xs">
+                        Free text or guided mapping → traits & modalities
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setEditingAssessments(true)}
+                      className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-500 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-400"
+                    >
+                      Or enter assessments manually
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {top5.length > 0 && (
+                      <div>
+                        <ol className="flex flex-wrap gap-1.5">
+                          {top5.map((t, i) => (
+                            <li
+                              key={t}
+                              className="rounded-full px-2.5 py-1 text-xs font-medium text-white"
+                              style={{
+                                backgroundColor: DOMAIN_COLOR[THEME_DOMAIN[t]],
+                              }}
+                            >
+                              {i + 1}. {t}
+                            </li>
+                          ))}
+                        </ol>
+                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                          {DOMAINS.map((d) => (
+                            <span
+                              key={d}
+                              className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                            >
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ backgroundColor: DOMAIN_COLOR[d] }}
+                              />
+                              {d}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
+                      {enn && (
+                        <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
+                          <div className="text-[10px] tracking-wider text-stone-500 uppercase dark:text-stone-400">
+                            Enneagram
+                          </div>
+                          <div className="text-sm font-semibold">
+                            {person.assessments.enneagram}
+                          </div>
+                          <div className="text-xs text-stone-500">
+                            {enn.name}
+                          </div>
+                        </div>
+                      )}
+                      {mbtiKey && MBTI[mbtiKey] && (
+                        <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
+                          <div className="text-[10px] tracking-wider text-stone-500 uppercase dark:text-stone-400">
+                            MBTI
+                          </div>
+                          <div className="text-sm font-semibold">{mbtiKey}</div>
+                          <div className="text-xs text-stone-500">
+                            {MBTI[mbtiKey].split("—")[0].trim()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {customMods.length > 0 && (
+                      <div className="space-y-2">
+                        {customMods.map((m) => (
+                          <div
+                            key={m.id}
+                            className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
+                          >
+                            <div className="text-[10px] tracking-wider text-stone-500 uppercase dark:text-stone-400">
+                              {m.name}
+                              {m.source !== "self-report" && (
+                                <span className="ml-1.5 font-normal tracking-normal normal-case">
+                                  · {m.source}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm font-semibold">
+                              {m.result}
+                            </div>
+                            {m.notes && (
+                              <div className="mt-0.5 text-xs text-stone-500">
+                                {m.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(read.strengths.length > 0 || read.watchOuts.length > 0) && (
+                      <div className="space-y-2">
+                        {read.strengths.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {read.strengths.map((s) => (
+                              <Badge key={s} size="sm" color="success">
+                                {s}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        {read.watchOuts.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {read.watchOuts.map((s) => (
+                              <Badge key={s} size="sm" color="warning">
+                                ⚠ {s}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {person.howToLead && (
+                      <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-400">
+                        <span className="font-medium text-teal-700 dark:text-teal-400">
+                          How to lead:{" "}
+                        </span>
+                        {person.howToLead}
+                      </div>
+                    )}
+                    {!hasAssessments &&
+                      customMods.length === 0 &&
+                      (read.strengths.length > 0 ||
+                        read.watchOuts.length > 0 ||
+                        person.howToLead) && (
+                        <Button
+                          size="sm"
+                          color="link-color"
+                          onClick={() => setEditingAssessments(true)}
+                        >
+                          + Add formal assessments or other modalities
+                        </Button>
+                      )}
+                  </>
+                )}
+              </section>
+            )}
 
             <section className="space-y-2">
               <SectionTitle>AI coach</SectionTitle>
               <AICoach person={person} />
             </section>
+
             <ProfileAdminLinks
               onEdit={() => setEditingPerson(true)}
               onRemove={async () => {
@@ -601,58 +524,21 @@ export function PersonProfile({
           </div>
         )}
 
-        {tab === "sessions" && (
-          <div className="space-y-3 p-4">
-            {/* Where the notes live comes first: if they're in Notion or a
-                Word doc, that's the answer to "open our 1:1", not this list. */}
-            <TrackerLink subjectKind="person" subjectId={person.id} />
-            {meeting ? (
-              <SessionTable
-                meetingId={meeting.id}
-                onOpen={openSession}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={startNewSession}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-              >
-                + Log a {isLeadUp ? "check-in" : "1:1"} with{" "}
-                {person.name.split(" ")[0]}
-                <div className="mt-1 text-xs">
-                  Starts tracking it as-needed — set a rhythm when you want it
-                  measured
-                </div>
-              </button>
-            )}
-          </div>
-        )}
-
-        {tab === "topics" && (
-          <div className="space-y-3 p-4">
-            <SubjectTopics
-              subjectKind="person"
-              subjectId={person.id}
-              subjectName={person.name}
-              direction={isLeadUp ? "up" : "down"}
-            />
-          </div>
-        )}
-
-        {tab === "notes" && (
-          <div className="p-4">
+        {/* ── Notes: my running record ──────────────────────────────────── */}
+        {mode === "notes" && (
+          <div className="flex flex-col gap-6 p-4 sm:p-6">
             <NotesPanel subjectId={person.id} />
+            {isLeadUp && <WinsLedger subjectId={person.id} />}
           </div>
         )}
 
-        {tab === "prayer" && (
+        {mode === "prayer" && (
           <PrayerPanel
             subjectKind="person"
             subjectId={person.id}
             subjectName={person.name}
           />
         )}
-
       </div>
 
       {editingAssessments && (
@@ -673,4 +559,3 @@ export function PersonProfile({
     </aside>
   );
 }
-

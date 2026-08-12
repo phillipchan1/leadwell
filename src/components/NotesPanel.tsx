@@ -28,64 +28,62 @@ export function NotesPanel({
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [composing, setComposing] = useState(false);
   const [draft, setDraft] = useState("");
 
   // Editors are per-subject — switching subjects must not carry a draft over.
   useEffect(() => {
     setEditingId(null);
-    setComposing(false);
     setDraft("");
   }, [subjectId]);
 
+  const save = () => {
+    if (!draft.trim()) return;
+    addNote(subjectId, draft.trim());
+    setDraft("");
+  };
+
   return (
     <div className="flex flex-col gap-3">
-      {!composing && (
-        <button
-          type="button"
-          onClick={() => {
-            setComposing(true);
-            setDraft("");
+      {/* The composer is always here rather than behind a "+ New note" button.
+          Capturing a thought is the whole job of this panel, and a click that
+          only reveals a textarea is a click that stops you having the thought. */}
+      <div className="space-y-2">
+        <WritingPad
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={placeholder}
+          startEditing
+          dualMode={false}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              save();
+            }
           }}
-          className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
-        >
-          + New note
-        </button>
-      )}
-      {composing && (
-        <div className="space-y-2">
-          <WritingPad
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={placeholder}
-            autoFocus={autoFocusUnlessTouch()}
-            startEditing
-            dualMode={false}
-          />
-          <div className="flex justify-end gap-2">
-            <Button
-              size="sm"
-              color="link-gray"
-              onClick={() => setComposing(false)}
-            >
-              Cancel
+        />
+        {draft.trim() && (
+          <div className="flex items-center justify-end gap-2">
+            <Button size="sm" color="link-gray" onClick={() => setDraft("")}>
+              Clear
             </Button>
             <Button
               size="sm"
-              onClick={() => {
-                if (!draft.trim()) return;
-                addNote(subjectId, draft.trim());
-                setDraft("");
-                setComposing(false);
-              }}
+              onClick={save}
+              iconTrailing={
+                <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
+                  ⌘↵
+                </kbd>
+              }
             >
               Save note
             </Button>
           </div>
-        </div>
-      )}
-      {mine.length === 0 && !composing && (
-        <p className="text-center text-xs text-stone-500 dark:text-stone-400">No notes yet.</p>
+        )}
+      </div>
+      {mine.length === 0 && (
+        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+          No notes yet.
+        </p>
       )}
       <ul className="space-y-3">
         {mine.map((n) => (

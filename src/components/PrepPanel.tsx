@@ -54,7 +54,6 @@ export function PrepPanel({
     teams,
     managers,
     trackMeeting,
-    createMeeting,
     setNoMeeting,
   } = useStore();
 
@@ -129,19 +128,6 @@ export function PrepPanel({
           onFix={onFix}
         />
       ))}
-      <Button
-        size="sm"
-        color="link-gray"
-        onClick={() =>
-          createMeeting(subjectKind, subjectId, {
-            rhythm: "monthly",
-            name: `Another ${label}`,
-          })
-        }
-        aria-label={`Track a second recurring meeting with ${firstName}`}
-      >
-        + Another meeting
-      </Button>
     </section>
   );
 }
@@ -328,7 +314,6 @@ function MeetingPrep({
         </div>
       </div>
 
-      <TrackerLink meetingId={meeting.id} />
     </div>
   );
 }

@@ -32,7 +32,9 @@ type MeetingTab = "plan" | "notes" | "settings";
 
 const MEETING_TABS: { id: MeetingTab; label: string }[] = [
   { id: "plan", label: "Plan" },
-  { id: "notes", label: "Notes" },
+  // "History" rather than "Notes": every other entity's Notes mode is a
+  // scratchpad, and this one is the record of what happened.
+  { id: "notes", label: "History" },
   { id: "settings", label: "Settings" },
 ];
 

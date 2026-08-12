@@ -185,7 +185,9 @@ export function TopicBoard({
               key={col.key}
               ref={columnRef(col.key)}
               className={cx(
-                "flex w-[78vw] max-w-[15rem] shrink-0 snap-start flex-col rounded-xl border bg-stone-50/60 sm:w-[11.5rem] dark:bg-stone-950/40",
+                // The panel it lives in is now the wide half of the split, so
+                // a column can hold a phrase on one line instead of four.
+                "flex w-[78vw] max-w-[15rem] shrink-0 snap-start flex-col rounded-xl border bg-stone-50/60 sm:w-[14rem] sm:max-w-none dark:bg-stone-950/40",
                 drag?.over === col.key
                   ? "border-teal-400 bg-teal-50/70 dark:border-teal-600 dark:bg-teal-950/30"
                   : past

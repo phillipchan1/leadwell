@@ -3,6 +3,7 @@ import { useStore } from "../store/useStore";
 import type { Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
 import { hasApiKey, refineTeamMandate } from "../lib/ai";
+import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
 import { TintBadge, ProgressBar, SectionTitle } from "./ui";
@@ -13,11 +14,11 @@ import { TextArea } from "@/components/base/textarea/textarea";
 import { X } from "@untitledui/icons";
 import { AICoach } from "./AICoach";
 import { HealthField } from "./Health";
-import { PrayerIcon, PrayerPanel } from "./Prayer";
+import { PrayerPanel } from "./Prayer";
 import { StatsBar } from "./StatsBar";
 import { PrepPanel } from "./PrepPanel";
-import { SessionTable } from "./SessionTable";
-import { SubjectTopics } from "./SubjectTopics";
+import { SubjectMeetings } from "./SubjectMeetings";
+import { EntityModeTabs } from "./EntityModeTabs";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 
 function today() {
@@ -25,11 +26,17 @@ function today() {
 }
 
 /**
- * Team panel — optimized for the leadership audit loop:
- * mandate → next steps → people → supporting detail.
+ * Team panel, in the five modes every entity shares (see lib/entityModes).
  *
- * Renders at both densities. Breadcrumb, sibling pager, close and the
- * promotion to focus all live in EntityChrome, so this owns content only.
+ * This used to be eleven sections in one scroll — health, prayer, readiness,
+ * sessions, topics, mandate, sub-teams, next steps, people, notes and a
+ * collapsible drawer of goals, stats and AI — with no tab strip at all, while
+ * a person right next to it had five tabs. Same modes now, same order, same
+ * place: Now is the audit loop, Meetings is the standing meeting, Profile is
+ * the charter and the roster, Notes is the record, Prayer is the posture.
+ *
+ * Breadcrumb, sibling pager, close and the promotion to focus all live in
+ * EntityChrome, so this owns content only.
  */
 export function TeamProfile({
   team,
@@ -44,6 +51,7 @@ export function TeamProfile({
     teams,
     people,
     section,
+    setSection,
     selectTeam,
     selectPerson,
     selectedPersonId,
@@ -54,9 +62,8 @@ export function TeamProfile({
     modal,
     askAIOpen,
     meetings,
-    addSession,
     trackMeeting,
-    openSession,
+    addSession,
     teamActions,
     addTeamAction,
     updateTeamAction,
@@ -82,18 +89,6 @@ export function TeamProfile({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [modal, askAIOpen, selectTeam]);
 
-  /**
-   * A team is one scroll rather than a tab strip, so its sub-page is a
-   * destination inside that scroll. `?s=prayer` is what the canvas links to
-   * when you click a team's prayer mark, and this is what makes it land.
-   */
-  useEffect(() => {
-    if (section !== "prayer") return;
-    document
-      .getElementById(`team-prayer-${team.id}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [section, team.id]);
-
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);
   const parent = teams.find((t) => t.id === team.parentId);
@@ -112,37 +107,20 @@ export function TeamProfile({
     .filter((n) => n.teamId === team.id)
     .sort((a, b) => b.date.localeCompare(a.date));
 
+  const mode = entityMode(section);
+  const setMode = (next: EntityMode) => setSection(modeSection(next));
+
   const [name, setName] = useState(team.name);
   const [mandate, setMandate] = useState(team.purpose ?? "");
   const [refining, setRefining] = useState(false);
-
-  const teamMeeting = meetingFor(meetings, "team", team.id);
-
-  /**
-   * Send a failing readiness check where it gets fixed. Teams have no topic
-   * board, so agenda and commitments both land on Next steps below.
-   */
-  const goFix = (fix: CheckFix, sessionRowId?: string) => {
-    if (fix === "writeUp" && sessionRowId) {
-      openSession(sessionRowId);
-      return;
-    }
-    if (fix === "book") {
-      const meetingId =
-        teamMeeting?.id ?? trackMeeting("team", team.id, "as_needed");
-      openSession(addSession({ meetingId, date: today() }));
-      return;
-    }
-    document
-      .getElementById(`team-next-steps-${team.id}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
   const [refineError, setRefineError] = useState<string | null>(null);
   const [newAction, setNewAction] = useState("");
   const [newGoal, setNewGoal] = useState("");
   const [newNote, setNewNote] = useState("");
   const [showDone, setShowDone] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+  const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
+
+  const teamMeeting = meetingFor(meetings, "team", team.id);
 
   // Keep local fields in sync when switching teams.
   useEffect(() => {
@@ -154,8 +132,24 @@ export function TeamProfile({
     setNewGoal("");
     setNewNote("");
     setShowDone(false);
-    setShowMore(false);
+    setFocusSessionId(undefined);
   }, [team.id, team.name, team.purpose]);
+
+  /**
+   * Send a failing readiness check where it gets fixed. Write-ups, the agenda
+   * and the commitments all live in Meetings now, so every check lands there
+   * rather than scattering across sections or a full-page editor.
+   */
+  const goFix = (fix: CheckFix, sessionRowId?: string) => {
+    if (fix === "book") {
+      const meetingId =
+        teamMeeting?.id ?? trackMeeting("team", team.id, "as_needed");
+      setFocusSessionId(addSession({ meetingId, date: today() }));
+    } else {
+      setFocusSessionId(fix === "writeUp" ? sessionRowId : undefined);
+    }
+    setMode("meetings");
+  };
 
   const saveName = () => {
     const next = name.trim();
@@ -199,16 +193,20 @@ export function TeamProfile({
   };
 
   return (
-    <aside className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
-      {/* Header — identity only */}
+    <aside
+      className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900"
+      data-team-mode={mode}
+    >
+      {/* Header — identity only. The name stays editable in place; everything
+          that isn't identity moved into a mode. */}
       <header
-        className="entity-header shrink-0 border-b border-stone-200 px-8 py-4 dark:border-stone-800"
+        className="entity-header shrink-0 border-b border-stone-200 px-4 py-4 sm:px-6 dark:border-stone-800"
         style={{ borderTop: `3px solid ${accent}` }}
       >
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
+        <div>
+          <div className="flex items-center gap-2">
             <input
-              className="w-full rounded-xl bg-stone-50 px-3 py-2 text-2xl font-semibold tracking-tight text-stone-900 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-stone-100/90 focus:bg-stone-50 focus:shadow-[inset_0_0_0_1.5px_rgb(13_148_136/0.35)] dark:bg-stone-950/60 dark:text-stone-100 dark:hover:bg-stone-950 dark:focus:bg-stone-950/80"
+              className="min-w-0 flex-1 rounded-xl bg-stone-50 px-3 py-2 text-2xl font-semibold tracking-tight text-stone-900 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-stone-100/90 focus:bg-stone-50 focus:shadow-[inset_0_0_0_1.5px_rgb(13_148_136/0.35)] dark:bg-stone-950/60 dark:text-stone-100 dark:hover:bg-stone-950 dark:focus:bg-stone-950/80"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={saveName}
@@ -224,255 +222,108 @@ export function TeamProfile({
               }}
               aria-label="Team name"
             />
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
-              {capacity && <TintBadge color={capacity.color}>{capacity.label}</TintBadge>}
-              {team.direction === "up" && (
-                <span className="text-[11px] text-stone-500 dark:text-stone-400">Reports up</span>
-              )}
-            </div>
-            {parent && (
-              <Button
-                size="sm"
-                color="link-gray"
-                className="mt-2"
-                onClick={() => selectTeam(parent.id)}
-              >
-                Under {parent.name}
-              </Button>
-            )}
-            {leader && (
-              <Button
-                size="sm"
-                color="link-gray"
-                className="mt-2 flex"
-                onClick={() => selectPerson(leader.id)}
-                aria-label={`Led by ${leader.name}. They run this team — your job is leading them, not it`}
-              >
-                Led by {leader.name}
-              </Button>
-            )}
+            {/* "Delete" used to sit right beside "Settings" — a mis-tap
+                destroyed the team and every member on it. Deleting lives in
+                the team's settings modal, next to the rest of its admin. */}
+            <Button
+              size="sm"
+              color="secondary"
+              className="shrink-0"
+              onClick={() => openModal({ kind: "team", team })}
+            >
+              Settings
+            </Button>
           </div>
-        </div>
-
-        {/* Pulse strip */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-stone-500">
-          <span>
-            {members.length} {members.length === 1 ? "person" : "people"}
-          </span>
-          <span className="text-stone-400 dark:text-stone-600">·</span>
-          <span>
-            {team.lastMet ? (
-              <>
-                Met{" "}
-                <span className="font-medium text-stone-700 dark:text-stone-400">
-                  {team.lastMet}
-                </span>
-              </>
-            ) : (
-              "Not met yet"
-            )}
-          </span>
-          <Button
-            size="sm"
-            color="link-color"
-            onClick={() => updateTeam(team.id, { lastMet: today() })}
-          >
-            Mark met today
-          </Button>
-          {/* "Delete" used to sit right beside "Settings" — a mis-tap
-              destroyed the team and every member on it. Deleting now lives in
-              the team's settings modal, next to the rest of its admin. */}
-          <Button
-            size="sm"
-            color="link-gray"
-            className="ml-auto"
-            onClick={() => openModal({ kind: "team", team })}
-          >
-            Settings
-          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
+              {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
+              {capacity && (
+                <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
+              )}
+              <span>
+                {members.length} {members.length === 1 ? "person" : "people"}
+              </span>
+              <span className="text-stone-400 dark:text-stone-600">·</span>
+              <span>
+                {team.lastMet ? (
+                  <>
+                    Met{" "}
+                    <span className="font-medium text-stone-700 dark:text-stone-400">
+                      {team.lastMet}
+                    </span>
+                  </>
+                ) : (
+                  "Not met yet"
+                )}
+              </span>
+              {team.direction === "up" && <span>· Reports up</span>}
+            </div>
+          </div>
         </div>
       </header>
 
-      <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
-        <div className="flex flex-col gap-8 px-8 py-5">
-          {/* My read on the team. Not derived from anything below it — the
-              whole point is that it's the call only I can make. */}
-          <section className="max-w-sm">
-            <HealthField
-              key={team.id}
-              health={team.health}
-              onLevel={(level) => setHealth("team", team.id, level)}
-              onNote={(note) => setHealthNote("team", team.id, note)}
-              label="Health — my read"
-            />
-          </section>
+      <EntityModeTabs
+        subject="team"
+        mode={mode}
+        onMode={setMode}
+        counts={{ notes: myNotes.length }}
+      />
 
-          {/* Prayer sits beside health because they're the same kind of
-              thing: not a metric of the team but a record of my own posture
-              toward it. A team has no tab strip to hang this off, so it's a
-              section the canvas can scroll you to (`?s=prayer`). */}
-          <section id={`team-prayer-${team.id}`} className="space-y-3">
-            <div className="flex items-center gap-2">
-              <PrayerIcon className="size-3.5 text-violet-500 dark:text-violet-300" />
-              <SectionTitle>Prayer</SectionTitle>
-            </div>
-            <PrayerPanel
-              key={team.id}
-              subjectKind="team"
-              subjectId={team.id}
-              subjectName={team.name}
-              padded={false}
-            />
-          </section>
+      {/* A container query, not a viewport one: the panel is resizable, so the
+          layout has to answer to how wide *it* is. */}
+      <div className="scroll-contain @container min-h-0 flex-1 overflow-y-auto">
+        {/* ── Now: the audit loop — my read, readiness, what's next ─────── */}
+        {mode === "now" && (
+          <div className="grid gap-6 px-4 py-5 sm:px-6 @3xl:grid-cols-2 @3xl:items-start">
+            <div className="flex min-w-0 flex-col gap-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <section className="min-w-[15rem] max-w-sm flex-1">
+                  <HealthField
+                    key={team.id}
+                    health={team.health}
+                    onLevel={(level) => setHealth("team", team.id, level)}
+                    onNote={(note) => setHealthNote("team", team.id, note)}
+                    label="Health — my read"
+                  />
+                </section>
+                <Button
+                  size="sm"
+                  color="secondary"
+                  onClick={() => updateTeam(team.id, { lastMet: today() })}
+                >
+                  Mark met today
+                </Button>
+              </div>
 
-          {/* Readiness for this team's own standing meeting — separate from
-              the 1:1s with its members, which live on each person. */}
-          <PrepPanel
-            subjectKind="team"
-            subjectId={team.id}
-            subjectName={team.name}
-            onFix={goFix}
-          />
-
-          {teamMeeting && (
-            <section className="space-y-2">
-              <SectionTitle>{teamMeeting.name ?? "Meetings"}</SectionTitle>
-              <SessionTable
-                meetingId={teamMeeting.id}
-                onOpen={openSession}
+              <PrepPanel
+                subjectKind="team"
+                subjectId={team.id}
+                subjectName={team.name}
+                onFix={goFix}
               />
-            </section>
-          )}
-
-          {/* Topics — the same board a 1:1 gets. A staff meeting has an agenda
-              worth scaffolding as much as any 1:1 does; it just never had
-              anywhere to keep one. */}
-          <section className="space-y-2">
-            <SectionTitle>Topics</SectionTitle>
-            <SubjectTopics
-              subjectKind="team"
-              subjectId={team.id}
-              subjectName={team.name}
-            />
-          </section>
-
-          {/* Mandate — always editable, blur to save */}
-          <section>
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <SectionTitle>Mandate</SectionTitle>
-              <Button
-                size="sm"
-                color="link-color"
-                onClick={runRefineMandate}
-                isLoading={refining}
-                showTextWhileLoading
-              >
-                {refining ? "Refining…" : "✦ Refine"}
-              </Button>
             </div>
-            <TextArea
-              size="md"
-              aria-label="Mandate"
-              textAreaClassName={`min-h-[88px] resize-y leading-relaxed ${
-                refining ? "opacity-80" : ""
-              }`}
-              placeholder="What am I responsible to lead this team toward?"
-              value={mandate}
-              onChange={setMandate}
-              onBlur={saveMandate}
-              isReadOnly={refining}
-            />
-            {refineError && (
-              <p className="mt-1.5 text-[11px] text-red-500">{refineError}</p>
-            )}
-          </section>
 
-          {/* Sub-teams — broader purview → specific teams I lead */}
-          {(subTeams.length > 0 || team.direction !== "up") && (
+            <div className="flex min-w-0 flex-col gap-6">
+            {/* Next steps — the reason you opened this panel */}
             <section>
               <div className="mb-2 flex items-baseline justify-between">
-                <SectionTitle>Sub-teams</SectionTitle>
-                {team.direction !== "up" && (
+                <SectionTitle>Next steps</SectionTitle>
+                {doneActions.length > 0 && (
                   <Button
                     size="sm"
-                    color="link-color"
-                    onClick={() =>
-                      openModal({ kind: "team", parentId: team.id })
-                    }
+                    color="link-gray"
+                    onClick={() => setShowDone((v) => !v)}
                   >
-                    + Add
+                    {showDone ? "Hide done" : `${doneActions.length} done`}
                   </Button>
                 )}
               </div>
-              {subTeams.length === 0 ? (
-                <p className="text-xs italic text-stone-500 dark:text-stone-400">
-                  No sub-teams — nest a team you specifically lead under this
-                  broader purview.
-                </p>
-              ) : (
-                <ul className="space-y-1">
-                  {subTeams.map((st) => {
-                    const stCap = capacities.find((c) => c.id === st.capacityId);
-                    const stMembers = people.filter((p) => p.teamId === st.id);
-                    return (
-                      <li key={st.id}>
-                        <button
-                          type="button"
-                          onClick={() => selectTeam(st.id)}
-                          className="flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:border-teal-400 dark:border-stone-800"
-                        >
-                          <span className="truncate font-medium">{st.name}</span>
-                          <span className="shrink-0 text-[11px] text-stone-500 dark:text-stone-400">
-                            {stCap?.label}
-                            {stMembers.length
-                              ? ` · ${stMembers.length}`
-                              : ""}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          )}
-
-          {/* Next steps — the reason you opened this panel */}
-          <section id={`team-next-steps-${team.id}`}>
-            <div className="mb-2 flex items-baseline justify-between">
-              <SectionTitle>Next steps</SectionTitle>
-              {doneActions.length > 0 && (
-                <Button
-                  size="sm"
-                  color="link-gray"
-                  onClick={() => setShowDone((v) => !v)}
-                >
-                  {showDone ? "Hide done" : `${doneActions.length} done`}
-                </Button>
-              )}
-            </div>
-            <ul className="space-y-2">
-              {openActions.map((a) => (
-                <ActionRow
-                  key={a.id}
-                  text={a.text}
-                  done={false}
-                  dueDate={a.dueDate}
-                  onToggle={() => toggleTeamAction(a.id)}
-                  onCommit={(text) => {
-                    if (!text) deleteTeamAction(a.id);
-                    else if (text !== a.text) updateTeamAction(a.id, { text });
-                  }}
-                  onDelete={() => deleteTeamAction(a.id)}
-                />
-              ))}
-              {showDone &&
-                doneActions.map((a) => (
+              <ul className="space-y-2">
+                {openActions.map((a) => (
                   <ActionRow
                     key={a.id}
                     text={a.text}
-                    done
+                    done={false}
                     dueDate={a.dueDate}
                     onToggle={() => toggleTeamAction(a.id)}
                     onCommit={(text) => {
@@ -482,103 +333,308 @@ export function TeamProfile({
                     onDelete={() => deleteTeamAction(a.id)}
                   />
                 ))}
-            </ul>
-            <form
-              className="mt-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!newAction.trim()) return;
-                addTeamAction(team.id, newAction.trim());
-                setNewAction("");
-              }}
-            >
-              <div className="flex items-center gap-3 rounded-xl border border-dashed border-stone-300 bg-stone-50/40 px-3 py-2.5 dark:border-stone-700 dark:bg-stone-950/30">
-                <span
-                  className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-dashed border-stone-300 dark:border-stone-600"
-                  aria-hidden
-                />
-                <input
-                  className="min-w-0 flex-1 bg-transparent text-[0.95rem] leading-snug text-stone-700 outline-none placeholder:text-stone-400 dark:text-stone-200"
-                  placeholder="Add a to-do…"
-                  value={newAction}
-                  onChange={(e) => setNewAction(e.target.value)}
-                />
-              </div>
-            </form>
-          </section>
-
-          {/* People */}
-          <section>
-            <div className="mb-2 flex items-baseline justify-between">
-              <SectionTitle>People</SectionTitle>
-              <Button
-                size="sm"
-                color="link-color"
-                onClick={() => openModal({ kind: "person", teamId: team.id })}
-              >
-                + Add
-              </Button>
-            </div>
-            {members.length === 0 ? (
-              <p className="text-sm text-stone-500 dark:text-stone-400">No one on this team yet.</p>
-            ) : (
-              <ul className="divide-y divide-stone-100 dark:divide-stone-800">
-                {members.map((p) => {
-                  const active = p.id === selectedPersonId;
-                  return (
-                    <li key={p.id}>
-                      <button
-                        className={`flex w-full items-center gap-3 py-2.5 text-left transition-colors ${
-                          active
-                            ? "bg-teal-50 dark:bg-teal-950/40"
-                            : "hover:bg-stone-50 dark:hover:bg-stone-800/40"
-                        }`}
-                        onClick={() => selectPerson(p.id)}
-                        aria-current={active ? "true" : undefined}
-                      >
-                        <Avatar
-                          name={p.name}
-                          photo={p.photo}
-                          size={32}
-                          dimmed={!hasLeadershipRead(p)}
-                          ring={active ? accent : undefined}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div
-                            className={`truncate text-sm font-medium ${
-                              active ? "text-teal-800 dark:text-teal-200" : ""
-                            }`}
-                          >
-                            {p.name}
-                          </div>
-                          {p.role && (
-                            <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
-                              {p.role}
-                            </div>
-                          )}
-                        </div>
-                        <span
-                          className={
-                            active
-                              ? "text-teal-600 dark:text-teal-400"
-                              : "text-stone-400 dark:text-stone-500"
-                          }
-                        >
-                          ›
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
+                {showDone &&
+                  doneActions.map((a) => (
+                    <ActionRow
+                      key={a.id}
+                      text={a.text}
+                      done
+                      dueDate={a.dueDate}
+                      onToggle={() => toggleTeamAction(a.id)}
+                      onCommit={(text) => {
+                        if (!text) deleteTeamAction(a.id);
+                        else if (text !== a.text)
+                          updateTeamAction(a.id, { text });
+                      }}
+                      onDelete={() => deleteTeamAction(a.id)}
+                    />
+                  ))}
               </ul>
-            )}
-          </section>
+              <form
+                className="mt-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newAction.trim()) return;
+                  addTeamAction(team.id, newAction.trim());
+                  setNewAction("");
+                }}
+              >
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-stone-300 bg-stone-50/40 px-3 py-2.5 dark:border-stone-700 dark:bg-stone-950/30">
+                  <span
+                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-dashed border-stone-300 dark:border-stone-600"
+                    aria-hidden
+                  />
+                  <input
+                    className="min-w-0 flex-1 bg-transparent text-[0.95rem] leading-snug text-stone-700 outline-none placeholder:text-stone-400 dark:text-stone-200"
+                    placeholder="Add a to-do… ↵"
+                    value={newAction}
+                    onChange={(e) => setNewAction(e.target.value)}
+                  />
+                </div>
+              </form>
+            </section>
 
-          {/* Notes */}
-          <section>
-            <SectionTitle>Notes</SectionTitle>
+            {/* Goals sat behind a "Goals, strengths & AI" disclosure nobody
+                opened. Progress against a mandate belongs in Now. */}
+            <section>
+              <SectionTitle>Goals</SectionTitle>
+              <div className="mt-2 space-y-2.5">
+                {myGoals.map((g) => (
+                  <div key={g.id} className="group">
+                    <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+                      <span className="flex-1">{g.title}</span>
+                      <span className="text-xs text-stone-500 dark:text-stone-400">
+                        {Math.round(g.progress)}%
+                      </span>
+                      <ButtonUtility
+                        size="xs"
+                        color="tertiary"
+                        icon={X}
+                        tooltip="Delete goal"
+                        className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                        onClick={() => deleteTeamGoal(g.id)}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={g.progress}
+                      onChange={(e) =>
+                        updateTeamGoal(g.id, {
+                          progress: Number(e.target.value),
+                        })
+                      }
+                      className="goal-range mb-0.5 w-full"
+                    />
+                    <ProgressBar value={g.progress} />
+                  </div>
+                ))}
+              </div>
+              <form
+                className="mt-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newGoal.trim()) return;
+                  addTeamGoal(team.id, newGoal.trim());
+                  setNewGoal("");
+                }}
+              >
+                <Input
+                  size="md"
+                  placeholder="Add a team goal… ↵"
+                  value={newGoal}
+                  onChange={setNewGoal}
+                  enterKeyHint="done"
+                />
+              </form>
+            </section>
+            </div>
+          </div>
+        )}
+
+        {/* ── Meetings: the standing meeting's plan and history ─────────── */}
+        {mode === "meetings" && (
+          <div className="px-4 py-5 sm:px-6">
+            <SubjectMeetings
+              subjectKind="team"
+              subjectId={team.id}
+              subjectName={team.name}
+              focusSessionId={focusSessionId}
+            />
+          </div>
+        )}
+
+        {/* ── Profile: the charter, the roster, the shape ───────────────── */}
+        {mode === "profile" && (
+          <div className="flex flex-col gap-8 px-4 py-5 sm:px-6">
+            <section>
+              <div className="mb-2 flex items-baseline justify-between gap-2">
+                <SectionTitle>Mandate</SectionTitle>
+                <Button
+                  size="sm"
+                  color="link-color"
+                  onClick={runRefineMandate}
+                  isLoading={refining}
+                  showTextWhileLoading
+                >
+                  {refining ? "Refining…" : "✦ Refine"}
+                </Button>
+              </div>
+              <TextArea
+                size="md"
+                aria-label="Mandate"
+                textAreaClassName={`min-h-[88px] resize-y leading-relaxed ${
+                  refining ? "opacity-80" : ""
+                }`}
+                placeholder="What am I responsible to lead this team toward?"
+                value={mandate}
+                onChange={setMandate}
+                onBlur={saveMandate}
+                isReadOnly={refining}
+              />
+              {refineError && (
+                <p className="mt-1.5 text-[11px] text-red-500">{refineError}</p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {parent && (
+                  <Button
+                    size="sm"
+                    color="link-gray"
+                    onClick={() => selectTeam(parent.id)}
+                  >
+                    Under {parent.name}
+                  </Button>
+                )}
+                {leader && (
+                  <Button
+                    size="sm"
+                    color="link-gray"
+                    onClick={() => selectPerson(leader.id)}
+                    aria-label={`Led by ${leader.name}. They run this team — your job is leading them, not it`}
+                  >
+                    Led by {leader.name}
+                  </Button>
+                )}
+              </div>
+            </section>
+
+            {/* People */}
+            <section>
+              <div className="mb-2 flex items-baseline justify-between">
+                <SectionTitle>People</SectionTitle>
+                <Button
+                  size="sm"
+                  color="link-color"
+                  onClick={() => openModal({ kind: "person", teamId: team.id })}
+                >
+                  + Add
+                </Button>
+              </div>
+              {members.length === 0 ? (
+                <p className="text-sm text-stone-500 dark:text-stone-400">
+                  No one on this team yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-stone-100 dark:divide-stone-800">
+                  {members.map((p) => {
+                    const active = p.id === selectedPersonId;
+                    return (
+                      <li key={p.id}>
+                        <button
+                          className={`flex w-full items-center gap-3 py-2.5 text-left transition-colors ${
+                            active
+                              ? "bg-teal-50 dark:bg-teal-950/40"
+                              : "hover:bg-stone-50 dark:hover:bg-stone-800/40"
+                          }`}
+                          onClick={() => selectPerson(p.id)}
+                          aria-current={active ? "true" : undefined}
+                        >
+                          <Avatar
+                            name={p.name}
+                            photo={p.photo}
+                            size={32}
+                            dimmed={!hasLeadershipRead(p)}
+                            ring={active ? accent : undefined}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className={`truncate text-sm font-medium ${
+                                active ? "text-teal-800 dark:text-teal-200" : ""
+                              }`}
+                            >
+                              {p.name}
+                            </div>
+                            {p.role && (
+                              <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                                {p.role}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className={
+                              active
+                                ? "text-teal-600 dark:text-teal-400"
+                                : "text-stone-400 dark:text-stone-500"
+                            }
+                          >
+                            ›
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+
+            {/* Sub-teams — broader purview → specific teams I lead */}
+            {(subTeams.length > 0 || team.direction !== "up") && (
+              <section>
+                <div className="mb-2 flex items-baseline justify-between">
+                  <SectionTitle>Sub-teams</SectionTitle>
+                  {team.direction !== "up" && (
+                    <Button
+                      size="sm"
+                      color="link-color"
+                      onClick={() =>
+                        openModal({ kind: "team", parentId: team.id })
+                      }
+                    >
+                      + Add
+                    </Button>
+                  )}
+                </div>
+                {subTeams.length === 0 ? (
+                  <p className="text-xs italic text-stone-500 dark:text-stone-400">
+                    No sub-teams — nest a team you specifically lead under this
+                    broader purview.
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {subTeams.map((st) => {
+                      const stCap = capacities.find(
+                        (c) => c.id === st.capacityId
+                      );
+                      const stMembers = people.filter((p) => p.teamId === st.id);
+                      return (
+                        <li key={st.id}>
+                          <button
+                            type="button"
+                            onClick={() => selectTeam(st.id)}
+                            className="flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:border-teal-400 dark:border-stone-800"
+                          >
+                            <span className="truncate font-medium">
+                              {st.name}
+                            </span>
+                            <span className="shrink-0 text-[11px] text-stone-500 dark:text-stone-400">
+                              {stCap?.label}
+                              {stMembers.length ? ` · ${stMembers.length}` : ""}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            )}
+
+            <StatsBar people={members} />
+
+            <section>
+              <SectionTitle>AI coach</SectionTitle>
+              <div className="mt-2">
+                <AICoach team={team} />
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* ── Notes ────────────────────────────────────────────────────── */}
+        {mode === "notes" && (
+          <div className="px-4 py-5 sm:px-6">
             <form
-              className="mt-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!newNote.trim()) return;
@@ -588,12 +644,17 @@ export function TeamProfile({
             >
               <Input
                 size="md"
-                placeholder="Capture a team note…"
+                placeholder="Capture a team note… ↵"
                 value={newNote}
                 onChange={setNewNote}
+                enterKeyHint="done"
               />
             </form>
-            {myNotes.length > 0 && (
+            {myNotes.length === 0 ? (
+              <p className="mt-4 text-center text-xs text-stone-500 dark:text-stone-400">
+                No notes yet.
+              </p>
+            ) : (
               <ul className="mt-3 space-y-2">
                 {myNotes.map((n) => (
                   <li
@@ -616,86 +677,17 @@ export function TeamProfile({
                 ))}
               </ul>
             )}
-          </section>
+          </div>
+        )}
 
-          {/* Secondary — goals, strengths, AI */}
-          <section>
-            <button
-              className="flex w-full items-center justify-between rounded-xl border border-stone-200 px-3 py-2.5 text-left text-sm dark:border-stone-800"
-              onClick={() => setShowMore((v) => !v)}
-            >
-              <span className="font-medium text-stone-600 dark:text-stone-400">
-                Goals, strengths & AI
-              </span>
-              <span className="text-stone-500 dark:text-stone-400">{showMore ? "▴" : "▾"}</span>
-            </button>
-            {showMore && (
-              <div className="mt-4 space-y-6">
-                <div>
-                  <SectionTitle>Goals</SectionTitle>
-                  <div className="mt-2 space-y-2.5">
-                    {myGoals.map((g) => (
-                      <div key={g.id} className="group">
-                        <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                          <span className="flex-1">{g.title}</span>
-                          <span className="text-xs text-stone-500 dark:text-stone-400">
-                            {Math.round(g.progress)}%
-                          </span>
-                          <ButtonUtility
-                            size="xs"
-                            color="tertiary"
-                            icon={X}
-                            tooltip="Delete goal"
-                            className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                            onClick={() => deleteTeamGoal(g.id)}
-                          />
-                        </div>
-                        <input
-                          type="range"
-                          min={0}
-                          max={100}
-                          value={g.progress}
-                          onChange={(e) =>
-                            updateTeamGoal(g.id, {
-                              progress: Number(e.target.value),
-                            })
-                          }
-                          className="goal-range mb-0.5 w-full"
-                        />
-                        <ProgressBar value={g.progress} />
-                      </div>
-                    ))}
-                  </div>
-                  <form
-                    className="mt-2"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (!newGoal.trim()) return;
-                      addTeamGoal(team.id, newGoal.trim());
-                      setNewGoal("");
-                    }}
-                  >
-                    <Input
-                      size="md"
-                      placeholder="Add a team goal…"
-                      value={newGoal}
-                      onChange={setNewGoal}
-                    />
-                  </form>
-                </div>
-
-                <StatsBar people={members} />
-
-                <div>
-                  <SectionTitle>AI coach</SectionTitle>
-                  <div className="mt-2">
-                    <AICoach team={team} />
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-        </div>
+        {mode === "prayer" && (
+          <PrayerPanel
+            key={team.id}
+            subjectKind="team"
+            subjectId={team.id}
+            subjectName={team.name}
+          />
+        )}
       </div>
     </aside>
   );
@@ -759,7 +751,7 @@ function ActionRow({
           rows={1}
           className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none ${
             done
-              ? "text-stone-500 dark:text-stone-400 line-through decoration-stone-300"
+              ? "text-stone-500 line-through decoration-stone-300 dark:text-stone-400"
               : "text-stone-800 dark:text-stone-100"
           }`}
           value={value}
@@ -773,11 +765,13 @@ function ActionRow({
           }}
         />
         {dueDate && (
-          <div className="pt-0.5 text-[11px] text-stone-500 dark:text-stone-400">Due {dueDate}</div>
+          <div className="pt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+            Due {dueDate}
+          </div>
         )}
       </div>
       <button
-        className="mt-0.5 rounded-md px-1.5 py-0.5 text-sm text-stone-400 dark:text-stone-500 opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/40"
+        className="mt-0.5 rounded-md px-1.5 py-0.5 text-sm text-stone-400 opacity-0 transition-opacity touch:opacity-100 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-950/40"
         aria-label="Delete"
         onClick={onDelete}
       >
