@@ -17,6 +17,7 @@ import { PrayerIcon, PrayerPanel } from "./Prayer";
 import { StatsBar } from "./StatsBar";
 import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
+import { SubjectTopics } from "./SubjectTopics";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 
 function today() {
@@ -343,6 +344,18 @@ export function TeamProfile({
               />
             </section>
           )}
+
+          {/* Topics — the same board a 1:1 gets. A staff meeting has an agenda
+              worth scaffolding as much as any 1:1 does; it just never had
+              anywhere to keep one. */}
+          <section className="space-y-2">
+            <SectionTitle>Topics</SectionTitle>
+            <SubjectTopics
+              subjectKind="team"
+              subjectId={team.id}
+              subjectName={team.name}
+            />
+          </section>
 
           {/* Mandate — always editable, blur to save */}
           <section>

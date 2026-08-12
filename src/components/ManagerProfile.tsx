@@ -16,7 +16,7 @@ import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
 import { TrackerLink } from "./TrackerLink";
 import { NotesPanel } from "./NotesPanel";
-import { TopicKanban } from "./TopicKanban";
+import { SubjectTopics } from "./SubjectTopics";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { WinsLedger } from "./WinsLedger";
 import { PrayerIcon, PrayerPanel } from "./Prayer";
@@ -259,12 +259,12 @@ export function ManagerProfile({
 
         {tab === "topics" && (
           <div className={`space-y-3 ${pad}`}>
-            <p className="text-xs text-stone-500">
-              What you need from them — asks, escalations, decisions, things to
-              flag before they hear it elsewhere. Pull into This check-in before
-              you sit down.
-            </p>
-            <TopicKanban personId={manager.id} direction="up" />
+            <SubjectTopics
+              subjectKind="manager"
+              subjectId={manager.id}
+              subjectName={manager.name}
+              direction="up"
+            />
           </div>
         )}
 

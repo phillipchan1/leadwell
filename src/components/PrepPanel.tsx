@@ -1,4 +1,4 @@
-import type { MeetingRhythm, MeetingSubjectKind } from "../types";
+import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import {
   MEETING_LABEL,
@@ -7,11 +7,11 @@ import {
   STATE_COLOR,
   STATE_LABEL,
   formatCountdown,
-  meetingFor,
+  meetingAgenda,
   meetingReadiness,
-  personAgenda,
+  meetingTitle,
+  meetingsFor,
   sessionsFor,
-  teamAgenda,
   type CheckFix,
 } from "../lib/readiness";
 import { SectionTitle } from "./ui";
@@ -24,12 +24,17 @@ import { NativeSelect } from "@/components/base/select/select-native";
 const DEFAULT_FLOOR_DAYS = 45;
 
 /**
- * Prep for one tracked meeting — the checklist *is* the score. No hidden
- * weights, no mystery number: four named things, each one click from fixed.
+ * Prep for the meetings I've opted into being ready for with one subject — the
+ * checklist *is* the score. No hidden weights, no mystery number: four named
+ * things, each one click from fixed.
  *
  * Until you opt in, this is a single quiet button. Nothing is measured, and
  * nothing is counted at you, because most relationships have no meeting to
  * track and a dashboard that can never be clean gets ignored.
+ *
+ * A subject can have more than one — a 1:1 and a career check-in are different
+ * things to be ready for — so this stacks a panel per meeting rather than
+ * picking one and hiding the rest.
  */
 export function PrepPanel({
   subjectKind,
@@ -45,19 +50,15 @@ export function PrepPanel({
 }) {
   const {
     meetings,
-    sessions,
-    actions,
-    teamActions,
     people,
     teams,
     managers,
     trackMeeting,
-    updateMeeting,
-    untrackMeeting,
+    createMeeting,
     setNoMeeting,
   } = useStore();
 
-  const meeting = meetingFor(meetings, subjectKind, subjectId);
+  const mine = meetingsFor(meetings, subjectKind, subjectId);
   const subject =
     subjectKind === "person"
       ? people.find((p) => p.id === subjectId)
@@ -68,7 +69,7 @@ export function PrepPanel({
   const label = MEETING_LABEL[subjectKind];
 
   // ── Not tracked: the opt-in, and nothing else ───────────────────────────
-  if (!meeting) {
+  if (!mine.length) {
     const decided = Boolean(subject?.noMeeting);
     return (
       <section className="space-y-2">
@@ -116,21 +117,65 @@ export function PrepPanel({
     );
   }
 
-  // ── Tracked: rhythm + the checklist ─────────────────────────────────────
-  const agenda =
-    subjectKind === "team"
-      ? teamAgenda(teamActions, subjectId)
-      : personAgenda(actions, subjectId);
+  return (
+    <section className="space-y-2">
+      <SectionTitle>Readiness</SectionTitle>
+      {mine.map((meeting) => (
+        <MeetingPrep
+          key={meeting.id}
+          meeting={meeting}
+          subjectName={subjectName}
+          showTitle={mine.length > 1}
+          onFix={onFix}
+        />
+      ))}
+      <Button
+        size="sm"
+        color="link-gray"
+        onClick={() =>
+          createMeeting(subjectKind, subjectId, {
+            rhythm: "monthly",
+            name: `Another ${label}`,
+          })
+        }
+        aria-label={`Track a second recurring meeting with ${firstName}`}
+      >
+        + Another meeting
+      </Button>
+    </section>
+  );
+}
 
+function MeetingPrep({
+  meeting,
+  subjectName,
+  showTitle,
+  onFix,
+}: {
+  meeting: TrackedMeeting;
+  subjectName: string;
+  showTitle: boolean;
+  onFix: (fix: CheckFix, sessionId?: string) => void;
+}) {
+  const { sessions, topics, updateMeeting, untrackMeeting } = useStore();
+  const label = MEETING_LABEL[meeting.subjectKind];
+
+  const agenda = meetingAgenda(topics, sessions, meeting.id);
   const readiness = meetingReadiness(meeting, sessions, agenda);
   const color = STATE_COLOR[readiness.state];
   const sessionCount = sessionsFor(meeting.id, sessions).length;
 
   return (
-    <section className="space-y-2">
+    <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <SectionTitle>Readiness</SectionTitle>
-        <label className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+        {showTitle ? (
+          <span className="truncate text-xs font-medium text-stone-700 dark:text-stone-200">
+            {meetingTitle(meeting, subjectName)}
+          </span>
+        ) : (
+          <span />
+        )}
+        <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
           <span>Rhythm</span>
           <NativeSelect
             size="sm"
@@ -283,8 +328,8 @@ export function PrepPanel({
         </div>
       </div>
 
-      <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
-    </section>
+      <TrackerLink meetingId={meeting.id} />
+    </div>
   );
 }
 

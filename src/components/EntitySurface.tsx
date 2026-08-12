@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 import { useStore } from "../store/useStore";
-import type { Manager, Person, Team } from "../types";
+import type { Manager, Person, Team, TrackedMeeting } from "../types";
 import { EntityChrome, useEntityTrail } from "./EntityChrome";
 import { useSwipePager } from "@/hooks/use-sheet";
 
@@ -21,6 +21,9 @@ const ManagerProfile = lazy(() =>
 );
 const MeProfile = lazy(() =>
   import("./MeProfile").then((m) => ({ default: m.MeProfile }))
+);
+const MeetingProfile = lazy(() =>
+  import("./MeetingProfile").then((m) => ({ default: m.MeetingProfile }))
 );
 
 /** Holds the panel's shape while the profile chunk arrives. */
@@ -51,6 +54,7 @@ type Selected =
   | { kind: "person"; person: Person }
   | { kind: "team"; team: Team }
   | { kind: "manager"; manager: Manager }
+  | { kind: "meeting"; meeting: TrackedMeeting }
   | { kind: "me" }
   | null;
 
@@ -60,9 +64,11 @@ export function useSelectedEntity(): Selected {
     people,
     teams,
     managers,
+    meetings,
     selectedPersonId,
     selectedTeamId,
     selectedManagerId,
+    selectedMeetingId,
     selectedMe,
   } = useStore();
 
@@ -72,6 +78,8 @@ export function useSelectedEntity(): Selected {
   if (team) return { kind: "team", team };
   const manager = managers.find((m) => m.id === selectedManagerId);
   if (manager) return { kind: "manager", manager };
+  const meeting = meetings.find((m) => m.id === selectedMeetingId);
+  if (meeting) return { kind: "meeting", meeting };
   if (selectedMe) return { kind: "me" };
   return null;
 }
@@ -103,6 +111,14 @@ export function EntityBody({ density }: { density: Density }) {
           <ManagerProfile
             key={selected.manager.id}
             manager={selected.manager}
+            density={density}
+          />
+        );
+      case "meeting":
+        return (
+          <MeetingProfile
+            key={selected.meeting.id}
+            meeting={selected.meeting}
             density={density}
           />
         );

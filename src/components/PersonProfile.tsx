@@ -37,13 +37,12 @@ import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { SessionTable } from "./SessionTable";
 import { TrackerLink } from "./TrackerLink";
-import { TopicKanban } from "./TopicKanban";
+import { SubjectTopics } from "./SubjectTopics";
 import { NotesPanel } from "./NotesPanel";
 import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
-import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import { confirmAction } from "./ConfirmDialog";
 
 type PersonTab = "profile" | "sessions" | "topics" | "notes" | "prayer";
@@ -112,7 +111,6 @@ export function PersonProfile({
     notes,
   } = useStore();
 
-  const coarse = useCoarsePointer();
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);
   // Teams that are theirs to run, not mine.
@@ -632,15 +630,10 @@ export function PersonProfile({
 
         {tab === "topics" && (
           <div className="space-y-3 p-4">
-            <p className="text-xs text-stone-500 dark:text-stone-400">
-              {isLeadUp
-                ? "What you need from them — asks, escalations, decisions. Pull into This check-in before you sit down."
-                : coarse
-                  ? "Park topics to talk about. Use each card's Move to… control — pull into This 1:1 before you meet."
-                  : "Park topics to talk about. Drag cards between columns — pull into This 1:1 before you meet."}
-            </p>
-            <TopicKanban
-              personId={person.id}
+            <SubjectTopics
+              subjectKind="person"
+              subjectId={person.id}
+              subjectName={person.name}
               direction={isLeadUp ? "up" : "down"}
             />
           </div>

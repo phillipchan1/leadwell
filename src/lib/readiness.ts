@@ -27,12 +27,11 @@
  * haven't *decided* about, and that count empties.
  */
 import type {
-  Action,
   Cadence,
   MeetingRhythm,
   MeetingSubjectKind,
   Session,
-  TeamAction,
+  Topic,
   TrackedMeeting,
 } from "../types";
 import { trackerName } from "./tracker";
@@ -119,16 +118,20 @@ export const RHYTHM_OPTIONS: MeetingRhythm[] = [
 const AS_NEEDED_WINDOW_DAYS = 3;
 
 /**
- * Agenda / commitment input, normalized so the engine doesn't care whether it
- * came from `Action` (person topics) or `TeamAction` (team next steps).
+ * Agenda input, normalized so the engine doesn't care what produced it.
  */
 export type AgendaItem = {
   id: string;
   text: string;
   done: boolean;
   dueDate?: string;
-  /** Explicitly queued for the next occurrence. */
+  /** Explicitly planned into the next occurrence. */
   queued: boolean;
+  /**
+   * Planned into an occurrence that has already been and gone, and never
+   * closed. The thing this whole board exists to stop happening.
+   */
+  loose?: boolean;
 };
 
 /** What a failing check offers to do about itself. */
@@ -178,11 +181,11 @@ export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function addDays(iso: string, days: number): string {
+export function addDays(iso: string, days: number): string {
   return new Date(toUTC(iso) + days * DAY).toISOString().slice(0, 10);
 }
 
-function daysBetween(from: string, to: string): number {
+export function daysBetween(from: string, to: string): number {
   return Math.round((toUTC(to) - toUTC(from)) / DAY);
 }
 
@@ -298,6 +301,11 @@ export function meetingReadiness(
   const open = agenda.filter((a) => !a.done);
   const queued = open.filter((a) => a.queued);
   const pastDue = open.filter((a) => a.dueDate && a.dueDate < today);
+  // Planned into a meeting that has already happened and never closed out.
+  // Reported ahead of a past due date because it's the sharper failure: a due
+  // date slipping is a guess going wrong, a loose topic is one you sat in the
+  // room with and dropped.
+  const loose = open.filter((a) => a.loose);
 
   const checks: Check[] = [
     {
@@ -338,12 +346,13 @@ export function meetingReadiness(
     },
     {
       id: "commitments",
-      label: "No overdue commitments",
-      done: pastDue.length === 0,
-      detail:
-        pastDue.length === 0
-          ? undefined
-          : `${pastDue.length} past due — ${pastDue[0].text}`,
+      label: "Nothing left hanging",
+      done: pastDue.length === 0 && loose.length === 0,
+      detail: loose.length
+        ? `${loose.length} planned and never covered — ${loose[0].text}`
+        : pastDue.length
+          ? `${pastDue.length} past due — ${pastDue[0].text}`
+          : undefined,
       fix: "commitments",
     },
   ];
@@ -448,40 +457,76 @@ export function triageState(
 }
 
 /**
- * Topic-board items as agenda: only the queued column counts. Keyed by subject
- * id, so it reads the same board for someone I lead and someone I report to —
- * a manager's topics live in `actions` under the manager's id.
+ * One meeting's topic board as agenda.
+ *
+ * `queued` is what's planned into the *next* occurrence specifically — not
+ * "anything on the board", or the check would pass the moment you'd ever
+ * thought of something. `loose` is the occurrence that already went by.
  */
-export function personAgenda(actions: Action[], subjectId: string): AgendaItem[] {
-  return actions
-    .filter((a) => a.personId === subjectId)
-    .map((a) => ({ ...a, queued: a.column === "this_1on1" }));
-}
-
-/**
- * Team next-steps as agenda. Teams have no topic board yet, so any open step
- * counts as something to talk about — swap to a column when they get one.
- */
-export function teamAgenda(
-  teamActions: TeamAction[],
-  teamId: string
+export function meetingAgenda(
+  topics: Topic[],
+  sessions: Session[],
+  meetingId: string,
+  today: string = todayISO()
 ): AgendaItem[] {
-  return teamActions
-    .filter((a) => a.teamId === teamId)
-    .map((a) => ({ ...a, queued: !a.done }));
+  const mine = sessionsFor(meetingId, sessions);
+  const nextSession = mine.find((s) => s.date >= today);
+  const passed = new Set(mine.filter((s) => s.date < today).map((s) => s.id));
+
+  return topics
+    .filter((t) => t.meetingId === meetingId)
+    .map((t) => ({
+      id: t.id,
+      text: t.text,
+      done: t.status !== "open",
+      dueDate: t.dueDate,
+      queued: Boolean(nextSession && t.sessionId === nextSession.id),
+      loose: Boolean(t.sessionId && passed.has(t.sessionId)),
+    }));
 }
 
 /** Everything the engine needs, straight off the store. */
 export type ReadinessData = {
   meetings: TrackedMeeting[];
   sessions: Session[];
-  actions: Action[];
-  teamActions: TeamAction[];
+  topics: Topic[];
 };
 
+/** The readiness read for one meeting, straight off the store. */
+export function readinessOf(
+  meeting: TrackedMeeting,
+  data: ReadinessData,
+  today: string = todayISO()
+): Readiness {
+  return meetingReadiness(
+    meeting,
+    data.sessions,
+    meetingAgenda(data.topics, data.sessions, meeting.id, today),
+    today
+  );
+}
+
+/** Every reading for a subject — one per meeting, in tracking order. */
+export function readingsFor(
+  kind: MeetingSubjectKind,
+  subjectId: string,
+  data: ReadinessData,
+  today: string = todayISO()
+): Readiness[] {
+  return meetingsFor(data.meetings, kind, subjectId).map((m) =>
+    readinessOf(m, data, today)
+  );
+}
+
 /**
- * Readiness for a subject, or null when it isn't tracked. The single entry
- * point every surface uses, so the agenda rules can't drift between them.
+ * One reading for a subject that has several meetings, or null when it has
+ * none. Worst-of, deliberately — the same opinion `rollUp` encodes: a person
+ * whose 1:1 is Ready and whose career check-in is Drifting is not "mostly
+ * fine", they're someone being dropped in one of the two places that matter.
+ *
+ * Every surface that draws a single dot per subject reads this, which is why
+ * it kept the old `readinessFor` name: the canvas, the org table and the
+ * people table all get many-meetings behaviour without changing a line.
  */
 export function readinessFor(
   kind: MeetingSubjectKind,
@@ -489,22 +534,64 @@ export function readinessFor(
   data: ReadinessData,
   today: string = todayISO()
 ): Readiness | null {
-  const meeting = meetingFor(data.meetings, kind, subjectId);
-  if (!meeting) return null;
-  const agenda =
-    kind === "team"
-      ? teamAgenda(data.teamActions, subjectId)
-      : personAgenda(data.actions, subjectId);
-  return meetingReadiness(meeting, data.sessions, agenda, today);
+  const readings = readingsFor(kind, subjectId, data, today);
+  if (!readings.length) return null;
+  return (
+    STATE_ORDER.map((state) => readings.find((r) => r.state === state)).find(
+      Boolean
+    ) ?? readings[0]
+  );
 }
 
-/** The meeting tracked for a subject, if there is one. */
+/** Every meeting tracked for a subject. A person can have more than one. */
+export function meetingsFor(
+  meetings: TrackedMeeting[],
+  kind: MeetingSubjectKind,
+  subjectId: string
+): TrackedMeeting[] {
+  return meetings.filter(
+    (m) => m.subjectKind === kind && m.subjectId === subjectId
+  );
+}
+
+/**
+ * The subject's primary meeting — the first one tracked. Only for the surfaces
+ * that genuinely have room for one (a profile summary, the AI brief); anything
+ * showing the full picture should map over `meetingsFor`.
+ */
 export function meetingFor(
   meetings: TrackedMeeting[],
   kind: MeetingSubjectKind,
   subjectId: string
 ): TrackedMeeting | undefined {
-  return meetings.find(
-    (m) => m.subjectKind === kind && m.subjectId === subjectId
-  );
+  return meetingsFor(meetings, kind, subjectId)[0];
+}
+
+/** What to call a meeting: its own name, or the kind it is. */
+export function meetingTitle(
+  meeting: TrackedMeeting,
+  subjectName?: string
+): string {
+  const name = meeting.name?.trim();
+  if (name) return name;
+  const label = MEETING_LABEL[meeting.subjectKind];
+  return subjectName ? `${label} · ${subjectName}` : label;
+}
+
+/** Who or what a meeting is with. Named things only — the id is never shown. */
+export function meetingSubjectName(
+  meeting: TrackedMeeting,
+  src: {
+    people: { id: string; name: string }[];
+    teams: { id: string; name: string }[];
+    managers: { id: string; name: string }[];
+  }
+): string | undefined {
+  const pool =
+    meeting.subjectKind === "person"
+      ? src.people
+      : meeting.subjectKind === "team"
+        ? src.teams
+        : src.managers;
+  return pool.find((x) => x.id === meeting.subjectId)?.name;
 }

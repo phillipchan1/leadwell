@@ -280,6 +280,12 @@ export type Person = {
 /** Kanban column for 1:1 talk-about topics (Actions). */
 export type ActionColumn = "backlog" | "this_1on1" | "parking" | "done";
 
+/**
+ * @deprecated Superseded by `Topic`, which is keyed by meeting rather than by
+ * a `personId` that was really a subject id. Migration 0012 copies these over.
+ * The type and its table stay for one release as a rollback net — nothing
+ * reads them.
+ */
 export type Action = {
   id: string;
   personId: string;
@@ -288,6 +294,49 @@ export type Action = {
   dueDate?: string;
   /** Topic board column. Defaults to backlog (or done when done=true). */
   column?: ActionColumn;
+};
+
+/**
+ * Something to discuss, on the board of one meeting.
+ *
+ * ── Why this is keyed by meeting, not by person ───────────────────────────
+ * `Action.personId` was really a subject id — managers rode on it too — which
+ * left a staff meeting's topics with nowhere to live and teams with no board
+ * at all. A topic belongs to the meeting where it gets raised, so the same
+ * shape serves a 1:1, a check-in and a staff meeting without a second concept.
+ *
+ * ── Why `sessionId` and not a column ──────────────────────────────────────
+ * "This 1:1" could only ever mean the *next* one, so you could queue but not
+ * plan. Pointing a topic at a specific occurrence is what makes scaffolding
+ * possible: budget on the 17th, hiring on the 24th. Unslotted topics fall back
+ * to `lane`, which is the running list.
+ *
+ * Not stored, always derived: a topic is *loose* when it's still open and the
+ * occurrence it was slotted into has already happened. That one predicate is
+ * the whole guard against a subject being assigned to a meeting and quietly
+ * never finished.
+ */
+export type TopicStatus = "open" | "covered" | "dropped";
+
+/** Where a topic sits when it isn't slotted into an occurrence. */
+export type TopicLane = "backlog" | "parked";
+
+export type Topic = {
+  id: string;
+  /** The board this belongs to — a meeting, never a person. */
+  meetingId: string;
+  text: string;
+  detail?: string;
+  status: TopicStatus;
+  lane: TopicLane;
+  /** Slotted into this occurrence. Overrides `lane` while it's set. */
+  sessionId?: string;
+  /** Times it's been pushed to a later meeting. The honest nag. */
+  carried: number;
+  dueDate?: string;
+  createdOn: string;
+  closedOn?: string;
+  order: number;
 };
 
 /** One occurrence of a tracked meeting — what used to be a `OneOnOne`. */

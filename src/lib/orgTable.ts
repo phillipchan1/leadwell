@@ -17,9 +17,8 @@ import type {
   Prayer,
   Person,
   Team,
-  TeamAction,
-  Action,
   Session,
+  Topic,
   TrackedMeeting,
 } from "../types";
 import { isAssessed, hasLeadershipRead } from "./derive";
@@ -79,8 +78,7 @@ export type OrgSource = {
   capacities: Capacity[];
   meetings: TrackedMeeting[];
   sessions: Session[];
-  actions: Action[];
-  teamActions: TeamAction[];
+  topics: Topic[];
 };
 
 export const rowId = (kind: RowKind, id: string) => `${kind}:${id}`;
@@ -102,8 +100,7 @@ export function buildRecords(src: OrgSource): Map<string, OrgRecord> {
   const rdata: ReadinessData = {
     meetings: src.meetings,
     sessions: src.sessions,
-    actions: src.actions,
-    teamActions: src.teamActions,
+    topics: src.topics,
   };
   const domainOf = (id?: string) => src.domains.find((d) => d.id === id);
   const out = new Map<string, OrgRecord>();

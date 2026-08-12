@@ -5,6 +5,7 @@ import type {
   Team,
   Person,
   Action,
+  Topic,
   TrackedMeeting,
   Session,
   Goal,
@@ -438,6 +439,145 @@ export const seedMeetings: TrackedMeeting[] = [
     name: "Practice meeting",
     rhythm: "biweekly",
     role: "convene",
+  },
+];
+
+/**
+ * Topic boards, one per meeting. Two of these are load-bearing for the demo:
+ * `t-loose` sits in a 1:1 that already happened and was never closed, and
+ * `t-carried` has been pushed twice — between them a fresh account can see the
+ * failure this feature exists to catch without having to reproduce it first.
+ */
+export const seedTopics: Topic[] = [
+  // Sarah — a weekly 1:1 with a real backlog.
+  {
+    id: "t-1",
+    meetingId: "m-p-sarah",
+    text: "Ask about volunteer pipeline for fall",
+    status: "open",
+    lane: "backlog",
+    carried: 0,
+    createdOn: "2026-06-24",
+    order: 0,
+  },
+  {
+    id: "t-loose",
+    meetingId: "m-p-sarah",
+    text: "How is the setup checklist landing?",
+    status: "open",
+    lane: "backlog",
+    // Slotted into a 1:1 that has been and gone — this is what loose looks like.
+    sessionId: "o-1",
+    carried: 0,
+    createdOn: "2026-06-20",
+    order: 1,
+  },
+  {
+    id: "t-2",
+    meetingId: "m-p-sarah",
+    text: "Follow up on song-selection conflict",
+    status: "covered",
+    lane: "backlog",
+    sessionId: "o-1",
+    carried: 0,
+    createdOn: "2026-06-18",
+    closedOn: "2026-06-24",
+    order: 2,
+  },
+  {
+    id: "t-3",
+    meetingId: "m-p-sarah",
+    text: "Check in on mom's health",
+    status: "open",
+    lane: "backlog",
+    carried: 0,
+    createdOn: "2026-07-02",
+    order: 3,
+  },
+  {
+    id: "t-4",
+    meetingId: "m-p-sarah",
+    text: "Sunday setup handoff plan",
+    status: "open",
+    lane: "parked",
+    carried: 0,
+    createdOn: "2026-06-24",
+    order: 4,
+  },
+  // Marcus.
+  {
+    id: "t-5",
+    meetingId: "m-p-marcus",
+    text: "Review summer camp budget together",
+    status: "open",
+    lane: "backlog",
+    dueDate: "2026-07-15",
+    carried: 0,
+    createdOn: "2026-06-30",
+    order: 0,
+  },
+  {
+    id: "t-carried",
+    meetingId: "m-p-marcus",
+    text: "Preaching cohort — is he actually going to do it?",
+    status: "open",
+    lane: "backlog",
+    // Pushed twice already. The badge is the whole message.
+    carried: 2,
+    createdOn: "2026-06-02",
+    order: 1,
+  },
+  // Priya.
+  {
+    id: "t-6",
+    meetingId: "m-p-priya",
+    text: "Share Q3 roadmap draft before planning meeting",
+    status: "open",
+    lane: "backlog",
+    carried: 0,
+    createdOn: "2026-07-08",
+    order: 0,
+  },
+  // The staff meeting — a board that has nothing to do with any one person.
+  {
+    id: "t-7",
+    meetingId: "m-staff",
+    text: "Fall calendar — lock the retreat weekend",
+    status: "open",
+    lane: "backlog",
+    carried: 0,
+    createdOn: "2026-07-20",
+    order: 0,
+  },
+  {
+    id: "t-8",
+    meetingId: "m-staff",
+    text: "Budget: where we landed vs. what we projected",
+    status: "open",
+    lane: "backlog",
+    carried: 0,
+    createdOn: "2026-07-22",
+    order: 1,
+  },
+  {
+    id: "t-9",
+    meetingId: "m-staff",
+    text: "Hiring plan for the worship associate role",
+    status: "open",
+    lane: "backlog",
+    carried: 1,
+    createdOn: "2026-07-01",
+    order: 2,
+  },
+  {
+    id: "t-10",
+    meetingId: "m-staff",
+    text: "Offsite — worth doing this year?",
+    status: "open",
+    lane: "parked",
+    carried: 0,
+    createdOn: "2026-06-15",
+    order: 3,
   },
 ];
 

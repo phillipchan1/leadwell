@@ -7,7 +7,7 @@ import {
   ALL_THEMES,
 } from "../data/frameworks";
 import { derivedRead, hasLeadershipRead } from "./derive";
-import { meetingFor } from "./readiness";
+import { meetingFor, meetingsFor } from "./readiness";
 import { directReports, teamsLedBy } from "./teams";
 import { useStore } from "../store/useStore";
 import { supabaseConfigured, SUPABASE_ANON_KEY, SUPABASE_URL } from "./supabase";
@@ -59,8 +59,13 @@ export function personSystemPrompt(personId: string): string {
     .filter((o) => meeting && o.meetingId === meeting.id)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 3);
-  const actions = s.actions.filter(
-    (a) => a.personId === person.id && !a.done
+  // Every board they're on, not just the primary meeting's — the coach should
+  // see a career check-in's topics alongside the weekly 1:1's.
+  const meetingIds = new Set(
+    meetingsFor(s.meetings, "person", person.id).map((m) => m.id)
+  );
+  const openTopics = s.topics.filter(
+    (t) => meetingIds.has(t.meetingId) && t.status === "open"
   );
   const isLeadUp = team?.direction === "up";
   const lu = person.leadUp;
@@ -75,11 +80,8 @@ export function personSystemPrompt(personId: string): string {
     .map((t, i) => `${i + 1}. ${t} (${THEME_DOMAIN[t] ?? "?"})`)
     .join("\n");
 
-  const topicLines = actions
-    .map((a) => {
-      const col = a.column ?? "backlog";
-      return `- [${col}] ${a.text}`;
-    })
+  const topicLines = openTopics
+    .map((t) => `- [${t.sessionId ? "planned" : t.lane}] ${t.text}`)
     .join("\n");
 
   return [
@@ -181,11 +183,11 @@ export function managerSystemPrompt(managerId: string): string {
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 5)
     : [];
-  const topicLines = s.actions
-    .filter((a) => a.personId === manager.id && !a.done)
+  const topicLines = s.topics
+    .filter((t) => t.meetingId === checkIn?.id && t.status === "open")
     .map(
-      (a) =>
-        `- ${a.text}${a.column === "this_1on1" ? " (queued for the next check-in)" : ""}`
+      (t) =>
+        `- ${t.text}${t.sessionId ? " (planned for an upcoming check-in)" : ""}`
     )
     .join("\n");
   const notes = s.notes
