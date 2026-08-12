@@ -26,10 +26,10 @@ import {
   useStore,
   useActiveTeamId,
   type NodePosition,
-  type TreeLayer,
 } from "../store/useStore";
-import type { Manager, Person, Team } from "../types";
-import { domainCounts, hasLeadershipRead, topDomain } from "../lib/derive";
+import type { Manager, Person, Prayer, Team } from "../types";
+import { hasLeadershipRead } from "../lib/derive";
+import { MODE_LAYERS, MODE_SCAN, TREE_MODES } from "../lib/treeMode";
 import {
   HEALTH_COLOR,
   HEALTH_FILTER_VALUES,
@@ -42,7 +42,7 @@ import {
   type HealthFilterValue,
 } from "../lib/health";
 import { HealthBar, HealthChip, HealthDot } from "./Health";
-import { PrayerDot, PrayerIcon, PrayerMark } from "./Prayer";
+import { PrayerIcon, CardPrayer, PrayerCarryToggle } from "./Prayer";
 import {
   PRAYER_COLOR,
   PRAYER_FILTER_VALUES,
@@ -65,7 +65,6 @@ import {
   type Readiness,
   type ReadinessData,
 } from "../lib/readiness";
-import { DOMAINS, DOMAIN_COLOR, THEME_DOMAIN } from "../data/frameworks";
 import {
   delegatedTeamIds,
   directReports,
@@ -83,18 +82,6 @@ import { Edit01, Plus } from "@untitledui/icons";
 import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
 import { TriageModal } from "./TriageModal";
 import { TableView } from "./TableView";
-
-const LAYER_KEYS: Record<string, TreeLayer> = {
-  p: "people",
-  a: "action",
-  m: "mandate",
-  g: "giftMix",
-  d: "detail",
-  r: "readiness",
-  h: "health",
-  // praY — P, A and R are all taken, and Y is the letter the word ends on.
-  y: "prayer",
-};
 
 const NODE_W = 320; // matches w-80 on team cards
 const SPACING_X = NODE_W + 48;
@@ -239,8 +226,7 @@ export function OrgTree() {
     domains,
     treeDomainId,
     setTreeDomainId,
-    treeLayers,
-    toggleTreeLayer,
+    setTreeMode,
     modal,
     openModal,
     closeModal,
@@ -248,7 +234,8 @@ export function OrgTree() {
     settingsOpen,
   } = useStore();
 
-  // 1–9 = domains; P/A/M/G/D = card layers
+  // 1–4 = modes; ⇧1–⇧9 = domains. Mode is the headline control now, so it takes
+  // the bare digits and the domain filter moves up a shift.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (modal || askAIOpen || settingsOpen) return;
@@ -263,23 +250,28 @@ export function OrgTree() {
       ) {
         return;
       }
-      const layer = LAYER_KEYS[e.key.toLowerCase()];
-      if (layer) {
+      // `e.code`, not `e.key` — Shift+1 reports "!" on a US layout, and every
+      // other layout reports something different again.
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (!digit) return;
+      const n = Number(digit[1]);
+
+      if (e.shiftKey) {
+        const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
+        const id = options[n - 1];
+        if (id === undefined) return;
         e.preventDefault();
-        toggleTreeLayer(layer);
+        setTreeDomainId(id);
         return;
       }
-      const n = Number(e.key);
-      if (!Number.isInteger(n) || n < 1 || n > 9) return;
-      const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
-      const id = options[n - 1];
-      if (id === undefined) return;
+      const mode = TREE_MODES[n - 1];
+      if (!mode) return;
       e.preventDefault();
-      setTreeDomainId(id);
+      setTreeMode(mode.id);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [domains, modal, askAIOpen, settingsOpen, setTreeDomainId, toggleTreeLayer]);
+  }, [domains, modal, askAIOpen, settingsOpen, setTreeDomainId, setTreeMode]);
 
   const visibleTeams = useMemo(
     () =>
@@ -436,11 +428,13 @@ export function OrgTree() {
     return [...teamEdges, ...reportEdges, ...managerEdges];
   }, [visibleTeams, visibleManagers, visibleReports, capacities, domains]);
 
-  /* Domain filter: All = full tree; pick a domain for a focused view. Shared
-     by both surfaces — the outline is the same view of the same org, so it
-     filters by the same control rather than growing a second one. */
+  /* Mode over domain: what I'm doing, then where. Both are shared by the two
+     surfaces — the outline is the same view of the same org, so it answers the
+     same mode's question rather than growing controls of its own. */
   const filterRow = (
     <>
+      <ModeBar />
+
       <div
         className="flex flex-wrap items-center gap-1.5"
         role="tablist"
@@ -449,7 +443,7 @@ export function OrgTree() {
         <DomainTab
           active={treeDomainId === null}
           onClick={() => setTreeDomainId(null)}
-          shortcut="1"
+          shortcut="⇧1"
         >
           All
         </DomainTab>
@@ -459,7 +453,7 @@ export function OrgTree() {
             active={treeDomainId === d.id}
             color={d.color}
             onClick={() => setTreeDomainId(d.id)}
-            shortcut={i < 8 ? String(i + 2) : undefined}
+            shortcut={i < 8 ? `⇧${i + 2}` : undefined}
           >
             {d.name}
           </DomainTab>
@@ -471,23 +465,6 @@ export function OrgTree() {
         >
           Manage domains
         </Button>
-        {/* Below lg the canvas — and with it the layer bar — isn't rendered,
-            so prayer mode needs its own way in on a phone. The hand is the
-            whole button: it's a mode, not a column. */}
-        <button
-          type="button"
-          aria-pressed={treeLayers.prayer}
-          onClick={() => toggleTreeLayer("prayer")}
-          title="Who I'm carrying in prayer"
-          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors touch:min-h-11 lg:hidden ${
-            treeLayers.prayer
-              ? "border-violet-500 bg-violet-50 font-medium text-violet-700 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300"
-              : "border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-400"
-          }`}
-        >
-          <PrayerIcon className="size-4" />
-          Prayer
-        </button>
         <ReadinessSummary teams={visibleTeams} reports={visibleReports} />
       </div>
 
@@ -578,11 +555,6 @@ export function OrgTree() {
                 + Manager
               </Button>
             </div>
-            <span
-              className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
-              aria-hidden
-            />
-            <ViewLayers />
             <span
               className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
               aria-hidden
@@ -728,16 +700,15 @@ function ReadinessSummary({
     managers,
     meetings,
     sessions,
-    actions,
-    teamActions,
-    treeLayers,
+    topics,
+    treeMode,
     selectPerson,
     selectTeam,
     openModal,
   } = useStore();
-  if (!treeLayers.readiness) return null;
+  if (treeMode !== "prep") return null;
 
-  const rdata: ReadinessData = { meetings, sessions, actions, teamActions };
+  const rdata: ReadinessData = { meetings, sessions, topics };
   const teamIds = new Set(teams.map((t) => t.id));
   const members = [
     ...people.filter((p) => p.teamId && teamIds.has(p.teamId)),
@@ -863,12 +834,12 @@ function HealthScan({
   reports: Person[];
 }) {
   const people = useStore((s) => s.people);
-  const treeLayers = useStore((s) => s.treeLayers);
+  const treeMode = useStore((s) => s.treeMode);
   const filter = useStore((s) => s.healthScan);
   const toggle = useStore((s) => s.toggleHealthScan);
   const setFilter = useStore((s) => s.setHealthScan);
 
-  if (!treeLayers.health) return null;
+  if (treeMode !== "assess") return null;
 
   const teamIds = new Set(teams.map((t) => t.id));
   const members = people.filter((p) => p.teamId && teamIds.has(p.teamId));
@@ -958,16 +929,13 @@ function HealthScan({
 
 
 /**
- * The prayer scan — the same instrument as the health scan, pointed at a
- * question no metric answers: **who am I actually carrying, and who have I
- * stopped?**
+ * The prayer scan — the same shape as the health one, because it's the same
+ * move: click a state, everything else dims out of the way, and the shape of
+ * the org stays underneath so you can see *where* the quiet is.
  *
- * The counts are deliberately unflattering in one direction only. "Not
- * carrying" is not a gap and never turns red — a leader praying for four
- * people out of forty is being honest, not delinquent. The one number that
- * asks for something is *gone quiet*: a name you took up and haven't prayed
- * for in three weeks, which is exactly the thing that goes unnoticed without
- * a list like this.
+ * "Gone quiet" is the chip that earns this bar. A name taken up in January and
+ * not prayed for since June is exactly what goes unnoticed without a list, and
+ * a count alone can't put you in front of it.
  */
 function PrayerScan({
   teams,
@@ -978,12 +946,12 @@ function PrayerScan({
 }) {
   const people = useStore((s) => s.people);
   const managers = useStore((s) => s.managers);
-  const treeLayers = useStore((s) => s.treeLayers);
+  const treeMode = useStore((s) => s.treeMode);
   const filter = useStore((s) => s.prayerScan);
   const toggle = useStore((s) => s.togglePrayerScan);
   const setFilter = useStore((s) => s.setPrayerScan);
 
-  if (!treeLayers.prayer) return null;
+  if (treeMode !== "pray") return null;
 
   const teamIds = new Set(teams.map((t) => t.id));
   const members = people.filter((p) => p.teamId && teamIds.has(p.teamId));
@@ -1009,7 +977,11 @@ function PrayerScan({
             aria-pressed={active}
             disabled={count === 0 && !active}
             onClick={() => toggle(value)}
-            title={PRAYER_HINT[value]}
+            title={
+              count === 0
+                ? `Nobody in view: ${PRAYER_HINT[value].toLowerCase()}`
+                : `${PRAYER_HINT[value]} (${count})`
+            }
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 disabled:opacity-40 ${
               active
                 ? "border-transparent font-medium text-white"
@@ -1039,24 +1011,19 @@ function PrayerScan({
       )}
       <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
         {roll.carried === 0 ? (
-          "Nobody on the list yet — open anyone and take them up"
+          "Take someone up from any card below"
         ) : (
           <>
             carrying{" "}
             <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
               {roll.carried}
-            </strong>{" "}
-            of {subjects.length}
+            </strong>
             {roll.cold > 0 && (
               <>
                 {" · "}
-                <button
-                  type="button"
-                  onClick={() => setFilter(["cold"])}
-                  className="font-medium text-violet-700 underline-offset-2 hover:underline dark:text-violet-300"
-                >
+                <span className="font-medium text-stone-600 dark:text-stone-300">
                   {roll.cold} gone quiet
-                </button>
+                </span>
               </>
             )}
           </>
@@ -1071,73 +1038,49 @@ function PrayerScan({
  * its roster, so filtering for strain doesn't hide the card you need to click
  * through to reach the strained person.
  *
- * Two scans can run at once — health and prayer — and a card has to survive
- * both to stay lit. They compose rather than override because the pair is a
- * real question: *who am I worried about that I've also stopped praying for.*
+ * Only the scan the current mode owns applies. The scans themselves persist —
+ * they're shared with the table and follow you there — but a mode with no scan
+ * bar on screen has no way to say why a card faded, so it doesn't fade any.
  */
 function useScanDimmed(kind: "team" | "person" | "manager", id: string): boolean {
-  const filter = useStore((s) => s.healthScan);
-  const prayerFilter = useStore((s) => s.prayerScan);
+  const scan = MODE_SCAN[useStore((s) => s.treeMode)];
+  const healthScan = useStore((s) => s.healthScan);
+  const prayerScan = useStore((s) => s.prayerScan);
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
 
-  if (filter.length === 0 && prayerFilter.length === 0) return false;
+  if (scan === "prayer") {
+    if (prayerScan.length === 0) return false;
+    const matches = (p: { prayer?: Prayer } | undefined) =>
+      matchesPrayer(p?.prayer, prayerScan);
+
+    if (kind === "manager") return !matches(managers.find((m) => m.id === id));
+    if (kind === "person") return !matches(people.find((p) => p.id === id));
+
+    const team = teams.find((t) => t.id === id);
+    const members = people.filter((p) => p.teamId === id);
+    return !(matches(team) || members.some(matches));
+  }
+
+  if (scan !== "health" || healthScan.length === 0) return false;
 
   if (kind === "manager") {
-    const manager = managers.find((m) => m.id === id);
     // Managers carry no health rating, so a health scan can only ever match
     // them as "not rated".
-    const health = filter.length === 0 || filter.includes("unrated");
-    return !(health && matchesPrayer(manager?.prayer, prayerFilter));
+    return !healthScan.includes("unrated");
   }
 
   if (kind === "person") {
     const person = people.find((p) => p.id === id);
-    return !(
-      matchesHealth(person?.health, filter) &&
-      matchesPrayer(person?.prayer, prayerFilter)
-    );
+    return !matchesHealth(person?.health, healthScan);
   }
 
   const team = teams.find((t) => t.id === id);
   const members = people.filter((p) => p.teamId === id);
   const matches = (h: Team | Person | undefined) =>
-    matchesHealth(h?.health, filter) && matchesPrayer(h?.prayer, prayerFilter);
+    matchesHealth(h?.health, healthScan);
   return !(matches(team) || members.some(matches));
-}
-
-/**
- * A prayer mark on a card is a door: clicking it opens that subject's prayer
- * tab rather than the top of a profile you'd then have to navigate. That's
- * what makes the layer a mode you can actually work in — scan, click, pray,
- * mark, next.
- */
-function PrayerMarkLink({
-  prayer,
-  onOpen,
-  label,
-  size = "md",
-}: {
-  prayer?: Person["prayer"];
-  onOpen: () => void;
-  label: string;
-  size?: "sm" | "md";
-}) {
-  if (!prayer) return null;
-  return (
-    <button
-      type="button"
-      className="nodrag shrink-0"
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
-    >
-      <PrayerMark prayer={prayer} size={size} />
-    </button>
-  );
 }
 
 /** Cards fade back rather than disappear — see HealthScan. */
@@ -1146,112 +1089,58 @@ const dimStyle = (dim: boolean): CSSProperties => ({
   transition: "opacity 150ms ease-out",
 });
 
-const VIEW_LAYERS: {
-  id: TreeLayer;
-  label: string;
-  shortcut: string;
-  title: string;
-  /** Only prayer carries one — it's a mode, and the hand is what marks it. */
-  icon?: typeof PrayerIcon;
-}[] = [
-  { id: "people", label: "People", shortcut: "P", title: "Member list on cards" },
-  { id: "action", label: "Action", shortcut: "A", title: "Next step on cards" },
-  { id: "mandate", label: "Mandate", shortcut: "M", title: "Team mandate text" },
-  { id: "giftMix", label: "Gift", shortcut: "G", title: "Clifton domain mix bar" },
-  { id: "detail", label: "Detail", shortcut: "D", title: "Per-person strength dots" },
-  {
-    id: "readiness",
-    label: "Ready",
-    shortcut: "R",
-    title: "1:1 readiness — am I prepared for the next one",
-  },
-  {
-    id: "health",
-    label: "Health",
-    shortcut: "H",
-    title: "My read on how each team and person is doing — and the scan bar",
-  },
-  {
-    id: "prayer",
-    label: "Prayer",
-    shortcut: "Y",
-    title: "Who I'm carrying in prayer — and how long since I last did",
-    icon: PrayerIcon,
-  },
-];
-
-function ViewLayers() {
-  const treeLayers = useStore((s) => s.treeLayers);
-  const toggleTreeLayer = useStore((s) => s.toggleTreeLayer);
+/**
+ * Mode: the one card control. Exclusive, not additive — you're doing one of
+ * these things at a time, and the card, the scan bar and what dims all follow.
+ *
+ * Rendered above the domain chips on *both* surfaces, so the phone finally gets
+ * the control the canvas used to hoard. Pray keeps its violet: it's the one
+ * question here that isn't about how they're performing.
+ */
+function ModeBar() {
+  const treeMode = useStore((s) => s.treeMode);
+  const setTreeMode = useStore((s) => s.setTreeMode);
   return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Card layers">
-      {VIEW_LAYERS.map((layer) => {
-        const on = treeLayers[layer.id];
+    <div
+      className="flex flex-wrap gap-1.5"
+      role="tablist"
+      aria-label="What I'm here to do"
+    >
+      {TREE_MODES.map((mode) => {
+        const on = mode.id === treeMode;
+        const pray = mode.id === "pray";
         return (
           <button
-            key={layer.id}
+            key={mode.id}
             type="button"
-            onClick={() => toggleTreeLayer(layer.id)}
-            aria-pressed={on}
-            title={`${layer.title} (${layer.shortcut})`}
-            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm shadow-sm touch:min-h-11 ${
+            role="tab"
+            aria-selected={on}
+            onClick={() => setTreeMode(mode.id)}
+            title={`${mode.question} (${mode.key})`}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm shadow-sm transition-colors touch:min-h-11 ${
               on
-                ? layer.id === "prayer"
+                ? pray
                   ? "border-violet-500 bg-violet-50 font-medium text-violet-700 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300"
                   : "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-                : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
+                : "border-stone-300 bg-white text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 dark:hover:border-stone-500"
             }`}
           >
-            {layer.icon && <layer.icon className="size-3.5" />}
-            {layer.label}
+            {pray && <PrayerIcon className="size-3.5" />}
+            {mode.label}
             <kbd
-              className={`rounded px-1 font-mono text-[10px] ${
+              className={`hidden rounded px-1 font-mono text-[10px] sm:inline ${
                 on
-                  ? layer.id === "prayer"
+                  ? pray
                     ? "bg-violet-100 text-violet-600 dark:bg-violet-900/60 dark:text-violet-300"
                     : "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
-                  : "bg-stone-100 text-stone-500 dark:text-stone-400 dark:bg-stone-800"
+                  : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
               }`}
             >
-              {layer.shortcut}
+              {mode.key}
             </kbd>
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/** Proportional Clifton domain bar — color only, labels in the title. */
-function GiftMixBar({ people }: { people: Person[] }) {
-  const counts = domainCounts(people);
-  const total = DOMAINS.reduce((sum, d) => sum + counts[d], 0);
-  const title =
-    total === 0
-      ? "No Clifton Top 5 on this team yet"
-      : DOMAINS.map((d) => `${d}: ${counts[d]}`).join(" · ");
-
-  return (
-    <div
-      className="flex h-2 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800"
-      title={title}
-      role="img"
-      aria-label={title}
-    >
-      {total === 0
-        ? null
-        : DOMAINS.map((d) =>
-            counts[d] > 0 ? (
-              <span
-                key={d}
-                className="h-full"
-                style={{
-                  width: `${(counts[d] / total) * 100}%`,
-                  backgroundColor: DOMAIN_COLOR[d],
-                }}
-              />
-            ) : null
-          )}
     </div>
   );
 }
@@ -1285,45 +1174,11 @@ function ReadinessBar({ readings }: { readings: Readiness[] }) {
   );
 }
 
-/** Tiny visual read: Top-5 domain dots + optional Enneagram type. */
-function PersonGiftDots({ person }: { person: Person }) {
-  const themes = person.assessments.cliftonTop5 ?? [];
-  const enn = person.assessments.enneagram?.replace(/w\d+$/i, "") ?? null;
-  if (themes.length === 0 && !enn) return null;
-
-  return (
-    <div className="mt-0.5 flex items-center gap-1.5">
-      {themes.length > 0 && (
-        <span className="flex items-center gap-0.5" aria-hidden>
-          {themes.map((theme, i) => {
-            const d = THEME_DOMAIN[theme];
-            return (
-              <span
-                key={`${theme}-${i}`}
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: d ? DOMAIN_COLOR[d] : "#a8a29e" }}
-                title={theme}
-              />
-            );
-          })}
-        </span>
-      )}
-      {enn && (
-        <span
-          className="rounded bg-stone-100 px-1 font-mono text-[9px] leading-4 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
-          title={`Enneagram ${person.assessments.enneagram}`}
-        >
-          {enn}
-        </span>
-      )}
-    </div>
-  );
-}
-
 function MeNode() {
   const { me, teams, people, selectMe, selectedMe } = useStore();
+  // A count, not a mark. Coverage is worth one line on my own card; dimming
+  // every unassessed face across the canvas was a fifth question nobody asked.
   const assessed = people.filter(hasLeadershipRead).length;
-  const selfRead = hasLeadershipRead(me);
   return (
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
@@ -1333,7 +1188,7 @@ function MeNode() {
         }`}
         onClick={() => selectMe(true)}
       >
-        <Avatar name={me.name} photo={me.photo} size={44} dimmed={!selfRead} />
+        <Avatar name={me.name} photo={me.photo} size={44} />
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{me.name}</div>
           <div className="text-xs text-stone-500">
@@ -1354,22 +1209,21 @@ function ManagerNode({ data }: NodeProps) {
     domains,
     meetings,
     sessions,
-    actions,
-    teamActions,
-    treeLayers,
+    topics,
+    treeMode,
     openModal,
     selectManager,
     selectedManagerId,
   } = useStore();
+  const layers = MODE_LAYERS[treeMode];
   const dim = useScanDimmed("manager", managerId);
   const manager = managers.find((m) => m.id === managerId);
   if (!manager) return null;
-  const readiness = treeLayers.readiness
+  const readiness = layers.readiness
     ? readinessFor("manager", manager.id, {
         meetings,
         sessions,
-        actions,
-        teamActions,
+        topics,
       })
     : null;
   const domain = domains.find((d) => d.id === manager.domainId);
@@ -1382,63 +1236,70 @@ function ManagerNode({ data }: NodeProps) {
   return (
     <>
       <Card
-        className={`group flex w-52 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-blue-400 ${
+        className={`group flex w-52 cursor-pointer flex-col gap-2 px-3 py-2 shadow-sm hover:border-blue-400 ${
           selected ? "border-blue-500 ring-1 ring-blue-500/30" : ""
         }`}
         style={dimStyle(dim)}
         onClick={() => selectManager(manager.id)}
       >
-        <Avatar name={manager.name} photo={manager.photo} size={34} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold">{manager.name}</div>
-          <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
-            {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
-              "I report to"}
+        <div className="flex items-center gap-2.5">
+          <Avatar name={manager.name} photo={manager.photo} size={34} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-semibold">{manager.name}</div>
+            <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
+              {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
+                "I report to"}
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+              {filled > 0 ? (
+                <span className="text-blue-500 dark:text-blue-400">
+                  manual {filled}/6
+                </span>
+              ) : (
+                "no manual yet"
+              )}
+              {readiness && (
+                <ReadinessChip
+                  state={readiness.state}
+                  text={formatCountdown(readiness)}
+                  title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
+                />
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
-            {filled > 0 ? (
-              <span className="text-blue-500 dark:text-blue-400">
-                manual {filled}/6
-              </span>
-            ) : (
-              "no manual yet"
-            )}
-            {treeLayers.prayer && (
-              <PrayerMarkLink
-                prayer={manager.prayer}
-                size="sm"
-                label={`Prayer for ${manager.name}`}
-                onOpen={() => selectManager(manager.id, "prayer")}
-              />
-            )}
-            {readiness && (
-              <ReadinessChip
-                state={readiness.state}
-                text={formatCountdown(readiness)}
-                title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
-              />
-            )}
+          {domain && (
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: domain.color }}
+              title={domain.name}
+            />
+          )}
+          <div
+            className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ButtonUtility
+              size="xs"
+              color="tertiary"
+              icon={Edit01}
+              tooltip="Edit manager"
+              onClick={() => openModal({ kind: "manager", manager })}
+            />
           </div>
         </div>
-        {domain && (
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: domain.color }}
-            title={domain.name}
-          />
+        {layers.prayer && (
+          <div
+            className="nodrag"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <CardPrayer
+              subjectKind="manager"
+              subjectId={manager.id}
+              subjectName={manager.name}
+            />
+          </div>
         )}
-        <div
-          className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ButtonUtility
-            size="xs"
-            color="tertiary"
-            icon={Edit01}
-            tooltip="Edit manager"
-            onClick={() => openModal({ kind: "manager", manager })}
-          />
-        </div>
       </Card>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>
@@ -1459,22 +1320,21 @@ function DirectReportNode({ data }: NodeProps) {
     domains,
     meetings,
     sessions,
-    actions,
-    teamActions,
-    treeLayers,
+    topics,
+    treeMode,
     openModal,
     selectPerson,
     selectedPersonId,
   } = useStore();
+  const layers = MODE_LAYERS[treeMode];
   const dim = useScanDimmed("person", personId);
   const person = people.find((p) => p.id === personId);
   if (!person) return null;
-  const readiness = treeLayers.readiness
+  const readiness = layers.readiness
     ? readinessFor("person", person.id, {
         meetings,
         sessions,
-        actions,
-        teamActions,
+        topics,
       })
     : null;
   const domain = domains.find((d) => d.id === person.domainId);
@@ -1485,80 +1345,82 @@ function DirectReportNode({ data }: NodeProps) {
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
       <Card
-        className={`group flex w-64 cursor-pointer items-center gap-2.5 px-3 py-2 shadow-sm hover:border-teal-400 ${
+        className={`group flex w-64 cursor-pointer flex-col gap-2 px-3 py-2 shadow-sm hover:border-teal-400 ${
           selected ? "border-teal-500 ring-1 ring-teal-500/30" : ""
         }`}
         style={dimStyle(dim)}
         onClick={() => selectPerson(person.id)}
       >
-        <Avatar
-          name={person.name}
-          photo={person.photo}
-          size={34}
-          dimmed={!hasLeadershipRead(person)}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold">{person.name}</div>
-          <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
-            {[person.role, domain?.name].filter(Boolean).join(" · ") ||
-              "Direct report"}
+        <div className="flex items-center gap-2.5">
+          <Avatar name={person.name} photo={person.photo} size={34} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-semibold">{person.name}</div>
+            <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
+              {[person.role, domain?.name].filter(Boolean).join(" · ") ||
+                "Direct report"}
+            </div>
+            <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+              <span className="truncate">
+                {led.length > 0
+                  ? `${led.length} team${led.length === 1 ? "" : "s"}`
+                  : "no teams"}
+              </span>
+              {layers.health && person.health && (
+                <span className="shrink-0">
+                  <HealthChip health={person.health} size="sm" />
+                </span>
+              )}
+              {readiness && (
+                <span className="shrink-0">
+                  <ReadinessChip
+                    state={readiness.state}
+                    text={formatCountdown(readiness)}
+                    title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
+                  />
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
-            <span className="truncate">
-              {led.length > 0
-                ? `${led.length} team${led.length === 1 ? "" : "s"}`
-                : "no teams"}
-            </span>
-            {treeLayers.health && person.health && (
-              <span className="shrink-0">
-                <HealthChip health={person.health} size="sm" />
-              </span>
-            )}
-            {treeLayers.prayer && (
-              <PrayerMarkLink
-                prayer={person.prayer}
-                size="sm"
-                label={`Prayer for ${person.name}`}
-                onOpen={() => selectPerson(person.id, "prayer")}
-              />
-            )}
-            {readiness && (
-              <span className="shrink-0">
-                <ReadinessChip
-                  state={readiness.state}
-                  text={formatCountdown(readiness)}
-                  title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
-                />
-              </span>
-            )}
+          {domain && (
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: domain.color }}
+              title={domain.name}
+            />
+          )}
+          <div
+            className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ButtonUtility
+              size="xs"
+              color="tertiary"
+              icon={Plus}
+              tooltip={`Add a team ${person.name} leads`}
+              onClick={() => openModal({ kind: "team", leaderId: person.id })}
+            />
+            <ButtonUtility
+              size="xs"
+              color="tertiary"
+              icon={Edit01}
+              tooltip="Edit person"
+              onClick={() => openModal({ kind: "person", person })}
+            />
           </div>
         </div>
-        {domain && (
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: domain.color }}
-            title={domain.name}
-          />
+        {layers.prayer && (
+          <div
+            className="nodrag"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <CardPrayer
+              subjectKind="person"
+              subjectId={person.id}
+              subjectName={person.name}
+            />
+          </div>
         )}
-        <div
-          className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <ButtonUtility
-            size="xs"
-            color="tertiary"
-            icon={Plus}
-            tooltip={`Add a team ${person.name} leads`}
-            onClick={() => openModal({ kind: "team", leaderId: person.id })}
-          />
-          <ButtonUtility
-            size="xs"
-            color="tertiary"
-            icon={Edit01}
-            tooltip="Edit person"
-            onClick={() => openModal({ kind: "person", person })}
-          />
-        </div>
       </Card>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>
@@ -1574,7 +1436,7 @@ function TeamNode({ data }: NodeProps) {
     domains,
     meetings,
     sessions,
-    actions,
+    topics,
     teamActions,
     addTeamAction,
     updateTeamAction,
@@ -1583,14 +1445,25 @@ function TeamNode({ data }: NodeProps) {
     selectedPersonId,
     selectPerson,
     selectTeam,
-    treeLayers,
+    treeMode,
     openModal,
   } = useStore();
   // Highlight the card while one of its members is open, not just the team.
   const activeTeamId = useActiveTeamId();
-  const healthFilter = useStore((s) => s.healthScan);
-  const prayerFilter = useStore((s) => s.prayerScan);
+  const healthScan = useStore((s) => s.healthScan);
+  const prayerScan = useStore((s) => s.prayerScan);
   const dim = useScanDimmed("team", teamId);
+
+  // A scan dims the people it isn't asking about, so an open team card answers
+  // the scan bar's question without a second look. Whichever scan the mode owns
+  // — and in the two modes that own none, nothing dims.
+  const scan = MODE_SCAN[treeMode];
+  const rowDimmed = (p: Person) =>
+    scan === "health"
+      ? !matchesHealth(p.health, healthScan)
+      : scan === "prayer"
+        ? !matchesPrayer(p.prayer, prayerScan)
+        : false;
 
   const team = teams.find((t) => t.id === teamId);
   if (!team) return null;
@@ -1607,22 +1480,19 @@ function TeamNode({ data }: NodeProps) {
     people: showPeople,
     mandate,
     action,
-    giftMix,
-    detail,
     readiness: showReadiness,
     health: showHealth,
     prayer: showPrayer,
-  } = treeLayers;
+  } = MODE_LAYERS[treeMode];
 
   // My call on the team, or — when I've never made one — the average of the
   // calls I've made on its people, marked as derived so it never poses as mine.
   const health = teamHealth(team, members);
   const memberHealth = rollUpHealth(members.map((m) => m.health));
-  const memberPrayer = rollUpPrayer(members.map((m) => m.prayer));
 
   // A card can carry two different things to be ready for: the team's own
   // standing meeting, and a 1:1 with each member. Both are tracked meetings.
-  const rdata: ReadinessData = { meetings, sessions, actions, teamActions };
+  const rdata: ReadinessData = { meetings, sessions, topics };
   const teamMeeting = meetingFor(meetings, "team", team.id);
   const teamReading = readinessFor("team", team.id, rdata);
   const readings = new Map(
@@ -1691,13 +1561,6 @@ function TeamNode({ data }: NodeProps) {
                 {showHealth && health && (
                   <HealthChip health={health.health} derived={health.derived} />
                 )}
-                {showPrayer && (
-                  <PrayerMarkLink
-                    prayer={team.prayer}
-                    label={`Prayer for ${team.name}`}
-                    onOpen={() => selectTeam(team.id, "prayer")}
-                  />
-                )}
                 {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
                 {capacity && (
                   <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
@@ -1744,12 +1607,6 @@ function TeamNode({ data }: NodeProps) {
             </p>
           )}
 
-          {giftMix && members.length > 0 && (
-            <div className="mt-3">
-              <GiftMixBar people={members} />
-            </div>
-          )}
-
           {showHealth && (team.health?.note || memberHealth.rated > 0) && (
             <div className="mt-3 flex flex-col gap-1">
               {team.health?.note && (
@@ -1774,33 +1631,6 @@ function TeamNode({ data }: NodeProps) {
             </div>
           )}
 
-          {/* What I'm carrying on this card. One line, and only the line
-              that's asking for something — a count of who's gone quiet, or
-              the team's own focus when there is one. */}
-          {showPrayer && (team.prayer || memberPrayer.carried > 0) && (
-            <div className="mt-3 flex flex-col gap-1">
-              {team.prayer?.focus && (
-                <p className="prayer-text line-clamp-2 !text-[12px]">
-                  {team.prayer.focus}
-                </p>
-              )}
-              {memberPrayer.carried > 0 && (
-                <div className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
-                  <PrayerIcon
-                    className="size-3"
-                    style={{ color: PRAYER_COLOR.carrying }}
-                  />
-                  carrying {memberPrayer.carried} of {members.length}
-                  {memberPrayer.cold > 0 && (
-                    <span style={{ color: PRAYER_COLOR.cold }}>
-                      · {memberPrayer.cold} gone quiet
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
           {showReadiness && roll.tracked > 0 && (
             <div className="mt-3 flex flex-col gap-1">
               <ReadinessBar readings={allReadings} />
@@ -1813,6 +1643,20 @@ function TeamNode({ data }: NodeProps) {
             </div>
           )}
         </div>
+
+        {showPrayer && (
+          <div
+            className="nodrag px-4 pb-3"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <CardPrayer
+              subjectKind="team"
+              subjectId={team.id}
+              subjectName={team.name}
+            />
+          </div>
+        )}
 
         {action && (
           <div
@@ -1848,13 +1692,7 @@ function TeamNode({ data }: NodeProps) {
             {!showPeople && members.length > 0 && (
               <span className="flex -space-x-1.5">
                 {members.slice(0, 4).map((p) => (
-                  <Avatar
-                    key={p.id}
-                    name={p.name}
-                    photo={p.photo}
-                    size={20}
-                    dimmed={!hasLeadershipRead(p)}
-                  />
+                  <Avatar key={p.id} name={p.name} photo={p.photo} size={20} />
                 ))}
                 {members.length > 4 && (
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-[9px] dark:bg-stone-700">
@@ -1876,15 +1714,9 @@ function TeamNode({ data }: NodeProps) {
                   person={p}
                   selected={p.id === selectedPersonId}
                   capacityColor={capacity?.color ?? "#0D9488"}
-                  showDetail={detail}
                   showHealth={showHealth}
                   showPrayer={showPrayer}
-                  // A scan dims the people it isn't asking about, so an open
-                  // team card answers "who on this team" without a second look.
-                  dimmed={
-                    !matchesHealth(p.health, healthFilter) ||
-                    !matchesPrayer(p.prayer, prayerFilter)
-                  }
+                  dimmed={rowDimmed(p)}
                   readiness={showReadiness ? readings.get(p.id) : undefined}
                   onSelect={() => selectPerson(p.id)}
                   onOpenPrayer={() => selectPerson(p.id, "prayer")}
@@ -1994,7 +1826,6 @@ function PersonRow({
   person,
   selected,
   capacityColor,
-  showDetail,
   showHealth,
   showPrayer,
   dimmed = false,
@@ -2006,28 +1837,21 @@ function PersonRow({
   person: Person;
   selected: boolean;
   capacityColor: string;
-  showDetail: boolean;
-  /** Health layer on — show their level beside the name. */
+  /** Assess mode — show their health level beside the name. */
   showHealth?: boolean;
-  /** Prayer layer on — show the hand, and open the prayer tab from it. */
+  /** Pray mode — show the hand, and open the prayer tab from it. */
   showPrayer?: boolean;
-  /** A health scan is running and they're not part of the answer. */
+  /** A scan is running and they're not part of the answer. */
   dimmed?: boolean;
-  /** Present only when the readiness layer is on. */
+  /** Present only in Prep mode. */
   readiness?: Readiness;
   onSelect: () => void;
   onOpenPrayer: () => void;
   onEdit: () => void;
 }) {
-  const assessed = hasLeadershipRead(person);
-  const dominant = topDomain(person);
-  // Readiness owns the accent bar when its layer is on — it's the more
-  // time-sensitive signal, and capacity is already carried by the card.
-  const barColor = readiness
-    ? STATE_COLOR[readiness.state]
-    : showDetail && dominant
-      ? DOMAIN_COLOR[dominant]
-      : capacityColor;
+  // Readiness owns the accent bar in Prep — it's the more time-sensitive
+  // signal, and capacity is already carried by the card around it.
+  const barColor = readiness ? STATE_COLOR[readiness.state] : capacityColor;
   return (
     <div
       className={`person-row group/person relative flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 ${
@@ -2051,58 +1875,39 @@ function PersonRow({
           name={person.name}
           photo={person.photo}
           size={34}
-          dimmed={!assessed}
           ring={selected ? capacityColor : undefined}
         />
       </div>
       <div className="min-w-0 flex-1">
         <div
           className={`flex items-center gap-1.5 truncate text-sm transition-colors ${
-            selected
-              ? "font-medium"
-              : assessed
-                ? ""
-                : "text-stone-400 dark:text-stone-500"
+            selected ? "font-medium" : ""
           }`}
         >
           <span className="truncate">{person.name}</span>
           {showHealth && <HealthDot health={person.health} />}
-          {showPrayer && person.prayer && (
-            <button
-              type="button"
-              className="shrink-0"
-              aria-label={`Prayer for ${person.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenPrayer();
-              }}
-            >
-              <PrayerDot prayer={person.prayer} />
-            </button>
+          {showPrayer && (
+            <PrayerCarryToggle
+              subjectKind="person"
+              subjectId={person.id}
+              subjectName={person.name}
+              prayer={person.prayer}
+              onOpen={onOpenPrayer}
+            />
           )}
         </div>
-        {showDetail ? (
-          <PersonGiftDots person={person} />
-        ) : null}
-        {(!showDetail || !(person.assessments.cliftonTop5?.length || person.assessments.enneagram)) &&
-          person.role && (
-            <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
-              {person.role}
-            </div>
-          )}
+        {person.role && (
+          <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+            {person.role}
+          </div>
+        )}
       </div>
-      {readiness ? (
+      {readiness && (
         <ReadinessChip
           state={readiness.state}
           text={formatCountdown(readiness)}
           title={`${STATE_LABEL[readiness.state]} — ${readiness.headline}`}
         />
-      ) : (
-        !assessed && (
-          <span className="text-[10px] text-stone-400 dark:text-stone-600">
-            unassessed
-          </span>
-        )
       )}
       <ButtonUtility
         size="xs"

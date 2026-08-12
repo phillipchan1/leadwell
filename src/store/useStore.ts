@@ -17,6 +17,8 @@ import type {
   Person,
   Team,
   TeamAction,
+  Topic,
+  TopicLane,
   TrackedMeeting,
   MeetingRhythm,
   MeetingSubjectKind,
@@ -27,6 +29,7 @@ import type {
 import { storage } from "../lib/storage";
 import { todayISO, type HealthFilterValue } from "../lib/health";
 import type { PrayerFilterValue } from "../lib/prayer";
+import type { TreeMode } from "../lib/treeMode";
 import { isDescendant, personDomainId } from "../lib/teams";
 import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
@@ -45,6 +48,7 @@ import {
   seedPrayers,
   seedSessions,
   seedPeople,
+  seedTopics,
   seedTeamActions,
   seedTeamGoals,
   seedTeamNotes,
@@ -80,18 +84,6 @@ function go(path: string, opts?: { replace?: boolean }) {
   else if (typeof window !== "undefined")
     window.history.replaceState({}, "", path);
 }
-
-/** Independent show/hide layers on org-tree team cards. */
-export type TreeLayer =
-  | "people"
-  | "mandate"
-  | "action"
-  | "giftMix"
-  | "detail"
-  | "readiness"
-  | "health"
-  | "prayer";
-export type TreeLayers = Record<TreeLayer, boolean>;
 
 export type { NodePosition, PersistedData } from "../lib/repo";
 
@@ -141,12 +133,17 @@ type UIState = {
    * "who am I carrying" the same way in both places.
    */
   prayerScan: PrayerFilterValue[];
-  /** Canvas card layers — toggle what each team card surfaces. */
-  treeLayers: TreeLayers;
+  /**
+   * What I came to the chart to do. The only card control there is — the layer
+   * set, the scan bar and what dims all follow from it (see lib/treeMode.ts).
+   */
+  treeMode: TreeMode;
   selectedPersonId: string | null;
   selectedTeamId: string | null;
   /** Side panel open for a manager I report to (leading-up profile). */
   selectedManagerId: string | null;
+  /** Open on one recurring meeting — its planner, notes or settings. */
+  selectedMeetingId: string | null;
   /** Side panel open for the signed-in leader's own profile. */
   selectedMe: boolean;
   /** True when the selected entity is on its full-page focus route. */
@@ -175,7 +172,7 @@ type Store = PersistedData &
     togglePrayerScan: (value: PrayerFilterValue) => void;
     /** Scan for a specific set of prayer states (or clear it with []). */
     setPrayerScan: (values: PrayerFilterValue[]) => void;
-    toggleTreeLayer: (layer: TreeLayer) => void;
+    setTreeMode: (mode: TreeMode) => void;
     /**
      * Open someone. The optional section lands you on one of their tabs — the
      * canvas uses it to send a prayer mark straight to the prayer tab rather
@@ -184,6 +181,8 @@ type Store = PersistedData &
     selectPerson: (id: string | null, section?: string) => void;
     selectTeam: (id: string | null, section?: string) => void;
     selectManager: (id: string | null, section?: string) => void;
+    /** Open one recurring meeting — the planner unless told otherwise. */
+    selectMeeting: (id: string | null, section?: string) => void;
     selectMe: (open: boolean) => void;
     /** Close whatever is open, without stepping up the breadcrumb. */
     clearSelection: () => void;
@@ -305,12 +304,48 @@ type Store = PersistedData &
     setActionColumn: (id: string, column: ActionColumn) => void;
     toggleAction: (id: string) => void;
     deleteAction: (id: string) => void;
+    // topic boards — what there is to talk about, keyed by meeting
+    addTopic: (
+      meetingId: string,
+      text: string,
+      opts?: { lane?: TopicLane; sessionId?: string; dueDate?: string }
+    ) => string;
+    updateTopic: (
+      id: string,
+      patch: Partial<Pick<Topic, "text" | "detail" | "dueDate">>
+    ) => void;
+    /** Move a topic into a lane or onto one occurrence. Reopens it if closed. */
+    placeTopic: (
+      id: string,
+      target: { lane: TopicLane } | { sessionId: string }
+    ) => void;
+    /** "We talked about it." Passing false puts it back on the board. */
+    coverTopic: (id: string, covered?: boolean) => void;
+    /**
+     * Push a topic into a later occurrence and count it. Omit the session to
+     * drop it back to the backlog — still a push, still counted.
+     */
+    rollTopic: (id: string, sessionId?: string) => void;
+    deleteTopic: (id: string) => void;
     // tracked meetings — the unit readiness is measured against
-    /** Opt in to being ready for a meeting with this subject. Returns its id. */
+    /**
+     * Opt in to being ready for a meeting with this subject. Idempotent — it
+     * answers the "is this tracked at all" question, so it adopts an existing
+     * meeting rather than stacking a second one on it. Returns its id.
+     */
     trackMeeting: (
       subjectKind: MeetingSubjectKind,
       subjectId: string,
       rhythm: MeetingRhythm,
+      patch?: Partial<Omit<TrackedMeeting, "id" | "subjectKind" | "subjectId">>
+    ) => string;
+    /**
+     * Add a meeting, always a new one. A 1:1 and a career check-in with the
+     * same person are two different things to be ready for.
+     */
+    createMeeting: (
+      subjectKind: MeetingSubjectKind,
+      subjectId: string,
       patch?: Partial<Omit<TrackedMeeting, "id" | "subjectKind" | "subjectId">>
     ) => string;
     updateMeeting: (id: string, patch: Partial<Omit<TrackedMeeting, "id">>) => void;
@@ -400,12 +435,12 @@ function patchPrayer(
   return { people: s.people.map(apply) };
 }
 
-/** Meetings for a set of subjects, plus every session under them. */
+/** Meetings for a set of subjects, plus every session and topic under them. */
 function withoutMeetingsFor(
   s: Store,
   kind: MeetingSubjectKind,
   subjectIds: Set<string>
-): Pick<Store, "meetings" | "sessions"> {
+): Pick<Store, "meetings" | "sessions" | "topics"> {
   const doomed = new Set(
     s.meetings
       .filter((m) => m.subjectKind === kind && subjectIds.has(m.subjectId))
@@ -414,6 +449,7 @@ function withoutMeetingsFor(
   return {
     meetings: s.meetings.filter((m) => !doomed.has(m.id)),
     sessions: s.sessions.filter((o) => !doomed.has(o.meetingId)),
+    topics: s.topics.filter((t) => !doomed.has(t.meetingId)),
   };
 }
 
@@ -443,6 +479,7 @@ function seedData(): PersistedData {
     people: seedPeople,
     actions: seedActions,
     meetings: seedMeetings,
+    topics: seedTopics,
     sessions: seedSessions,
     goals: seedGoals,
     notes: seedNotes,
@@ -467,6 +504,7 @@ function blankData(): PersistedData {
     people: [],
     actions: [],
     meetings: [],
+    topics: [],
     sessions: [],
     goals: [],
     notes: [],
@@ -561,6 +599,13 @@ function currentSelection(s: UIState): Selection | null {
       section: s.section ?? undefined,
       sessionId,
     };
+  if (s.selectedMeetingId)
+    return {
+      kind: "meeting",
+      id: s.selectedMeetingId,
+      section: s.section ?? undefined,
+      sessionId,
+    };
   if (s.selectedMe)
     return { kind: "me", id: "", section: s.section ?? undefined, sessionId };
   return null;
@@ -606,21 +651,11 @@ export const useStore = create<Store>((set, get) => ({
   treeDomainId: null,
   healthScan: [],
   prayerScan: [],
-  treeLayers: {
-    people: false,
-    mandate: true,
-    action: true,
-    giftMix: false,
-    detail: false,
-    readiness: true,
-    health: true,
-    // Off by default. Prayer is a mode you enter on purpose, not a column
-    // everyone gets whether they asked for it or not.
-    prayer: false,
-  },
+  treeMode: "plan",
   selectedPersonId: null,
   selectedTeamId: null,
   selectedManagerId: null,
+  selectedMeetingId: null,
   selectedMe: false,
   focused: false,
   section: null,
@@ -675,19 +710,11 @@ export const useStore = create<Store>((set, get) => ({
         : [...s.prayerScan, value],
     })),
   setPrayerScan: (values) => set({ prayerScan: values }),
-  toggleTreeLayer: (layer) =>
-    set((s) => ({
-      treeLayers: { ...s.treeLayers, [layer]: !s.treeLayers[layer] },
-      // Scanning for a level with the layer hidden shows a filtered canvas
-      // that can't say why anything dimmed — turning the layer off drops the
-      // scan with it.
-      ...(layer === "health" && s.treeLayers.health
-        ? { healthScan: [] }
-        : null),
-      ...(layer === "prayer" && s.treeLayers.prayer
-        ? { prayerScan: [] }
-        : null),
-    })),
+  // Switching mode deliberately leaves the scans alone. They're shared with
+  // the table so a scan follows you between the two surfaces, and dropping one
+  // every time you changed mode would break that. The canvas just stops
+  // *applying* a scan its mode doesn't own — see MODE_SCAN.
+  setTreeMode: (mode) => set({ treeMode: mode }),
   /**
    * Closing a person steps up to their team rather than dismissing outright —
    * the breadcrumb parent is where you came from, so that's where back goes.
@@ -713,6 +740,22 @@ export const useStore = create<Store>((set, get) => ({
     const sel: Selection = { kind: "manager", id, section };
     if (s.focused) go(routePath({ view: "focus", target: sel }));
     else goTab(s, sel, "tree");
+  },
+  // A meeting is reached from the Meetings tab or from its subject's profile,
+  // and there's no canvas node for it — so it always opens in focus, where the
+  // planner has the width the board actually needs.
+  selectMeeting: (id, section) => {
+    const s = get();
+    if (!id) {
+      goTo(s, null);
+      return;
+    }
+    go(
+      routePath({
+        view: "focus",
+        target: { kind: "meeting", id, section: section ?? "plan" },
+      })
+    );
   },
   selectMe: (open) => {
     const s = get();
@@ -740,6 +783,24 @@ export const useStore = create<Store>((set, get) => ({
     if (!session) return;
     const meeting = s.meetings.find((m) => m.id === session.meetingId);
     if (!meeting) return;
+
+    // Land back where you opened it from. Coming off the planner, closing the
+    // write-up should return to the board, not jump sideways to a profile you
+    // were never on.
+    if (s.selectedMeetingId === meeting.id) {
+      go(
+        routePath({
+          view: "focus",
+          target: {
+            kind: "meeting",
+            id: meeting.id,
+            section: "notes",
+            sessionId,
+          },
+        })
+      );
+      return;
+    }
 
     let sel: Selection;
     if (meeting.subjectKind === "person") {
@@ -775,7 +836,9 @@ export const useStore = create<Store>((set, get) => ({
     const target =
       rest.kind === "team"
         ? { kind: rest.kind, id: rest.id }
-        : { ...rest, section: rest.section ?? "sessions" };
+        : rest.kind === "meeting"
+          ? { ...rest, section: rest.section ?? "notes" }
+          : { ...rest, section: rest.section ?? "sessions" };
     go(routePath({ view: "focus", target }));
   },
   openFocus: () => {
@@ -798,6 +861,7 @@ export const useStore = create<Store>((set, get) => ({
         selectedPersonId: null as string | null,
         selectedTeamId: null as string | null,
         selectedManagerId: null as string | null,
+        selectedMeetingId: null as string | null,
         selectedMe: false,
       };
       if (!sel) return next;
@@ -807,6 +871,7 @@ export const useStore = create<Store>((set, get) => ({
       if (sel.kind === "person") next.selectedPersonId = sel.id;
       else if (sel.kind === "team") next.selectedTeamId = sel.id;
       else if (sel.kind === "manager") next.selectedManagerId = sel.id;
+      else if (sel.kind === "meeting") next.selectedMeetingId = sel.id;
       else next.selectedMe = true;
       return next;
     }),
@@ -1256,6 +1321,77 @@ export const useStore = create<Store>((set, get) => ({
   deleteAction: (id) =>
     set((s) => ({ actions: s.actions.filter((a) => a.id !== id) })),
 
+  addTopic: (meetingId, text, opts = {}) => {
+    const id = uid();
+    set((s) => {
+      const last = s.topics
+        .filter((t) => t.meetingId === meetingId)
+        .reduce((max, t) => Math.max(max, t.order), -1);
+      return {
+        topics: [
+          ...s.topics,
+          {
+            id,
+            meetingId,
+            text,
+            status: "open",
+            lane: opts.lane ?? "backlog",
+            sessionId: opts.sessionId,
+            carried: 0,
+            dueDate: opts.dueDate,
+            createdOn: todayISO(),
+            order: last + 1,
+          },
+        ],
+      };
+    });
+    return id;
+  },
+  updateTopic: (id, patch) =>
+    set((s) => ({
+      topics: s.topics.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    })),
+  placeTopic: (id, target) =>
+    set((s) => ({
+      topics: s.topics.map((t) => {
+        if (t.id !== id) return t;
+        // Dragging a covered card back onto the board reopens it — the board
+        // only ever shows what's still live, so being there means it is.
+        const reopened = { ...t, status: "open" as const, closedOn: undefined };
+        return "sessionId" in target
+          ? { ...reopened, sessionId: target.sessionId }
+          : { ...reopened, lane: target.lane, sessionId: undefined };
+      }),
+    })),
+  coverTopic: (id, covered = true) =>
+    set((s) => ({
+      topics: s.topics.map((t) =>
+        t.id === id
+          ? covered
+            ? { ...t, status: "covered", closedOn: todayISO() }
+            : { ...t, status: "open", closedOn: undefined }
+          : t
+      ),
+    })),
+  rollTopic: (id, sessionId) =>
+    set((s) => ({
+      topics: s.topics.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              status: "open",
+              closedOn: undefined,
+              sessionId,
+              // The count is the honest signal: a topic pushed three times is
+              // telling you something a due date never would.
+              carried: t.carried + 1,
+            }
+          : t
+      ),
+    })),
+  deleteTopic: (id) =>
+    set((s) => ({ topics: s.topics.filter((t) => t.id !== id) })),
+
   trackMeeting: (subjectKind, subjectId, rhythm, patch) => {
     const existing = get().meetings.find(
       (m) => m.subjectKind === subjectKind && m.subjectId === subjectId
@@ -1264,11 +1400,14 @@ export const useStore = create<Store>((set, get) => ({
       get().updateMeeting(existing.id, { rhythm, ...patch });
       return existing.id;
     }
+    return get().createMeeting(subjectKind, subjectId, { rhythm, ...patch });
+  },
+  createMeeting: (subjectKind, subjectId, patch) => {
     const id = uid();
     set((s) => ({
       meetings: [
         ...s.meetings,
-        { id, subjectKind, subjectId, rhythm, ...patch },
+        { id, subjectKind, subjectId, rhythm: "weekly", ...patch },
       ],
       // Tracking answers the opt-in question, so the decision flag is moot.
       ...clearNoMeeting(s, subjectKind, subjectId),
@@ -1283,6 +1422,7 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({
       meetings: s.meetings.filter((m) => m.id !== id),
       sessions: s.sessions.filter((o) => o.meetingId !== id),
+      topics: s.topics.filter((t) => t.meetingId !== id),
     })),
   setNoMeeting: (subjectKind, subjectId, value) =>
     set((s) => {
@@ -1318,7 +1458,14 @@ export const useStore = create<Store>((set, get) => ({
       sessions: s.sessions.map((o) => (o.id === id ? { ...o, ...patch } : o)),
     })),
   deleteSession: (id) =>
-    set((s) => ({ sessions: s.sessions.filter((o) => o.id !== id) })),
+    set((s) => ({
+      sessions: s.sessions.filter((o) => o.id !== id),
+      // Anything planned for it goes back to the backlog rather than vanishing
+      // into a slot that no longer exists.
+      topics: s.topics.map((t) =>
+        t.sessionId === id ? { ...t, sessionId: undefined } : t
+      ),
+    })),
 
   addGoal: (g) => set((s) => ({ goals: [...s.goals, { ...g, id: uid() }] })),
   updateGoal: (id, patch) =>
@@ -1473,6 +1620,7 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "people",
   "actions",
   "meetings",
+  "topics",
   "sessions",
   "goals",
   "notes",
