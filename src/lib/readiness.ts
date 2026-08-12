@@ -278,6 +278,46 @@ export function sessionsFor(meetingId: string, sessions: Session[]): Session[] {
 }
 
 /**
+ * The next explicitly booked occurrence. `meeting.nextDate` wins when set —
+ * that's the user's current plan in Settings. Per-session `nextDate` fields are
+ * only fallbacks from individual write-ups.
+ */
+export function explicitNextDate(
+  meeting: TrackedMeeting,
+  sessions: Session[],
+  today: string = todayISO()
+): string | null {
+  if (meeting.nextDate && meeting.nextDate >= today) {
+    return meeting.nextDate;
+  }
+
+  const mine = sessionsFor(meeting.id, sessions);
+  const scheduled = mine.find((s) => s.date > today)?.date ?? null;
+  const fromSessions = mine
+    .map((s) => s.nextDate)
+    .filter((d): d is string => typeof d === "string" && d >= today)
+    .sort()
+    .pop();
+
+  if (scheduled && fromSessions) {
+    return scheduled < fromSessions ? scheduled : fromSessions;
+  }
+  return scheduled ?? fromSessions ?? null;
+}
+
+/** Latest booking hint on record — for missed-date detection. */
+function latestBookingHint(
+  meeting: TrackedMeeting,
+  sessions: Session[]
+): string | null {
+  const dates = [
+    meeting.nextDate,
+    ...sessionsFor(meeting.id, sessions).map((s) => s.nextDate),
+  ].filter((d): d is string => Boolean(d));
+  return dates.length ? dates.sort().pop()! : null;
+}
+
+/**
  * The readiness read for one tracked meeting.
  *
  * `sessions` and `agenda` may be the full unfiltered collections for the
@@ -298,22 +338,9 @@ export function meetingReadiness(
   const lastMet = lastSession?.date ?? null;
   const daysSince = lastMet ? daysBetween(lastMet, today) : null;
 
-  // A booking beats a projection. Take the latest `nextDate` on record so
-  // editing an old session's "next" can't override a newer plan.
-  const booked = [meeting.nextDate, ...mine.map((s) => s.nextDate)]
-    .filter((d): d is string => Boolean(d))
-    .sort()
-    .pop();
-  const upcomingBooked = booked && booked >= today ? booked : null;
-  // A session dated in the future is itself a booking.
-  const scheduled = mine.find((s) => s.date > today)?.date ?? null;
-
-  const explicit =
-    scheduled && upcomingBooked
-      ? scheduled < upcomingBooked
-        ? scheduled
-        : upcomingBooked
-      : (scheduled ?? upcomingBooked);
+  // A booking beats a projection. Meeting-level nextDate is the user's plan.
+  const explicit = explicitNextDate(meeting, sessions, today);
+  const booked = latestBookingHint(meeting, sessions);
 
   // As-needed makes no promise about a next date, so it projects nothing.
   const projectedDate =

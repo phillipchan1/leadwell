@@ -26,7 +26,7 @@
  * goes stale overnight, every night.
  */
 import type { Session, Topic, TopicLane, TrackedMeeting } from "../types";
-import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, weekdayUTC } from "./readiness";
+import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, weekdayUTC } from "./readiness";
 
 /** How many occurrences ahead the planner offers to scaffold into. */
 export const SLOTS_AHEAD = 3;
@@ -157,12 +157,24 @@ export function plannedSlots(
       .map((s) => ({ sessionId: s.id, date: s.date, projected: false, past: false })),
   ];
 
+  const booking = explicitNextDate(meeting, sessions, today);
+  if (booking && !slots.some((s) => s.date === booking)) {
+    const existing = mine.find((s) => s.date === booking);
+    slots.push({
+      sessionId: existing?.id ?? null,
+      date: booking,
+      projected: false,
+      past: false,
+    });
+  }
+
   // Project forward from whatever we last know about, so the runway continues
   // the rhythm rather than restarting it at today.
   const upcoming = slots.filter((s) => !s.past);
   const lastKnown =
     upcoming[upcoming.length - 1]?.date ??
     mine.filter((s) => s.date <= today).pop()?.date ??
+    booking ??
     today;
 
   const target = meeting.rhythm === "as_needed" ? 1 : ahead;
