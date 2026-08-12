@@ -8,9 +8,12 @@ import {
   nextSlotAfter,
   parseColumnKey,
   plannedSlots,
+  ensureSessionId,
   type BoardColumn,
 } from "../lib/topics";
 import { MEETING_LABEL, todayISO } from "../lib/readiness";
+import { sessionSummary } from "../lib/session";
+import { OccurrencePanel } from "./OccurrencePanel";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -50,9 +53,12 @@ const ADD_PLACEHOLDER: Record<BoardDirection, string> = {
 export function TopicBoard({
   meeting,
   direction = "down",
+  onOpenSession,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
+  /** Promote a write-up to the full-page editor. */
+  onOpenSession?: (sessionId: string) => void;
 }) {
   const {
     sessions,
@@ -68,6 +74,7 @@ export function TopicBoard({
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [allCovered, setAllCovered] = useState(false);
+  const [activeSlotKey, setActiveSlotKey] = useState<string | null>(null);
   const today = todayISO();
 
   const columns = useMemo(
@@ -150,6 +157,24 @@ export function TopicBoard({
 
   const moveOptions = columns.map((c) => ({ key: c.key, label: c.label }));
 
+  const activeColumn = columns.find((c) => c.key === activeSlotKey);
+  const activeSlot = activeColumn?.slot;
+
+  const openSlot = (col: BoardColumn) => {
+    if (!col.slot) return;
+    if (activeSlotKey === col.key) {
+      setActiveSlotKey(null);
+      return;
+    }
+    ensureSessionId(meeting.id, col.slot, sessions, addSession);
+    setActiveSlotKey(col.key);
+  };
+
+  const sessionForColumn = (col: BoardColumn) => {
+    if (!col.slot?.sessionId) return null;
+    return sessions.find((s) => s.id === col.slot!.sessionId) ?? null;
+  };
+
   return (
     <div className="space-y-2">
       {loose.length > 0 && (
@@ -181,6 +206,10 @@ export function TopicBoard({
         {columns.map((col) => {
           const past = Boolean(col.slot?.past);
           const canAdd = !col.covered;
+          const isWeek = Boolean(col.slot);
+          const isActive = activeSlotKey === col.key;
+          const session = sessionForColumn(col);
+          const notesPreview = session ? sessionSummary(session) : "";
           return (
             <div
               key={col.key}
@@ -191,40 +220,68 @@ export function TopicBoard({
                 "flex w-[78vw] max-w-[15rem] shrink-0 snap-start flex-col rounded-xl border bg-stone-50/60 sm:w-[14rem] sm:max-w-none dark:bg-stone-950/40",
                 drag?.over === col.key
                   ? "border-teal-400 bg-teal-50/70 dark:border-teal-600 dark:bg-teal-950/30"
-                  : past
-                    ? "border-amber-300 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-                    : "border-stone-200 dark:border-stone-800"
+                  : isActive
+                    ? "border-teal-500 ring-2 ring-teal-500/30 dark:border-teal-600"
+                    : past
+                      ? "border-amber-300 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
+                      : "border-stone-200 dark:border-stone-800"
               )}
             >
-              <div className="px-2.5 pt-2 pb-1">
-                <div className="flex items-baseline justify-between gap-1">
-                  <span
-                    className={cx(
-                      "truncate text-[11px] font-semibold tracking-wide uppercase",
-                      past
-                        ? "text-amber-700 dark:text-amber-500"
-                        : "text-stone-500 dark:text-stone-400"
-                    )}
-                  >
-                    {col.label}
-                  </span>
-                  <span className="shrink-0 text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
-                    {col.topics.length}
-                  </span>
-                </div>
-                {col.hint && (
-                  <div
-                    className={cx(
-                      "truncate text-[10px]",
-                      past
-                        ? "text-amber-700 dark:text-amber-500"
-                        : "text-stone-400 dark:text-stone-500"
-                    )}
-                  >
-                    {col.hint}
+              {isWeek ? (
+                <button
+                  type="button"
+                  onClick={() => openSlot(col)}
+                  aria-expanded={isActive}
+                  className="px-2.5 pt-2 pb-1 text-left transition-colors hover:bg-white/50 dark:hover:bg-stone-900/40"
+                >
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span
+                      className={cx(
+                        "truncate text-[11px] font-semibold tracking-wide uppercase",
+                        past
+                          ? "text-amber-700 dark:text-amber-500"
+                          : "text-stone-500 dark:text-stone-400"
+                      )}
+                    >
+                      {col.label}
+                    </span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+                      {col.topics.length}
+                    </span>
                   </div>
-                )}
-              </div>
+                  {col.hint && (
+                    <div
+                      className={cx(
+                        "truncate text-[10px]",
+                        past
+                          ? "text-amber-700 dark:text-amber-500"
+                          : "text-stone-400 dark:text-stone-500"
+                      )}
+                    >
+                      {col.hint}
+                    </div>
+                  )}
+                  <div className="mt-0.5 truncate text-[10px] text-teal-700 dark:text-teal-400">
+                    {notesPreview || (isActive ? "Writing…" : "Tap for notes")}
+                  </div>
+                </button>
+              ) : (
+                <div className="px-2.5 pt-2 pb-1">
+                  <div className="flex items-baseline justify-between gap-1">
+                    <span className="truncate text-[11px] font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400">
+                      {col.label}
+                    </span>
+                    <span className="shrink-0 text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+                      {col.topics.length}
+                    </span>
+                  </div>
+                  {col.hint && (
+                    <div className="truncate text-[10px] text-stone-400 dark:text-stone-500">
+                      {col.hint}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <ul className="flex min-h-[4rem] flex-1 flex-col gap-1.5 px-2 pb-2">
                 {col.topics.map((t) => (
@@ -233,7 +290,7 @@ export function TopicBoard({
                     topic={t}
                     columnKey={col.key}
                     past={past}
-                    inSlot={Boolean(col.slot?.sessionId)}
+                    inSlot={Boolean(col.slot && (col.slot.sessionId || isActive))}
                     covered={t.status !== "open"}
                     isDragging={drag?.id === t.id}
                     moveOptions={moveOptions}
@@ -283,6 +340,16 @@ export function TopicBoard({
           );
         })}
       </div>
+
+      {activeSlot && (
+        <OccurrencePanel
+          meeting={meeting}
+          slot={activeSlot}
+          onOpenSession={onOpenSession}
+          onClose={() => setActiveSlotKey(null)}
+          autoFocus
+        />
+      )}
 
       {/* The card under the pointer, lifted out of the strip so it can cross
           column boundaries and the scroll container's clipping. */}

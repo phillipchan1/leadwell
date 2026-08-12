@@ -87,6 +87,21 @@ export function columnKeyOf(topic: Topic): string {
   return topic.lane;
 }
 
+/** Materialize a projected occurrence so notes and topics can attach to it. */
+export function ensureSessionId(
+  meetingId: string,
+  slot: Slot,
+  sessions: Session[],
+  addSession: (o: Omit<Session, "id">) => string
+): string {
+  if (slot.sessionId) return slot.sessionId;
+  const existing = sessions.find(
+    (s) => s.meetingId === meetingId && s.date === slot.date
+  );
+  if (existing) return existing.id;
+  return addSession({ meetingId, date: slot.date });
+}
+
 // ── Reads ─────────────────────────────────────────────────────────────────
 
 export function topicsFor(topics: Topic[], meetingId: string): Topic[] {

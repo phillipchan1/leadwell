@@ -3,6 +3,7 @@ import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import {
   calendarGrid,
+  ensureSessionId,
   slotLabel,
   topicsFor,
   type CalendarDay,
@@ -10,6 +11,7 @@ import {
 import { todayISO } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { OccurrencePanel } from "./OccurrencePanel";
 import { Input } from "@/components/base/input/input";
 import { ChevronLeft, ChevronRight } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
@@ -45,7 +47,13 @@ function dayNumber(iso: string): number {
  * Month grid for one meeting — same slots and topics as the board, laid out
  * on a calendar. Projected occurrences show dashed; booked ones are solid.
  */
-export function MeetingCalendar({ meeting }: { meeting: TrackedMeeting }) {
+export function MeetingCalendar({
+  meeting,
+  onOpenSession,
+}: {
+  meeting: TrackedMeeting;
+  onOpenSession?: (sessionId: string) => void;
+}) {
   const { sessions, topics, addTopic, addSession, placeTopic } = useStore();
   const today = todayISO();
   const [month, setMonth] = useState(() => currentMonth(today));
@@ -130,12 +138,30 @@ export function MeetingCalendar({ meeting }: { meeting: TrackedMeeting }) {
             day={day}
             today={today}
             selected={selected === day.date}
-            onSelect={() => setSelected(day.date === selected ? null : day.date)}
+            onSelect={() => {
+              if (selected === day.date) {
+                setSelected(null);
+                return;
+              }
+              if (day.slot) {
+                ensureSessionId(meeting.id, day.slot, sessions, addSession);
+              }
+              setSelected(day.date);
+            }}
           />
         ))}
       </div>
 
-      {selectedDay && (
+      {selectedDay?.slot && (
+        <OccurrencePanel
+          meeting={meeting}
+          slot={selectedDay.slot}
+          onOpenSession={onOpenSession}
+          onClose={() => setSelected(null)}
+        />
+      )}
+
+      {selectedDay && !selectedDay.slot && (
         <form
           className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-stone-800 dark:bg-stone-950/40"
           onSubmit={(e) => {
@@ -144,39 +170,41 @@ export function MeetingCalendar({ meeting }: { meeting: TrackedMeeting }) {
           }}
         >
           <p className="text-xs font-medium text-stone-600 dark:text-stone-300">
-            {selectedDay.slot
-              ? slotLabel(selectedDay.slot)
-              : new Date(`${selectedDay.date}T00:00:00Z`).toLocaleDateString(
-                  undefined,
-                  {
-                    weekday: "long",
-                    month: "short",
-                    day: "numeric",
-                    timeZone: "UTC",
-                  }
-                )}
-            {selectedDay.slot?.projected && (
-              <span className="ml-1 text-stone-400">· projected</span>
+            {new Date(`${selectedDay.date}T00:00:00Z`).toLocaleDateString(
+              undefined,
+              {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+                timeZone: "UTC",
+              }
             )}
           </p>
-          {selectedDay.topics.length > 0 && (
-            <ul className="space-y-1">
-              {selectedDay.topics.map((t) => (
-                <li
-                  key={t.id}
-                  className="truncate text-xs text-stone-700 dark:text-stone-200"
-                >
-                  {t.text}
-                </li>
-              ))}
-            </ul>
-          )}
           <Input
             size="sm"
             placeholder="Talk about…"
             aria-label="Add topic to this date"
             value={draft}
             onChange={setDraft}
+          />
+        </form>
+      )}
+
+      {selectedDay?.slot && (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addToDay(selectedDay);
+          }}
+        >
+          <Input
+            size="sm"
+            placeholder="Add a topic…"
+            aria-label="Add topic to this date"
+            value={draft}
+            onChange={setDraft}
+            className="flex-1"
           />
         </form>
       )}

@@ -17,9 +17,11 @@ const VIEWS: { id: PlanView; label: string }[] = [
 export function MeetingPlanner({
   meeting,
   direction = "down",
+  onOpenSession,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
+  onOpenSession?: (sessionId: string) => void;
 }) {
   const [view, setView] = useState<PlanView>("board");
 
@@ -50,9 +52,13 @@ export function MeetingPlanner({
       </div>
 
       {view === "board" ? (
-        <TopicBoard meeting={meeting} direction={direction} />
+        <TopicBoard
+          meeting={meeting}
+          direction={direction}
+          onOpenSession={onOpenSession}
+        />
       ) : (
-        <MeetingCalendar meeting={meeting} />
+        <MeetingCalendar meeting={meeting} onOpenSession={onOpenSession} />
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
@@ -15,7 +15,7 @@ import {
 import { topicsFor } from "../lib/topics";
 import { MeetingPlanner } from "./MeetingPlanner";
 import type { BoardDirection } from "./TopicBoard";
-import { SessionTable } from "./SessionTable";
+import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { TintBadge } from "./ui";
 import { Button } from "@/components/base/buttons/button";
@@ -50,6 +50,10 @@ export function SubjectMeetings({
   focusSessionId?: string;
 }) {
   const { meetings, trackMeeting, createMeeting, openSession } = useStore();
+
+  useEffect(() => {
+    if (focusSessionId) openSession(focusSessionId);
+  }, [focusSessionId, openSession]);
 
   const mine = meetingsFor(meetings, subjectKind, subjectId);
   const label = MEETING_LABEL[subjectKind];
@@ -98,7 +102,6 @@ export function SubjectMeetings({
           subjectName={subjectName}
           direction={direction}
           onOpenSession={openSession}
-          focusSessionId={focusSessionId}
         />
       ))}
 
@@ -130,13 +133,11 @@ function MeetingBlock({
   subjectName,
   direction,
   onOpenSession,
-  focusSessionId,
 }: {
   meeting: TrackedMeeting;
   subjectName: string;
   direction: BoardDirection;
   onOpenSession: (id: string) => void;
-  focusSessionId?: string;
 }) {
   const { sessions, topics, meetings, addTopic, updateMeeting, selectMeeting } =
     useStore();
@@ -228,18 +229,18 @@ function MeetingBlock({
             {openCount} open
           </span>
         </div>
-        <MeetingPlanner meeting={meeting} direction={direction} />
+        <MeetingPlanner
+          meeting={meeting}
+          direction={direction}
+          onOpenSession={onOpenSession}
+        />
       </div>
 
       <div className="space-y-1.5">
         <span className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
           History
         </span>
-        <SessionTable
-          meetingId={meeting.id}
-          onOpen={onOpenSession}
-          focusSessionId={focusSessionId}
-        />
+        <SessionHistoryTable meetingId={meeting.id} onOpen={onOpenSession} />
       </div>
     </section>
   );

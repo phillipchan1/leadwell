@@ -11,7 +11,7 @@ import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SectionTitle, TintBadge } from "./ui";
 import { MeetingPlanner } from "./MeetingPlanner";
-import { SessionTable } from "./SessionTable";
+import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { confirmAction } from "./ConfirmDialog";
 import {
@@ -143,14 +143,14 @@ export function MeetingProfile({
       <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
         {tab === "plan" && (
           <div className={`space-y-3 ${pad}`}>
-            <MeetingPlanner meeting={meeting} />
+            <MeetingPlanner meeting={meeting} onOpenSession={openSession} />
           </div>
         )}
 
         {tab === "notes" && (
           <div className={`space-y-3 ${pad}`}>
             <TrackerLink meetingId={meeting.id} />
-            <SessionTable meetingId={meeting.id} onOpen={openSession} />
+            <SessionHistoryTable meetingId={meeting.id} onOpen={openSession} />
           </div>
         )}
 
