@@ -148,45 +148,64 @@ export function plannedSlots(
       .map((t) => t.sessionId as string)
   );
 
-  const slots: Slot[] = [
-    ...mine
-      .filter((s) => s.date < today && openSlotted.has(s.id))
-      .map((s) => ({ sessionId: s.id, date: s.date, projected: false, past: true })),
-    ...mine
-      .filter((s) => s.date >= today)
-      .map((s) => ({ sessionId: s.id, date: s.date, projected: false, past: false })),
-  ];
+  const byDate = new Map<string, Slot>();
+
+  for (const s of mine.filter((s) => s.date < today && openSlotted.has(s.id))) {
+    byDate.set(s.date, {
+      sessionId: s.id,
+      date: s.date,
+      projected: false,
+      past: true,
+    });
+  }
 
   const booking = explicitNextDate(meeting, sessions, today);
-  if (booking && !slots.some((s) => s.date === booking)) {
-    const existing = mine.find((s) => s.date === booking);
-    slots.push({
-      sessionId: existing?.id ?? null,
-      date: booking,
+  const lastPast = mine.filter((s) => s.date <= today).pop()?.date;
+  const anchor = booking ?? lastPast ?? today;
+  const target = meeting.rhythm === "as_needed" ? 1 : ahead;
+
+  // Always scaffold the next N occurrences from the nearest anchor — never
+  // from the furthest materialized session, or planning ahead would swallow
+  // the near-term columns.
+  let cursor = anchor;
+  if (cursor < today) {
+    cursor = projectFromLast(meeting, cursor);
+    while (cursor <= today) cursor = projectFromLast(meeting, cursor);
+  }
+
+  for (let i = 0; i < target; i++) {
+    if (i > 0) cursor = projectFromLast(meeting, cursor);
+    const existing = mine.find((s) => s.date === cursor);
+    byDate.set(cursor, {
+      sessionId: existing?.id ?? byDate.get(cursor)?.sessionId ?? null,
+      date: cursor,
+      projected: !existing,
+      past: cursor < today,
+    });
+  }
+
+  // Any other future session — usually from planning further out — still
+  // deserves its own column even when it falls beyond the runway.
+  for (const s of mine.filter((s) => s.date >= today)) {
+    byDate.set(s.date, {
+      sessionId: s.id,
+      date: s.date,
       projected: false,
       past: false,
     });
   }
 
-  // Project forward from whatever we last know about, so the runway continues
-  // the rhythm rather than restarting it at today.
-  const upcoming = slots.filter((s) => !s.past);
-  const lastKnown =
-    upcoming[upcoming.length - 1]?.date ??
-    mine.filter((s) => s.date <= today).pop()?.date ??
-    booking ??
-    today;
-
-  const target = meeting.rhythm === "as_needed" ? 1 : ahead;
-
-  let cursor = lastKnown;
-  while (slots.filter((s) => !s.past).length < target) {
-    cursor = projectFromLast(meeting, cursor);
-    while (cursor <= today) cursor = projectFromLast(meeting, cursor);
-    slots.push({ sessionId: null, date: cursor, projected: true, past: false });
+  if (booking && !byDate.has(booking)) {
+    const existing = mine.find((s) => s.date === booking);
+    byDate.set(booking, {
+      sessionId: existing?.id ?? null,
+      date: booking,
+      projected: !existing,
+      past: false,
+    });
   }
 
-  return slots.sort((a, b) => a.date.localeCompare(b.date));
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /** The next occurrence a topic can be pushed into, after the one it's in. */
@@ -211,8 +230,12 @@ export function slotLabel(slot: Slot): string {
   return slot.projected ? `~${label}` : label;
 }
 
-function slotHint(slot: Slot, openCount: number, today: string): string {
+function slotHint(slot: Slot, topics: Topic[], today: string): string {
+  const openCount = topics.filter((t) => t.status === "open").length;
   if (slot.past) {
+    if (openCount === 0) {
+      return topics.length > 0 ? "all covered" : "";
+    }
     return openCount === 1 ? "1 not covered" : `${openCount} not covered`;
   }
   const days = daysBetween(today, slot.date);
@@ -242,7 +265,7 @@ export function boardColumns(
 
   const coveredCutoff = addDays(today, -COVERED_WINDOW_DAYS);
   const covered = mine
-    .filter((t) => t.status !== "open")
+    .filter((t) => t.status !== "open" && !t.sessionId)
     .filter((t) => opts.allCovered || !t.closedOn || t.closedOn >= coveredCutoff)
     .sort((a, b) => (b.closedOn ?? "").localeCompare(a.closedOn ?? ""));
 
@@ -251,12 +274,12 @@ export function boardColumns(
 
   const slotColumns: BoardColumn[] = slots.map((slot) => {
     const inSlot = slot.sessionId
-      ? open.filter((t) => t.sessionId === slot.sessionId)
+      ? mine.filter((t) => t.sessionId === slot.sessionId && t.status !== "dropped")
       : [];
     return {
       key: slotKey(slot),
       label: slotLabel(slot),
-      hint: slotHint(slot, inSlot.length, today),
+      hint: slotHint(slot, inSlot, today) || undefined,
       slot,
       topics: inSlot,
     };
@@ -336,13 +359,13 @@ export function occurrencesInMonth(
   const end = monthEnd(month);
   const slots = slotsThrough(meeting, sessions, topics, end, today);
   const mine = sessionsFor(meeting.id, sessions);
-  const open = topicsFor(topics, meeting.id).filter((t) => t.status === "open");
+  const all = topicsFor(topics, meeting.id);
   const map = new Map<string, { slot: Slot; topics: Topic[] }>();
 
   for (const slot of slots) {
     if (slot.date < start || slot.date > end) continue;
     const inSlot = slot.sessionId
-      ? open.filter((t) => t.sessionId === slot.sessionId)
+      ? all.filter((t) => t.sessionId === slot.sessionId && t.status !== "dropped")
       : [];
     map.set(slot.date, { slot, topics: inSlot });
   }
@@ -356,7 +379,7 @@ export function occurrencesInMonth(
         projected: false,
         past: s.date < today,
       },
-      topics: open.filter((t) => t.sessionId === s.id),
+      topics: all.filter((t) => t.sessionId === s.id && t.status !== "dropped"),
     });
   }
 

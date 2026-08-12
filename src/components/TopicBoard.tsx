@@ -14,7 +14,8 @@ import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { Check, DotsGrid, X } from "@untitledui/icons";
+import { Checkbox } from "@/components/base/checkbox/checkbox";
+import { DotsGrid, X } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 
 /**
@@ -232,14 +233,16 @@ export function TopicBoard({
                     topic={t}
                     columnKey={col.key}
                     past={past}
-                    covered={Boolean(col.covered)}
+                    inSlot={Boolean(col.slot?.sessionId)}
+                    covered={t.status !== "open"}
                     isDragging={drag?.id === t.id}
                     moveOptions={moveOptions}
                     handleProps={handleProps}
                     onText={(text) => updateTopic(t.id, { text })}
                     onMove={(key) => place(t.id, key)}
-                    onCover={() => coverTopic(t.id, t.status === "open")}
+                    onCover={(covered) => coverTopic(t.id, covered)}
                     onRoll={() => roll(t)}
+                    onBacklog={() => placeTopic(t.id, { lane: "backlog" })}
                     onDelete={() => deleteTopic(t.id)}
                   />
                 ))}
@@ -304,6 +307,7 @@ function TopicCard({
   topic,
   columnKey,
   past,
+  inSlot,
   covered,
   isDragging,
   moveOptions,
@@ -312,19 +316,23 @@ function TopicCard({
   onMove,
   onCover,
   onRoll,
+  onBacklog,
   onDelete,
 }: {
   topic: Topic;
   columnKey: string;
   past: boolean;
+  /** Slotted into a booked occurrence — gets a covered checkbox. */
+  inSlot: boolean;
   covered: boolean;
   isDragging: boolean;
   moveOptions: { key: string; label: string }[];
   handleProps: ReturnType<typeof useCardDrag>["handleProps"];
   onText: (text: string) => void;
   onMove: (key: string) => void;
-  onCover: () => void;
+  onCover: (covered: boolean) => void;
   onRoll: () => void;
+  onBacklog: () => void;
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLLIElement>(null);
@@ -341,16 +349,24 @@ function TopicCard({
       )}
     >
       <div className="flex items-start gap-1 px-2 py-1.5">
-        {/* An explicit handle: the card also holds an editable textarea, and a
-            press anywhere would fight text selection and the caret. */}
-        <button
-          type="button"
-          aria-label={`Move "${topic.text || "topic"}"`}
-          className="-ml-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400"
-          {...handleProps(topic.id, columnKey, ref)}
-        >
-          <DotsGrid className="size-4" />
-        </button>
+        {inSlot ? (
+          <Checkbox
+            size="sm"
+            aria-label={`Covered "${topic.text || "topic"}"`}
+            isSelected={covered}
+            onChange={onCover}
+            className="mt-1 shrink-0"
+          />
+        ) : (
+          <button
+            type="button"
+            aria-label={`Move "${topic.text || "topic"}"`}
+            className="-ml-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400"
+            {...handleProps(topic.id, columnKey, ref)}
+          >
+            <DotsGrid className="size-4" />
+          </button>
+        )}
 
         <div className="min-w-0 flex-1">
           <textarea
@@ -384,6 +400,17 @@ function TopicCard({
           )}
         </div>
 
+        {inSlot ? (
+          <button
+            type="button"
+            aria-label={`Move "${topic.text || "topic"}"`}
+            className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 opacity-0 active:cursor-grabbing group-hover:opacity-100 hover:text-stone-500 touch:opacity-100 dark:text-stone-600 dark:hover:text-stone-400"
+            {...handleProps(topic.id, columnKey, ref)}
+          >
+            <DotsGrid className="size-3.5" />
+          </button>
+        ) : null}
+
         <ButtonUtility
           size="xs"
           color="tertiary"
@@ -394,15 +421,14 @@ function TopicCard({
         />
       </div>
 
-      {/* A slot that's been and gone gets the two answers inline, because
-          that's the moment the decision is cheap: did we cover it, or not? */}
-      {past && (
-        <div className="flex items-center gap-1 border-t border-amber-200 px-2 py-1 dark:border-amber-900/70">
-          <Button size="sm" color="link-color" iconLeading={Check} onClick={onCover}>
-            Covered
-          </Button>
+      {/* Past weeks: quick outs for what didn't get covered. */}
+      {past && !covered && (
+        <div className="flex flex-wrap items-center gap-1 border-t border-amber-200 px-2 py-1 dark:border-amber-900/70">
           <Button size="sm" color="link-gray" onClick={onRoll}>
-            → Next
+            → Next week
+          </Button>
+          <Button size="sm" color="link-gray" onClick={onBacklog}>
+            Backlog
           </Button>
         </div>
       )}
