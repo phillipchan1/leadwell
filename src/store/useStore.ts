@@ -9,6 +9,10 @@ import type {
   Manager,
   Me,
   Note,
+  Prayer,
+  PrayerEntry,
+  PrayerEntryKind,
+  PrayerSubjectKind,
   Session,
   Person,
   Team,
@@ -22,6 +26,7 @@ import type {
 } from "../types";
 import { storage } from "../lib/storage";
 import { todayISO, type HealthFilterValue } from "../lib/health";
+import type { PrayerFilterValue } from "../lib/prayer";
 import { isDescendant, personDomainId } from "../lib/teams";
 import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
@@ -37,6 +42,7 @@ import {
   seedManagers,
   seedMe,
   seedNotes,
+  seedPrayers,
   seedSessions,
   seedPeople,
   seedTeamActions,
@@ -83,7 +89,8 @@ export type TreeLayer =
   | "giftMix"
   | "detail"
   | "readiness"
-  | "health";
+  | "health"
+  | "prayer";
 export type TreeLayers = Record<TreeLayer, boolean>;
 
 export type { NodePosition, PersistedData } from "../lib/repo";
@@ -128,6 +135,12 @@ type UIState = {
    * (the shape of the org is the point there); the table drops the rows.
    */
   healthScan: HealthFilterValue[];
+  /**
+   * The prayer scan, shared by the canvas and the table for the same reason
+   * the health scan is. Empty = everything; otherwise the surfaces answer
+   * "who am I carrying" the same way in both places.
+   */
+  prayerScan: PrayerFilterValue[];
   /** Canvas card layers — toggle what each team card surfaces. */
   treeLayers: TreeLayers;
   selectedPersonId: string | null;
@@ -158,10 +171,19 @@ type Store = PersistedData &
     toggleHealthScan: (value: HealthFilterValue) => void;
     /** Scan for a specific set of levels (or clear it with []). */
     setHealthScan: (values: HealthFilterValue[]) => void;
+    /** Add/remove one prayer state from the canvas scan. */
+    togglePrayerScan: (value: PrayerFilterValue) => void;
+    /** Scan for a specific set of prayer states (or clear it with []). */
+    setPrayerScan: (values: PrayerFilterValue[]) => void;
     toggleTreeLayer: (layer: TreeLayer) => void;
-    selectPerson: (id: string | null) => void;
-    selectTeam: (id: string | null) => void;
-    selectManager: (id: string | null) => void;
+    /**
+     * Open someone. The optional section lands you on one of their tabs — the
+     * canvas uses it to send a prayer mark straight to the prayer tab rather
+     * than to the top of a profile you then have to navigate.
+     */
+    selectPerson: (id: string | null, section?: string) => void;
+    selectTeam: (id: string | null, section?: string) => void;
+    selectManager: (id: string | null, section?: string) => void;
     selectMe: (open: boolean) => void;
     /** Close whatever is open, without stepping up the breadcrumb. */
     clearSelection: () => void;
@@ -206,6 +228,44 @@ type Store = PersistedData &
     ) => void;
     /** Edit the one-line evidence behind an existing health call. */
     setHealthNote: (kind: "team" | "person", id: string, note: string) => void;
+    // prayer — who I'm carrying, and the log of what for
+    /**
+     * Take someone up in prayer, or lay them down. Taking up stamps the date
+     * it started; laying down clears the mark but never the log — what you
+     * prayed and what was answered outlives the season you prayed it in.
+     */
+    setPrayer: (
+      kind: PrayerSubjectKind,
+      id: string,
+      carrying: boolean
+    ) => void;
+    /** The one line of what I'm holding for them. */
+    setPrayerFocus: (
+      kind: PrayerSubjectKind,
+      id: string,
+      focus: string
+    ) => void;
+    /** Mark that I prayed. Counts once a day — twice is still once. */
+    markPrayed: (kind: PrayerSubjectKind, id: string) => void;
+    /**
+     * Write something down. Starts carrying the subject if they weren't
+     * already: writing a burden for someone is the decision.
+     */
+    addPrayerEntry: (
+      kind: PrayerSubjectKind,
+      subjectId: string,
+      text: string,
+      entryKind?: PrayerEntryKind
+    ) => string;
+    updatePrayerEntry: (
+      id: string,
+      patch: Partial<Pick<PrayerEntry, "text" | "kind" | "date">>
+    ) => void;
+    /** Answered — a transition with a date, not a deletion. */
+    answerPrayerEntry: (id: string, note?: string) => void;
+    /** Reopen: it wasn't answered after all, or it's back. */
+    reopenPrayerEntry: (id: string) => void;
+    deletePrayerEntry: (id: string) => void;
     // teams
     addTeam: (team: Omit<Team, "id" | "order">) => void;
     updateTeam: (id: string, patch: Partial<Team>) => void;
@@ -322,6 +382,24 @@ function clearNoMeeting(
   };
 }
 
+/**
+ * All three subject kinds carry the prayer mark on their own row, so every
+ * prayer writer goes through this one patcher: praying for a team, for someone
+ * on it and for the leader I answer to are the same act — only the row differs.
+ */
+function patchPrayer(
+  s: Store,
+  kind: PrayerSubjectKind,
+  id: string,
+  next: (prayer?: Prayer) => Prayer | undefined
+): Partial<Store> {
+  const apply = <T extends { id: string; prayer?: Prayer }>(x: T): T =>
+    x.id === id ? { ...x, prayer: next(x.prayer) } : x;
+  if (kind === "team") return { teams: s.teams.map(apply) };
+  if (kind === "manager") return { managers: s.managers.map(apply) };
+  return { people: s.people.map(apply) };
+}
+
 /** Meetings for a set of subjects, plus every session under them. */
 function withoutMeetingsFor(
   s: Store,
@@ -369,6 +447,7 @@ function seedData(): PersistedData {
     goals: seedGoals,
     notes: seedNotes,
     wins: seedWins,
+    prayers: seedPrayers,
     teamActions: seedTeamActions,
     teamGoals: seedTeamGoals,
     teamNotes: seedTeamNotes,
@@ -392,6 +471,7 @@ function blankData(): PersistedData {
     goals: [],
     notes: [],
     wins: [],
+    prayers: [],
     teamActions: [],
     teamGoals: [],
     teamNotes: [],
@@ -425,6 +505,7 @@ function importLegacyLocalData(): PersistedData | null {
     domains: saved.domains ?? seedDomains,
     managers: saved.managers ?? [],
     wins: saved.wins ?? [],
+    prayers: saved.prayers ?? [],
     teamActions: saved.teamActions ?? [],
     teamGoals: saved.teamGoals ?? [],
     teamNotes: saved.teamNotes ?? [],
@@ -524,6 +605,7 @@ export const useStore = create<Store>((set, get) => ({
   tab: "tree",
   treeDomainId: null,
   healthScan: [],
+  prayerScan: [],
   treeLayers: {
     people: false,
     mandate: true,
@@ -532,6 +614,9 @@ export const useStore = create<Store>((set, get) => ({
     detail: false,
     readiness: true,
     health: true,
+    // Off by default. Prayer is a mode you enter on purpose, not a column
+    // everyone gets whether they asked for it or not.
+    prayer: false,
   },
   selectedPersonId: null,
   selectedTeamId: null,
@@ -583,6 +668,13 @@ export const useStore = create<Store>((set, get) => ({
         : [...s.healthScan, value],
     })),
   setHealthScan: (values) => set({ healthScan: values }),
+  togglePrayerScan: (value) =>
+    set((s) => ({
+      prayerScan: s.prayerScan.includes(value)
+        ? s.prayerScan.filter((v) => v !== value)
+        : [...s.prayerScan, value],
+    })),
+  setPrayerScan: (values) => set({ prayerScan: values }),
   toggleTreeLayer: (layer) =>
     set((s) => ({
       treeLayers: { ...s.treeLayers, [layer]: !s.treeLayers[layer] },
@@ -592,29 +684,33 @@ export const useStore = create<Store>((set, get) => ({
       ...(layer === "health" && s.treeLayers.health
         ? { healthScan: [] }
         : null),
+      ...(layer === "prayer" && s.treeLayers.prayer
+        ? { prayerScan: [] }
+        : null),
     })),
   /**
    * Closing a person steps up to their team rather than dismissing outright —
    * the breadcrumb parent is where you came from, so that's where back goes.
    */
-  selectPerson: (id) => {
+  selectPerson: (id, section) => {
     const s = get();
     if (!id) {
       const teamId = s.people.find((p) => p.id === s.selectedPersonId)?.teamId;
       goTo(s, teamId ? { kind: "team", id: teamId } : null);
       return;
     }
-    goTo(s, { kind: "person", id });
+    goTo(s, { kind: "person", id, section });
   },
-  selectTeam: (id) => goTo(get(), id ? { kind: "team", id } : null),
+  selectTeam: (id, section) =>
+    goTo(get(), id ? { kind: "team", id, section } : null),
   // A manager stands above me on the canvas — always reached from the tree.
-  selectManager: (id) => {
+  selectManager: (id, section) => {
     const s = get();
     if (!id) {
       goTo(s, null);
       return;
     }
-    const sel: Selection = { kind: "manager", id };
+    const sel: Selection = { kind: "manager", id, section };
     if (s.focused) go(routePath({ view: "focus", target: sel }));
     else goTab(s, sel, "tree");
   },
@@ -795,6 +891,9 @@ export const useStore = create<Store>((set, get) => ({
         actions: s.actions.filter((a) => a.personId !== id),
         notes: s.notes.filter((n) => n.personId !== id),
         wins: s.wins.filter((w) => w.personId !== id),
+        prayers: s.prayers.filter(
+          (e) => !(e.subjectKind === "manager" && e.subjectId === id)
+        ),
         nodePositions,
       };
     });
@@ -832,6 +931,79 @@ export const useStore = create<Store>((set, get) => ({
         ? { teams: s.teams.map(apply) }
         : { people: s.people.map(apply) };
     }),
+
+  setPrayer: (kind, id, carrying) =>
+    set((s) =>
+      patchPrayer(s, kind, id, (prayer) =>
+        // Already carrying? Taking them up again must not reset the clock —
+        // how long you've held someone is the whole point of the date.
+        carrying ? (prayer ?? { since: todayISO() }) : undefined
+      )
+    ),
+  setPrayerFocus: (kind, id, focus) =>
+    set((s) =>
+      patchPrayer(s, kind, id, (prayer) => {
+        const text = focus.trim();
+        // Writing the focus for someone you weren't carrying takes them up —
+        // the sentence is the decision.
+        return { ...(prayer ?? { since: todayISO() }), focus: text || undefined };
+      })
+    ),
+  markPrayed: (kind, id) =>
+    set((s) =>
+      patchPrayer(s, kind, id, (prayer) => {
+        const today = todayISO();
+        const base = prayer ?? { since: today };
+        // Twice in a day is still one day. The count is a record of days held,
+        // not a tally to run up.
+        if (base.lastPrayedOn === today) return base;
+        return { ...base, lastPrayedOn: today, times: (base.times ?? 0) + 1 };
+      })
+    ),
+  addPrayerEntry: (kind, subjectId, text, entryKind = "burden") => {
+    const id = uid();
+    set((s) => ({
+      prayers: [
+        ...s.prayers,
+        {
+          id,
+          subjectKind: kind,
+          subjectId,
+          date: todayISO(),
+          kind: entryKind,
+          text: text.trim(),
+        },
+      ],
+      // Writing something down for someone starts carrying them. Refusing
+      // until a switch had been flipped first would be pure ceremony.
+      ...patchPrayer(s, kind, subjectId, (prayer) => prayer ?? { since: todayISO() }),
+    }));
+    return id;
+  },
+  updatePrayerEntry: (id, patch) =>
+    set((s) => ({
+      prayers: s.prayers.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    })),
+  answerPrayerEntry: (id, note) =>
+    set((s) => ({
+      prayers: s.prayers.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              answeredOn: e.answeredOn ?? todayISO(),
+              answerNote: note?.trim() || e.answerNote,
+            }
+          : e
+      ),
+    })),
+  reopenPrayerEntry: (id) =>
+    set((s) => ({
+      prayers: s.prayers.map((e) =>
+        e.id === id ? { ...e, answeredOn: undefined, answerNote: undefined } : e
+      ),
+    })),
+  deletePrayerEntry: (id) =>
+    set((s) => ({ prayers: s.prayers.filter((e) => e.id !== id) })),
 
   addTeam: (team) =>
     set((s) => ({
@@ -911,6 +1083,11 @@ export const useStore = create<Store>((set, get) => ({
         goals: s.goals.filter((g) => !peopleIds.has(g.personId)),
         notes: s.notes.filter((n) => !peopleIds.has(n.personId)),
         wins: s.wins.filter((w) => !peopleIds.has(w.personId)),
+        prayers: s.prayers.filter((e) =>
+          e.subjectKind === "team"
+            ? e.subjectId !== id
+            : !(e.subjectKind === "person" && peopleIds.has(e.subjectId))
+        ),
         teamActions: s.teamActions.filter((a) => a.teamId !== id),
         teamGoals: s.teamGoals.filter((g) => g.teamId !== id),
         teamNotes: s.teamNotes.filter((n) => n.teamId !== id),
@@ -1012,6 +1189,9 @@ export const useStore = create<Store>((set, get) => ({
         goals: s.goals.filter((g) => g.personId !== id),
         notes: s.notes.filter((n) => n.personId !== id),
         wins: s.wins.filter((w) => w.personId !== id),
+        prayers: s.prayers.filter(
+          (e) => !(e.subjectKind === "person" && e.subjectId === id)
+        ),
         nodePositions,
       };
     });
@@ -1297,6 +1477,7 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "goals",
   "notes",
   "wins",
+  "prayers",
   "teamActions",
   "teamGoals",
   "teamNotes",

@@ -9,6 +9,7 @@ import type {
   Session,
   Goal,
   Note,
+  PrayerEntry,
   Win,
   TeamAction,
   TeamGoal,
@@ -49,6 +50,12 @@ export const seedTeams: Team[] = [
   {
     id: "team-frontier",
     name: "Frontier Staff",
+    prayer: {
+      since: "2026-03-01",
+      focus: "Unity through the building season",
+      lastPrayedOn: "2026-08-10",
+      times: 46,
+    },
     capacityId: "cap-manager",
     domainId: "dom-church",
     description: "Church staff team",
@@ -162,6 +169,12 @@ export const seedPeople: Person[] = [
     teamId: "team-frontier",
     name: "Sarah Kim",
     role: "Worship Director",
+    prayer: {
+      since: "2026-04-02",
+      focus: "Rest — and the courage to say no without guilt",
+      lastPrayedOn: "2026-08-09",
+      times: 34,
+    },
     health: {
       level: "watch",
       note: "Plate is past full — no weekend off since March.",
@@ -204,6 +217,12 @@ export const seedPeople: Person[] = [
   },
   {
     id: "p-dave",
+    prayer: {
+      since: "2026-01-15",
+      focus: "His marriage, and the move he's weighing",
+      lastPrayedOn: "2026-06-28",
+      times: 21,
+    },
     teamId: "team-mens",
     name: "Dave Okafor",
     role: "Small Groups Lead",
@@ -557,5 +576,55 @@ export const seedWins: Win[] = [
     date: "2026-07-18",
     text: "Every artifact passed review first-pass this cycle",
     impact: "No rework, nothing bounced back up the chain",
+  },
+];
+
+/**
+ * The prayer log. Deliberately sparse: most people on the tree aren't being
+ * carried, which is the honest starting point and the thing the canvas scan is
+ * built to show.
+ */
+export const seedPrayers: PrayerEntry[] = [
+  {
+    id: "pr-1",
+    subjectKind: "person",
+    subjectId: "p-sarah",
+    date: "2026-04-02",
+    kind: "burden",
+    text: "That she'd take a real weekend off without earning it first.",
+  },
+  {
+    id: "pr-2",
+    subjectKind: "person",
+    subjectId: "p-sarah",
+    date: "2026-05-18",
+    kind: "scripture",
+    text: "Matthew 11:28 — Come to me, all who are weary and burdened.",
+  },
+  {
+    id: "pr-3",
+    subjectKind: "person",
+    subjectId: "p-sarah",
+    date: "2026-04-02",
+    kind: "burden",
+    text: "A second worship leader so the whole thing doesn't rest on her.",
+    answeredOn: "2026-07-14",
+    answerNote: "Micah stepped up and led two Sundays in July.",
+  },
+  {
+    id: "pr-4",
+    subjectKind: "person",
+    subjectId: "p-dave",
+    date: "2026-01-15",
+    kind: "burden",
+    text: "Clarity on the move — and that he and Jen would land on it together.",
+  },
+  {
+    id: "pr-5",
+    subjectKind: "team",
+    subjectId: "team-frontier",
+    date: "2026-03-01",
+    kind: "burden",
+    text: "That the building season wouldn't cost us the staff's unity.",
   },
 ];

@@ -510,6 +510,95 @@ body {
   line-height: 1.15;
 }
 
+/* ── Prayer ──
+   A quieter register than the rest of the app on purpose. Nothing here is a
+   control surface: the panel is a page you write on, entries are serif lines
+   with a margin rule rather than rows with widgets, and the only color is the
+   muted violet the mode is anchored in. Any affordance that would make this
+   read as a to-do list (checkbox, add row, hover delete) is deliberately
+   absent — the controls live behind a click on the line itself. */
+
+.prayer-panel {
+  border: 1px solid color-mix(in srgb, var(--prayer-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--prayer-accent) 6%, rgb(255 255 255));
+}
+
+.dark .prayer-panel {
+  background: color-mix(in srgb, var(--prayer-accent) 12%, rgb(28 25 23));
+}
+
+.prayer-focus,
+.prayer-focus-input {
+  font-family: var(--font-journal);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: rgb(41 37 36);
+}
+
+.dark .prayer-focus,
+.dark .prayer-focus-input {
+  color: rgb(231 229 228);
+}
+
+.prayer-focus-input::placeholder {
+  font-style: italic;
+  color: rgb(168 162 158);
+}
+
+/* A margin rule, the way a page has one — not a card, and not a row. */
+.prayer-line {
+  border-left: 2px solid color-mix(in srgb, #7c6bc4 45%, transparent);
+  @apply rounded-r-lg py-2 pr-2 pl-3 transition-colors;
+}
+
+.prayer-line:hover {
+  background: color-mix(in srgb, #7c6bc4 6%, transparent);
+}
+
+.prayer-line.is-answered {
+  border-left-color: rgb(214 211 209);
+}
+
+.dark .prayer-line.is-answered {
+  border-left-color: rgb(68 64 60);
+}
+
+.prayer-text {
+  font-family: var(--font-journal);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  @apply block text-stone-700 dark:text-stone-200;
+}
+
+.prayer-line.is-answered .prayer-text {
+  @apply text-stone-500 dark:text-stone-400;
+}
+
+.prayer-text.is-scripture {
+  font-style: italic;
+  @apply text-stone-600 dark:text-stone-300;
+}
+
+.prayer-answer {
+  font-family: var(--font-journal);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  @apply mt-1 block text-violet-700 dark:text-violet-300;
+}
+
+.prayer-empty,
+.prayer-write {
+  font-family: var(--font-journal);
+  font-style: italic;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  @apply text-stone-500 dark:text-stone-400;
+}
+
+.prayer-write {
+  @apply w-full py-1 text-left transition-colors touch:min-h-11 hover:text-violet-700 dark:hover:text-violet-300;
+}
+
 /* ── Form fields — larger, soft, accent-lit ── */
 
 .field-input {

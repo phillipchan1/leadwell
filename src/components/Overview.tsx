@@ -21,11 +21,21 @@ import {
   needsAttention,
   rollUpHealth,
 } from "../lib/health";
+import {
+  PRAYER_COLOR,
+  daysSincePrayed,
+  formatCarried,
+  formatLastPrayed,
+  prayerState,
+  recentAnswers,
+  rollUpPrayer,
+} from "../lib/prayer";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
 import { Card, SectionTitle } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Avatar } from "./Avatar";
 import { HealthBar } from "./Health";
+import { PrayerIcon, PrayerMark } from "./Prayer";
 
 export function Overview() {
   const {
@@ -34,8 +44,11 @@ export function Overview() {
     meetings,
     sessions,
     actions,
+    managers,
+    prayers,
     selectPerson,
     selectTeam,
+    selectManager,
     setTab,
     setHealthScan,
   } = useStore();
@@ -93,6 +106,59 @@ export function Overview() {
     (a, b) =>
       HEALTH_LEVELS.indexOf(b.health.level) - HEALTH_LEVELS.indexOf(a.health.level)
   );
+
+  /**
+   * The prayer list, boiled down to the two things worth surfacing on a
+   * dashboard: who I'm carrying, and who I've quietly stopped praying for.
+   * Sorted by silence, longest first — that's the whole point of the card.
+   */
+  const carried = [
+    ...teams.flatMap((t) =>
+      t.prayer
+        ? [{ kind: "team" as const, id: t.id, name: t.name, prayer: t.prayer }]
+        : []
+    ),
+    ...people.flatMap((p) =>
+      p.prayer
+        ? [
+            {
+              kind: "person" as const,
+              id: p.id,
+              name: p.name,
+              photo: p.photo,
+              prayer: p.prayer,
+            },
+          ]
+        : []
+    ),
+    ...managers.flatMap((m) =>
+      m.prayer
+        ? [
+            {
+              kind: "manager" as const,
+              id: m.id,
+              name: m.name,
+              photo: m.photo,
+              prayer: m.prayer,
+            },
+          ]
+        : []
+    ),
+  ].sort(
+    (a, b) => (daysSincePrayed(b.prayer) ?? 1e6) - (daysSincePrayed(a.prayer) ?? 1e6)
+  );
+  const prayerRoll = rollUpPrayer([
+    ...teams.map((t) => t.prayer),
+    ...people.map((p) => p.prayer),
+    ...managers.map((m) => m.prayer),
+  ]);
+  const answers = recentAnswers(prayers);
+
+  const openPrayer = (kind: "team" | "person" | "manager", id: string) => {
+    if (kind === "person") selectPerson(id, "prayer");
+    else if (kind === "team") selectTeam(id, "prayer");
+    else selectManager(id, "prayer");
+  };
 
   const generateBrief = async () => {
     setLoading(true);
@@ -284,6 +350,87 @@ export function Overview() {
                 ))}
               </ul>
             </>
+          )}
+        </Card>
+
+        {/* The prayer list. No score, no percentage — the only number here
+            that asks for anything is how long it's been. */}
+        <Card className="p-6">
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <PrayerIcon className="size-3.5 text-violet-500 dark:text-violet-300" />
+              <SectionTitle>Prayer list</SectionTitle>
+            </div>
+            <span className="text-[11px] text-stone-500 dark:text-stone-400">
+              {prayerRoll.carried > 0 && (
+                <>
+                  carrying{" "}
+                  <span className="tabular-nums">{prayerRoll.carried}</span>
+                  {prayerRoll.cold > 0 && (
+                    <span style={{ color: PRAYER_COLOR.cold }}>
+                      {" · "}
+                      {prayerRoll.cold} gone quiet
+                    </span>
+                  )}
+                </>
+              )}
+            </span>
+          </div>
+          {carried.length === 0 ? (
+            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
+              Nobody on the list yet. Open anyone — or a whole team — and take
+              them up in prayer; they'll show up here and on the canvas.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {carried.map((c) => (
+                <li key={`${c.kind}-${c.id}`}>
+                  <button
+                    className="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-stone-50 active:bg-stone-100 dark:hover:bg-stone-800/50 dark:active:bg-stone-800"
+                    onClick={() => openPrayer(c.kind, c.id)}
+                  >
+                    {c.kind === "team" ? (
+                      <span
+                        className="h-[30px] w-[30px] shrink-0 rounded-lg"
+                        style={{
+                          backgroundColor:
+                            PRAYER_COLOR[prayerState(c.prayer)] + "24",
+                        }}
+                        aria-hidden
+                      />
+                    ) : (
+                      <Avatar name={c.name} photo={c.photo} size={30} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{c.name}</div>
+                      <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                        {c.prayer.focus ??
+                          [formatCarried(c.prayer), formatLastPrayed(c.prayer)]
+                            .filter(Boolean)
+                            .join(" · ")}
+                      </div>
+                    </div>
+                    <PrayerMark prayer={c.prayer} size="sm" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {answers.length > 0 && (
+            /* Answered in the last month. The one thing on this page worth
+               reading twice. */
+            <div className="mt-4 border-t border-stone-100 pt-3 dark:border-stone-800">
+              <div className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+                Answered lately
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {answers.slice(0, 3).map((a) => (
+                  <li key={a.id} className="prayer-text !text-[13px]">
+                    {a.answerNote ?? a.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </Card>
 

@@ -16,6 +16,8 @@ export type Team = {
   domainId?: string;
   /** My own read on how this team is doing. Undefined = not rated yet. */
   health?: Health;
+  /** Set when I'm carrying this team in prayer. Undefined = I'm not. */
+  prayer?: Prayer;
   description?: string;
   /** Mandate — what I'm responsible to lead this team toward. */
   purpose?: string;
@@ -53,6 +55,8 @@ export type Manager = {
   domainId?: string;
   /** "No standing check-in with them." A decision, not a gap. */
   noMeeting?: boolean;
+  /** Set when I'm carrying them in prayer. Leading up is still carrying. */
+  prayer?: Prayer;
   photo?: string; // base64 data URL
   /** Operating manual for leading up to them — same shape as up-team people. */
   leadUp?: LeadUpProfile;
@@ -76,6 +80,57 @@ export type Health = {
   note?: string;
   /** ISO date the call was last made. A read from eight months ago is a guess. */
   ratedOn?: string;
+};
+
+/**
+ * Prayer — the dimension that isn't a metric.
+ *
+ * Health is my read on how a team or person is doing; readiness is whether I'm
+ * prepared to sit down with them. Prayer is the one thing on a leader's mind
+ * that neither touches: **am I carrying this person before God right now.**
+ *
+ * The presence of this object *is* the answer. Taking someone up is a
+ * deliberate act and laying them down is another — there's no level to pick,
+ * because there's no scale here worth pretending to.
+ */
+export type Prayer = {
+  /** ISO date I took them up. What "carrying since March" is measured from. */
+  since: string;
+  /** The one line of what I'm holding for them — the burden in a sentence. */
+  focus?: string;
+  /** ISO date I last marked a prayer. Silence is the honest signal here. */
+  lastPrayedOn?: string;
+  /** How many days I've marked. Counts once per day, never twice. */
+  times?: number;
+};
+
+/** Who a prayer is for. The same three subjects every other record uses. */
+export type PrayerSubjectKind = "person" | "team" | "manager";
+
+/**
+ * What kind of thing this entry is. Deliberately only two: something I'm
+ * asking for, and something I'm praying over them. A third ("a note") would
+ * just be the Notes tab wearing a different hat.
+ */
+export type PrayerEntryKind = "burden" | "scripture";
+
+/**
+ * One line in the prayer log for a subject. Written down, not checked off:
+ * entries are never "completed", they're **answered** — a transition with a
+ * date and (optionally) what happened, which is the whole reason to keep them.
+ */
+export type PrayerEntry = {
+  id: string;
+  subjectKind: PrayerSubjectKind;
+  subjectId: string;
+  /** ISO date it was written down. */
+  date: string;
+  kind: PrayerEntryKind;
+  text: string;
+  /** ISO date it was answered. Scripture is never answered — only carried. */
+  answeredOn?: string;
+  /** What happened. The part worth re-reading a year later. */
+  answerNote?: string;
 };
 
 export type StrengthTheme = string;
@@ -204,6 +259,8 @@ export type Person = {
   photo?: string; // base64 data URL
   /** My own read on how they're doing. Undefined = not rated yet. */
   health?: Health;
+  /** Set when I'm carrying them in prayer. Undefined = I'm not. */
+  prayer?: Prayer;
   relationshipType?: string;
   /**
    * "I deliberately don't sit down with them." A decision, not a gap — it

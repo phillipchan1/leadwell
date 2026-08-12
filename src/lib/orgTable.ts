@@ -14,6 +14,7 @@ import type {
   Capacity,
   Domain,
   Health,
+  Prayer,
   Person,
   Team,
   TeamAction,
@@ -23,6 +24,7 @@ import type {
 } from "../types";
 import { isAssessed, hasLeadershipRead } from "./derive";
 import { HEALTH_LABEL, HEALTH_SCORE, teamHealth } from "./health";
+import { PRAYER_STATES, prayerState } from "./prayer";
 import {
   STATE_ORDER,
   readinessFor,
@@ -56,6 +58,11 @@ export type OrgRecord = {
   /** Display only: a team's level averaged from its people, when I've made no call. */
   derived?: Health;
   note?: string;
+  /**
+   * Who I'm carrying. Never derived from members the way a team's health can
+   * be — praying for four people on a team is not praying for the team.
+   */
+  prayer?: Prayer;
   readiness: Readiness | null;
   nextDate: string | null;
   /** People: frameworks recorded, 0–3. Teams: members with a read. */
@@ -123,6 +130,7 @@ export function buildRecords(src: OrgSource): Map<string, OrgRecord> {
       health: team.health,
       derived: health?.derived ? health.health : undefined,
       note: team.health?.note,
+      prayer: team.prayer,
       readiness,
       nextDate: readiness?.nextDate ?? null,
       coverage: members.length ? withRead / members.length : 0,
@@ -160,6 +168,7 @@ export function buildRecords(src: OrgSource): Map<string, OrgRecord> {
       capacity: src.capacities.find((c) => c.id === team?.capacityId),
       health: person.health,
       note: person.health?.note,
+      prayer: person.prayer,
       readiness,
       nextDate: readiness?.nextDate ?? null,
       coverage: coverage / 3,
@@ -265,6 +274,7 @@ export type SortKey =
   | "domain"
   | "capacity"
   | "health"
+  | "prayer"
   | "note"
   | "ready"
   | "next"
@@ -274,6 +284,11 @@ export type SortKey =
 /** Weakest first when ascending — the direction you actually want on health. */
 function healthRank(r: OrgRecord): number {
   return r.health ? HEALTH_SCORE[r.health.level] : 999;
+}
+
+/** Carried-and-quiet first: the end of this list is where the work is. */
+function prayerRank(r: OrgRecord): number {
+  return PRAYER_STATES.indexOf(prayerState(r.prayer));
 }
 
 function readyRank(r: OrgRecord): number {
@@ -292,6 +307,9 @@ export function compareRecords(
     switch (key) {
       case "health":
         d = healthRank(a) - healthRank(b);
+        break;
+      case "prayer":
+        d = prayerRank(a) - prayerRank(b);
         break;
       case "ready":
         d = readyRank(a) - readyRank(b);

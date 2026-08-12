@@ -74,7 +74,7 @@ opens it in place instead of throwing you back to the tree.
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
 
-The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. Card layers toggle independently by keystroke — **P** people · **A** action · **M** mandate · **G** gift mix · **D** detail · **R** readiness — and compose with the domain filter (`1`–`9`). **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
+The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. Card layers toggle independently by keystroke — **P** people · **A** action · **M** mandate · **G** gift mix · **D** detail · **R** readiness · **H** health · **Y** prayer — and compose with the domain filter (`1`–`9`). **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 
 ```
 src/
@@ -88,6 +88,7 @@ src/
     derive.ts            # coverage, domain counts, blind spots, derived "read"
     readiness.ts         # meeting prep: states, checks, roll-up, triage
     health.ts            # my own read: levels, the scan filter, roll-ups
+    prayer.ts            # who I'm carrying: states, silence, the scan filter
     orgTable.ts          # rows, outline, sorting + grouping for the table view
     ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
@@ -100,6 +101,7 @@ src/
     Leading up: ManagerProfile.tsx, LeadUpManual.tsx, WinsLedger.tsx
     Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx
     Health: Health.tsx   # the property control, at every density
+    Prayer: Prayer.tsx   # the mark, the log, the mode — people, teams and managers alike
     Table: TableView.tsx # the canvas's correlated view
     Other tabs: Overview.tsx, PeopleTable.tsx
     forms.tsx, ui.tsx    # modals + small primitives
@@ -114,9 +116,16 @@ type Health   = { level: HealthLevel; note?: string; ratedOn?: string };  // my 
 
 type Team     = { id: string; name: string; capacityId: string; description?: string; order: number;
                   health?: Health;                              // my call on how the team is doing
+                  prayer?: Prayer;                              // set when I'm carrying this team
                   direction?: "up" | "down";                    // "up" = I report to this team; renders above me
                   parentId?: string;                            // sub-team, nests under a broader team
                   leaderId?: string };                          // a direct report runs it — hangs under them, not me
+
+// Who I'm carrying. Presence = actively praying; there is no level and no score.
+type Prayer      = { since: string; focus?: string; lastPrayedOn?: string; times?: number };
+type PrayerEntry = { id: string; subjectKind: "person" | "team" | "manager"; subjectId: string;
+                     date: string; kind: "burden" | "scripture"; text: string;
+                     answeredOn?: string; answerNote?: string };   // answered, never "done"
 
 type Domain = "Executing" | "Influencing" | "Relationship Building" | "Strategic Thinking";
 type Assessments = { cliftonTop5?: string[]; enneagram?: string; mbti?: string };
@@ -143,6 +152,7 @@ type Person = {
   photo?: string;                       // base64 data URL (downscaled on upload)
   relationshipType?: string;
   health?: Health;                      // my call on how they're doing
+  prayer?: Prayer;                      // set when I'm carrying them
   noMeeting?: boolean;                  // "I deliberately don't sit down with them"
   assessments: Assessments;
   strengths: string[]; watchOuts: string[]; howToLead?: string;
@@ -241,6 +251,57 @@ own rating matches **or any of its people do**, so a scan finds the person even
 when the team around them reads fine. The scan is shared with the table view, so
 it follows you between the two surfaces. Overview carries the boiled-down
 version: the mix bar, and everything strained or critical, worst first.
+
+## Prayer (who I'm carrying)
+
+The fourth dimension, and the only one that isn't about them. Coverage asks *do
+I know them*; readiness asks *am I ready to sit down with them*; health asks *is
+this going well*. This one asks the question a lot of leaders actually carry
+around: **am I praying for this person, and this team, right now.**
+
+```ts
+type Prayer = { since: string; focus?: string; lastPrayedOn?: string; times?: number };
+```
+
+**There is no scale, and there is no score.** Presence of the mark is the whole
+answer — taking someone up is a deliberate act and laying them down is another,
+which is why the model has a `since` date and no level. Nothing is derived
+either: a team is not "prayed for" because four people on it are.
+
+What *is* measured is the only honest signal available — **how long it's been.**
+Four states, and only one of them asks for anything: **Prayed this week** →
+**Carrying** → **Gone quiet** (nothing marked in 21 days) → **Not carrying**.
+"Not carrying" is never counted as a gap. Praying for four people out of forty
+is a true answer, and an app that nagged about the other thirty-six would be
+teaching the wrong thing. "Gone quiet" is the one that surfaces: a name you took
+up in January and haven't prayed for since June is exactly what goes unnoticed
+without a list.
+
+**The mode.** Layer **`Y`** on the canvas puts the hand on every card — the mark
+shows how long since you last prayed, a team card shows its focus line and
+`carrying 3 of 8 · 1 gone quiet` — and turns on the scan bar above it. The scan
+dims rather than hides, like health's, and the two compose: filtering *Strained*
+and *Gone quiet* together answers a question neither does alone. It's shared
+with the table, so it follows you between surfaces, and the marks are doors —
+clicking one opens that subject's prayer tab, so a pass down the list is scan →
+click → pray → mark → next. The layer is **off by default**: this is a mode you
+enter on purpose, not a column everyone gets.
+
+**The log** is a tab on every person and manager (`?s=prayer`) and a section on
+every team, and it deliberately does not look like a to-do list. No checkboxes,
+no "+ Add" row, no hover-delete in the margin — entries are *written down*, in
+serif, against a margin rule, and the controls live behind a click on the line
+itself so the resting state of the panel is just the words. Two kinds of entry,
+a **burden** and a **scripture**, because a third would just be the Notes tab
+wearing a hat. Nothing is ever "completed": an entry is **answered**, which
+keeps the words and adds a date and a line about what happened — the part worth
+re-reading a year later. Laying someone down keeps the log, including every
+answer.
+
+The engine is [`src/lib/prayer.ts`](src/lib/prayer.ts) and the whole UI —
+canvas mark, panel and log — is [`Prayer.tsx`](src/components/Prayer.tsx).
+Overview carries the boiled-down version: who's on the list, longest silence
+first, and what's been answered lately.
 
 ## Table view
 

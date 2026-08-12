@@ -30,6 +30,8 @@ import type {
   Manager,
   Me,
   Note,
+  Prayer,
+  PrayerEntry,
   Session,
   Person,
   Team,
@@ -56,6 +58,8 @@ export type PersistedData = {
   goals: Goal[];
   notes: Note[];
   wins: Win[];
+  /** The prayer log — entries for people, teams and managers alike. */
+  prayers: PrayerEntry[];
   teamActions: TeamAction[];
   teamGoals: TeamGoal[];
   teamNotes: TeamNote[];
@@ -212,6 +216,7 @@ const map = {
       domain_id: nn(m.domainId),
       photo: nn(m.photo),
       no_meeting: nn(m.noMeeting),
+      prayer: nn(m.prayer ?? null),
       lead_up: nn(m.leadUp ?? null),
     }),
     fromRow: (r: Row): Manager => ({
@@ -221,6 +226,7 @@ const map = {
       domainId: opt(r.domain_id as string | null),
       photo: opt(r.photo as string | null),
       noMeeting: opt(r.no_meeting as boolean | null),
+      prayer: opt(r.prayer as Prayer | null),
       leadUp: opt(r.lead_up as LeadUpProfile | null),
     }),
   },
@@ -233,6 +239,7 @@ const map = {
       capacity_id: t.capacityId,
       domain_id: nn(t.domainId),
       health: nn(t.health ?? null),
+      prayer: nn(t.prayer ?? null),
       description: nn(t.description),
       purpose: nn(t.purpose),
       cadence: nn(t.cadence),
@@ -249,6 +256,7 @@ const map = {
       capacityId: r.capacity_id as string,
       domainId: opt(r.domain_id as string | null),
       health: opt(r.health as Health | null),
+      prayer: opt(r.prayer as Prayer | null),
       description: opt(r.description as string | null),
       purpose: opt(r.purpose as string | null),
       cadence: opt(r.cadence as string | null),
@@ -272,6 +280,7 @@ const map = {
       role: nn(p.role),
       photo: nn(p.photo),
       health: nn(p.health ?? null),
+      prayer: nn(p.prayer ?? null),
       relationship_type: nn(p.relationshipType),
       no_meeting: nn(p.noMeeting),
       clifton_top5: p.assessments.cliftonTop5 ?? [],
@@ -297,6 +306,7 @@ const map = {
         role: opt(r.role as string | null),
         photo: opt(r.photo as string | null),
         health: opt(r.health as Health | null),
+        prayer: opt(r.prayer as Prayer | null),
         relationshipType: opt(r.relationship_type as string | null),
         noMeeting: opt(r.no_meeting as boolean | null),
         assessments: {
@@ -436,6 +446,30 @@ const map = {
       impact: opt(r.impact as string | null),
     }),
   },
+  prayers: {
+    table: "prayers",
+    toRow: (u: string, e: PrayerEntry): Row => ({
+      user_id: u,
+      id: e.id,
+      subject_kind: e.subjectKind,
+      subject_id: e.subjectId,
+      date: e.date,
+      kind: e.kind,
+      text: e.text,
+      answered_on: nn(e.answeredOn),
+      answer_note: nn(e.answerNote),
+    }),
+    fromRow: (r: Row): PrayerEntry => ({
+      id: r.id as string,
+      subjectKind: r.subject_kind as PrayerEntry["subjectKind"],
+      subjectId: r.subject_id as string,
+      date: r.date as string,
+      kind: r.kind as PrayerEntry["kind"],
+      text: r.text as string,
+      answeredOn: opt(r.answered_on as string | null),
+      answerNote: opt(r.answer_note as string | null),
+    }),
+  },
   teamActions: {
     table: "team_actions",
     toRow: (u: string, a: TeamAction): Row => ({
@@ -565,6 +599,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     goals,
     notes,
     wins,
+    prayers,
     teamActions,
     teamGoals,
     teamNotes,
@@ -582,6 +617,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     grab("goals"),
     grab("notes"),
     grab("wins"),
+    grab("prayers"),
     grab("team_actions"),
     grab("team_goals"),
     grab("team_notes"),
@@ -602,6 +638,7 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     goals: goals.map(map.goals.fromRow),
     notes: notes.map(map.notes.fromRow),
     wins: wins.map(map.wins.fromRow),
+    prayers: prayers.map(map.prayers.fromRow),
     teamActions: teamActions.map(map.teamActions.fromRow),
     teamGoals: teamGoals.map(map.teamGoals.fromRow),
     teamNotes: teamNotes.map(map.teamNotes.fromRow),

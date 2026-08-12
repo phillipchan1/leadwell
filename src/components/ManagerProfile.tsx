@@ -19,16 +19,24 @@ import { NotesPanel } from "./NotesPanel";
 import { TopicKanban } from "./TopicKanban";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { WinsLedger } from "./WinsLedger";
+import { PrayerIcon, PrayerPanel } from "./Prayer";
 import type { Density } from "./EntitySurface";
 import { confirmAction } from "./ConfirmDialog";
 
-type ManagerTab = "manual" | "sessions" | "topics" | "notes";
+type ManagerTab = "manual" | "sessions" | "topics" | "notes" | "prayer";
 
-const MANAGER_TABS: { id: ManagerTab; label: string }[] = [
+const MANAGER_TABS: {
+  id: ManagerTab;
+  label: string;
+  icon?: typeof PrayerIcon;
+}[] = [
   { id: "manual", label: "Leading up" },
   { id: "sessions", label: "Check-ins" },
   { id: "topics", label: "Topics" },
   { id: "notes", label: "Notes" },
+  // Praying for the person you report to is the same act as praying for the
+  // person who reports to you, so it's the same panel.
+  { id: "prayer", label: "Prayer", icon: PrayerIcon },
 ];
 
 function isManagerTab(value: string | null): value is ManagerTab {
@@ -175,6 +183,7 @@ export function ManagerProfile({
             <TabItem
               id={t.id}
               label={t.label}
+              icon={t.icon}
               badge={
                 t.id === "sessions" && mySessions.length > 0
                   ? mySessions.length
@@ -266,6 +275,14 @@ export function ManagerProfile({
               placeholder="What they said, what they signalled, what to remember…"
             />
           </div>
+        )}
+
+        {tab === "prayer" && (
+          <PrayerPanel
+            subjectKind="manager"
+            subjectId={manager.id}
+            subjectName={manager.name}
+          />
         )}
 
       </div>

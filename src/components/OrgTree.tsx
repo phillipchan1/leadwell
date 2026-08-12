@@ -42,6 +42,15 @@ import {
   type HealthFilterValue,
 } from "../lib/health";
 import { HealthBar, HealthChip, HealthDot } from "./Health";
+import { PrayerDot, PrayerIcon, PrayerMark } from "./Prayer";
+import {
+  PRAYER_COLOR,
+  PRAYER_FILTER_VALUES,
+  PRAYER_HINT,
+  PRAYER_LABEL,
+  matchesPrayer,
+  rollUpPrayer,
+} from "../lib/prayer";
 import {
   distribution,
   formatCountdown,
@@ -83,6 +92,8 @@ const LAYER_KEYS: Record<string, TreeLayer> = {
   d: "detail",
   r: "readiness",
   h: "health",
+  // praY — P, A and R are all taken, and Y is the letter the word ends on.
+  y: "prayer",
 };
 
 const NODE_W = 320; // matches w-80 on team cards
@@ -228,6 +239,7 @@ export function OrgTree() {
     domains,
     treeDomainId,
     setTreeDomainId,
+    treeLayers,
     toggleTreeLayer,
     modal,
     openModal,
@@ -459,10 +471,29 @@ export function OrgTree() {
         >
           Manage domains
         </Button>
+        {/* Below lg the canvas — and with it the layer bar — isn't rendered,
+            so prayer mode needs its own way in on a phone. The hand is the
+            whole button: it's a mode, not a column. */}
+        <button
+          type="button"
+          aria-pressed={treeLayers.prayer}
+          onClick={() => toggleTreeLayer("prayer")}
+          title="Who I'm carrying in prayer"
+          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors touch:min-h-11 lg:hidden ${
+            treeLayers.prayer
+              ? "border-violet-500 bg-violet-50 font-medium text-violet-700 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300"
+              : "border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-400"
+          }`}
+        >
+          <PrayerIcon className="size-4" />
+          Prayer
+        </button>
         <ReadinessSummary teams={visibleTeams} reports={visibleReports} />
       </div>
 
       <HealthScan teams={visibleTeams} reports={visibleReports} />
+
+      <PrayerScan teams={visibleTeams} reports={visibleReports} />
     </>
   );
 
@@ -925,27 +956,187 @@ function HealthScan({
   );
 }
 
+
+/**
+ * The prayer scan — the same instrument as the health scan, pointed at a
+ * question no metric answers: **who am I actually carrying, and who have I
+ * stopped?**
+ *
+ * The counts are deliberately unflattering in one direction only. "Not
+ * carrying" is not a gap and never turns red — a leader praying for four
+ * people out of forty is being honest, not delinquent. The one number that
+ * asks for something is *gone quiet*: a name you took up and haven't prayed
+ * for in three weeks, which is exactly the thing that goes unnoticed without
+ * a list like this.
+ */
+function PrayerScan({
+  teams,
+  reports,
+}: {
+  teams: Team[];
+  reports: Person[];
+}) {
+  const people = useStore((s) => s.people);
+  const managers = useStore((s) => s.managers);
+  const treeLayers = useStore((s) => s.treeLayers);
+  const filter = useStore((s) => s.prayerScan);
+  const toggle = useStore((s) => s.togglePrayerScan);
+  const setFilter = useStore((s) => s.setPrayerScan);
+
+  if (!treeLayers.prayer) return null;
+
+  const teamIds = new Set(teams.map((t) => t.id));
+  const members = people.filter((p) => p.teamId && teamIds.has(p.teamId));
+  const subjects = [...teams, ...members, ...reports, ...managers];
+  if (subjects.length === 0) return null;
+
+  const roll = rollUpPrayer(subjects.map((s) => s.prayer));
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="flex items-center gap-1 text-[11px] font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
+        <PrayerIcon className="size-3.5" />
+        Prayer
+      </span>
+      {PRAYER_FILTER_VALUES.map((value) => {
+        const count = roll.counts[value];
+        const active = filter.includes(value);
+        const color = PRAYER_COLOR[value];
+        return (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={active}
+            disabled={count === 0 && !active}
+            onClick={() => toggle(value)}
+            title={PRAYER_HINT[value]}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 disabled:opacity-40 ${
+              active
+                ? "border-transparent font-medium text-white"
+                : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
+            }`}
+            style={active ? { backgroundColor: color } : undefined}
+          >
+            {!active && (
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: color }}
+              />
+            )}
+            {PRAYER_LABEL[value]}
+            <span
+              className={`tabular-nums ${active ? "text-white/80" : "text-stone-500 dark:text-stone-400"}`}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
+      {filter.length > 0 && (
+        <Button size="sm" color="link-gray" onClick={() => setFilter([])}>
+          Clear
+        </Button>
+      )}
+      <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
+        {roll.carried === 0 ? (
+          "Nobody on the list yet — open anyone and take them up"
+        ) : (
+          <>
+            carrying{" "}
+            <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
+              {roll.carried}
+            </strong>{" "}
+            of {subjects.length}
+            {roll.cold > 0 && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => setFilter(["cold"])}
+                  className="font-medium text-violet-700 underline-offset-2 hover:underline dark:text-violet-300"
+                >
+                  {roll.cold} gone quiet
+                </button>
+              </>
+            )}
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 /**
  * Is this card part of the current scan's answer? A team counts itself *and*
  * its roster, so filtering for strain doesn't hide the card you need to click
  * through to reach the strained person.
+ *
+ * Two scans can run at once — health and prayer — and a card has to survive
+ * both to stay lit. They compose rather than override because the pair is a
+ * real question: *who am I worried about that I've also stopped praying for.*
  */
 function useScanDimmed(kind: "team" | "person" | "manager", id: string): boolean {
   const filter = useStore((s) => s.healthScan);
+  const prayerFilter = useStore((s) => s.prayerScan);
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
 
-  if (filter.length === 0) return false;
-  if (kind === "manager") return !filter.includes("unrated");
+  if (filter.length === 0 && prayerFilter.length === 0) return false;
+
+  if (kind === "manager") {
+    const manager = managers.find((m) => m.id === id);
+    // Managers carry no health rating, so a health scan can only ever match
+    // them as "not rated".
+    const health = filter.length === 0 || filter.includes("unrated");
+    return !(health && matchesPrayer(manager?.prayer, prayerFilter));
+  }
+
   if (kind === "person") {
     const person = people.find((p) => p.id === id);
-    return !matchesHealth(person?.health, filter);
+    return !(
+      matchesHealth(person?.health, filter) &&
+      matchesPrayer(person?.prayer, prayerFilter)
+    );
   }
+
   const team = teams.find((t) => t.id === id);
   const members = people.filter((p) => p.teamId === id);
-  return !(
-    matchesHealth(team?.health, filter) ||
-    members.some((m) => matchesHealth(m.health, filter))
+  const matches = (h: Team | Person | undefined) =>
+    matchesHealth(h?.health, filter) && matchesPrayer(h?.prayer, prayerFilter);
+  return !(matches(team) || members.some(matches));
+}
+
+/**
+ * A prayer mark on a card is a door: clicking it opens that subject's prayer
+ * tab rather than the top of a profile you'd then have to navigate. That's
+ * what makes the layer a mode you can actually work in — scan, click, pray,
+ * mark, next.
+ */
+function PrayerMarkLink({
+  prayer,
+  onOpen,
+  label,
+  size = "md",
+}: {
+  prayer?: Person["prayer"];
+  onOpen: () => void;
+  label: string;
+  size?: "sm" | "md";
+}) {
+  if (!prayer) return null;
+  return (
+    <button
+      type="button"
+      className="nodrag shrink-0"
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+    >
+      <PrayerMark prayer={prayer} size={size} />
+    </button>
   );
 }
 
@@ -960,6 +1151,8 @@ const VIEW_LAYERS: {
   label: string;
   shortcut: string;
   title: string;
+  /** Only prayer carries one — it's a mode, and the hand is what marks it. */
+  icon?: typeof PrayerIcon;
 }[] = [
   { id: "people", label: "People", shortcut: "P", title: "Member list on cards" },
   { id: "action", label: "Action", shortcut: "A", title: "Next step on cards" },
@@ -977,6 +1170,13 @@ const VIEW_LAYERS: {
     label: "Health",
     shortcut: "H",
     title: "My read on how each team and person is doing — and the scan bar",
+  },
+  {
+    id: "prayer",
+    label: "Prayer",
+    shortcut: "Y",
+    title: "Who I'm carrying in prayer — and how long since I last did",
+    icon: PrayerIcon,
   },
 ];
 
@@ -996,15 +1196,20 @@ function ViewLayers() {
             title={`${layer.title} (${layer.shortcut})`}
             className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-sm shadow-sm touch:min-h-11 ${
               on
-                ? "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
+                ? layer.id === "prayer"
+                  ? "border-violet-500 bg-violet-50 font-medium text-violet-700 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300"
+                  : "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
                 : "border-stone-300 bg-white text-stone-600 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400"
             }`}
           >
+            {layer.icon && <layer.icon className="size-3.5" />}
             {layer.label}
             <kbd
               className={`rounded px-1 font-mono text-[10px] ${
                 on
-                  ? "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
+                  ? layer.id === "prayer"
+                    ? "bg-violet-100 text-violet-600 dark:bg-violet-900/60 dark:text-violet-300"
+                    : "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
                   : "bg-stone-100 text-stone-500 dark:text-stone-400 dark:bg-stone-800"
               }`}
             >
@@ -1198,6 +1403,14 @@ function ManagerNode({ data }: NodeProps) {
             ) : (
               "no manual yet"
             )}
+            {treeLayers.prayer && (
+              <PrayerMarkLink
+                prayer={manager.prayer}
+                size="sm"
+                label={`Prayer for ${manager.name}`}
+                onOpen={() => selectManager(manager.id, "prayer")}
+              />
+            )}
             {readiness && (
               <ReadinessChip
                 state={readiness.state}
@@ -1301,6 +1514,14 @@ function DirectReportNode({ data }: NodeProps) {
                 <HealthChip health={person.health} size="sm" />
               </span>
             )}
+            {treeLayers.prayer && (
+              <PrayerMarkLink
+                prayer={person.prayer}
+                size="sm"
+                label={`Prayer for ${person.name}`}
+                onOpen={() => selectPerson(person.id, "prayer")}
+              />
+            )}
             {readiness && (
               <span className="shrink-0">
                 <ReadinessChip
@@ -1368,6 +1589,7 @@ function TeamNode({ data }: NodeProps) {
   // Highlight the card while one of its members is open, not just the team.
   const activeTeamId = useActiveTeamId();
   const healthFilter = useStore((s) => s.healthScan);
+  const prayerFilter = useStore((s) => s.prayerScan);
   const dim = useScanDimmed("team", teamId);
 
   const team = teams.find((t) => t.id === teamId);
@@ -1389,12 +1611,14 @@ function TeamNode({ data }: NodeProps) {
     detail,
     readiness: showReadiness,
     health: showHealth,
+    prayer: showPrayer,
   } = treeLayers;
 
   // My call on the team, or — when I've never made one — the average of the
   // calls I've made on its people, marked as derived so it never poses as mine.
   const health = teamHealth(team, members);
   const memberHealth = rollUpHealth(members.map((m) => m.health));
+  const memberPrayer = rollUpPrayer(members.map((m) => m.prayer));
 
   // A card can carry two different things to be ready for: the team's own
   // standing meeting, and a 1:1 with each member. Both are tracked meetings.
@@ -1466,6 +1690,13 @@ function TeamNode({ data }: NodeProps) {
                 )}
                 {showHealth && health && (
                   <HealthChip health={health.health} derived={health.derived} />
+                )}
+                {showPrayer && (
+                  <PrayerMarkLink
+                    prayer={team.prayer}
+                    label={`Prayer for ${team.name}`}
+                    onOpen={() => selectTeam(team.id, "prayer")}
+                  />
                 )}
                 {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
                 {capacity && (
@@ -1539,6 +1770,33 @@ function TeamNode({ data }: NodeProps) {
                       : `${memberHealth.rated} of ${members.length} rated, none strained`}
                   </div>
                 </>
+              )}
+            </div>
+          )}
+
+          {/* What I'm carrying on this card. One line, and only the line
+              that's asking for something — a count of who's gone quiet, or
+              the team's own focus when there is one. */}
+          {showPrayer && (team.prayer || memberPrayer.carried > 0) && (
+            <div className="mt-3 flex flex-col gap-1">
+              {team.prayer?.focus && (
+                <p className="prayer-text line-clamp-2 !text-[12px]">
+                  {team.prayer.focus}
+                </p>
+              )}
+              {memberPrayer.carried > 0 && (
+                <div className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+                  <PrayerIcon
+                    className="size-3"
+                    style={{ color: PRAYER_COLOR.carrying }}
+                  />
+                  carrying {memberPrayer.carried} of {members.length}
+                  {memberPrayer.cold > 0 && (
+                    <span style={{ color: PRAYER_COLOR.cold }}>
+                      · {memberPrayer.cold} gone quiet
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -1620,11 +1878,16 @@ function TeamNode({ data }: NodeProps) {
                   capacityColor={capacity?.color ?? "#0D9488"}
                   showDetail={detail}
                   showHealth={showHealth}
+                  showPrayer={showPrayer}
                   // A scan dims the people it isn't asking about, so an open
                   // team card answers "who on this team" without a second look.
-                  dimmed={!matchesHealth(p.health, healthFilter)}
+                  dimmed={
+                    !matchesHealth(p.health, healthFilter) ||
+                    !matchesPrayer(p.prayer, prayerFilter)
+                  }
                   readiness={showReadiness ? readings.get(p.id) : undefined}
                   onSelect={() => selectPerson(p.id)}
+                  onOpenPrayer={() => selectPerson(p.id, "prayer")}
                   onEdit={() => openModal({ kind: "person", person: p })}
                 />
               ))}
@@ -1733,9 +1996,11 @@ function PersonRow({
   capacityColor,
   showDetail,
   showHealth,
+  showPrayer,
   dimmed = false,
   readiness,
   onSelect,
+  onOpenPrayer,
   onEdit,
 }: {
   person: Person;
@@ -1744,11 +2009,14 @@ function PersonRow({
   showDetail: boolean;
   /** Health layer on — show their level beside the name. */
   showHealth?: boolean;
+  /** Prayer layer on — show the hand, and open the prayer tab from it. */
+  showPrayer?: boolean;
   /** A health scan is running and they're not part of the answer. */
   dimmed?: boolean;
   /** Present only when the readiness layer is on. */
   readiness?: Readiness;
   onSelect: () => void;
+  onOpenPrayer: () => void;
   onEdit: () => void;
 }) {
   const assessed = hasLeadershipRead(person);
@@ -1799,6 +2067,19 @@ function PersonRow({
         >
           <span className="truncate">{person.name}</span>
           {showHealth && <HealthDot health={person.health} />}
+          {showPrayer && person.prayer && (
+            <button
+              type="button"
+              className="shrink-0"
+              aria-label={`Prayer for ${person.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenPrayer();
+              }}
+            >
+              <PrayerDot prayer={person.prayer} />
+            </button>
+          )}
         </div>
         {showDetail ? (
           <PersonGiftDots person={person} />

@@ -26,6 +26,13 @@ import {
   rollUpHealth,
 } from "../lib/health";
 import {
+  PRAYER_COLOR,
+  PRAYER_FILTER_VALUES,
+  PRAYER_HINT,
+  PRAYER_LABEL,
+  matchesPrayer,
+} from "../lib/prayer";
+import {
   buildOutline,
   buildRecords,
   compareRecords,
@@ -45,6 +52,7 @@ import { ReadinessChip } from "./ReadinessChip";
 import { Explain } from "./Explain";
 import { Th } from "./Th";
 import { HealthBar, HealthSelect } from "./Health";
+import { PrayerIcon, PrayerMark } from "./Prayer";
 import { TintBadge, Card } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -66,6 +74,7 @@ const COLUMNS: {
   { key: "type", label: "Type", defaultOn: true },
   { key: "under", label: "Under", defaultOn: true },
   { key: "health", label: "Health", defaultOn: true },
+  { key: "prayer", label: "Prayer", defaultOn: false },
   { key: "note", label: "Why", defaultOn: true },
   { key: "domain", label: "Domain", defaultOn: true },
   { key: "ready", label: "Ready", defaultOn: true },
@@ -123,6 +132,9 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
     healthScan,
     toggleHealthScan,
     setHealthScan,
+    prayerScan,
+    togglePrayerScan,
+    setPrayerScan,
     setHealth,
     setHealthNote,
     selectTeam,
@@ -183,12 +195,13 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
         if ((r.domain?.id ?? undefined) !== id) return false;
       }
       if (!matchesHealth(r.health, healthScan)) return false;
+      if (!matchesPrayer(r.prayer, prayerScan)) return false;
       if (!q) return true;
       return [r.name, r.role, r.underName, r.note, r.typeLabel]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(q));
     };
-  }, [query, show, domainFilter, healthScan]);
+  }, [query, show, domainFilter, healthScan, prayerScan]);
 
   const compare = sort ? compareRecords(sort.key, sort.asc) : null;
 
@@ -319,9 +332,8 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
   const sortedDir = (key: SortKey) =>
     sort?.key === key ? (sort.asc ? ("asc" as const) : ("desc" as const)) : undefined;
 
-  const scanning = healthScan.length > 0;
+  const scanning = healthScan.length > 0 || prayerScan.length > 0;
   const weakScan =
-    scanning &&
     healthScan.length === WEAK_LEVELS.length &&
     WEAK_LEVELS.every((l) => healthScan.includes(l));
 
@@ -466,6 +478,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
             color="link-gray"
             onClick={() => {
               setHealthScan([]);
+              setPrayerScan([]);
               setQuery("");
               setDomainFilter("");
               setShow("all");
@@ -473,6 +486,58 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
             }}
           >
             Reset view
+          </Button>
+        )}
+      </div>
+
+      {/* Prayer scan — the same store value the canvas layer drives, so who
+          you're carrying follows you between the two surfaces exactly as a
+          health scan does. */}
+      <div className={cx("flex flex-wrap items-center gap-1.5", isTree && "hidden")}>
+        <Explain text="Shared with the org tree — who you're carrying, and how long since you last did">
+          <span className="flex items-center gap-1 text-[11px] font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
+            <PrayerIcon className="size-3.5" />
+            Prayer
+          </span>
+        </Explain>
+        {PRAYER_FILTER_VALUES.map((value) => {
+          const active = prayerScan.includes(value);
+          const color = PRAYER_COLOR[value];
+          const count = [...records.values()].filter((r) =>
+            matchesPrayer(r.prayer, [value])
+          ).length;
+          return (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => togglePrayerScan(value)}
+              title={PRAYER_HINT[value]}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 ${
+                active
+                  ? "border-transparent font-medium text-white"
+                  : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
+              }`}
+              style={active ? { backgroundColor: color } : undefined}
+            >
+              {!active && (
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+              )}
+              {PRAYER_LABEL[value]}
+              <span
+                className={`tabular-nums ${active ? "text-white/80" : "text-stone-500 dark:text-stone-400"}`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+        {prayerScan.length > 0 && (
+          <Button size="sm" color="link-gray" onClick={() => setPrayerScan([])}>
+            Clear
           </Button>
         )}
       </div>
@@ -535,7 +600,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
         {rowCount === 0 && (
           <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
             Nothing matches this view.
-            {scanning && " Try clearing the health scan."}
+            {scanning && " Try clearing the scan."}
           </p>
         )}
       </div>
@@ -638,7 +703,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
                   className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                 >
                   Nothing matches this view.
-                  {scanning && " Try clearing the health scan."}
+                  {scanning && " Try clearing the scan."}
                 </td>
               </tr>
             )}
@@ -793,6 +858,11 @@ function Cell({
           )}
         </div>
       );
+    case "prayer":
+      // Read-only on purpose. Health is edited in place because rating a
+      // whole org is a two-minute pass; ticking twelve names as prayed for in
+      // ten seconds is the exact thing this dimension shouldn't become.
+      return record.prayer ? <PrayerMark prayer={record.prayer} size="sm" /> : dash;
     case "note":
       return <NoteCell record={record} onNote={onNote} />;
     case "ready":
@@ -1027,6 +1097,10 @@ function MobileRecordCard({
             dot={false}
           />
         )}
+        {/* On a phone this list *is* the tree, so the prayer mark has to be
+            here too — otherwise the scan filters rows by something the rows
+            never show. */}
+        {record.prayer && <PrayerMark prayer={record.prayer} size="sm" />}
         {record.domain && (
           <TintBadge color={record.domain.color}>{record.domain.name}</TintBadge>
         )}

@@ -13,6 +13,7 @@ import { TextArea } from "@/components/base/textarea/textarea";
 import { X } from "@untitledui/icons";
 import { AICoach } from "./AICoach";
 import { HealthField } from "./Health";
+import { PrayerIcon, PrayerPanel } from "./Prayer";
 import { StatsBar } from "./StatsBar";
 import { PrepPanel } from "./PrepPanel";
 import { SessionTable } from "./SessionTable";
@@ -41,6 +42,7 @@ export function TeamProfile({
     domains,
     teams,
     people,
+    section,
     selectTeam,
     selectPerson,
     selectedPersonId,
@@ -78,6 +80,18 @@ export function TeamProfile({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [modal, askAIOpen, selectTeam]);
+
+  /**
+   * A team is one scroll rather than a tab strip, so its sub-page is a
+   * destination inside that scroll. `?s=prayer` is what the canvas links to
+   * when you click a team's prayer mark, and this is what makes it land.
+   */
+  useEffect(() => {
+    if (section !== "prayer") return;
+    document
+      .getElementById(`team-prayer-${team.id}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [section, team.id]);
 
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);
@@ -290,6 +304,24 @@ export function TeamProfile({
               onLevel={(level) => setHealth("team", team.id, level)}
               onNote={(note) => setHealthNote("team", team.id, note)}
               label="Health — my read"
+            />
+          </section>
+
+          {/* Prayer sits beside health because they're the same kind of
+              thing: not a metric of the team but a record of my own posture
+              toward it. A team has no tab strip to hang this off, so it's a
+              section the canvas can scroll you to (`?s=prayer`). */}
+          <section id={`team-prayer-${team.id}`} className="space-y-3">
+            <div className="flex items-center gap-2">
+              <PrayerIcon className="size-3.5 text-violet-500 dark:text-violet-300" />
+              <SectionTitle>Prayer</SectionTitle>
+            </div>
+            <PrayerPanel
+              key={team.id}
+              subjectKind="team"
+              subjectId={team.id}
+              subjectName={team.name}
+              padded={false}
             />
           </section>
 

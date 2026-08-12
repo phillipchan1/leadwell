@@ -28,6 +28,7 @@ import {
 
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
+import { PrayerIcon, PrayerPanel } from "./Prayer";
 import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -45,20 +46,31 @@ import { PrepPanel } from "./PrepPanel";
 import { useCoarsePointer } from "@/hooks/use-coarse-pointer";
 import { confirmAction } from "./ConfirmDialog";
 
-type PersonTab = "profile" | "sessions" | "topics" | "notes";
+type PersonTab = "profile" | "sessions" | "topics" | "notes" | "prayer";
 
-const PERSON_TAB_IDS: PersonTab[] = ["profile", "sessions", "topics", "notes"];
+const PERSON_TAB_IDS: PersonTab[] = [
+  "profile",
+  "sessions",
+  "topics",
+  "notes",
+  "prayer",
+];
 
 function isPersonTab(value: string | null): value is PersonTab {
   return PERSON_TAB_IDS.includes(value as PersonTab);
 }
 
-function personTabs(isLeadUp: boolean): { id: PersonTab; label: string }[] {
+function personTabs(
+  isLeadUp: boolean
+): { id: PersonTab; label: string; icon?: typeof PrayerIcon }[] {
   return [
     { id: "profile", label: isLeadUp ? "Leading up" : "Profile" },
     { id: "sessions", label: isLeadUp ? "Check-ins" : "1:1s" },
     { id: "topics", label: "Topics" },
     { id: "notes", label: "Notes" },
+    // The hand carries the label here — the tab is a different mode, not
+    // another list, and it should look like one before it's read.
+    { id: "prayer", label: "Prayer", icon: PrayerIcon },
   ];
 }
 
@@ -266,6 +278,7 @@ export function PersonProfile({
             <TabItem
               id={t.id}
               label={t.label}
+              icon={t.icon}
               badge={
                 t.id === "sessions" && mySessions.length > 0
                   ? mySessions.length
@@ -637,6 +650,14 @@ export function PersonProfile({
           <div className="p-4">
             <NotesPanel subjectId={person.id} />
           </div>
+        )}
+
+        {tab === "prayer" && (
+          <PrayerPanel
+            subjectKind="person"
+            subjectId={person.id}
+            subjectName={person.name}
+          />
         )}
 
       </div>
