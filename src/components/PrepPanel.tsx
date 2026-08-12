@@ -84,7 +84,7 @@ export function PrepPanel({
               size="sm"
               onClick={() => trackMeeting(subjectKind, subjectId, "weekly")}
             >
-              Track a {label}
+              Set up a meeting
             </Button>
             {!decided && (
               <Button

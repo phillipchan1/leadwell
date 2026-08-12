@@ -18,6 +18,7 @@ import type { BoardDirection } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { SessionHistoryTable } from "./SessionHistoryTable";
+import { StartMeetingForm } from "./StartMeetingForm";
 import { TrackerLink } from "./TrackerLink";
 import { TintBadge } from "./ui";
 import { Button } from "@/components/base/buttons/button";
@@ -52,6 +53,7 @@ export function SubjectMeetings({
   focusSessionId?: string;
 }) {
   const { meetings, trackMeeting, createMeeting, openSession } = useStore();
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (focusSessionId) openSession(focusSessionId);
@@ -61,35 +63,34 @@ export function SubjectMeetings({
   const label = MEETING_LABEL[subjectKind];
   const firstName = subjectName.split(" ")[0] ?? subjectName;
 
+  const startMeeting = (rhythm: MeetingRhythm, name?: string) => {
+    if (mine.length === 0) {
+      trackMeeting(subjectKind, subjectId, rhythm, { name });
+    } else {
+      createMeeting(subjectKind, subjectId, { rhythm, name });
+    }
+    setAdding(false);
+  };
+
   if (!mine.length) {
     return (
       <div className="space-y-3">
         <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center dark:border-stone-700">
           <p className="text-sm text-stone-500 dark:text-stone-400">
-            No {label} tracked with {firstName} yet.
+            No meetings tracked with {firstName} yet.
           </p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500 dark:text-stone-400">
-            Tracking one gives you a topic board, a history of write-ups and a
-            read on whether you're ready for the next one.
+            Add as many as you actually have — a weekly {label}, a quarterly
+            career check-in, whatever rhythm fits.
           </p>
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => trackMeeting(subjectKind, subjectId, "weekly")}
-            >
-              Track a weekly {label}
-            </Button>
-            <Button
-              size="sm"
-              color="secondary"
-              onClick={() => trackMeeting(subjectKind, subjectId, "as_needed")}
-            >
-              As needed
-            </Button>
+          <div className="mt-4">
+            <StartMeetingForm
+              subjectKind={subjectKind}
+              subjectName={subjectName}
+              onStart={startMeeting}
+            />
           </div>
         </div>
-        {/* The third answer, for anyone who arrived with a system already: the
-            notes are in Notion or a doc, and that's fine. */}
         <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
       </div>
     );
@@ -107,22 +108,39 @@ export function SubjectMeetings({
         />
       ))}
 
-      <div className="flex items-center justify-between gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
-        <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
-        <Button
-          size="sm"
-          color="link-gray"
-          className="shrink-0"
-          onClick={() =>
-            createMeeting(subjectKind, subjectId, {
-              rhythm: "monthly",
-              name: `Another ${label}`,
-            })
-          }
-        >
-          + Another meeting
-        </Button>
-      </div>
+      {adding ? (
+        <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-950/40">
+          <p className="mb-3 text-sm font-medium text-stone-700 dark:text-stone-200">
+            Another meeting with {firstName}
+          </p>
+          <StartMeetingForm
+            subjectKind={subjectKind}
+            subjectName={subjectName}
+            onStart={startMeeting}
+            submitLabel="Add meeting"
+          />
+          <Button
+            size="sm"
+            color="link-gray"
+            className="mt-2"
+            onClick={() => setAdding(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
+          <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
+          <Button
+            size="sm"
+            color="link-gray"
+            className="shrink-0"
+            onClick={() => setAdding(true)}
+          >
+            + Add meeting
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -144,6 +162,11 @@ function MeetingBlock({
   const { sessions, topics, meetings, addTopic, updateMeeting, selectMeeting } =
     useStore();
   const [draft, setDraft] = useState("");
+  const [name, setName] = useState(meeting.name ?? "");
+
+  useEffect(() => {
+    setName(meeting.name ?? "");
+  }, [meeting.id, meeting.name]);
 
   const readiness = readinessOf(meeting, { meetings, sessions, topics });
   const color = STATE_COLOR[readiness.state];
@@ -207,9 +230,24 @@ function MeetingBlock({
         </Button>
       </div>
 
-      {/* The single fastest thing in the app: think of something, type it,
-          enter. It lands in the running list and can be dragged onto a date
-          later — no board scrolling, no dialog, no page. */}
+      <Input
+        size="sm"
+        label="Meeting name"
+        placeholder={meetingTitle(meeting, subjectName)}
+        hint="Rename if this isn't just a generic 1:1 — e.g. Weekly sync."
+        value={name}
+        onChange={setName}
+        onBlur={() =>
+          updateMeeting(meeting.id, { name: name.trim() || undefined })
+        }
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            updateMeeting(meeting.id, { name: name.trim() || undefined });
+          }
+        }}
+      />
+
       <form
         onSubmit={(e) => {
           e.preventDefault();

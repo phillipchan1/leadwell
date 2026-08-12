@@ -38,9 +38,8 @@ import { confirmAction } from "./ConfirmDialog";
 /**
  * Person panel, in the five modes every entity shares (see lib/entityModes).
  *
- * Now is where you stand with them, Meetings is the 1:1 itself, Profile is who
- * they are, Notes is your record and Prayer is your posture. The mode is a URL
- * sub-page, so a teammate's 1:1 history stays a link you can send someone.
+ * Now is where you stand with them, Meetings is the recurring rhythm itself,
+ * Profile is who they are, Notes is your record and Prayer is your posture.
  *
  * Breadcrumb, teammate pager, close and the promotion to focus live in
  * EntityChrome; this owns content only.

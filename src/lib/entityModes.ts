@@ -16,14 +16,12 @@
  *   notes     My running record.
  *   prayer    My posture toward them. Not a metric, so not mixed in.
  *
- * The nouns change by entity ("1:1s" vs "Check-ins" vs "Meetings") because
- * that's how the thing is actually spoken about, but the position and the
- * meaning never do.
+ * The nouns change by entity ("Meetings" vs "Check-ins") because that's how
+ * the thing is actually spoken about, but the position and the meaning never do.
  *
  * ── Why meetings is one mode and not two ─────────────────────────────────
- * "Topics" and "1:1s" were separate tabs, which split one activity across two
- * places: what you plan to say lived in one and what you said lived in the
- * other, with no way to see both while preparing. They're the same mode.
+ * "Topics" and session history were separate tabs, which split one activity
+ * across two places. They're the same mode.
  */
 
 export type EntityMode = "now" | "meetings" | "profile" | "notes" | "prayer";
@@ -66,7 +64,7 @@ export function modeSection(mode: EntityMode): string | null {
 const LABELS: Record<ModeSubject, Record<EntityMode, string>> = {
   person: {
     now: "Now",
-    meetings: "1:1s",
+    meetings: "Meetings",
     profile: "Profile",
     notes: "Notes",
     prayer: "Prayer",
