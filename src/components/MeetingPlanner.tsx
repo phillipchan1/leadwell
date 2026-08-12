@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useId, useState } from "react";
 import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { ensureSessionId, type Slot } from "../lib/topics";
@@ -7,6 +7,7 @@ import { TopicBoard, type BoardDirection } from "./TopicBoard";
 import { MeetingCalendar } from "./MeetingCalendar";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
+import { useRovingFocus } from "@/hooks/use-roving-focus";
 import { cx } from "@/utils/cx";
 
 export type PlanView = "board" | "calendar";
@@ -37,6 +38,9 @@ export function MeetingPlanner({
   const { sessions, addSession } = useStore();
   const [view, setView] = useState<PlanView>("board");
   const isMobile = useMediaQuery("(max-width: 767px)");
+
+  const viewRoving = useRovingFocus();
+  const panelId = useId();
 
   const openWeek = useCallback(
     (slotKeyArg: string, slot: Slot) => {
@@ -77,7 +81,11 @@ export function MeetingPlanner({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {/* A real tablist: roving arrow keys, and each tab pointing at the panel
+          it actually controls. `role="tab"` without either is a promise to
+          assistive tech that the widget doesn't keep. */}
       <div
+        {...viewRoving.groupProps}
         className="inline-flex shrink-0 gap-0.5 rounded-lg bg-stone-100 p-0.5 touch:gap-2 dark:bg-stone-800"
         role="tablist"
         aria-label="Plan view"
@@ -87,7 +95,10 @@ export function MeetingPlanner({
             key={v.id}
             type="button"
             role="tab"
+            id={`${panelId}-tab-${v.id}`}
             aria-selected={view === v.id}
+            aria-controls={panelId}
+            {...viewRoving.itemProps(view === v.id)}
             className={cx(
               "rounded-md px-3 py-1 text-xs font-semibold transition",
               // Hand-rolled rather than the design system's tabs, so it needs
@@ -111,6 +122,9 @@ export function MeetingPlanner({
         )}
       >
         <div
+          id={panelId}
+          role="tabpanel"
+          aria-labelledby={`${panelId}-tab-${view}`}
           className={cx(
             "min-h-0 min-w-0",
             selectedSlotKey && !isMobile
