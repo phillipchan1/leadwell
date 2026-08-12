@@ -10,7 +10,7 @@ import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SectionTitle, TintBadge } from "./ui";
-import { TopicBoard } from "./TopicBoard";
+import { MeetingPlanner } from "./MeetingPlanner";
 import { SessionTable } from "./SessionTable";
 import { TrackerLink } from "./TrackerLink";
 import { confirmAction } from "./ConfirmDialog";
@@ -143,7 +143,7 @@ export function MeetingProfile({
       <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
         {tab === "plan" && (
           <div className={`space-y-3 ${pad}`}>
-            <TopicBoard meeting={meeting} />
+            <MeetingPlanner meeting={meeting} />
           </div>
         )}
 

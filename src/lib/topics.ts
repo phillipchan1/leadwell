@@ -26,7 +26,7 @@
  * goes stale overnight, every night.
  */
 import type { Session, Topic, TopicLane, TrackedMeeting } from "../types";
-import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast } from "./readiness";
+import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, weekdayUTC } from "./readiness";
 
 /** How many occurrences ahead the planner offers to scaffold into. */
 export const SLOTS_AHEAD = 3;
@@ -262,4 +262,119 @@ export function boardColumns(
       topics: covered,
     },
   ];
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────
+
+export type CalendarDay = {
+  date: string;
+  /** False for padding days from the previous/next month. */
+  inMonth: boolean;
+  slot?: Slot;
+  topics: Topic[];
+};
+
+/** Last ISO date in a YYYY-MM month. */
+export function monthEnd(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const next =
+    m === 12
+      ? `${y + 1}-01-01`
+      : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  return addDays(next, -1);
+}
+
+/** Project occurrences forward until `through` is covered. */
+export function slotsThrough(
+  meeting: TrackedMeeting,
+  sessions: Session[],
+  topics: Topic[],
+  through: string,
+  today: string = todayISO()
+): Slot[] {
+  const slots = [...plannedSlots(meeting, sessions, topics, today, SLOTS_AHEAD)];
+  const seen = new Set(slots.map((s) => s.date));
+
+  while (true) {
+    const last = slots[slots.length - 1]?.date;
+    if (!last || last >= through) break;
+    const next = projectFromLast(meeting, last);
+    if (seen.has(next)) break;
+    seen.add(next);
+    slots.push({
+      sessionId: null,
+      date: next,
+      projected: true,
+      past: next < today,
+    });
+  }
+
+  return slots.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Occurrences and slotted topics keyed by ISO date for one month. */
+export function occurrencesInMonth(
+  meeting: TrackedMeeting,
+  sessions: Session[],
+  topics: Topic[],
+  month: string,
+  today: string = todayISO()
+): Map<string, { slot: Slot; topics: Topic[] }> {
+  const start = `${month}-01`;
+  const end = monthEnd(month);
+  const slots = slotsThrough(meeting, sessions, topics, end, today);
+  const mine = sessionsFor(meeting.id, sessions);
+  const open = topicsFor(topics, meeting.id).filter((t) => t.status === "open");
+  const map = new Map<string, { slot: Slot; topics: Topic[] }>();
+
+  for (const slot of slots) {
+    if (slot.date < start || slot.date > end) continue;
+    const inSlot = slot.sessionId
+      ? open.filter((t) => t.sessionId === slot.sessionId)
+      : [];
+    map.set(slot.date, { slot, topics: inSlot });
+  }
+
+  for (const s of mine) {
+    if (s.date < start || s.date > end || map.has(s.date)) continue;
+    map.set(s.date, {
+      slot: {
+        sessionId: s.id,
+        date: s.date,
+        projected: false,
+        past: s.date < today,
+      },
+      topics: open.filter((t) => t.sessionId === s.id),
+    });
+  }
+
+  return map;
+}
+
+/** Six-week grid (Sun–Sat) for a month, sharing the board's slot data. */
+export function calendarGrid(
+  month: string,
+  meeting: TrackedMeeting,
+  sessions: Session[],
+  topics: Topic[],
+  today: string = todayISO()
+): CalendarDay[] {
+  const start = `${month}-01`;
+  const byDate = occurrencesInMonth(meeting, sessions, topics, month, today);
+
+  let cursor = addDays(start, -weekdayUTC(start));
+  const days: CalendarDay[] = [];
+
+  for (let i = 0; i < 42; i++) {
+    const entry = byDate.get(cursor);
+    days.push({
+      date: cursor,
+      inMonth: cursor.startsWith(month),
+      slot: entry?.slot,
+      topics: entry?.topics ?? [],
+    });
+    cursor = addDays(cursor, 1);
+  }
+
+  return days;
 }

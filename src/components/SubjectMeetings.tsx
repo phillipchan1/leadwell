@@ -13,7 +13,8 @@ import {
   readinessOf,
 } from "../lib/readiness";
 import { topicsFor } from "../lib/topics";
-import { TopicBoard, type BoardDirection } from "./TopicBoard";
+import { MeetingPlanner } from "./MeetingPlanner";
+import type { BoardDirection } from "./TopicBoard";
 import { SessionTable } from "./SessionTable";
 import { TrackerLink } from "./TrackerLink";
 import { TintBadge } from "./ui";
@@ -227,7 +228,7 @@ function MeetingBlock({
             {openCount} open
           </span>
         </div>
-        <TopicBoard meeting={meeting} direction={direction} />
+        <MeetingPlanner meeting={meeting} direction={direction} />
       </div>
 
       <div className="space-y-1.5">
