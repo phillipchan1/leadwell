@@ -24,6 +24,7 @@ import {
   LoadingSplash,
   TABS,
 } from "./components/AppChrome";
+import { useKeyboardInset } from "./hooks/use-keyboard-inset";
 import { cx } from "@/utils/cx";
 
 /**
@@ -134,6 +135,8 @@ function useDropStaleSelection() {
 export default function App() {
   useRouteSync();
   useDropStaleSelection();
+  // Above every phase gate: the sign-in screen has a field too.
+  useKeyboardInset();
 
   const {
     phase,

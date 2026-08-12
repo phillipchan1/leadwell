@@ -29,7 +29,11 @@ export function Th({
         <button
           type="button"
           onClick={onClick}
-          className="inline-flex cursor-pointer items-center gap-0.5 font-medium select-none hover:text-stone-600 dark:hover:text-stone-400 dark:text-stone-500"
+          /* The wide tables only appear from `sm` up, but "up" includes a
+             tablet — where the header is still pressed with a thumb and the
+             cell's own padding leaves the button 20px tall. The negative
+             margin keeps the header row from growing by the difference. */
+          className="inline-flex cursor-pointer items-center gap-0.5 font-medium select-none touch:-my-2.5 touch:min-h-11 hover:text-stone-600 dark:hover:text-stone-400 dark:text-stone-500"
         >
           {children}
           {sorted && <span aria-hidden>{sorted === "asc" ? "↑" : "↓"}</span>}

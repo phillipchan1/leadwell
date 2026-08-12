@@ -163,7 +163,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1 touch:gap-2">
             {AVATAR_THEMES.map((t) => {
               const active = t.id === themeId;
               return (
@@ -171,7 +171,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
                   key={t.id}
                   type="button"
                   onClick={() => setThemeId(t.id)}
-                  className={`rounded-md px-2 py-1 text-xs transition-colors ${
+                  className={`rounded-md px-2 py-1 text-xs transition-colors touch:min-h-11 touch:min-w-11 touch:px-3 ${
                     active
                       ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
                       : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"

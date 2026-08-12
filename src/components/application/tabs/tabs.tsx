@@ -53,19 +53,19 @@ const getTabStyles = ({ isFocusVisible, isSelected, isHovered }: AriaTabRenderPr
 const sizes = {
     sm: {
         base: "text-sm font-semibold gap-1 *:data-icon:size-4",
-        "button-brand": "py-2 px-2.5",
-        "button-gray": "py-2 px-2.5",
-        "button-border": "py-2 px-2.5",
-        "button-minimal": "py-2 px-2.5",
+        "button-brand": "py-2 px-2.5 touch:min-h-11",
+        "button-gray": "py-2 px-2.5 touch:min-h-11",
+        "button-border": "py-2 px-2.5 touch:min-h-11",
+        "button-minimal": "py-2 px-2.5 touch:min-h-11",
         underline: "px-0.5 pb-2.5 pt-0 touch:min-h-11 touch:px-3",
         line: "pl-2.5 pr-3 py-0.5 touch:min-h-11",
     },
     md: {
         base: "text-md font-semibold gap-1.5 *:data-icon:size-5",
-        "button-brand": "py-2.5 px-2.5",
-        "button-gray": "py-2.5 px-2.5",
-        "button-border": "py-2.5 px-2.5",
-        "button-minimal": "py-2.5 px-2.5",
+        "button-brand": "py-2.5 px-2.5 touch:min-h-11",
+        "button-gray": "py-2.5 px-2.5 touch:min-h-11",
+        "button-border": "py-2.5 px-2.5 touch:min-h-11",
+        "button-minimal": "py-2.5 px-2.5 touch:min-h-11",
         underline: "px-0.5 pb-2.5 pt-0 touch:min-h-11 touch:px-3",
         line: "pr-3.5 pl-3 py-1 touch:min-h-11",
     },
@@ -73,10 +73,15 @@ const sizes = {
 
 // Styles for different types of horizontal tabs
 const getHorizontalStyles = ({ size, fullWidth }: { size?: "sm" | "md"; fullWidth?: boolean }) => ({
-    "button-brand": "gap-1",
-    "button-gray": "gap-1",
-    "button-border": cx("gap-1 rounded-[10px] bg-secondary_alt p-1 ring-1 ring-secondary ring-inset", size === "md" && "rounded-xl p-1.5"),
-    "button-minimal": "gap-0.5 rounded-lg bg-secondary_alt ring-1 ring-inset ring-secondary",
+    // `touch:gap-2` throughout: 4px between two 36px segments was the tightest
+    // pairing measured anywhere in the app.
+    "button-brand": "gap-1 touch:gap-2",
+    "button-gray": "gap-1 touch:gap-2",
+    "button-border": cx(
+        "gap-1 touch:gap-2 rounded-[10px] bg-secondary_alt p-1 ring-1 ring-secondary ring-inset",
+        size === "md" && "rounded-xl p-1.5",
+    ),
+    "button-minimal": "gap-0.5 touch:gap-2 rounded-lg bg-secondary_alt ring-1 ring-inset ring-secondary",
     underline: cx("gap-3", fullWidth && "w-full gap-4"),
     line: "gap-2",
 });

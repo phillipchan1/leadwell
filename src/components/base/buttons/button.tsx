@@ -89,8 +89,12 @@ export const styles = sortCx({
         "link-color": {
             root: [
                 "justify-normal rounded p-0! text-brand-secondary hover:text-brand-secondary_hover",
-                // Link buttons collapse to their text box; give a finger a real target.
-                "touch:min-h-11",
+                // Link buttons collapse to their text box; give a finger a real
+                // target. The width floor matters as much as the height here —
+                // "Edit", "Back" and "Log it" are all under 44px wide — and
+                // centring keeps the label in the middle of the grown box
+                // instead of pinned to its left edge.
+                "touch:min-h-11 touch:min-w-11 touch:justify-center",
                 // Inner text underline
                 "*:data-text:underline *:data-text:decoration-transparent hover:*:data-text:decoration-fg-brand-secondary_alt",
                 // Icon styles
@@ -100,8 +104,12 @@ export const styles = sortCx({
         "link-gray": {
             root: [
                 "justify-normal rounded p-0! text-tertiary hover:text-tertiary_hover",
-                // Link buttons collapse to their text box; give a finger a real target.
-                "touch:min-h-11",
+                // Link buttons collapse to their text box; give a finger a real
+                // target. The width floor matters as much as the height here —
+                // "Edit", "Back" and "Log it" are all under 44px wide — and
+                // centring keeps the label in the middle of the grown box
+                // instead of pinned to its left edge.
+                "touch:min-h-11 touch:min-w-11 touch:justify-center",
                 // Inner text underline
                 "*:data-text:underline *:data-text:decoration-transparent hover:*:data-text:decoration-fg-quaternary",
                 // Icon styles
@@ -134,8 +142,12 @@ export const styles = sortCx({
         "link-destructive": {
             root: [
                 "justify-normal rounded p-0! text-error-primary outline-error hover:text-error-primary_hover",
-                // Link buttons collapse to their text box; give a finger a real target.
-                "touch:min-h-11",
+                // Link buttons collapse to their text box; give a finger a real
+                // target. The width floor matters as much as the height here —
+                // "Edit", "Back" and "Log it" are all under 44px wide — and
+                // centring keeps the label in the middle of the grown box
+                // instead of pinned to its left edge.
+                "touch:min-h-11 touch:min-w-11 touch:justify-center",
                 // Inner text underline
                 "*:data-text:underline *:data-text:decoration-transparent *:data-text:underline-offset-2 hover:*:data-text:decoration-current",
                 // Icon styles

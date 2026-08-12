@@ -145,26 +145,11 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* ── Touch baseline ── */
-
-/* iOS zooms the viewport when a focused control renders under 16px and never
-   zooms back out. Every control below that floor is raised here; the design
-   system's own `sm` variants carry a matching `touch:text-md`. */
-@media (pointer: coarse) {
-  .field-input,
-  .field-input--sm,
-  .meeting-editor-transcript,
-  .notion-markdown-source,
-  .meeting-editor-point {
-    font-size: 16px;
-  }
-
-  /* The focus lift fires at the same moment as the keyboard-open scroll
-     adjustment, which reads as a double jump. */
-  .field-input:focus {
-    transform: none;
-  }
-}
+/* ── Touch baseline ──
+   See the `@media (pointer: coarse)` block at the very bottom of this file for
+   the 16px type floor and the touch sizing of the hand-rolled controls. It
+   lives there, not here, because it competes with single-class rules declared
+   further down — see the comment on that block. */
 
 /* Reserve the iOS interactive back-swipe gutter. Applied to surfaces that
    otherwise capture horizontal drags (the org canvas). */
@@ -1170,7 +1155,7 @@ label:focus-within > .field-label,
 }
 
 .meeting-editor-scroll {
-  @apply min-h-0 flex-1 overflow-y-auto;
+  @apply scroll-contain min-h-0 flex-1 overflow-y-auto;
 }
 
 .meeting-editor-page {
@@ -1544,5 +1529,108 @@ label:focus-within > .field-label,
 
   .entity-header-secondary {
     display: none;
+  }
+}
+
+/* ── Touch baseline (must stay last) ──
+   Everything a finger needs from the hand-rolled classes above, in one place.
+
+   Why it's at the bottom, and why the selectors are doubled: this block used to
+   sit near the top of the file and was dead. `.field-input` and friends are
+   single-class rules declared *later*, so at equal specificity source order
+   decided and the class won — `.field-input` computed to 15.6px, `--sm` to
+   13px and the transcript box to 12px on a phone, which is exactly the
+   iOS-zoom-on-focus this block exists to prevent. Doubling each selector
+   (`.x.x`) raises specificity so the floor holds wherever the block sits, and
+   keeping it last means a new class below can't quietly defeat it either. */
+
+@media (pointer: coarse) {
+  /* iOS zooms the viewport when a focused control renders under 16px and never
+     zooms back out. Every typing surface is raised to the floor; the design
+     system's own `sm` variants carry a matching `touch:text-md`. */
+  .field-input.field-input,
+  .field-input--sm.field-input--sm,
+  .meeting-editor-transcript.meeting-editor-transcript,
+  .notion-markdown-source.notion-markdown-source,
+  .meeting-editor-point.meeting-editor-point,
+  .prayer-text.prayer-text,
+  .prayer-card-field.prayer-card-field {
+    font-size: 16px;
+  }
+
+  /* The focus lift fires at the same moment as the keyboard-open scroll
+     adjustment, which reads as a double jump. */
+  .field-input.field-input:focus {
+    transform: none;
+  }
+
+  /* Small controls get a 44px box. Padding rather than a larger glyph, so the
+     visual weight of the chrome is unchanged and only the hit area grows. */
+  .meeting-editor-back.meeting-editor-back,
+  .meeting-editor-tool-toggle.meeting-editor-tool-toggle,
+  .meeting-editor-delete.meeting-editor-delete,
+  .meeting-editor-chip.meeting-editor-chip,
+  .notion-mode-btn.notion-mode-btn,
+  .notion-bubble-menu.notion-bubble-menu button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* The topbar is three of those in a row; without this the row grows to 44px
+     of padding *plus* 44px of button. */
+  .meeting-editor-topbar.meeting-editor-topbar {
+    padding-block: 0;
+  }
+
+  .slash-menu-item.slash-menu-item {
+    min-height: 44px;
+  }
+
+  /* Borderless and small-variant fields take their whole height from type, so
+     the 16px floor above still leaves them short of a target. */
+  .meeting-editor-point.meeting-editor-point,
+  .field-input--sm.field-input--sm,
+  .prayer-text.prayer-text {
+    min-height: 44px;
+  }
+
+  /* A prayer line is a one-row textarea; without this its box is the line box. */
+  .prayer-line.prayer-line {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Canvas-card fields are the densest typing surfaces in the app; they still
+     get the floor, because a field you can't reliably put a caret in is worse
+     than a taller card. */
+  .prayer-card-field.prayer-card-field {
+    min-height: 44px;
+  }
+
+  /* Tiptap renders task-list checkboxes as bare inputs, which are 13px at the
+     browser default — the smallest target in the app. The visible box grows to
+     20px and a pseudo-element carries the rest of the 44px, so a checklist
+     doesn't turn into a 44px-per-line ladder. */
+  .notion-editor-content li[data-type="taskItem"] > label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+  }
+
+  .notion-editor-content li[data-type="taskItem"] input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: #0d9488;
+  }
+
+  .notion-editor-content li[data-type="taskItem"] > label::after {
+    content: "";
+    position: absolute;
+    inset: -12px;
   }
 }

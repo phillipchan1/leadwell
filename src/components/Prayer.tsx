@@ -221,7 +221,7 @@ export function CardPrayer({
               type="button"
               disabled={prayedToday}
               onClick={() => markPrayed(subjectKind, subjectId)}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-700 transition-colors touch:min-h-9 hover:bg-violet-100/80 disabled:text-violet-400 disabled:hover:bg-transparent dark:text-violet-300 dark:hover:bg-violet-950/60 dark:disabled:text-violet-500"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-700 transition-colors touch:min-h-11 hover:bg-violet-100/80 disabled:text-violet-400 disabled:hover:bg-transparent dark:text-violet-300 dark:hover:bg-violet-950/60 dark:disabled:text-violet-500"
               title={PRAYER_HINT[state]}
             >
               <HeartHand
@@ -238,7 +238,7 @@ export function CardPrayer({
             <button
               type="button"
               onClick={layDown}
-              className="ml-auto text-[11px] text-stone-500 touch:min-h-9 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+              className="ml-auto text-[11px] text-stone-500 touch:min-h-11 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
             >
               Lay down
             </button>
@@ -248,7 +248,7 @@ export function CardPrayer({
         <button
           type="button"
           onClick={() => setPrayer(subjectKind, subjectId, true)}
-          className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 touch:min-h-9 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200"
+          className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 touch:min-h-11 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200"
         >
           <HeartHand className="size-3.5 text-stone-400 dark:text-stone-500" />
           Take up in prayer
@@ -590,7 +590,7 @@ function KindToggle({
 }) {
   return (
     <div
-      className="flex shrink-0 gap-1"
+      className="flex shrink-0 gap-1 touch:gap-2"
       role="group"
       aria-label="What kind of entry"
     >

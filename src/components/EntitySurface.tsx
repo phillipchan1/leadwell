@@ -214,11 +214,14 @@ export function PeekPanel() {
           }
         }}
         title="Drag to resize · double-click to reset"
-        className="group absolute top-0 -left-1.5 z-20 hidden h-full w-3 cursor-col-resize touch-none outline-none lg:block"
+        /* A 3px-wide grip is a mouse target. Above lg with a coarse pointer —
+           a tablet in landscape — it widens to a thumb's worth and the grip
+           stops hiding, because there is no hover to reveal it with. */
+        className="group absolute top-0 -left-1.5 z-20 hidden h-full w-3 cursor-col-resize touch-none outline-none touch:-left-3 touch:w-6 lg:block"
       >
         <span
           aria-hidden
-          className="absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-stone-300 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:bg-teal-500 group-focus-visible:opacity-100 dark:bg-stone-600"
+          className="absolute top-1/2 left-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-stone-300 opacity-0 transition-opacity touch:opacity-100 group-hover:opacity-100 group-focus-visible:bg-teal-500 group-focus-visible:opacity-100 dark:bg-stone-600"
         />
       </div>
 

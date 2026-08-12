@@ -436,7 +436,7 @@ export function OrgTree() {
       <ModeBar />
 
       <div
-        className="flex flex-wrap items-center gap-1.5"
+        className="flex flex-wrap items-center gap-1.5 touch:gap-2"
         role="tablist"
         aria-label="Filter tree by domain"
       >
@@ -853,7 +853,7 @@ function HealthScan({
     value === "unrated" ? unrated : roll.counts[value];
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 touch:gap-2">
       <span className="text-[11px] font-medium tracking-wide text-stone-500 dark:text-stone-400 uppercase">
         Health
       </span>
@@ -961,7 +961,7 @@ function PrayerScan({
   const roll = rollUpPrayer(subjects.map((s) => s.prayer));
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 touch:gap-2">
       <span className="flex items-center gap-1 text-[11px] font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
         <PrayerIcon className="size-3.5" />
         Prayer
@@ -1102,7 +1102,7 @@ function ModeBar() {
   const setTreeMode = useStore((s) => s.setTreeMode);
   return (
     <div
-      className="flex flex-wrap gap-1.5"
+      className="flex flex-wrap gap-1.5 touch:gap-2"
       role="tablist"
       aria-label="What I'm here to do"
     >
@@ -1794,7 +1794,7 @@ function CardNextStep({
         )}
         <textarea
           rows={2}
-          className="w-full resize-none bg-transparent text-xs font-medium leading-relaxed text-teal-900 outline-none placeholder:font-normal placeholder:text-stone-500 dark:text-stone-400 dark:text-teal-100"
+          className="w-full resize-none bg-transparent text-xs font-medium leading-relaxed text-teal-900 outline-none touch:text-md placeholder:font-normal placeholder:text-stone-500 dark:text-stone-400 dark:text-teal-100"
           placeholder="What's the next move for this team?"
           value={value}
           onChange={(e) => setValue(e.target.value)}

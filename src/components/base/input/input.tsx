@@ -132,6 +132,12 @@ export const InputBase = ({
                 placeholder={placeholder}
                 className={cx(
                     "m-0 w-full bg-transparent text-primary ring-0 outline-hidden placeholder:text-placeholder autofill:rounded-lg autofill:text-primary disabled:cursor-not-allowed",
+                    // Every size lands at 40px from padding + line height, which
+                    // is under the 44px floor. The floor goes on the input
+                    // itself rather than the wrapper: a tap on wrapper padding
+                    // doesn't focus the field, so growing the box that way
+                    // would look right and still miss.
+                    "touch:min-h-11",
                     sizes[inputSize].root,
                     context?.inputClassName,
                     inputClassName,

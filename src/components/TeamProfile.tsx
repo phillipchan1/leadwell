@@ -365,7 +365,7 @@ export function TeamProfile({
                     aria-hidden
                   />
                   <input
-                    className="min-w-0 flex-1 bg-transparent text-[0.95rem] leading-snug text-stone-700 outline-none placeholder:text-stone-400 dark:text-stone-200"
+                    className="min-w-0 flex-1 bg-transparent text-[0.95rem] leading-snug text-stone-700 outline-none touch:min-h-11 touch:text-md placeholder:text-stone-400 dark:text-stone-200"
                     placeholder="Add a to-do… ↵"
                     value={newAction}
                     onChange={(e) => setNewAction(e.target.value)}
@@ -719,37 +719,44 @@ function ActionRow({
           : "border-stone-200 bg-white shadow-sm shadow-stone-900/3 hover:border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:shadow-none dark:hover:border-stone-600"
       }`}
     >
+      {/* The box a finger presses and the box it sees are different sizes: the
+          button grows to 44px on touch and the 20px tick stays as drawn. The
+          negative margin is what stops the row growing by the difference. */}
       <button
         type="button"
         role="checkbox"
         aria-checked={done}
         aria-label={done ? "Mark incomplete" : "Mark done"}
         onClick={onToggle}
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
-          done
-            ? "border-teal-600 bg-teal-600 text-white"
-            : "border-stone-300 bg-white hover:border-teal-500 dark:border-stone-600 dark:bg-stone-950 dark:hover:border-teal-500"
-        }`}
+        className="mt-0.5 flex shrink-0 items-center justify-center touch:-my-2.5 touch:mt-0 touch:-ml-1.5 touch:size-11"
       >
-        {done && (
-          <svg
-            viewBox="0 0 12 12"
-            className="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M2.5 6.5 5 9l4.5-6" />
-          </svg>
-        )}
+        <span
+          className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-colors ${
+            done
+              ? "border-teal-600 bg-teal-600 text-white"
+              : "border-stone-300 bg-white hover:border-teal-500 dark:border-stone-600 dark:bg-stone-950 dark:hover:border-teal-500"
+          }`}
+        >
+          {done && (
+            <svg
+              viewBox="0 0 12 12"
+              className="h-3 w-3"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M2.5 6.5 5 9l4.5-6" />
+            </svg>
+          )}
+        </span>
       </button>
       <div className="min-w-0 flex-1">
         <textarea
           rows={1}
-          className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none ${
+          className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none touch:min-h-11 touch:text-md ${
             done
               ? "text-stone-500 line-through decoration-stone-300 dark:text-stone-400"
               : "text-stone-800 dark:text-stone-100"
@@ -771,7 +778,7 @@ function ActionRow({
         )}
       </div>
       <button
-        className="mt-0.5 rounded-md px-1.5 py-0.5 text-sm text-stone-400 opacity-0 transition-opacity touch:opacity-100 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-950/40"
+        className="mt-0.5 flex items-center justify-center rounded-md px-1.5 py-0.5 text-sm text-stone-400 opacity-0 transition-opacity touch:-my-2.5 touch:mt-0 touch:-mr-1.5 touch:size-11 touch:opacity-100 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 dark:text-stone-500 dark:hover:bg-red-950/40"
         aria-label="Delete"
         onClick={onDelete}
       >

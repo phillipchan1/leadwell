@@ -124,7 +124,7 @@ export function SessionTable({
       <button
         type="button"
         onClick={createNew}
-        className="flex w-full items-center gap-2 border-t border-dashed border-stone-200 px-3 py-2.5 text-left text-sm font-medium text-stone-500 transition-colors hover:bg-teal-50/60 hover:text-teal-700 dark:border-stone-800 dark:text-stone-400 dark:hover:bg-teal-950/30 dark:hover:text-teal-300"
+        className="flex w-full items-center gap-2 border-t border-dashed border-stone-200 px-3 py-2.5 text-left text-sm font-medium text-stone-500 transition-colors touch:min-h-11 hover:bg-teal-50/60 hover:text-teal-700 dark:border-stone-800 dark:text-stone-400 dark:hover:bg-teal-950/30 dark:hover:text-teal-300"
       >
         <span className="text-base leading-none">+</span>
         Log a meeting
@@ -168,7 +168,7 @@ function SessionRow({
           type="button"
           onClick={onToggle}
           aria-expanded={expanded}
-          className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 py-1 text-left touch:min-h-11"
         >
           <span
             aria-hidden

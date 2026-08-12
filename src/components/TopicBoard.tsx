@@ -396,7 +396,7 @@ function TopicCard({
         isDragging && "opacity-40"
       )}
     >
-      <div className="flex items-start gap-1 px-2 py-1.5">
+      <div className="flex items-start gap-1 px-2 py-1.5 touch:gap-2">
         {inSlot ? (
           <Checkbox
             size="sm"
@@ -406,10 +406,15 @@ function TopicCard({
             className="mt-1 shrink-0"
           />
         ) : (
+          /* An explicit handle: the card also holds an editable textarea, and a
+             press anywhere would fight text selection and the caret.
+             `select-none` and the callout suppression matter because the touch
+             drag starts on a 300ms hold — the same gesture iOS uses to raise
+             the selection handles and the copy/lookup callout. */
           <button
             type="button"
             aria-label={`Move "${topic.text || "topic"}"`}
-            className="-ml-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400"
+            className="-ml-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 select-none touch:-my-1.5 touch:size-11 [-webkit-touch-callout:none] active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400"
             {...handleProps(topic.id, columnKey, ref)}
           >
             <DotsGrid className="size-4" />
@@ -469,9 +474,10 @@ function TopicCard({
         />
       </div>
 
-      {/* Past weeks: quick outs for what didn't get covered. */}
+      {/* Past weeks: quick outs for what didn't get covered. Both are routing
+          choices rather than opposites, so they take the 8px peer spacing. */}
       {past && !covered && (
-        <div className="flex flex-wrap items-center gap-1 border-t border-amber-200 px-2 py-1 dark:border-amber-900/70">
+        <div className="flex flex-wrap items-center gap-1 border-t border-amber-200 px-2 py-1 touch:gap-2 dark:border-amber-900/70">
           <Button size="sm" color="link-gray" onClick={onRoll}>
             → Next week
           </Button>

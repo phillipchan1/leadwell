@@ -415,7 +415,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
       {/* Health scan — the same filter the org tree is using. In tree mode the
           tree renders its own layer-aware copy directly above this one, so
           showing both would be two identical rows driving one store value. */}
-      <div className={cx("flex flex-wrap items-center gap-1.5", isTree && "hidden")}>
+      <div className={cx("flex flex-wrap items-center gap-1.5 touch:gap-2", isTree && "hidden")}>
         <Explain text="Shared with the org tree, so a scan follows you between the two views">
           <span className="text-[11px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
             Health
@@ -862,7 +862,7 @@ function NoteCell({
 
   return (
     <input
-      className="w-full min-w-[10rem] rounded-md bg-transparent px-1.5 py-1 text-xs outline-none hover:bg-stone-100 focus:bg-stone-100 dark:hover:bg-stone-800 dark:focus:bg-stone-800"
+      className="w-full min-w-[10rem] rounded-md bg-transparent px-1.5 py-1 text-xs outline-none touch:min-h-11 touch:text-md hover:bg-stone-100 focus:bg-stone-100 dark:hover:bg-stone-800 dark:focus:bg-stone-800"
       placeholder="Why?"
       title={value || undefined}
       value={value}
@@ -972,7 +972,7 @@ function MobileRecordCard({
       // room for the name on a 320px screen.
       style={{ marginLeft: Math.min(depth, 3) * 12 }}
     >
-      <div className="flex items-start gap-2 p-3">
+      <div className="flex items-start gap-2 p-3 touch:gap-3.5">
         {/* Negative margin keeps the 44px touch box from padding the row out. */}
         <button
           type="button"

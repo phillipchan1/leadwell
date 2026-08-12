@@ -104,6 +104,11 @@ export const Toggle = ({ label, hint, className, size = "sm", slim, ...ariaSwitc
             className={(state) =>
                 cx(
                     "relative flex w-max items-start",
+                    // The switch itself is 20–24px tall. The label element is
+                    // what receives the tap, so the floor goes here and the
+                    // switch keeps its size — a 44px switch would read as a
+                    // different control.
+                    "touch:min-h-11 touch:items-center",
                     state.isDisabled && "cursor-not-allowed",
                     styles[size].root,
                     typeof className === "function" ? className(state) : className,

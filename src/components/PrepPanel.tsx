@@ -79,7 +79,7 @@ export function PrepPanel({
               ? `No ${label} with ${firstName} — left out of readiness on purpose.`
               : `Track a ${label} to see whether you're ready for the next one. Nothing is measured until you do.`}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-1.5 touch:gap-2">
             <Button
               size="sm"
               onClick={() => trackMeeting(subjectKind, subjectId, "weekly")}

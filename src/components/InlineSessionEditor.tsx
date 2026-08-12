@@ -144,7 +144,7 @@ export function InlineSessionEditor({
 
       <textarea
         ref={notesRef}
-        className="w-full resize-none rounded-xl border border-stone-200 bg-white p-3 text-[0.95rem] leading-relaxed text-stone-800 outline-none placeholder:text-stone-400 focus:border-teal-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+        className="w-full resize-none rounded-xl border border-stone-200 bg-white p-3 text-[0.95rem] leading-relaxed text-stone-800 outline-none touch:text-md placeholder:text-stone-400 focus:border-teal-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
         placeholder="What did you cover? Markdown works — Expand for blocks, transcript and AI."
         value={notes}
         autoFocus={autoFocus && autoFocusUnlessTouch()}
