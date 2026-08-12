@@ -70,11 +70,49 @@ profile components own content only, and render at both densities from one tree.
 Because a peek is not tied to the canvas, clicking a row in the People table
 opens it in place instead of throwing you back to the tree.
 
+## Modes
+
+Nobody opens the org tree wanting "mandate and health and readiness." They open
+it **in a mode** — and the chart used to make you assemble that mode yourself
+out of eight independent layer toggles, every one of them offered at once
+regardless of the question being asked.
+
+So mode is now the only card control there is. Four of them, one per question:
+
+| Mode | Question | Cards carry | Bar under the chips |
+|---|---|---|---|
+| **Plan** `1` | What is each team for, and what's next? | mandate, next step, stacked avatars | — |
+| **Prep** `2` | Am I ready for the next 1:1? | readiness rail, countdown chips, roster, next step | *4 of 6 ready · 2 need prep · N undecided* |
+| **Assess** `3` | Is this going well? | health chip, why-line, member health bar, roster | the **health scan** |
+| **Pray** `4` | Who am I carrying? | the hand, focus line, *carrying 3 of 8 · 1 gone quiet*, roster | the **prayer scan** |
+
+Plan is the only one that leaves the roster off: mandate and next step are
+team-level answers, and a list of names under them buries the two lines that
+matter. The other three are per-person signals, so they need the names.
+
+**Mode is what you're doing; the domain filter is where.** They're orthogonal
+and compose — Assess × Church answers a question neither does alone. Mode takes
+the bare digits `1`–`4`; domains moved up a shift to `⇧1`–`⇧9`.
+
+**Only the scan a mode owns applies.** The scans themselves persist across a
+mode switch — they're shared with the table and have to follow you there — but
+Plan and Prep put no scan bar on screen, so nothing dims in them. A mode that
+can't say *why* a card faded has no business fading it. Composing health *and*
+prayer at once is still the table's job, where both are columns.
+
+The mode bar renders above the domain chips on **both** surfaces, which is how
+the phone finally gets the control the canvas used to hoard. Below `lg` it
+picks the outline's columns instead of the card's layers — same question, the
+shape the screen can carry.
+
+Modes live in [`src/lib/treeMode.ts`](src/lib/treeMode.ts): the four ids, the
+layer set each one stamps, the scan it owns, and the columns it shows.
+
 ## Stack & structure
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
 
-The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. Card layers toggle independently by keystroke — **P** people · **A** action · **M** mandate · **G** gift mix · **D** detail · **R** readiness · **H** health · **Y** prayer — and compose with the domain filter (`1`–`9`). **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
+The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. The cards themselves are driven by **mode** (see below), not by a row of toggles, and mode composes with the domain filter. **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 
 ```
 src/
@@ -90,6 +128,7 @@ src/
     health.ts            # my own read: levels, the scan filter, roll-ups
     prayer.ts            # who I'm carrying: states, silence, the scan filter
     orgTable.ts          # rows, outline, sorting + grouping for the table view
+    treeMode.ts          # the four chart modes: layers, scan and columns each owns
     ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
   components/
@@ -277,15 +316,16 @@ teaching the wrong thing. "Gone quiet" is the one that surfaces: a name you took
 up in January and haven't prayed for since June is exactly what goes unnoticed
 without a list.
 
-**The mode.** Layer **`Y`** on the canvas puts the hand on every card — the mark
-shows how long since you last prayed, a team card shows its focus line and
-`carrying 3 of 8 · 1 gone quiet` — and turns on the scan bar above it. The scan
-dims rather than hides, like health's, and the two compose: filtering *Strained*
-and *Gone quiet* together answers a question neither does alone. It's shared
-with the table, so it follows you between surfaces, and the marks are doors —
+**The mode.** Pray (`4`) puts the hand on every card — the mark shows how long
+since you last prayed, a team card shows its focus line and `carrying 3 of 8 ·
+1 gone quiet` — and brings up the **prayer scan**: one chip per state, with
+counts, dimming rather than hiding the way health's does. *Gone quiet* is the
+chip that earns the bar. A count can tell you a name has gone six months
+unprayed-for; only the scan puts you in front of it. The scan is shared with
+the table, so it follows you between surfaces, and the marks are doors —
 clicking one opens that subject's prayer tab, so a pass down the list is scan →
-click → pray → mark → next. The layer is **off by default**: this is a mode you
-enter on purpose, not a column everyone gets.
+click → pray → mark → next. It's a mode you enter on purpose, never a column
+everyone gets — which is the whole reason the canvas has modes at all.
 
 **The log** is a tab on every person and manager (`?s=prayer`) and a section on
 every team, and it deliberately does not look like a to-do list. No checkboxes,
