@@ -108,6 +108,48 @@ shape the screen can carry.
 Modes live in [`src/lib/treeMode.ts`](src/lib/treeMode.ts): the four ids, the
 layer set each one stamps, the scan it owns, and the columns it shows.
 
+## Quick search (`⌘K`)
+
+You're walking into a meeting with Meghan in ninety seconds. You don't want the
+org chart, you want *her* — and the thing you said you'd follow up on.
+
+`⌘K` is that. One field over the whole workspace, answered from memory:
+
+| Type | You get |
+|---|---|
+| *nothing* | the last eight things you opened, then every command |
+| `meg` | Meghan, then her meeting, then her topics, notes, write-ups and prayer entries |
+| `sunday setup` | every record with **both** words, wherever they are — the snippet shows the line they're on |
+| `add person` | the command, with the shortcut that would have skipped the palette |
+
+**The unit of search is the record, not the entity.** A write-up, a topic, a
+note, a banked win, a prayer entry and every profile field are each their own
+document that knows the route which opens it — so searching for something you
+discussed lands you *in the occurrence where you discussed it*, not on a
+profile you then have to dig through. A raw meeting transcript is indexed too:
+"what did she say about the budget" is answerable before anyone has written it up.
+
+**It never touches the network.** The store is already hydrated from
+[`docCache`](src/lib/docCache.ts) on a cold open and the shell is already served
+by the service worker, so the index is built from memory the app has anyway.
+A basement, a plane, a church hallway with two bars — search can't tell the
+difference, because there is nothing for it to know.
+
+**It's built once per document version, not per keystroke.** The index —
+folded haystacks, a sorted token list, posting lists — is cached on the
+identity of the store's collections and rebuilt only when one of them actually
+changes. A query is a binary search over the tokens and a merge of postings;
+only the survivors get scored. Building it happens a frame *after* the palette
+paints, so the field is live before the corpus is read. On a workspace at the
+ceiling of what the offline cache can hold (~3 MB of prose, ~3,000 write-ups)
+that build is ~100 ms once, and a keystroke is single-digit milliseconds.
+
+Ranking is four terms, in [`src/lib/search.ts`](src/lib/search.ts): how well the
+text matches (prefix > word-start > mid-word > initials), which field matched
+(a name outranks where it lives, which outranks the prose), how recent the
+record is, and how recently you opened it. That last one is why `m` puts *your*
+Meghan above three M-names you've never touched.
+
 ## Stack & structure
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
@@ -129,6 +171,9 @@ src/
     prayer.ts            # who I'm carrying: states, silence, the scan filter
     orgTable.ts          # rows, outline, sorting + grouping for the table view
     treeMode.ts          # the four chart modes: layers, scan and columns each owns
+    search.ts            # the offline quick-search index: documents, tokens, ranking
+    recents.ts           # what you opened last — the resting list and the frecency term
+    docCache.ts          # the local copy of the document, so a cold open needs no network
     ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
   components/

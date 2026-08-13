@@ -35,6 +35,8 @@ import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
 import type { NodePosition, PersistedData } from "../lib/repo";
 import { clearDoc, loadDoc, saveDoc } from "../lib/docCache";
+import { clearIndex } from "../lib/search";
+import { clearRecents } from "../lib/recents";
 import { clearUndo } from "../lib/undo";
 import { emptyMe } from "../lib/repo";
 import {
@@ -1742,7 +1744,13 @@ export const useStore = create<Store>((set, get) => ({
     await supabase.auth.signOut();
     // The local copy outlives the session unless we say otherwise, and the
     // next person to open this browser is not necessarily the same person.
-    if (userId) clearDoc(userId);
+    // The search index and what it was recently asked for are that same copy,
+    // held in another shape.
+    if (userId) {
+      clearDoc(userId);
+      clearRecents(userId);
+    }
+    clearIndex();
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
@@ -2026,7 +2034,11 @@ supabase.auth.onAuthStateChange((event) => {
     // token, a sign-out in another tab. The local copy must not outlive the
     // session that was allowed to read it.
     const { userId } = useStore.getState();
-    if (userId) clearDoc(userId);
+    if (userId) {
+      clearDoc(userId);
+      clearRecents(userId);
+    }
+    clearIndex();
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;

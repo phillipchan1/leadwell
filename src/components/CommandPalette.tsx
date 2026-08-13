@@ -1,4 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Dialog,
   Modal as SysModal,
@@ -7,14 +15,25 @@ import {
 import { useStore } from "../store/useStore";
 import { useOverlayGuard, useShortcutList } from "@/hooks/use-shortcut";
 import { keysOf } from "@/lib/shortcuts";
-import { meetingSubjectName, meetingTitle } from "../lib/readiness";
 import { TREE_MODES } from "../lib/treeMode";
+import {
+  getIndex,
+  highlight,
+  queryTokens,
+  score,
+  search,
+  type SearchDoc,
+  type SearchIndex,
+  type SearchSource,
+  type SearchTarget,
+} from "../lib/search";
+import { loadRecents, recentRank, recordRecent } from "../lib/recents";
 import { Avatar } from "./Avatar";
 import { cx } from "@/utils/cx";
 import { SearchLg } from "@untitledui/icons";
 
 /**
- * ⌘K — one place to reach anything.
+ * ⌘K — one place to reach anything, answered from memory.
  *
  * Leadwell earns a palette: five tabs, five tree modes, four entity kinds that
  * each number in the dozens, and a set of create actions scattered across three
@@ -24,55 +43,40 @@ import { SearchLg } from "@untitledui/icons";
  * Two kinds of result share one list. **Commands** come from the shortcut
  * registry plus a handful of navigation entries, so a command that has a
  * shortcut shows it — the palette teaches the shortcut that would have skipped
- * the palette. **Entities** are every person, team, manager and meeting, ranked
- * below commands because an exact command match is almost always the intent.
+ * the palette. **Documents** come from [`lib/search`](../lib/search.ts): not
+ * just the entities, but every write-up, topic, note, win and prayer entry in
+ * the workspace, so the half-remembered thing you discussed is as reachable as
+ * the person you discussed it with.
+ *
+ * Three things make it feel instant, and all three are deliberate:
+ *
+ *   - **The index is built off the paint.** Opening the palette shows recents
+ *     and commands immediately; the index lands a frame later, from an effect.
+ *     A cold build over a large workspace is tens of milliseconds, and none of
+ *     them are spent with an empty box on screen.
+ *   - **Results are deferred, the field is not.** `useDeferredValue` lets React
+ *     keep the caret ahead of the list, so a long query never stutters.
+ *   - **Nothing is fetched.** The store is already hydrated from the local
+ *     document cache, so this works with no signal at all — which is exactly
+ *     when you need to pull someone up before walking into the room.
  */
 
-type Item = {
+type Row = {
   id: string;
   label: string;
+  /** Right-aligned context — a role, a date, whose write-up this is. */
   hint?: string;
   chord?: string;
   group: string;
   photo?: string;
+  /** A line of the body, around the match. Only on documents. */
+  snippet?: string;
   run: () => void;
 };
 
-/**
- * How well `text` answers `query`, or 0 for "not at all".
- *
- * Three tiers, deliberately narrow. A prefix wins, then a match at the start of
- * any word ("foster" finds "Dana Foster"), then initials ("df" finds the same).
- *
- * What's *not* here is a free subsequence match over the whole string. It's the
- * obvious thing to write and it makes a palette feel broken: with it, "da"
- * matched "A**d**d man**a**ger" and "Manage **d**om**a**ins", so the top of the
- * list filled with commands that have nothing to do with what was typed.
- */
-function score(query: string, text: string): number {
-  if (!query || !text) return 0;
-  const q = query.toLowerCase();
-  const t = text.toLowerCase();
-
-  if (t.startsWith(q)) return 1000 - t.length;
-
-  const at = t.indexOf(q);
-  if (at > 0) {
-    const wordStart = /[\s\-–—·:/(]/.test(t[at - 1]);
-    // Mid-word substrings still count, just below every word-start match.
-    return (wordStart ? 700 : 300) - at;
-  }
-
-  // Initials: "df" → "Dana Foster", "tmp" → "Tree mode — Pray".
-  const initials = t
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .join("");
-  if (q.length > 1 && initials.startsWith(q)) return 600;
-
-  return 0;
-}
+/** Rows shown before anything is typed. Enough to scan, not enough to read. */
+const RESTING_LIMIT = 30;
+const RECENT_LIMIT = 8;
 
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   useOverlayGuard();
@@ -82,16 +86,25 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const listId = useId();
 
   const shortcuts = useShortcutList();
+  const userId = useStore((s) => s.userId);
+  const me = useStore((s) => s.me);
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
   const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const notes = useStore((s) => s.notes);
+  const teamNotes = useStore((s) => s.teamNotes);
+  const wins = useStore((s) => s.wins);
+  const prayers = useStore((s) => s.prayers);
   const setTab = useStore((s) => s.setTab);
   const selectPerson = useStore((s) => s.selectPerson);
   const selectTeam = useStore((s) => s.selectTeam);
   const selectManager = useStore((s) => s.selectManager);
   const selectMeeting = useStore((s) => s.selectMeeting);
   const selectMe = useStore((s) => s.selectMe);
+  const openSession = useStore((s) => s.openSession);
   const setTreeMode = useStore((s) => s.setTreeMode);
   const openModal = useStore((s) => s.openModal);
   const setAskAIOpen = useStore((s) => s.setAskAIOpen);
@@ -99,23 +112,107 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const toggleDark = useStore((s) => s.toggleDark);
   const dark = useStore((s) => s.dark);
 
-  const items = useMemo<Item[]>(() => {
-    const go = (fn: () => void) => () => {
+  const source = useMemo<SearchSource>(
+    () => ({
+      me,
+      people,
+      teams,
+      managers,
+      meetings,
+      sessions,
+      topics,
+      notes,
+      teamNotes,
+      wins,
+      prayers,
+    }),
+    [me, people, teams, managers, meetings, sessions, topics, notes, teamNotes, wins, prayers]
+  );
+
+  /**
+   * Built after the first paint, never during it. `getIndex` caches on the
+   * document's identity, so this is a map lookup on every open but the first
+   * after an edit.
+   */
+  const [index, setIndex] = useState<SearchIndex | null>(null);
+  useEffect(() => {
+    // A frame's grace so the overlay and the focused field are on screen
+    // before a large workspace is folded and tokenized.
+    const id = requestAnimationFrame(() => setIndex(getIndex(source)));
+    return () => cancelAnimationFrame(id);
+  }, [source]);
+
+  // Read once per open. The list is rewritten as rows are run, and re-reading
+  // it mid-session would reorder the results under the user's cursor.
+  const [recents] = useState(() => loadRecents(userId));
+  const ranks = useMemo(() => recentRank(recents), [recents]);
+
+  const openTarget = useCallback(
+    (target: SearchTarget) => {
+      // A write-up opens as the full-screen editor for that occurrence; the
+      // store's own route handling knows which surface that is.
+      if (target.sessionId) {
+        openSession(target.sessionId);
+        return;
+      }
+      switch (target.kind) {
+        case "person":
+          selectPerson(target.id, target.section);
+          break;
+        case "team":
+          selectTeam(target.id, target.section);
+          break;
+        case "manager":
+          selectManager(target.id, target.section);
+          break;
+        case "meeting":
+          selectMeeting(target.id, target.section);
+          break;
+        case "me":
+          selectMe(true);
+          break;
+      }
+    },
+    [openSession, selectPerson, selectTeam, selectManager, selectMeeting, selectMe]
+  );
+
+  /** Close, remember, then go. In that order — navigation unmounts this. */
+  const runRow = useCallback(
+    (id: string, go: () => void) => {
       onClose();
-      fn();
-    };
+      recordRecent(userId, id);
+      go();
+    },
+    [onClose, userId]
+  );
 
-    const commands: Item[] = [
-      { id: "go:overview", label: "Go to Overview", group: "Go to", run: go(() => setTab("overview")), hint: "G then O" },
-      { id: "go:tree", label: "Go to Org tree", group: "Go to", run: go(() => setTab("tree")), hint: "G then T" },
-      { id: "go:meetings", label: "Go to Meetings", group: "Go to", run: go(() => setTab("meetings")), hint: "G then M" },
-      { id: "go:table", label: "Go to Table", group: "Go to", run: go(() => setTab("table")), hint: "G then B" },
-      { id: "go:me", label: "Open my profile", group: "Go to", run: go(() => selectMe(true)) },
+  const docRow = useCallback(
+    (doc: SearchDoc, snippet?: string): Row => ({
+      id: doc.id,
+      label: doc.title,
+      hint: doc.context,
+      group: doc.group,
+      photo: doc.photo,
+      snippet,
+      run: () => runRow(doc.id, () => openTarget(doc.target)),
+    }),
+    [openTarget, runRow]
+  );
 
-      { id: "new:team", label: "Add team", group: "Create", run: go(() => openModal({ kind: "team" })) },
-      { id: "new:person", label: "Add person", group: "Create", run: go(() => openModal({ kind: "person", teamId: null })) },
-      { id: "new:manager", label: "Add manager", group: "Create", run: go(() => openModal({ kind: "manager" })) },
-      { id: "new:domain", label: "Manage domains", group: "Create", run: go(() => openModal({ kind: "domains" })) },
+  const commands = useMemo<Row[]>(() => {
+    const go = (id: string, fn: () => void) => () => runRow(id, fn);
+
+    const nav: Row[] = [
+      { id: "go:overview", label: "Go to Overview", group: "Go to", hint: "G then O", run: go("go:overview", () => setTab("overview")) },
+      { id: "go:tree", label: "Go to Org tree", group: "Go to", hint: "G then T", run: go("go:tree", () => setTab("tree")) },
+      { id: "go:meetings", label: "Go to Meetings", group: "Go to", hint: "G then M", run: go("go:meetings", () => setTab("meetings")) },
+      { id: "go:table", label: "Go to Table", group: "Go to", hint: "G then B", run: go("go:table", () => setTab("table")) },
+      { id: "go:me", label: "Open my profile", group: "Go to", run: go("go:me", () => selectMe(true)) },
+
+      { id: "new:team", label: "Add team", group: "Create", run: go("new:team", () => openModal({ kind: "team" })) },
+      { id: "new:person", label: "Add person", group: "Create", run: go("new:person", () => openModal({ kind: "person", teamId: null })) },
+      { id: "new:manager", label: "Add manager", group: "Create", run: go("new:manager", () => openModal({ kind: "manager" })) },
+      { id: "new:domain", label: "Manage domains", group: "Create", run: go("new:domain", () => openModal({ kind: "domains" })) },
 
       ...TREE_MODES.map((m) => ({
         id: `mode:${m.id}`,
@@ -123,84 +220,40 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         hint: m.question,
         chord: m.key,
         group: "Org tree",
-        run: go(() => {
+        run: go(`mode:${m.id}`, () => {
           setTab("tree");
           setTreeMode(m.id);
         }),
       })),
 
-      { id: "app:ai", label: "Ask AI about your org", group: "App", run: go(() => setAskAIOpen(true)) },
-      { id: "app:settings", label: "Open settings", group: "App", run: go(() => setSettingsOpen(true)) },
+      { id: "app:ai", label: "Ask AI about your org", group: "App", run: go("app:ai", () => setAskAIOpen(true)) },
+      { id: "app:settings", label: "Open settings", group: "App", run: go("app:settings", () => setSettingsOpen(true)) },
       {
         id: "app:theme",
         label: dark ? "Switch to light mode" : "Switch to dark mode",
         group: "App",
-        run: go(toggleDark),
+        run: go("app:theme", toggleDark),
       },
     ];
 
     // Anything bound to a chord is offered here too, so the palette is a
     // complete index of what the app can do rather than a second, shorter list.
-    const bound: Item[] = shortcuts
+    const bound: Row[] = shortcuts
       .filter((s) => s.group !== "Writing")
       .map((s) => ({
         id: `key:${s.id}`,
         label: s.label,
         chord: keysOf(s),
         group: s.group,
-        run: () => {
-          onClose();
-          s.run(new KeyboardEvent("keydown"));
-        },
+        run: () => runRow(`key:${s.id}`, () => s.run(new KeyboardEvent("keydown"))),
       }));
 
-    const entities: Item[] = [
-      ...people.map((p) => ({
-        id: `person:${p.id}`,
-        label: p.name,
-        hint: p.role,
-        photo: p.photo,
-        group: "People",
-        run: go(() => selectPerson(p.id)),
-      })),
-      ...teams.map((t) => ({
-        id: `team:${t.id}`,
-        label: t.name,
-        hint: "Team",
-        group: "Teams",
-        run: go(() => selectTeam(t.id)),
-      })),
-      ...managers.map((m) => ({
-        id: `manager:${m.id}`,
-        label: m.name,
-        hint: m.role ?? "I report to",
-        photo: m.photo,
-        group: "Managers",
-        run: go(() => selectManager(m.id)),
-      })),
-      ...meetings.map((m) => ({
-        id: `meeting:${m.id}`,
-        label: meetingTitle(m, meetingSubjectName(m, { people, teams, managers })),
-        hint: "Meeting",
-        group: "Meetings",
-        run: go(() => selectMeeting(m.id)),
-      })),
-    ];
-
-    return [...commands, ...bound, ...entities];
+    return [...nav, ...bound];
   }, [
     shortcuts,
-    people,
-    teams,
-    managers,
-    meetings,
     dark,
-    onClose,
+    runRow,
     setTab,
-    selectPerson,
-    selectTeam,
-    selectManager,
-    selectMeeting,
     selectMe,
     setTreeMode,
     openModal,
@@ -209,19 +262,43 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     toggleDark,
   ]);
 
-  const results = useMemo(() => {
-    if (!query.trim()) {
-      // The unfiltered list opens on commands, not on 60 names.
-      return items.filter((i) => !i.id.match(/^(person|team|manager|meeting):/)).slice(0, 30);
+  // The list lags the field by at most a frame under load, so typing is never
+  // gated on scoring a workspace's worth of prose.
+  const deferred = useDeferredValue(query);
+  const trimmed = deferred.trim();
+  const tokens = useMemo(() => queryTokens(trimmed), [trimmed]);
+
+  const results = useMemo<Row[]>(() => {
+    if (!trimmed) {
+      // At rest: what you opened last, then what the app can do. Sixty names
+      // are not an answer to a question nobody has asked yet.
+      const recentRows = index
+        ? recents
+            .map((id) => index.byId.get(id))
+            .filter((d): d is SearchDoc => !!d)
+            .slice(0, RECENT_LIMIT)
+            .map((doc) => ({ ...docRow(doc), group: "Recent" }))
+        : [];
+      return [...recentRows, ...commands].slice(0, RESTING_LIMIT);
     }
-    const q = query.trim();
-    const scored = items
-      .map((item) => ({
-        item,
+
+    const commandHits = commands
+      .map((row) => ({
+        row,
         // A match on the subtitle counts, but never beats one on the name.
-        s: Math.max(score(q, item.label), score(q, item.hint ?? "") - 400),
+        s: Math.max(score(trimmed, row.label), score(trimmed, row.hint ?? "") - 400),
       }))
       .filter((r) => r.s > 0)
+      .sort((a, b) => b.s - a.s);
+
+    const docHits = index
+      ? search(index, trimmed, { recentRank: ranks }).map((hit) => ({
+          row: docRow(hit.doc, hit.snippet),
+          s: hit.score,
+        }))
+      : [];
+
+    const scored = [...commandHits, ...docHits]
       .sort((a, b) => b.s - a.s)
       .slice(0, 40);
 
@@ -229,20 +306,20 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     // by score interleaves them, and the rendered headers repeat — three
     // separate "People" headings in one ten-row list.
     const order: string[] = [];
-    const byGroup = new Map<string, Item[]>();
-    for (const { item } of scored) {
-      if (!byGroup.has(item.group)) {
-        byGroup.set(item.group, []);
-        order.push(item.group);
+    const byGroup = new Map<string, Row[]>();
+    for (const { row } of scored) {
+      if (!byGroup.has(row.group)) {
+        byGroup.set(row.group, []);
+        order.push(row.group);
       }
-      byGroup.get(item.group)!.push(item);
+      byGroup.get(row.group)!.push(row);
     }
     return order.flatMap((g) => byGroup.get(g)!);
-  }, [items, query]);
+  }, [commands, docRow, index, ranks, recents, trimmed]);
 
   // A new query invalidates the highlight — otherwise Enter runs whatever
   // happened to be at index 4 in the previous result set.
-  useEffect(() => setActive(0), [query]);
+  useEffect(() => setActive(0), [trimmed]);
 
   useEffect(() => {
     listRef.current
@@ -288,8 +365,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="Search people, teams, meetings and commands…"
-              aria-label="Search people, teams, meetings and commands"
+              placeholder="Search people, notes, write-ups and commands…"
+              aria-label="Search people, notes, write-ups and commands"
               aria-controls={listId}
               aria-expanded
               aria-activedescendant={
@@ -313,7 +390,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           >
             {results.length === 0 && (
               <p className="px-4 py-8 text-center text-sm text-quaternary">
-                Nothing matches “{query}”.
+                {index
+                  ? `Nothing matches “${trimmed}”.`
+                  : "Searching your workspace…"}
               </p>
             )}
             {results.map((item, i) => {
@@ -335,25 +414,37 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     onMouseMove={() => setActive(i)}
                     onClick={item.run}
                     className={cx(
-                      "flex cursor-pointer items-center gap-2.5 px-4 py-2 text-sm",
+                      "cursor-pointer px-4 py-2 text-sm",
                       i === active
                         ? "bg-teal-50 text-teal-900 dark:bg-teal-950/50 dark:text-teal-100"
                         : "text-stone-700 dark:text-stone-200"
                     )}
                   >
-                    {item.photo !== undefined && (
-                      <Avatar name={item.label} photo={item.photo} size={22} />
-                    )}
-                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    {item.hint && (
-                      <span className="hidden shrink-0 truncate text-xs text-stone-400 sm:inline dark:text-stone-500">
-                        {item.hint}
+                    <div className="flex items-center gap-2.5">
+                      {item.photo !== undefined && (
+                        <Avatar name={item.label} photo={item.photo} size={22} />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">
+                        <Marked text={item.label} tokens={tokens} />
                       </span>
-                    )}
-                    {item.chord && (
-                      <kbd className="shrink-0 rounded bg-tertiary px-1.5 py-0.5 font-mono text-caption text-quaternary">
-                        {item.chord}
-                      </kbd>
+                      {item.hint && (
+                        <span className="hidden shrink-0 truncate text-xs text-stone-400 sm:inline dark:text-stone-500">
+                          {item.hint}
+                        </span>
+                      )}
+                      {item.chord && (
+                        <kbd className="shrink-0 rounded bg-tertiary px-1.5 py-0.5 font-mono text-caption text-quaternary">
+                          {item.chord}
+                        </kbd>
+                      )}
+                    </div>
+                    {/* The line the match was actually on. Without it, a hit
+                        inside a 2,000-word write-up is a row you have to open
+                        to find out why it's there. */}
+                    {item.snippet && (
+                      <p className="mt-0.5 truncate pl-0 text-xs text-stone-400 dark:text-stone-500">
+                        <Marked text={item.snippet} tokens={tokens} />
+                      </p>
                     )}
                   </div>
                 </div>
@@ -375,5 +466,26 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         </Dialog>
       </SysModal>
     </ModalOverlay>
+  );
+}
+
+/** What you typed, picked out of what was found. */
+function Marked({ text, tokens }: { text: string; tokens: string[] }) {
+  if (!tokens.length) return <>{text}</>;
+  return (
+    <>
+      {highlight(text, tokens).map((part, i) =>
+        part.hit ? (
+          <mark
+            key={i}
+            className="bg-transparent font-semibold text-current underline decoration-teal-500/60 decoration-2 underline-offset-2"
+          >
+            {part.text}
+          </mark>
+        ) : (
+          <span key={i}>{part.text}</span>
+        )
+      )}
+    </>
   );
 }
