@@ -1549,6 +1549,20 @@ label:focus-within > .field-label,
   }
 }
 
+/* ── Focus ring baseline ──
+   84 raw <button>s across 29 files each re-derived their own hover, active and
+   disabled treatment, and most of them never got as far as a focus ring — so
+   tabbing through a screen lost the caret repeatedly even where the tab order
+   itself was correct.
+
+   `:where()` contributes zero specificity, so this is a floor and not a fight:
+   anything that declares its own outline (the design-system Button, the nodes
+   on the canvas) still wins, and everything else stops being invisible. */
+:where(button, [role="button"], [role="menuitem"], a[href], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ── Touch baseline (must stay last) ──
    Everything a finger needs from the hand-rolled classes above, in one place.
 

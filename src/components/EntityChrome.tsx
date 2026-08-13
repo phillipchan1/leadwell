@@ -277,7 +277,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       {trail.siblings.length > 1 && (
         <div className="flex shrink-0 items-center gap-2">
           <PagerButton
-            label={prev ? `Previous — ${prev.name}` : "Previous"}
+            label={prev ? `Previous — ${prev.name} (←)` : "Previous (←)"}
             disabled={!prev}
             onClick={() => prev && trail.select(prev.id)}
             icon={ChevronLeft}
@@ -286,7 +286,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             {index + 1}/{trail.siblings.length}
           </span>
           <PagerButton
-            label={next ? `Next — ${next.name}` : "Next"}
+            label={next ? `Next — ${next.name} (→)` : "Next (→)"}
             disabled={!next}
             onClick={() => next && trail.select(next.id)}
             icon={ChevronRight}

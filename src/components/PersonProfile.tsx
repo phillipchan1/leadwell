@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import type { Person } from "../types";
 import {
   DOMAIN_COLOR,
@@ -16,6 +17,7 @@ import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
 import { TintBadge, ProgressBar, ProfileAdminLinks, SectionTitle } from "./ui";
 import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
 import { EntityModeTabs } from "./EntityModeTabs";
 
 import { AssessmentEditor } from "./AssessmentEditor";
@@ -62,14 +64,12 @@ export function PersonProfile({
   const updateLeadUp = useStore((s) => s.updateLeadUp);
   const setHealth = useStore((s) => s.setHealth);
   const setHealthNote = useStore((s) => s.setHealthNote);
-  const modal = useStore((s) => s.modal);
-  const askAIOpen = useStore((s) => s.askAIOpen);
-  const settingsOpen = useStore((s) => s.settingsOpen);
   const meetings = useStore((s) => s.meetings);
   const sessions = useStore((s) => s.sessions);
   const goals = useStore((s) => s.goals);
   const addGoal = useStore((s) => s.addGoal);
   const updateGoal = useStore((s) => s.updateGoal);
+  const movePerson = useStore((s) => s.movePerson);
   const deleteGoal = useStore((s) => s.deleteGoal);
   const restoreGoal = useStore((s) => s.restoreGoal);
   const notes = useStore((s) => s.notes);
@@ -116,32 +116,9 @@ export function PersonProfile({
     setFocusSessionId(undefined);
   }, [person.id]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (
-        modal ||
-        askAIOpen ||
-        settingsOpen ||
-        editingAssessments ||
-        editingPerson ||
-        fillingProfile
-      )
-        return;
-      e.preventDefault();
-      selectPerson(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    modal,
-    askAIOpen,
-    settingsOpen,
-    editingAssessments,
-    editingPerson,
-    fillingProfile,
-    selectPerson,
-  ]);
+  // Ordering comes from the stack, not from a guard list — an editor
+  // opened inside this panel registers after it and gets Escape first.
+  useDismiss(() => selectPerson(null));
 
   /**
    * Send a failing readiness check where it gets fixed. Every fix now lands in
@@ -511,6 +488,30 @@ export function PersonProfile({
             <section className="space-y-2">
               <SectionTitle>AI coach</SectionTitle>
               <AICoach person={person} />
+            </section>
+
+            {/* Moving someone between teams was drag-only on the canvas, which
+                meant it had no keyboard or screen-reader path at all — and
+                `movePerson` had been sitting in the store with no UI of any
+                kind, so on a phone it was simply impossible. Same shape as
+                TopicBoard's "Move to" select, which is the pattern the rest of
+                the app owes its drags. */}
+            <section className="space-y-2">
+              <SectionTitle>Team</SectionTitle>
+              <label className="flex flex-col gap-1">
+                <span className="sr-only">Move {person.name} to a team</span>
+                <NativeSelect
+                  size="sm"
+                  value={person.teamId ?? ""}
+                  onChange={(e) =>
+                    movePerson(person.id, e.target.value || undefined)
+                  }
+                  options={[
+                    { label: "No team — reports directly to me", value: "" },
+                    ...teams.map((tm) => ({ label: tm.name, value: tm.id })),
+                  ]}
+                />
+              </label>
             </section>
 
             <ProfileAdminLinks

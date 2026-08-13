@@ -1218,6 +1218,7 @@ const MeNode = memo(function MeNode() {
           selectedMe ? "border-teal-500 ring-1 ring-teal-500/30" : ""
         }`}
         onClick={() => selectMe(true)}
+        label={`Open ${me.name}`}
       >
         <Avatar name={me.name} photo={me.photo} size={44} />
         <div className="min-w-0">
@@ -1272,6 +1273,7 @@ const ManagerNode = memo(function ManagerNode({ data }: NodeProps) {
         }`}
         style={dimStyle(dim)}
         onClick={() => selectManager(manager.id)}
+        label={`Open ${manager.name}`}
       >
         <div className="flex items-center gap-2.5">
           <Avatar name={manager.name} photo={manager.photo} size={34} />
@@ -1381,6 +1383,7 @@ const DirectReportNode = memo(function DirectReportNode({ data }: NodeProps) {
         }`}
         style={dimStyle(dim)}
         onClick={() => selectPerson(person.id)}
+        label={`Open ${person.name}`}
       >
         <div className="flex items-center gap-2.5">
           <Avatar name={person.name} photo={person.photo} size={34} />

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import type { MeetingRhythm, MeetingRole, TrackedMeeting } from "../types";
@@ -78,6 +79,8 @@ export function MeetingProfile({
   const updateMeeting = useStore((s) => s.updateMeeting);
   const untrackMeeting = useStore((s) => s.untrackMeeting);
   const clearSelection = useStore((s) => s.clearSelection);
+  // Escape closed every other entity panel and not this one.
+  useDismiss(() => clearSelection());
 
   const tab: MeetingTab = isMeetingTab(section) ? section : "plan";
   const pad = density === "focus" ? "p-6" : "p-4";

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
 import { parseRoute, routePath } from "./lib/routes";
@@ -12,6 +12,7 @@ import { ConfirmHost } from "./components/ConfirmDialog";
 import { ToastHost } from "./components/Toast";
 import { ModalHost } from "./components/ModalHost";
 import { CreateMenu } from "./components/CreateMenu";
+import { ShortcutsModal } from "./components/Shortcuts";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -165,6 +166,29 @@ export default function App() {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
+  /**
+   * `?` opens the shortcut list. Ignored while typing, obviously — and also
+   * while a modifier is held, so it can't shadow a browser or OS binding.
+   */
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (
+        el?.isContentEditable ||
+        el?.tagName === "INPUT" ||
+        el?.tagName === "TEXTAREA" ||
+        el?.tagName === "SELECT"
+      )
+        return;
+      e.preventDefault();
+      setShortcutsOpen(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   // Auth/loading gate: only the "ready" phase renders the full app.
   if (phase === "loading") return <LoadingSplash />;
   // A network failure is not a sign-out — keep the session and offer a retry.
@@ -185,6 +209,9 @@ export default function App() {
         <ConfirmHost />
         <ToastHost />
         <ModalHost />
+        {shortcutsOpen && (
+          <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
+        )}
       </div>
     );
   }
@@ -210,7 +237,7 @@ export default function App() {
           <Button size="sm" onClick={() => setAskAIOpen(true)}>
             ✦ Ask AI
           </Button>
-          <HeaderOverflow />
+          <HeaderOverflow onShortcuts={() => setShortcutsOpen(true)} />
         </div>
       </header>
 
@@ -283,6 +310,9 @@ export default function App() {
       <ConfirmHost />
       <ToastHost />
       <ModalHost />
+      {shortcutsOpen && (
+        <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
+      )}
     </div>
   );
 }
