@@ -39,7 +39,16 @@ function QuickAction({
   );
 }
 
-/** The signed-in leader's own profile — identity + self-assessment. */
+/**
+ * The signed-in leader's own profile — identity + self-assessment.
+ *
+ * On the five-mode contract as `profile` alone (see lib/entityModes). That is
+ * the whole of it: there are no meetings with yourself, no running record about
+ * yourself distinct from this page, and no sibling pager. A one-tab strip would
+ * be a worse answer than no strip, so this renders the mode directly — but it
+ * is now *named* by the contract instead of sitting outside it, which is what
+ * made it the third sub-navigation vocabulary.
+ */
 export function MeProfile({ density: _density = "peek" }: { density?: Density }) {
   const me = useStore((s) => s.me);
   const selectMe = useStore((s) => s.selectMe);

@@ -32,7 +32,10 @@ export function EntityModeTabs({
     <Tabs
       selectedKey={mode}
       onSelectionChange={(key) => onMode(key as EntityMode)}
-      className="scroll-contain scrollbar-hide shrink-0 overflow-x-auto border-b border-secondary px-4"
+      /* `px-4 sm:px-6` matches the entity header above and every body section
+         below it — the strip was on `px-4` alone, so from `sm` up it sat 8px
+         left of everything it labels. */
+      className="scroll-contain scrollbar-hide shrink-0 overflow-x-auto border-b border-secondary px-4 sm:px-6"
     >
       <TabList type="underline" size="sm" items={tabs}>
         {(t) => {

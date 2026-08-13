@@ -82,7 +82,13 @@ const getHorizontalStyles = ({ size, fullWidth }: { size?: "sm" | "md"; fullWidt
         size === "md" && "rounded-xl p-1.5",
     ),
     "button-minimal": "gap-0.5 touch:gap-2 rounded-lg bg-secondary_alt ring-1 ring-inset ring-secondary",
-    underline: cx("gap-3", fullWidth && "w-full gap-4"),
+    /* `-mx-*` cancels the first and last tab's own horizontal padding, so the
+       *label* lines up with whatever sits above and below the strip rather than
+       the tab's invisible box. Without it every underline strip in the app sat
+       2px in on a fine pointer and 12px in on a touch one, against content that
+       started at the container edge. The padding still does its job between
+       tabs and still carries the touch target. */
+    underline: cx("gap-3 -mx-0.5 touch:-mx-3", fullWidth && "w-full gap-4"),
     line: "gap-2",
 });
 

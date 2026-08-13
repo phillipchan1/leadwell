@@ -4,11 +4,6 @@ import { useDismiss } from "@/hooks/use-dismiss";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import type { MeetingRhythm, MeetingRole, TrackedMeeting } from "../types";
-import {
-  Tab as TabItem,
-  TabList,
-  Tabs,
-} from "@/components/application/tabs/tabs";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
@@ -31,21 +26,8 @@ import {
 } from "../lib/readiness";
 import { looseTopics, topicsFor } from "../lib/topics";
 import type { Density } from "./EntitySurface";
-import { cx } from "@/utils/cx";
-
-type MeetingTab = "plan" | "notes" | "settings";
-
-const MEETING_TABS: { id: MeetingTab; label: string }[] = [
-  { id: "plan", label: "Plan" },
-  // "History" rather than "Notes": every other entity's Notes mode is a
-  // scratchpad, and this one is the record of what happened.
-  { id: "notes", label: "History" },
-  { id: "settings", label: "Settings" },
-];
-
-function isMeetingTab(value: string | null): value is MeetingTab {
-  return MEETING_TABS.some((t) => t.id === value);
-}
+import { EntityModeTabs } from "./EntityModeTabs";
+import { entityModeFor, modeSection } from "../lib/entityModes";
 
 const ROLE_OPTIONS: { label: string; value: MeetingRole }[] = [
   { label: "I convene it", value: "convene" },
@@ -82,7 +64,11 @@ export function MeetingProfile({
   // Escape closed every other entity panel and not this one.
   useDismiss(() => clearSelection());
 
-  const tab: MeetingTab = isMeetingTab(section) ? section : "plan";
+  /* On the five-mode contract now (see lib/entityModes). A meeting carries
+     three of the five: Plan is its `meetings` mode, Write-ups its `notes`, and
+     Settings its `profile`. `now` and `prayer` are omitted deliberately — the
+     contract documents why. */
+  const mode = entityModeFor("meeting", section);
   const pad = density === "focus" ? "p-6" : "p-4";
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
 
@@ -98,7 +84,7 @@ export function MeetingProfile({
 
   useEffect(() => {
     setSelectedSlotKey(null);
-  }, [tab]);
+  }, [mode]);
 
   const subjectName = meetingSubjectName(meeting, { people, teams, managers });
   const title = meetingTitle(meeting, subjectName);
@@ -133,33 +119,15 @@ export function MeetingProfile({
         )}
       </div>
 
-      <Tabs
-        selectedKey={tab}
-        onSelectionChange={(key) => setSection(key as MeetingTab)}
-        className={cx(
-          "scrollbar-hide shrink-0 overflow-x-auto dark:border-stone-800",
-          density === "focus" ? "px-6" : "px-4"
-        )}
-      >
-        <TabList type="underline" size="sm" items={MEETING_TABS} className="gap-4">
-          {(t) => (
-            <TabItem
-              id={t.id}
-              label={t.label}
-              badge={
-                t.id === "plan" && openCount > 0
-                  ? openCount
-                  : t.id === "notes" && sessionCount > 0
-                    ? sessionCount
-                    : undefined
-              }
-            />
-          )}
-        </TabList>
-      </Tabs>
+      <EntityModeTabs
+        subject="meeting"
+        mode={mode}
+        onMode={(next) => setSection(modeSection(next))}
+        counts={{ meetings: openCount, notes: sessionCount }}
+      />
 
       <div className="scroll-contain relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {tab === "plan" && (
+        {mode === "meetings" && (
           <div className={`flex min-h-0 flex-1 flex-col ${pad}`}>
             <MeetingPlanner
               meeting={meeting}
@@ -171,7 +139,7 @@ export function MeetingProfile({
           </div>
         )}
 
-        {tab === "notes" && (
+        {mode === "notes" && (
           <div className={`min-h-0 flex-1 overflow-y-auto ${pad}`}>
             <div className="space-y-3">
               <TrackerLink meetingId={meeting.id} />
@@ -183,7 +151,7 @@ export function MeetingProfile({
           </div>
         )}
 
-        {tab === "notes" && selectedSlotKey && (
+        {mode === "notes" && selectedSlotKey && (
           <OccurrenceNotesSheet
             open
             onClose={closeNotes}
@@ -198,7 +166,7 @@ export function MeetingProfile({
           </OccurrenceNotesSheet>
         )}
 
-        {tab === "settings" && (
+        {mode === "profile" && (
           <MeetingSettings
             meeting={meeting}
             title={title}
