@@ -340,7 +340,7 @@ function UnscheduledChip({
     <span className="relative inline-block max-w-full">
       <button
         type="button"
-        className="max-w-full truncate rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+        className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
         title={`Schedule: ${text}`}
         onClick={() => setOpen((v) => !v)}
       >
@@ -352,7 +352,7 @@ function UnscheduledChip({
             <li key={d}>
               <button
                 type="button"
-                className="block w-full truncate px-3 py-1.5 text-left text-xs hover:bg-stone-50 dark:hover:bg-stone-800"
+                className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 flex w-full items-center truncate px-3 py-1.5 text-left text-xs hover:bg-stone-50 dark:hover:bg-stone-800"
                 onClick={() => {
                   onPlace(d);
                   setOpen(false);

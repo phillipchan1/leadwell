@@ -10,6 +10,8 @@ import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
 import { ConfirmHost } from "./components/ConfirmDialog";
 import { ToastHost } from "./components/Toast";
+import { ModalHost } from "./components/ModalHost";
+import { CreateMenu } from "./components/CreateMenu";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -182,6 +184,7 @@ export default function App() {
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         <ConfirmHost />
         <ToastHost />
+        <ModalHost />
       </div>
     );
   }
@@ -203,6 +206,7 @@ export default function App() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <SyncIndicator />
+          <CreateMenu />
           <Button size="sm" onClick={() => setAskAIOpen(true)}>
             ✦ Ask AI
           </Button>
@@ -278,6 +282,7 @@ export default function App() {
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ConfirmHost />
       <ToastHost />
+      <ModalHost />
     </div>
   );
 }

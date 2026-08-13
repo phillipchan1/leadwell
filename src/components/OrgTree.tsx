@@ -79,9 +79,7 @@ import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { Edit01, Plus } from "@untitledui/icons";
-import { TeamModal, PersonModal, ManagerModal, DomainsModal } from "./forms";
-import { TriageModal } from "./TriageModal";
+import { ChevronDown, ChevronUp, Edit01, Plus } from "@untitledui/icons";
 import { TableView } from "./TableView";
 
 const NODE_W = 320; // matches w-80 on team cards
@@ -218,11 +216,12 @@ export function OrgTree() {
   const capacities = useStore((s) => s.capacities);
   const domains = useStore((s) => s.domains);
   const treeDomainId = useStore((s) => s.treeDomainId);
+  const healthScan = useStore((s) => s.healthScan);
+  const prayerScan = useStore((s) => s.prayerScan);
   const setTreeDomainId = useStore((s) => s.setTreeDomainId);
   const setTreeMode = useStore((s) => s.setTreeMode);
   const modal = useStore((s) => s.modal);
   const openModal = useStore((s) => s.openModal);
-  const closeModal = useStore((s) => s.closeModal);
   const askAIOpen = useStore((s) => s.askAIOpen);
   const settingsOpen = useStore((s) => s.settingsOpen);
 
@@ -420,13 +419,19 @@ export function OrgTree() {
     return [...teamEdges, ...reportEdges, ...managerEdges];
   }, [visibleTeams, visibleManagers, visibleReports, capacities, domains]);
 
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  /* What's actually narrowing the view right now. Shown on the collapsed
+     control so a filter left on from yesterday isn't invisible today. */
+  const activeFilterCount =
+    (treeDomainId ? 1 : 0) +
+    (healthScan.length ? 1 : 0) +
+    (prayerScan.length ? 1 : 0);
+
   /* Mode over domain: what I'm doing, then where. Both are shared by the two
      surfaces — the outline is the same view of the same org, so it answers the
      same mode's question rather than growing controls of its own. */
-  const filterRow = (
+  const filters = (
     <>
-      <ModeBar />
-
       <div
         className="flex flex-wrap items-center gap-1.5 touch:gap-2"
         role="tablist"
@@ -463,6 +468,41 @@ export function OrgTree() {
       <HealthScan teams={visibleTeams} reports={visibleReports} />
 
       <PrayerScan teams={visibleTeams} reports={visibleReports} />
+    </>
+  );
+
+  const filterRow = (
+    <>
+      {/* The mode bar stays out in the open at every width: it's the primary
+          control, and it's what the 1–4 shortcuts and the readme both treat as
+          the headline question. */}
+      <ModeBar />
+
+      <div className="max-lg:hidden flex flex-col gap-2">{filters}</div>
+
+      {/* Below lg the rest collapses behind one control. Stacked, these rows
+          filled most of a 375×667 screen before a single person's name
+          appeared — so the org never arrived, which is the one thing this tab
+          exists to show. The scans are one tap away instead of zero; the names
+          are zero taps away instead of a scroll. The count is there so a
+          filter you left on is never invisible. */}
+      <div className="lg:hidden">
+        <Button
+          size="sm"
+          color="secondary"
+          onClick={() => setFiltersOpen((v) => !v)}
+          aria-expanded={filtersOpen}
+          iconTrailing={filtersOpen ? ChevronUp : ChevronDown}
+        >
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="ml-1.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+        {filtersOpen && <div className="mt-2 flex flex-col gap-2">{filters}</div>}
+      </div>
     </>
   );
 
@@ -597,26 +637,9 @@ export function OrgTree() {
       </div>
       </div>
 
-      {modal?.kind === "team" && (
-        <TeamModal
-          team={modal.team}
-          defaultParentId={modal.parentId}
-          defaultLeaderId={modal.leaderId}
-          onClose={closeModal}
-        />
-      )}
-      {modal?.kind === "manager" && (
-        <ManagerModal manager={modal.manager} onClose={closeModal} />
-      )}
-      {modal?.kind === "person" && (
-        <PersonModal
-          person={modal.person}
-          defaultTeamId={modal.teamId}
-          onClose={closeModal}
-        />
-      )}
-      {modal?.kind === "domains" && <DomainsModal onClose={closeModal} />}
-      {modal?.kind === "triage" && <TriageModal onClose={closeModal} />}
+      {/* The entity modals used to be rendered here. They're in `ModalHost` at
+          the app root now, so `openModal` works from every surface — including
+          the phone, where this component's create buttons never render. */}
     </div>
   );
 }

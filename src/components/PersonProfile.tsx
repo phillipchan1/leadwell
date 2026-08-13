@@ -193,7 +193,7 @@ export function PersonProfile({
                     key={t.id}
                     type="button"
                     onClick={() => selectTeam(t.id)}
-                    className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                   >
                     {t.name}
                   </button>
