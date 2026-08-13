@@ -36,7 +36,7 @@ import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
 import { confirmAction } from "./ConfirmDialog";
-import { deleteWithUndo } from "../lib/toasts";
+import { deleteWithUndo } from "../lib/undo";
 
 /**
  * Person panel, in the five modes every entity shares (see lib/entityModes).

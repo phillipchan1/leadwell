@@ -22,7 +22,7 @@ import { SubjectMeetings } from "./SubjectMeetings";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { confirmAction } from "./ConfirmDialog";
-import { deleteWithUndo } from "../lib/toasts";
+import { deleteWithUndo } from "../lib/undo";
 
 function today() {
   return new Date().toISOString().slice(0, 10);

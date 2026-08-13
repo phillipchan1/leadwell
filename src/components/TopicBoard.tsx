@@ -14,7 +14,7 @@ import {
 } from "../lib/topics";
 import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
-import { deleteWithUndo } from "../lib/toasts";
+import { deleteWithUndo } from "../lib/undo";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
