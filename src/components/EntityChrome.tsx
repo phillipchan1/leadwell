@@ -262,9 +262,10 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             >
               {trail.parent.label}
             </Button>
-            <span className="shrink-0 text-stone-400 dark:text-stone-600">
-              ›
-            </span>
+            <ChevronRight
+              className="size-3.5 shrink-0 text-stone-400 dark:text-stone-600"
+              aria-hidden="true"
+            />
           </>
         )}
         <span className="truncate px-1 py-1 font-medium text-stone-700 dark:text-stone-200">

@@ -12,7 +12,7 @@ import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
-import { X } from "@untitledui/icons";
+import { Stars01, X } from "@untitledui/icons";
 import { AICoach } from "./AICoach";
 import { HealthField } from "./Health";
 import { PrayerPanel } from "./Prayer";
@@ -466,11 +466,12 @@ export function TeamProfile({
                 <Button
                   size="sm"
                   color="link-color"
+                  iconLeading={refining ? undefined : Stars01}
                   onClick={runRefineMandate}
                   isLoading={refining}
                   showTextWhileLoading
                 >
-                  {refining ? "Refining…" : "✦ Refine"}
+                  {refining ? "Refining…" : "Refine"}
                 </Button>
               </div>
               <TextArea

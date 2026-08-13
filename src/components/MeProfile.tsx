@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { AlertTriangle, Stars01 } from "@untitledui/icons";
 import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import {
@@ -75,7 +76,11 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <QuickAction onClick={() => setFillingProfile(true)}>
-            ✨ AI fill
+            <Stars01
+              className="mr-1 inline size-3.5 shrink-0 align-[-0.15em]"
+              aria-hidden="true"
+            />
+            AI fill
           </QuickAction>
           <QuickAction onClick={() => setEditingAssessments(true)}>
             Assessments
@@ -100,7 +105,11 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                 onClick={() => setFillingProfile(true)}
                 className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
               >
-                ✨ Map my profile
+                <Stars01
+                  className="mr-1 inline size-3.5 shrink-0 align-[-0.15em]"
+                  aria-hidden="true"
+                />
+                Map my profile
                 <div className="mt-1 text-xs">
                   Brain dump or guided mapping
                 </div>
@@ -204,7 +213,8 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                     <div className="flex flex-wrap gap-1">
                       {read.watchOuts.map((s) => (
                         <Badge key={s} size="sm" color="warning">
-                          ⚠ {s}
+                          <AlertTriangle className="mr-1 inline size-3 shrink-0 align-[-0.1em]" aria-hidden="true" />
+                          {s}
                         </Badge>
                       ))}
                     </div>

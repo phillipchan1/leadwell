@@ -26,7 +26,7 @@ import { PrayerPanel } from "./Prayer";
 import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { X } from "@untitledui/icons";
+import { AlertTriangle, Stars01, X } from "@untitledui/icons";
 import { PersonModal } from "./forms";
 import { AICoach } from "./AICoach";
 import { SubjectMeetings } from "./SubjectMeetings";
@@ -339,7 +339,11 @@ export function PersonProfile({
                       onClick={() => setFillingProfile(true)}
                       className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
                     >
-                      ✨ AI fill from a brain dump
+                      <Stars01
+                        className="mr-1.5 inline size-4 shrink-0 align-[-0.2em]"
+                        aria-hidden="true"
+                      />
+                      AI fill from a brain dump
                       <div className="mt-1 text-xs">
                         Free text or guided mapping → traits & modalities
                       </div>
@@ -452,7 +456,8 @@ export function PersonProfile({
                           <div className="flex flex-wrap gap-1">
                             {read.watchOuts.map((s) => (
                               <Badge key={s} size="sm" color="warning">
-                                ⚠ {s}
+                                <AlertTriangle className="mr-1 inline size-3 shrink-0 align-[-0.1em]" aria-hidden="true" />
+                                {s}
                               </Badge>
                             ))}
                           </div>

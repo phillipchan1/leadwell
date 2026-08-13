@@ -13,6 +13,7 @@ import { ToastHost } from "./components/Toast";
 import { ModalHost } from "./components/ModalHost";
 import { CreateMenu } from "./components/CreateMenu";
 import { ShortcutsModal } from "./components/Shortcuts";
+import { Stars01 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -234,8 +235,8 @@ export default function App() {
         <div className="flex shrink-0 items-center gap-2">
           <SyncIndicator />
           <CreateMenu />
-          <Button size="sm" onClick={() => setAskAIOpen(true)}>
-            ✦ Ask AI
+          <Button size="sm" iconLeading={Stars01} onClick={() => setAskAIOpen(true)}>
+            Ask AI
           </Button>
           <HeaderOverflow onShortcuts={() => setShortcutsOpen(true)} />
         </div>

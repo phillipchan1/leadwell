@@ -31,6 +31,7 @@ import {
   rollUpPrayer,
 } from "../lib/prayer";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
+import { Stars01 } from "@untitledui/icons";
 import { Card, SectionTitle } from "./ui";
 import { SkeletonLines } from "./Skeleton";
 import { Button } from "@/components/base/buttons/button";
@@ -243,12 +244,13 @@ export function Overview() {
           {keyed && (
             <Button
               size="md"
+              iconLeading={loading || brief ? undefined : Stars01}
               onClick={generateBrief}
               isDisabled={loading}
               isLoading={loading}
               showTextWhileLoading
             >
-              {loading ? "Thinking…" : brief ? "Regenerate" : "✦ Generate with AI"}
+              {loading ? "Thinking…" : brief ? "Regenerate" : "Generate with AI"}
             </Button>
           )}
         </div>
