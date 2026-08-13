@@ -67,7 +67,7 @@
   /* Text fields style their own focus (border and background shift) and sit
      flush inside rows, where an offset ring would overlap the neighbour. The
      shift alone is a weak indicator, so they keep a ring — inset, no offset. */
-  :where(.field-input, .journal-textarea, .notion-markdown-source):focus-visible,
+  :where(.journal-textarea, .notion-markdown-source):focus-visible,
   .notion-block-editor .ProseMirror:focus-visible {
     outline: 2px solid var(--color-focus-ring, #0d9488);
     outline-offset: -2px;
@@ -610,160 +610,6 @@ body {
 
 /* ── Form fields — larger, soft, accent-lit ── */
 
-.field-input {
-  --field-accent: #0d9488;
-  width: 100%;
-  appearance: none;
-  border-radius: 0.875rem;
-  border: 1.5px solid rgb(231 229 228);
-  background:
-    linear-gradient(180deg, rgb(255 255 255 / 0.92) 0%, rgb(250 250 249) 100%);
-  padding: 0.7rem 0.95rem;
-  font-size: 0.975rem;
-  line-height: 1.45;
-  color: rgb(28 25 23);
-  outline: none;
-  caret-color: var(--field-accent);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.8),
-    0 1px 2px rgb(28 25 23 / 0.03);
-  transition:
-    border-color 160ms ease,
-    box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1),
-    background 160ms ease,
-    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
-    color 120ms ease;
-}
-
-.field-input::placeholder {
-  color: rgb(168 162 158);
-  transition: color 160ms ease, opacity 160ms ease;
-}
-
-.field-input:hover:not(:disabled):not(:focus) {
-  border-color: color-mix(in srgb, var(--field-accent) 28%, rgb(214 211 209));
-  /* Use background-image (not shorthand) so select chevron layers keep
-     their position/size — shorthand resets those and stretches the arrow. */
-  background-image: linear-gradient(
-    180deg,
-    rgb(255 255 255) 0%,
-    rgb(250 250 249) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.9),
-    0 2px 6px rgb(28 25 23 / 0.045);
-}
-
-.field-input:focus {
-  border-color: color-mix(in srgb, var(--field-accent) 72%, rgb(214 211 209));
-  background-image: linear-gradient(rgb(255 255 255), rgb(255 255 255));
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255),
-    0 0 0 3.5px color-mix(in srgb, var(--field-accent) 18%, transparent),
-    0 8px 20px -8px color-mix(in srgb, var(--field-accent) 35%, transparent),
-    0 2px 6px rgb(28 25 23 / 0.04);
-}
-
-.field-input:focus::placeholder {
-  color: rgb(214 211 209);
-  opacity: 0.7;
-}
-
-.field-input:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-textarea.field-input {
-  resize: vertical;
-  line-height: 1.55;
-}
-
-select.field-input {
-  background-image:
-    linear-gradient(45deg, transparent 50%, rgb(120 113 108) 50%),
-    linear-gradient(135deg, rgb(120 113 108) 50%, transparent 50%),
-    linear-gradient(180deg, rgb(255 255 255 / 0.92) 0%, rgb(250 250 249) 100%);
-  background-position:
-    calc(100% - 1.15rem) calc(50% - 0.15rem),
-    calc(100% - 0.75rem) calc(50% - 0.15rem),
-    0 0;
-  background-size:
-    5px 5px,
-    5px 5px,
-    100% 100%;
-  background-repeat: no-repeat;
-  padding-right: 2.25rem;
-  cursor: pointer;
-}
-
-select.field-input:hover:not(:disabled):not(:focus) {
-  background-image:
-    linear-gradient(45deg, transparent 50%, rgb(120 113 108) 50%),
-    linear-gradient(135deg, rgb(120 113 108) 50%, transparent 50%),
-    linear-gradient(180deg, rgb(255 255 255) 0%, rgb(250 250 249) 100%);
-  background-position:
-    calc(100% - 1.15rem) calc(50% - 0.15rem),
-    calc(100% - 0.75rem) calc(50% - 0.15rem),
-    0 0;
-  background-size:
-    5px 5px,
-    5px 5px,
-    100% 100%;
-  background-repeat: no-repeat;
-}
-
-select.field-input:focus {
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--field-accent) 50%),
-    linear-gradient(135deg, var(--field-accent) 50%, transparent 50%),
-    linear-gradient(rgb(255 255 255), rgb(255 255 255));
-  background-position:
-    calc(100% - 1.15rem) calc(50% - 0.15rem),
-    calc(100% - 0.75rem) calc(50% - 0.15rem),
-    0 0;
-  background-size:
-    5px 5px,
-    5px 5px,
-    100% 100%;
-  background-repeat: no-repeat;
-}
-
-.field-input--sm {
-  border-radius: 0.7rem;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.8125rem;
-  line-height: 1.35;
-}
-
-.field-input--sm:focus {
-  transform: none;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255),
-    0 0 0 2.5px color-mix(in srgb, var(--field-accent) 16%, transparent),
-    0 4px 12px -6px color-mix(in srgb, var(--field-accent) 30%, transparent);
-}
-
-.field-input--ghost {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  padding-left: 0.35rem;
-  padding-right: 0.35rem;
-}
-
-.field-input--ghost:hover:not(:disabled):not(:focus) {
-  border-color: transparent;
-  background: color-mix(in srgb, var(--field-accent) 5%, transparent);
-  box-shadow: none;
-}
-
-.field-input--ghost:focus {
-  border-color: color-mix(in srgb, var(--field-accent) 55%, transparent);
-  background: rgb(255 255 255);
-  transform: none;
-}
 
 .field-label {
   display: block;
@@ -781,80 +627,6 @@ label:focus-within > .field-label,
   color: var(--field-accent, #0d9488);
 }
 
-.dark .field-input {
-  border-color: rgb(68 64 60);
-  background:
-    linear-gradient(180deg, rgb(28 25 23 / 0.9) 0%, rgb(12 10 9 / 0.95) 100%);
-  color: rgb(245 245 244);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.03),
-    0 1px 2px rgb(0 0 0 / 0.2);
-}
-
-.dark .field-input::placeholder {
-  color: rgb(87 83 78);
-}
-
-.dark .field-input:hover:not(:disabled):not(:focus) {
-  border-color: color-mix(in srgb, var(--field-accent) 35%, rgb(68 64 60));
-  background-image: linear-gradient(
-    180deg,
-    rgb(41 37 36) 0%,
-    rgb(28 25 23) 100%
-  );
-}
-
-.dark .field-input:focus {
-  border-color: color-mix(in srgb, var(--field-accent) 65%, rgb(68 64 60));
-  background-image: linear-gradient(rgb(12 10 9), rgb(12 10 9));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.04),
-    0 0 0 3.5px color-mix(in srgb, var(--field-accent) 22%, transparent),
-    0 10px 24px -10px color-mix(in srgb, var(--field-accent) 40%, transparent);
-}
-
-.dark select.field-input {
-  background-image:
-    linear-gradient(45deg, transparent 50%, rgb(168 162 158) 50%),
-    linear-gradient(135deg, rgb(168 162 158) 50%, transparent 50%),
-    linear-gradient(180deg, rgb(28 25 23 / 0.9) 0%, rgb(12 10 9 / 0.95) 100%);
-}
-
-.dark select.field-input:hover:not(:disabled):not(:focus) {
-  background-image:
-    linear-gradient(45deg, transparent 50%, rgb(168 162 158) 50%),
-    linear-gradient(135deg, rgb(168 162 158) 50%, transparent 50%),
-    linear-gradient(180deg, rgb(41 37 36) 0%, rgb(28 25 23) 100%);
-  background-position:
-    calc(100% - 1.15rem) calc(50% - 0.15rem),
-    calc(100% - 0.75rem) calc(50% - 0.15rem),
-    0 0;
-  background-size:
-    5px 5px,
-    5px 5px,
-    100% 100%;
-  background-repeat: no-repeat;
-}
-
-.dark select.field-input:focus {
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--field-accent) 50%),
-    linear-gradient(135deg, var(--field-accent) 50%, transparent 50%),
-    linear-gradient(rgb(12 10 9), rgb(12 10 9));
-  background-position:
-    calc(100% - 1.15rem) calc(50% - 0.15rem),
-    calc(100% - 0.75rem) calc(50% - 0.15rem),
-    0 0;
-  background-size:
-    5px 5px,
-    5px 5px,
-    100% 100%;
-  background-repeat: no-repeat;
-}
-
-.dark .field-input--ghost:focus {
-  background-image: linear-gradient(rgb(12 10 9), rgb(12 10 9));
-}
 
 .dark .field-label {
   color: rgb(168 162 158);
@@ -866,13 +638,6 @@ label:focus-within > .field-label,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .field-input,
-  .field-input:hover:not(:disabled):not(:focus),
-  .field-input:focus {
-    transition: border-color 120ms ease, box-shadow 120ms ease;
-    transform: none;
-  }
-
   /* Looping decoration is the part that actually bothers people; kill the
      animation entirely rather than shortening it. */
   .profile-build--parsing .profile-build__glow,
@@ -1627,7 +1392,7 @@ label:focus-within > .field-label,
    The floors a finger needs, stated once and structurally.
 
    This block used to be a hand-maintained allowlist of class names —
-   `.field-input`, `.meeting-editor-transcript`, `.notion-markdown-source` and
+   `.meeting-editor-transcript`, `.notion-markdown-source` and
    a dozen more — each doubled (`.x.x`) to win a specificity fight the file
    documented at length. The fight was real: single-class rules declared later
    in the file beat it at equal specificity, so the floor was silently dead and
@@ -1673,12 +1438,6 @@ label:focus-within > .field-label,
       select, textarea, input
     ):not([type="range"], [type="checkbox"], [type="radio"], [type="hidden"])[class] {
     min-height: 44px;
-  }
-
-  /* The focus lift fires at the same moment as the keyboard-open scroll
-     adjustment, which reads as a double jump. */
-  .field-input:focus {
-    transform: none;
   }
 
   /* A prayer line is a one-row textarea; without this its box is the line box. */

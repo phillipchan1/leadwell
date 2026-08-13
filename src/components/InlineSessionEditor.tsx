@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Session, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
+import { Input } from "@/components/base/input/input";
 import { SessionAgenda } from "./SessionAgenda";
 import { Button } from "@/components/base/buttons/button";
 import { confirmAction } from "./ConfirmDialog";
@@ -68,29 +69,25 @@ export function InlineSessionEditor({
       className="space-y-3 border-t border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40"
     >
       <div className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-0.5">
-          <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
-            Date
-          </span>
-          <input
-            type="date"
-            className="field-input field-input--sm tabular-nums"
-            value={session.date}
-            onChange={(e) => updateSession(session.id, { date: e.target.value })}
-          />
-        </label>
+        <Input
+          size="sm"
+          type="date"
+          label="Date"
+          inputClassName="tabular-nums"
+          value={session.date}
+          onChange={(value) => updateSession(session.id, { date: value })}
+        />
         <label className="flex flex-col gap-0.5">
           <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
             Next
           </span>
-          <input
+          <Input
+            size="sm"
             type="date"
-            className="field-input field-input--sm tabular-nums"
+            inputClassName="tabular-nums"
             value={session.nextDate ?? ""}
-            onChange={(e) =>
-              updateSession(session.id, {
-                nextDate: e.target.value || undefined,
-              })
+            onChange={(value) =>
+              updateSession(session.id, { nextDate: value || undefined })
             }
           />
         </label>
@@ -126,16 +123,14 @@ export function InlineSessionEditor({
         </div>
       </div>
 
-      <input
-        type="text"
-        className="field-input field-input--sm w-full"
+      <Input
+        size="sm"
+        className="w-full"
         placeholder="Why we met this time…"
         value={point}
-        onChange={(e) => {
-          setPoint(e.target.value);
-          updateSession(session.id, {
-            point: e.target.value.trim() || undefined,
-          });
+        onChange={(value) => {
+          setPoint(value);
+          updateSession(session.id, { point: value.trim() || undefined });
         }}
       />
 

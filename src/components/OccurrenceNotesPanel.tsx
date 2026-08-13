@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
+import { Input } from "@/components/base/input/input";
 import { parseColumnKey, slotLabel, topicsFor, type Slot } from "../lib/topics";
 import { seedNotesFromTopics } from "../lib/sessionNotes";
 import { SessionAgenda } from "./SessionAgenda";
@@ -115,19 +116,15 @@ export function OccurrenceNotesPanel({
           <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
             {heading}
           </p>
-          <label className="mt-1 flex items-center gap-1.5">
-            <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
-              Date
-            </span>
-            <input
-              type="date"
-              className="field-input field-input--sm tabular-nums"
-              value={session.date}
-              onChange={(e) =>
-                updateSession(session.id, { date: e.target.value })
-              }
-            />
-          </label>
+          <Input
+            size="sm"
+            type="date"
+            label="Date"
+            className="mt-1"
+            inputClassName="tabular-nums"
+            value={session.date}
+            onChange={(value) => updateSession(session.id, { date: value })}
+          />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {onOpenFullEditor && (

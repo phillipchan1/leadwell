@@ -1,6 +1,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import type { Session } from "../types";
 import { useStore } from "../store/useStore";
+import { Input } from "@/components/base/input/input";
 import { Badge } from "@/components/base/badges/badges";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
@@ -203,12 +204,14 @@ function SessionRow({
           <span className="text-caption tracking-wide text-stone-400 uppercase dark:text-stone-500">
             Next
           </span>
-          <input
+          <Input
+            size="sm"
             type="date"
-            className="field-input field-input--ghost field-input--sm tabular-nums text-stone-500"
+            wrapperClassName="border-0 bg-transparent shadow-none ring-0"
+            inputClassName="tabular-nums text-quaternary"
             aria-label="Next meeting date"
             value={row.nextDate ?? ""}
-            onChange={(e) => onPatch({ nextDate: e.target.value || undefined })}
+            onChange={(value) => onPatch({ nextDate: value || undefined })}
           />
         </label>
 

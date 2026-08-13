@@ -833,10 +833,14 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 title="Color"
                 aria-label={`Color for ${d.name}`}
               />
-              <input
-                className="field-input field-input--ghost flex-1"
+              <Input
+                size="sm"
+                className="flex-1"
+                /* Borderless in a dense row — expressed through the
+                   primitive's own seam rather than a parallel class. */
+                wrapperClassName="border-0 bg-transparent shadow-none ring-0"
                 value={d.name}
-                onChange={(e) => updateDomain(d.id, { name: e.target.value })}
+                onChange={(value) => updateDomain(d.id, { name: value })}
                 aria-label="Domain name"
               />
               <span className="shrink-0 text-caption text-quaternary">
