@@ -175,7 +175,7 @@ export function CardPrayer({
           Prayer
         </span>
         {openCount > 0 && (
-          <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+          <span className="text-[10px] tabular-nums text-quaternary">
             {openCount} written
           </span>
         )}
@@ -231,14 +231,14 @@ export function CardPrayer({
               {prayedToday ? "Prayed today" : "Mark prayed"}
             </button>
             {prayer.times ? (
-              <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+              <span className="text-[10px] tabular-nums text-quaternary">
                 {prayer.times}d marked
               </span>
             ) : null}
             <button
               type="button"
               onClick={layDown}
-              className="ml-auto text-[11px] text-stone-500 touch:min-h-11 hover:text-stone-700 dark:text-stone-400 dark:hover:text-stone-300"
+              className="ml-auto text-[11px] text-quaternary touch:min-h-11 hover:text-stone-700 dark:hover:text-stone-300"
             >
               Lay down
             </button>
@@ -446,7 +446,7 @@ export function PrayerPanel({
               <span className="text-sm font-medium">
                 Carrying {subjectName}
               </span>
-              <span className="text-[11px] text-stone-500 dark:text-stone-400">
+              <span className="text-[11px] text-quaternary">
                 {[formatCarried(prayer), formatLastPrayed(prayer)]
                   .filter(Boolean)
                   .join(" · ")}
@@ -484,7 +484,7 @@ export function PrayerPanel({
                 {prayedToday ? "Prayed today" : "Mark prayed"}
               </Button>
               {prayer.times ? (
-                <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                <span className="text-[11px] text-quaternary">
                   <span className="tabular-nums">{prayer.times}</span>{" "}
                   {prayer.times === 1 ? "day" : "days"} marked
                 </span>
@@ -507,7 +507,7 @@ export function PrayerPanel({
                 {subjectName} isn't on your prayer list.
               </span>
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+            <p className="text-[11px] text-quaternary">
               Taking someone up is a decision, so it's yours to make — nothing
               here counts a gap at you. Writing anything down below takes them up
               too.
@@ -553,7 +553,7 @@ export function PrayerPanel({
         </form>
 
         {open.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+          <p className="text-sm text-quaternary">
             Nothing written down yet. What would you pray for {subjectName} if
             someone asked you right now?
           </p>
@@ -603,7 +603,7 @@ function KindToggle({
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 ${
             kind === k
               ? "border-transparent bg-violet-100 font-medium text-violet-800 dark:bg-violet-950/60 dark:text-violet-200"
-              : "border-stone-300 text-stone-500 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
+              : "border-primary text-quaternary hover:border-stone-400"
           }`}
         >
           {KIND_LABEL[k]}
@@ -687,7 +687,7 @@ function PrayerLine({ entry }: { entry: PrayerEntry }) {
       )}
 
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 opacity-0 transition-opacity touch:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100">
-        <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+        <span className="text-[10px] tabular-nums text-quaternary">
           {answered ? `answered ${entry.answeredOn}` : `written ${entry.date}`}
         </span>
         {answered ? (

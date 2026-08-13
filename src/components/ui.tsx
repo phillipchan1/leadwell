@@ -207,7 +207,7 @@ export function Modal({
             <div className="min-w-0">
               <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
               {subtitle && (
-                <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                <p className="mt-0.5 text-xs text-quaternary">
                   {subtitle}
                 </p>
               )}
@@ -226,7 +226,7 @@ export function Modal({
           {footer && (
             /* Sticky so the keyboard can never push the primary action off
                screen, and padded past the home indicator. */
-            <div className="pad-safe-bottom flex shrink-0 items-center justify-end gap-2 border-t border-stone-200 bg-white px-6 py-4 [--pad-safe-bottom:1rem] dark:border-stone-800 dark:bg-stone-900">
+            <div className="pad-safe-bottom flex shrink-0 items-center justify-end gap-2 border-t border-secondary bg-primary px-6 py-4 [--pad-safe-bottom:1rem]">
               {footer}
             </div>
           )}

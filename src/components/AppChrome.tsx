@@ -50,7 +50,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="pad-safe-bottom chrome-compact z-30 flex shrink-0 items-stretch justify-around border-t border-stone-200 bg-white lg:hidden dark:border-stone-800 dark:bg-stone-900"
+      className="pad-safe-bottom chrome-compact z-30 flex shrink-0 items-stretch justify-around border-t border-secondary bg-primary lg:hidden"
     >
       {TABS.map((t) => {
         const active = tab === t.id;
@@ -65,7 +65,7 @@ export function BottomNav() {
               "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 pt-2 pb-1.5 text-[11px] font-medium transition-colors active:bg-stone-100 dark:active:bg-stone-800",
               active
                 ? "text-teal-700 dark:text-teal-400"
-                : "text-stone-500 dark:text-stone-400"
+                : "text-quaternary"
             )}
           >
             <Icon className={cx("size-5 shrink-0", active && "stroke-[2.25px]")} />
@@ -198,7 +198,7 @@ export function HeaderOverflow({
             role="menu"
             aria-label="More"
             onKeyDown={onMenuKeyDown}
-            className="absolute right-0 z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900"
+            className="absolute right-0 z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-stone-200 bg-primary py-1 shadow-xl dark:border-stone-700"
           >
             {items.map(({ label, icon: Icon, run }, i) => (
               <button
@@ -216,7 +216,7 @@ export function HeaderOverflow({
                 className={ITEM_CLASS}
               >
                 <Icon
-                  className="size-4.5 shrink-0 text-stone-500 dark:text-stone-400"
+                  className="size-4.5 shrink-0 text-quaternary"
                   aria-hidden="true"
                 />
                 {label}
@@ -269,7 +269,7 @@ export function SyncIndicator() {
  */
 export function LoadingSplash() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 bg-stone-50 px-6 dark:bg-stone-950">
+    <div className="flex h-full flex-col items-center justify-center gap-5 bg-secondary px-6">
       <img
         src="/icon-192.png"
         alt=""
@@ -278,7 +278,7 @@ export function LoadingSplash() {
         className="rounded-[14px] shadow-sm"
       />
       <SkeletonLines count={3} className="w-full max-w-xs" />
-      <p className="text-sm text-stone-500 dark:text-stone-400">
+      <p className="text-sm text-quaternary">
         Loading your org…
       </p>
     </div>
@@ -296,13 +296,13 @@ export function LoadErrorScreen() {
   const [retrying, setRetrying] = useState(false);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 bg-stone-50 px-6 text-center dark:bg-stone-950">
+    <div className="flex h-full flex-col items-center justify-center gap-4 bg-secondary px-6 text-center">
       <span className="flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950">
         <AlertCircle className="size-6 text-amber-600 dark:text-amber-400" />
       </span>
       <div className="space-y-1">
         <h1 className="text-base font-semibold">We couldn't load your org</h1>
-        <p className="max-w-xs text-sm text-stone-500 dark:text-stone-400">
+        <p className="max-w-xs text-sm text-quaternary">
           {loadError ?? "Check your connection and try again."} You're still
           signed in — nothing was lost.
         </p>

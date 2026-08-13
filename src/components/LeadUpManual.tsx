@@ -70,7 +70,7 @@ export function LeadUpManual({
     <section className="space-y-3">
       <div>
         <SectionTitle>Operating manual</SectionTitle>
-        <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+        <p className="mt-1 text-[11px] text-quaternary">
           How to win with {subject.name.split(" ")[0]} — not their personality,
           their wiring as your manager.
         </p>
@@ -109,7 +109,7 @@ function ManualField({
   };
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-stone-800 dark:bg-stone-950/40">
+    <div className="rounded-xl border border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40">
       <TextArea
         size="sm"
         label={field.label}

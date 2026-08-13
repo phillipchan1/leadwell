@@ -36,7 +36,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             private to this account (row-level security).
           </p>
           <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 dark:border-stone-700 dark:bg-stone-950/50">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-quaternary">
               Signed in as
             </p>
             <p className="mt-0.5 text-sm text-stone-800 dark:text-stone-100">

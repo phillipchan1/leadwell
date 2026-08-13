@@ -79,11 +79,11 @@ export function SubjectMeetings({
   if (!mine.length) {
     return (
       <div className="space-y-3">
-        <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center dark:border-stone-700">
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+        <div className="rounded-xl border border-dashed border-primary px-4 py-8 text-center">
+          <p className="text-sm text-quaternary">
             No meetings tracked with {firstName} yet.
           </p>
-          <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500 dark:text-stone-400">
+          <p className="mx-auto mt-1 max-w-sm text-xs text-quaternary">
             Add as many as you actually have — a weekly {label}, a quarterly
             career check-in, whatever rhythm fits.
           </p>
@@ -113,7 +113,7 @@ export function SubjectMeetings({
       ))}
 
       {adding ? (
-        <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-950/40">
+        <div className="rounded-xl border border-secondary bg-stone-50/60 p-4 dark:bg-stone-950/40">
           <p className="mb-3 text-sm font-medium text-stone-700 dark:text-stone-200">
             Another meeting with {firstName}
           </p>

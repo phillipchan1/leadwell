@@ -141,11 +141,11 @@ export function PersonProfile({
 
   return (
     <aside
-      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-primary"
       data-person-mode={mode}
     >
       {/* Header */}
-      <div className="entity-header shrink-0 border-b border-stone-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:border-stone-800 dark:bg-stone-900/90">
+      <div className="entity-header shrink-0 border-b border-secondary bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:bg-stone-900/90">
         <div className="flex items-start gap-3">
           <Avatar
             name={person.name}
@@ -162,7 +162,7 @@ export function PersonProfile({
             </div>
             {led.length > 0 && (
               <div className="entity-header-secondary mt-1 flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                <span className="text-[11px] text-quaternary">
                   Leads
                 </span>
                 {led.map((t) => (
@@ -170,7 +170,7 @@ export function PersonProfile({
                     key={t.id}
                     type="button"
                     onClick={() => selectTeam(t.id)}
-                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-tertiary px-1.5 py-0.5 text-[11px] text-tertiary hover:bg-stone-200 dark:hover:bg-stone-700"
                   >
                     {t.name}
                   </button>
@@ -182,7 +182,7 @@ export function PersonProfile({
                 <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
               </div>
             )}
-            <div className="entity-header-secondary mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+            <div className="entity-header-secondary mt-1 text-[11px] text-quaternary">
               {nextSession &&
                 `Next ${isLeadUp ? "check-in" : "1:1"} ${nextSession}`}
               {nextSession && lastSession && " · "}
@@ -237,7 +237,7 @@ export function PersonProfile({
                     <div key={g.id} className="group">
                       <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                         <span className="flex-1">{g.title}</span>
-                        <span className="text-xs text-stone-500 dark:text-stone-400">
+                        <span className="text-xs text-quaternary">
                           {Math.round(g.progress)}%
                         </span>
                         <ButtonUtility
@@ -337,7 +337,7 @@ export function PersonProfile({
                   <div className="space-y-2">
                     <button
                       onClick={() => setFillingProfile(true)}
-                      className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-400"
+                      className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
                     >
                       ✨ AI fill from a brain dump
                       <div className="mt-1 text-xs">
@@ -346,7 +346,7 @@ export function PersonProfile({
                     </button>
                     <button
                       onClick={() => setEditingAssessments(true)}
-                      className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-500 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-400"
+                      className="w-full rounded-xl border border-dashed border-primary py-3 text-xs text-quaternary hover:border-teal-500 hover:text-teal-600"
                     >
                       Or enter assessments manually
                     </button>
@@ -372,7 +372,7 @@ export function PersonProfile({
                           {DOMAINS.map((d) => (
                             <span
                               key={d}
-                              className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                              className="flex items-center gap-1 text-[10px] text-quaternary"
                             >
                               <span
                                 className="h-1.5 w-1.5 rounded-full"
@@ -387,7 +387,7 @@ export function PersonProfile({
                     <div className="grid grid-cols-2 gap-2">
                       {enn && (
                         <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                          <div className="text-[10px] tracking-wider text-stone-500 uppercase dark:text-stone-400">
+                          <div className="text-[10px] tracking-wider text-quaternary uppercase">
                             Enneagram
                           </div>
                           <div className="text-sm font-semibold">
@@ -400,7 +400,7 @@ export function PersonProfile({
                       )}
                       {mbtiKey && MBTI[mbtiKey] && (
                         <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                          <div className="text-[10px] tracking-wider text-stone-500 uppercase dark:text-stone-400">
+                          <div className="text-[10px] tracking-wider text-quaternary uppercase">
                             MBTI
                           </div>
                           <div className="text-sm font-semibold">{mbtiKey}</div>
@@ -417,7 +417,7 @@ export function PersonProfile({
                             key={m.id}
                             className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
                           >
-                            <div className="text-[10px] tracking-wider text-stone-500 uppercase dark:text-stone-400">
+                            <div className="text-[10px] tracking-wider text-quaternary uppercase">
                               {m.name}
                               {m.source !== "self-report" && (
                                 <span className="ml-1.5 font-normal tracking-normal normal-case">
@@ -460,7 +460,7 @@ export function PersonProfile({
                       </div>
                     )}
                     {person.howToLead && (
-                      <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-400">
+                      <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-tertiary dark:bg-teal-950/20">
                         <span className="font-medium text-teal-700 dark:text-teal-400">
                           How to lead:{" "}
                         </span>

@@ -85,14 +85,14 @@ export function NotesPanel({
         )}
       </div>
       {mine.length === 0 && (
-        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
+        <p className="text-center text-xs text-quaternary">
           No notes yet.
         </p>
       )}
       <ul className="space-y-3">
         {mine.map((n) => (
           <li key={n.id} className="group space-y-1">
-            <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
+            <div className="flex items-center justify-between text-[11px] text-quaternary">
               <span>{n.date}</span>
               <ButtonUtility
                 size="xs"

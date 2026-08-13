@@ -78,8 +78,8 @@ function DomainPicker({
           onClick={() => onChange(undefined)}
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
             !domainId
-              ? "border-stone-400 bg-stone-100 font-medium text-stone-700 dark:border-stone-500 dark:bg-stone-800 dark:text-stone-200"
-              : "border-stone-300 text-stone-500 dark:border-stone-700 dark:text-stone-400"
+              ? "border-stone-400 bg-tertiary font-medium text-stone-700 dark:border-stone-500 dark:text-stone-200"
+              : "border-primary text-quaternary"
           }`}
         >
           None
@@ -115,7 +115,7 @@ function DomainPicker({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="rounded-full border border-dashed border-stone-300 px-2.5 py-1 text-xs text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+            className="rounded-full border border-dashed border-primary px-2.5 py-1 text-xs text-quaternary hover:border-teal-500 hover:text-teal-600"
           >
             + New
           </button>
@@ -309,7 +309,7 @@ export function TeamModal({
                 className={`flex-1 rounded-lg border px-2 py-1.5 text-sm transition-colors ${
                   capacityId === c.id
                     ? "border-transparent text-white"
-                    : "border-stone-300 text-stone-600 dark:border-stone-700 dark:text-stone-400"
+                    : "border-primary text-tertiary"
                 }`}
                 style={
                   capacityId === c.id ? { backgroundColor: c.color } : undefined
@@ -337,7 +337,7 @@ export function TeamModal({
                   className={`flex-1 rounded-lg border px-2 py-1.5 text-xs transition-colors ${
                     direction === opt.value
                       ? "border-teal-600 bg-teal-50 font-medium text-teal-700 dark:bg-teal-950/40 dark:text-teal-300"
-                      : "border-stone-300 text-stone-500 dark:border-stone-700 dark:text-stone-400"
+                      : "border-primary text-quaternary"
                   }`}
                 >
                   {opt.label}
@@ -725,7 +725,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
           return (
             <li
               key={d.id}
-              className="flex items-center gap-2 rounded-xl border border-stone-200 px-2.5 py-2 dark:border-stone-800"
+              className="flex items-center gap-2 rounded-xl border border-secondary px-2.5 py-2"
             >
               <input
                 type="color"
@@ -741,7 +741,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => updateDomain(d.id, { name: e.target.value })}
                 aria-label="Domain name"
               />
-              <span className="shrink-0 text-[10px] text-stone-500 dark:text-stone-400">
+              <span className="shrink-0 text-[10px] text-quaternary">
                 {n === 0 ? "unused" : `${n} tagged`}
               </span>
               <ButtonUtility
@@ -767,14 +767,14 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
           );
         })}
         {domains.length === 0 && (
-          <li className="py-4 text-center text-sm text-stone-500 dark:text-stone-400">
+          <li className="py-4 text-center text-sm text-quaternary">
             No domains yet — add your first life area below.
           </li>
         )}
       </ul>
 
-      <div className="mt-4 rounded-xl border border-dashed border-stone-300 p-3 dark:border-stone-700">
-        <div className="mb-2 text-[11px] font-medium tracking-wide text-stone-500 dark:text-stone-400 uppercase">
+      <div className="mt-4 rounded-xl border border-dashed border-primary p-3">
+        <div className="mb-2 text-[11px] font-medium tracking-wide text-quaternary uppercase">
           Add domain
         </div>
         <div className="flex items-center gap-2">

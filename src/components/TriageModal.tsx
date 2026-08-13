@@ -89,13 +89,13 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Who do you actually meet with?" onClose={onClose}>
       {rows.length === 0 ? (
-        <p className="text-sm text-stone-500 dark:text-stone-400">
+        <p className="text-sm text-quaternary">
           Nothing left to decide. This list only fills up when you add someone
           new.
         </p>
       ) : (
         <div className="space-y-4">
-          <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+          <p className="text-xs leading-relaxed text-quaternary">
             Readiness only measures what you opt into — so the only thing
             counted at you is what you haven't decided about yet. Marking
             someone <strong className="font-medium">No meeting</strong> is a
@@ -103,7 +103,7 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
           </p>
 
           <div className="flex items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 dark:bg-stone-950/50">
-            <label className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+            <label className="flex items-center gap-1.5 text-[11px] text-quaternary">
               Track at
               <NativeSelect
                 size="sm"
@@ -137,7 +137,7 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
                     <Avatar name={row.name} size={28} />
                   ) : (
                     <span
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-stone-100 text-[10px] text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-tertiary text-[10px] text-quaternary"
                       aria-hidden
                     >
                       ▤
@@ -146,7 +146,7 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm">{row.name}</div>
                     {row.sub && (
-                      <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                      <div className="truncate text-[11px] text-quaternary">
                         {row.sub}
                       </div>
                     )}

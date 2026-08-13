@@ -54,17 +54,17 @@ export function SessionHistoryTable({
 
   if (!rows.length) {
     return (
-      <p className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-500 dark:border-stone-700 dark:text-stone-400">
+      <p className="rounded-xl border border-dashed border-primary px-4 py-8 text-center text-sm text-quaternary">
         Nothing logged yet. Open a week on the Plan board to write up a meeting.
       </p>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-stone-200 dark:border-stone-800">
+    <div className="overflow-x-auto rounded-xl border border-secondary">
       <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-stone-200 bg-stone-50 text-[10px] font-semibold tracking-wide text-stone-500 uppercase dark:border-stone-800 dark:bg-stone-950 dark:text-stone-400">
+          <tr className="border-b border-secondary bg-secondary text-[10px] font-semibold tracking-wide text-quaternary uppercase">
             <th className="px-3 py-2 font-semibold">Date</th>
             <th className="px-3 py-2 font-semibold">Status</th>
             <th className="hidden px-3 py-2 font-semibold sm:table-cell">
@@ -92,14 +92,14 @@ export function SessionHistoryTable({
                     {sessionStatusLabel(status)}
                   </Badge>
                 </td>
-                <td className="hidden max-w-[14rem] truncate px-3 py-2.5 text-stone-600 sm:table-cell dark:text-stone-400">
+                <td className="hidden max-w-[14rem] truncate px-3 py-2.5 text-tertiary sm:table-cell">
                   {summary || (
                     <span className="italic text-stone-400 dark:text-stone-500">
                       No notes
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-stone-500 dark:text-stone-400">
+                <td className="px-3 py-2.5 text-right tabular-nums text-quaternary">
                   {count || "—"}
                 </td>
               </tr>

@@ -356,7 +356,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
             domain chips and would only contradict them. */}
         {!isTree && (
           <>
-            <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+            <label className="flex items-center gap-1.5 text-xs text-quaternary">
               Group
               <NativeSelect
                 size="sm"
@@ -367,7 +367,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
                 options={GROUP_OPTIONS}
               />
             </label>
-            <label className="flex items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+            <label className="flex items-center gap-1.5 text-xs text-quaternary">
               Show
               <NativeSelect
                 size="sm"
@@ -413,7 +413,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
         />
         </div>
 
-        <span className="ml-auto text-xs tabular-nums text-stone-500 dark:text-stone-400">
+        <span className="ml-auto text-xs tabular-nums text-quaternary">
           {rowCount} row{rowCount === 1 ? "" : "s"}
         </span>
       </div>
@@ -423,7 +423,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
           showing both would be two identical rows driving one store value. */}
       <div className={cx("flex flex-wrap items-center gap-1.5 touch:gap-2", isTree && "hidden")}>
         <Explain text="Shared with the org tree, so a scan follows you between the two views">
-          <span className="text-[11px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
+          <span className="text-[11px] font-medium tracking-wide text-quaternary uppercase">
             Health
           </span>
         </Explain>
@@ -434,7 +434,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
           className={`rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 ${
             weakScan
               ? "border-transparent bg-amber-500 font-medium text-white"
-              : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
+              : "border-primary text-tertiary hover:border-stone-400"
           }`}
           title="Everything I've flagged watch, strained or critical"
         >
@@ -455,7 +455,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 ${
                 active
                   ? "border-transparent font-medium text-white"
-                  : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400"
+                  : "border-primary text-tertiary hover:border-stone-400"
               }`}
               style={active ? { backgroundColor: color } : undefined}
             >
@@ -500,9 +500,9 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
               key={`mg-${line.key}`}
               type="button"
               onClick={() => toggleCollapsed(`group:${line.key}`)}
-              className="flex min-h-11 items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-left text-xs font-medium text-stone-600 active:bg-stone-200 dark:bg-stone-900 dark:text-stone-400 dark:active:bg-stone-800"
+              className="flex min-h-11 items-center gap-2 rounded-lg bg-stone-100 px-3 py-2 text-left text-xs font-medium text-tertiary active:bg-stone-200 dark:bg-stone-900 dark:active:bg-stone-800"
             >
-              <span className="w-3 shrink-0 text-stone-500 dark:text-stone-400">
+              <span className="w-3 shrink-0 text-quaternary">
                 {collapsed.has(`group:${line.key}`) ? "▸" : "▾"}
               </span>
               {line.color && (
@@ -550,7 +550,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
           (orgIsEmpty ? (
             <EmptyOrg onAdd={openModal} />
           ) : (
-            <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
+            <p className="px-4 py-10 text-center text-sm text-quaternary">
               Nothing matches this view.
               {scanning && " Try clearing the scan."}
             </p>
@@ -559,8 +559,8 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
 
       <Card className="max-lg:hidden overflow-x-auto">
         <table className="w-full min-w-[52rem] text-sm">
-          <thead className="sticky top-0 z-10 bg-white dark:bg-stone-900">
-            <tr className="border-b border-stone-200 text-left text-xs text-stone-500 dark:text-stone-400 dark:border-stone-800">
+          <thead className="sticky top-0 z-10 bg-primary">
+            <tr className="border-b border-secondary text-left text-xs text-quaternary">
               <Th
                 onClick={() => sortBy("name")}
                 sorted={sortedDir("name")}
@@ -589,9 +589,9 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
                 >
                   <td
                     colSpan={visible.length + 1}
-                    className="px-4 py-2 text-xs font-medium text-stone-500 dark:text-stone-400"
+                    className="px-4 py-2 text-xs font-medium text-quaternary"
                   >
-                    <span className="mr-1.5 inline-block w-3 text-stone-500 dark:text-stone-400">
+                    <span className="mr-1.5 inline-block w-3 text-quaternary">
                       {collapsed.has(`group:${line.key}`) ? "▸" : "▾"}
                     </span>
                     {line.color && (
@@ -601,7 +601,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
                       />
                     )}
                     {line.label}
-                    <span className="ml-2 text-stone-500 dark:text-stone-400 tabular-nums">
+                    <span className="ml-2 text-quaternary tabular-nums">
                       {line.count}
                     </span>
                     <span className="ml-3 inline-block w-24 align-middle">
@@ -652,7 +652,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
               <tr>
                 <td
                   colSpan={visible.length + 1}
-                  className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
+                  className="px-4 py-10 text-center text-sm text-quaternary"
                 >
                   {orgIsEmpty ? (
                     <EmptyOrg onAdd={openModal} />
@@ -706,7 +706,7 @@ function Row({
         >
           <button
             type="button"
-            className={`w-3 shrink-0 text-stone-500 dark:text-stone-400 ${hasChildren ? "" : "invisible"}`}
+            className={`w-3 shrink-0 text-quaternary ${hasChildren ? "" : "invisible"}`}
             aria-label={expanded ? "Collapse" : "Expand"}
             onClick={(e) => {
               e.stopPropagation();
@@ -744,7 +744,7 @@ function Row({
               {record.name}
             </div>
             {record.role && (
-              <div className="truncate text-[11px] text-stone-500 dark:text-stone-400" title={record.role}>
+              <div className="truncate text-[11px] text-quaternary" title={record.role}>
                 {record.role}
               </div>
             )}
@@ -809,7 +809,7 @@ function Cell({
           />
           {record.derived && (
             <Explain text="Averaged from the people on it — I haven't rated the team itself">
-              <span className="text-[10px] text-stone-500 dark:text-stone-400">
+              <span className="text-[10px] text-quaternary">
                 ~{filterLabel(record.derived.level).toLowerCase()}
               </span>
             </Explain>
@@ -931,10 +931,10 @@ function ColumnsMenu({
         aria-expanded={open}
       >
         Columns
-        <span className="ml-1 text-stone-500 dark:text-stone-400 tabular-nums">{columns.size}</span>
+        <span className="ml-1 text-quaternary tabular-nums">{columns.size}</span>
       </Button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg dark:border-stone-800 dark:bg-stone-900">
+        <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-secondary bg-primary p-1.5 shadow-lg">
           {COLUMNS.map((c) => (
             <label
               key={c.key}
@@ -981,7 +981,7 @@ function MobileRecordCard({
       className={`rounded-xl border transition-colors ${
         selected
           ? "border-teal-300 bg-teal-50/70 dark:border-teal-800 dark:bg-teal-950/30"
-          : "border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900"
+          : "border-secondary bg-primary"
       } ${context ? "opacity-60" : ""}`}
       // Indent tracks the outline, but capped so deep nesting still leaves
       // room for the name on a 320px screen.
@@ -1032,7 +1032,7 @@ function MobileRecordCard({
             >
               {record.name}
             </span>
-            <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+            <span className="block truncate text-xs text-quaternary">
               {record.role || record.typeLabel}
               {record.underName ? ` · ${record.underName}` : ""}
             </span>
@@ -1063,14 +1063,14 @@ function MobileRecordCard({
           <TintBadge color={record.domain.color}>{record.domain.name}</TintBadge>
         )}
         {record.nextDate && (
-          <span className="text-xs tabular-nums text-stone-500 dark:text-stone-400">
+          <span className="text-xs tabular-nums text-quaternary">
             Next {record.nextDate}
           </span>
         )}
       </div>
 
       {record.note && (
-        <p className="border-t border-stone-100 px-3 py-2 text-xs text-stone-600 dark:border-stone-800 dark:text-stone-400">
+        <p className="border-t border-stone-100 px-3 py-2 text-xs text-tertiary dark:border-stone-800">
           {record.note}
         </p>
       )}
@@ -1090,7 +1090,7 @@ function EmptyOrg({
 }) {
   return (
     <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-      <p className="max-w-xs text-sm text-stone-500 dark:text-stone-400">
+      <p className="max-w-xs text-sm text-quaternary">
         Nothing here yet. Start with a team — the people you lead hang off it,
         and everything else follows from there.
       </p>

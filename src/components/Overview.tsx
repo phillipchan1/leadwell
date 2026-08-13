@@ -262,7 +262,7 @@ export function Overview() {
             {brief}
           </div>
         ) : (
-          <div className="space-y-3 text-sm text-stone-600 dark:text-stone-400">
+          <div className="space-y-3 text-sm text-tertiary">
             {/* Local (non-AI) brief so the tab is useful without a key */}
             <p>
               You lead <strong>{people.length} people</strong> across{" "}
@@ -301,7 +301,7 @@ export function Overview() {
               .
             </p>
             {!keyed && (
-              <p className="text-xs text-stone-500 dark:text-stone-400">
+              <p className="text-xs text-quaternary">
                 AI brief needs a signed-in session and the server AI function.
               </p>
             )}
@@ -328,7 +328,7 @@ export function Overview() {
             </Button>
           </div>
           {healthRoll.rated === 0 ? (
-            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
+            <p className="mt-3 text-sm text-quaternary">
               Nothing rated yet. Set a health on any team or person and it shows
               up here, on the canvas, and in the table.
             </p>
@@ -336,7 +336,7 @@ export function Overview() {
             <>
               <div className="mt-3 space-y-1">
                 <HealthBar roll={healthRoll} />
-                <div className="text-[11px] text-stone-500 dark:text-stone-400">
+                <div className="text-[11px] text-quaternary">
                   {healthRoll.rated} of {teams.length + people.length} rated
                   {healthRoll.level && (
                     <>
@@ -353,7 +353,7 @@ export function Overview() {
               </div>
               <ul className="mt-3 space-y-2">
                 {weakest.length === 0 && (
-                  <li className="text-sm text-stone-500 dark:text-stone-400">
+                  <li className="text-sm text-quaternary">
                     Nothing strained or critical. ✓
                   </li>
                 )}
@@ -386,7 +386,7 @@ export function Overview() {
                           />
                           {w.name}
                         </div>
-                        <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                        <div className="truncate text-[11px] text-quaternary">
                           {w.health.note ?? HEALTH_LABEL[w.health.level]}
                         </div>
                       </div>
@@ -406,7 +406,7 @@ export function Overview() {
               <PrayerIcon className="size-3.5 text-violet-500 dark:text-violet-300" />
               <SectionTitle>Prayer list</SectionTitle>
             </div>
-            <span className="text-[11px] text-stone-500 dark:text-stone-400">
+            <span className="text-[11px] text-quaternary">
               {prayerRoll.carried > 0 && (
                 <>
                   carrying{" "}
@@ -422,7 +422,7 @@ export function Overview() {
             </span>
           </div>
           {carried.length === 0 ? (
-            <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
+            <p className="mt-3 text-sm text-quaternary">
               Nobody on the list yet. Open anyone — or a whole team — and take
               them up in prayer; they'll show up here and on the canvas.
             </p>
@@ -448,7 +448,7 @@ export function Overview() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm">{c.name}</div>
-                      <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                      <div className="truncate text-[11px] text-quaternary">
                         {c.prayer.focus ??
                           [formatCarried(c.prayer), formatLastPrayed(c.prayer)]
                             .filter(Boolean)
@@ -483,7 +483,7 @@ export function Overview() {
           <SectionTitle>Needs attention</SectionTitle>
           <ul className="mt-3 space-y-2">
             {needAttention.length === 0 && (
-              <li className="text-sm text-stone-500 dark:text-stone-400">
+              <li className="text-sm text-quaternary">
                 Every tracked 1:1 is on track. 🎉
               </li>
             )}
@@ -504,7 +504,7 @@ export function Overview() {
                       />
                       {p.name}
                     </div>
-                    <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                    <div className="truncate text-[11px] text-quaternary">
                       {readiness.headline}
                     </div>
                   </div>
@@ -518,7 +518,7 @@ export function Overview() {
           <SectionTitle>Coverage gaps</SectionTitle>
           <ul className="mt-3 space-y-2">
             {unassessed.length === 0 && (
-              <li className="text-sm text-stone-500 dark:text-stone-400">Everyone has a read. ✓</li>
+              <li className="text-sm text-quaternary">Everyone has a read. ✓</li>
             )}
             {unassessed.map((p) => (
               <li key={p.id}>
@@ -531,7 +531,7 @@ export function Overview() {
                   <Avatar name={p.name} photo={p.photo} size={30} dimmed />
                   <div>
                     <div className="text-sm">{p.name}</div>
-                    <div className="text-[11px] text-stone-500 dark:text-stone-400">
+                    <div className="text-[11px] text-quaternary">
                       No profile read yet
                     </div>
                   </div>

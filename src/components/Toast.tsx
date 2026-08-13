@@ -47,7 +47,7 @@ export function ToastHost() {
               "outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2",
               tone === "error"
                 ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
-                : "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900"
+                : "border-stone-200 bg-primary dark:border-stone-700"
             )}
           >
             <AriaToastContent className="flex min-w-0 flex-1 items-center gap-2">

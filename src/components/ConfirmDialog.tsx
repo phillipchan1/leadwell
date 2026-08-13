@@ -73,7 +73,7 @@ export function ConfirmHost() {
         </>
       }
     >
-      <p className="text-sm text-stone-600 dark:text-stone-400">
+      <p className="text-sm text-tertiary">
         {request.body ?? "This can't be undone."}
       </p>
     </Modal>

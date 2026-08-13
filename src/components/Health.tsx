@@ -59,7 +59,7 @@ export function HealthSelect({
            touch floors itself: 16px keeps iOS from zooming the page on focus,
            and min-h-11 makes a 26px row control a real target. */
         className={`w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 touch:min-h-11 touch:text-md ${
-          value ? "" : "text-stone-500 dark:text-stone-400"
+          value ? "" : "text-quaternary"
         } ${className}`}
         style={
           color
@@ -159,7 +159,7 @@ export function HealthBar({ roll }: { roll: HealthRollUp }) {
 
   return (
     <div
-      className="flex h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800"
+      className="flex h-1.5 overflow-hidden rounded-full bg-tertiary"
       title={title}
       role="img"
       aria-label={title}
@@ -218,7 +218,7 @@ export function HealthField({
               className={`text-[10px] ${
                 isStale(health)
                   ? "text-amber-600 dark:text-amber-400"
-                  : "text-stone-500 dark:text-stone-400"
+                  : "text-quaternary"
               }`}
             >
               {rated}
@@ -228,7 +228,7 @@ export function HealthField({
       </div>
       <HealthSelect value={health?.level} onChange={onLevel} ariaLabel={label} />
       {/* The scale, taught in place: what the level you just picked means. */}
-      <p className="text-[11px] text-stone-500 dark:text-stone-400">
+      <p className="text-[11px] text-quaternary">
         {health
           ? HEALTH_HINT[health.level]
           : "Not rated — pick the level that matches your gut."}
@@ -252,7 +252,7 @@ export function HealthField({
           aria-label={`${label} note`}
         />
       )}
-      {hint && <p className="text-[11px] text-stone-500 dark:text-stone-400">{hint}</p>}
+      {hint && <p className="text-[11px] text-quaternary">{hint}</p>}
     </div>
   );
 }

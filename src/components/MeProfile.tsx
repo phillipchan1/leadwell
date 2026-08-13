@@ -59,8 +59,8 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
   const [fillingProfile, setFillingProfile] = useState(false);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
-      <div className="entity-header shrink-0 border-b border-stone-200 p-6 dark:border-stone-800">
+    <div className="flex h-full min-h-0 flex-col bg-primary">
+      <div className="entity-header shrink-0 border-b border-secondary p-6">
         <div className="flex items-start gap-3">
           <Avatar name={me.name} photo={me.photo} size={48} />
           <div className="min-w-0 flex-1">
@@ -68,7 +68,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
             <div className="text-xs text-stone-500">
               {me.title ?? "Leader"} · you
             </div>
-            <div className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+            <div className="mt-1 text-[11px] text-quaternary">
               {teams.length} teams · {withRead}/{people.length} with a read
             </div>
           </div>
@@ -98,7 +98,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
             <div className="space-y-2">
               <button
                 onClick={() => setFillingProfile(true)}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-6 text-sm text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
               >
                 ✨ Map my profile
                 <div className="mt-1 text-xs">
@@ -107,7 +107,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
               </button>
               <button
                 onClick={() => setEditingAssessments(true)}
-                className="w-full rounded-xl border border-dashed border-stone-300 py-3 text-xs text-stone-500 dark:text-stone-400 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700"
+                className="w-full rounded-xl border border-dashed border-primary py-3 text-xs text-quaternary hover:border-teal-500 hover:text-teal-600"
               >
                 Or enter assessments manually
               </button>
@@ -133,7 +133,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                     {DOMAINS.map((d) => (
                       <span
                         key={d}
-                        className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                        className="flex items-center gap-1 text-[10px] text-quaternary"
                       >
                         <span
                           className="h-1.5 w-1.5 rounded-full"
@@ -148,7 +148,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
               <div className="grid grid-cols-2 gap-2">
                 {enn && (
                   <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                    <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+                    <div className="text-[10px] tracking-wider text-quaternary uppercase">
                       Enneagram
                     </div>
                     <div className="text-sm font-semibold">
@@ -159,7 +159,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                 )}
                 {mbtiKey && MBTI[mbtiKey] && (
                   <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                    <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+                    <div className="text-[10px] tracking-wider text-quaternary uppercase">
                       MBTI
                     </div>
                     <div className="text-sm font-semibold">{mbtiKey}</div>
@@ -176,7 +176,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                       key={m.id}
                       className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
                     >
-                      <div className="text-[10px] tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+                      <div className="text-[10px] tracking-wider text-quaternary uppercase">
                         {m.name}
                       </div>
                       <div className="text-sm font-semibold">{m.result}</div>
@@ -212,7 +212,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                 </div>
               )}
               {me.howToLead && (
-                <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-stone-600 dark:bg-teal-950/20 dark:text-stone-400">
+                <div className="rounded-xl border-l-2 border-teal-500 bg-teal-50/50 p-3 text-xs leading-relaxed text-tertiary dark:bg-teal-950/20">
                   <span className="font-medium text-teal-700 dark:text-teal-400">
                     How I work best:{" "}
                   </span>

@@ -222,12 +222,12 @@ export default function App() {
           `pad-safe-x` owns the horizontal padding outright: it and `px-*` set
           the same property with the same specificity, so pairing them means
           whichever Tailwind emits last silently wins. */}
-      <header className="pad-safe-top pad-safe-x chrome-compact flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 bg-white py-3 dark:border-stone-800 dark:bg-stone-900 [--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]">
+      <header className="pad-safe-top pad-safe-x chrome-compact flex shrink-0 items-center justify-between gap-3 border-b border-secondary bg-primary py-3 [--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]">
         <div className="flex min-w-0 items-baseline gap-4">
           <h1 className="text-lg font-bold tracking-tight">
             Lead<span className="text-teal-600">Well</span>
           </h1>
-          <span className="hidden truncate text-xs text-stone-500 lg:inline dark:text-stone-400">
+          <span className="hidden truncate text-xs text-quaternary lg:inline">
             {assessed} of {people.length} with a read · {teams.length} teams
           </span>
         </div>
@@ -252,7 +252,7 @@ export default function App() {
             selectedKey={tab}
             onSelectionChange={(key) => setTab(key as Tab)}
             className={cx(
-              "chrome-compact-hide shrink-0 border-b border-stone-200 bg-white px-6 dark:border-stone-800 dark:bg-stone-900",
+              "chrome-compact-hide shrink-0 border-b border-secondary bg-primary px-6",
               "max-lg:hidden"
             )}
           >

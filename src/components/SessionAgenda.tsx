@@ -62,12 +62,12 @@ export function SessionAgenda({
   const open = mine.filter((t) => t.status === "open").length;
 
   return (
-    <section className="meeting-editor-agenda mb-6 rounded-xl border border-stone-200 dark:border-stone-800">
+    <section className="meeting-editor-agenda mb-6 rounded-xl border border-secondary">
       <div className="flex items-baseline justify-between gap-2 border-b border-stone-100 px-3 py-2 dark:border-stone-800/80">
-        <span className="text-[11px] font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400">
+        <span className="text-[11px] font-semibold tracking-wide text-quaternary uppercase">
           Agenda
         </span>
-        <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+        <span className="text-[10px] tabular-nums text-quaternary">
           {mine.length === 0
             ? "nothing planned"
             : `${mine.length - open} of ${mine.length} covered`}
@@ -153,7 +153,7 @@ export function SessionAgenda({
                     <button
                       type="button"
                       onClick={() => placeTopic(t.id, { sessionId: session.id })}
-                      className="rounded-full border border-stone-300 px-2.5 py-1 text-xs text-stone-600 touch:min-h-11 hover:border-teal-500 hover:text-teal-600 dark:border-stone-700 dark:text-stone-300"
+                      className="rounded-full border border-primary px-2.5 py-1 text-xs text-stone-600 touch:min-h-11 hover:border-teal-500 hover:text-teal-600 dark:text-stone-300"
                     >
                       + {t.text}
                     </button>

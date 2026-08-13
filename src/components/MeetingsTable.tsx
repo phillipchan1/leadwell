@@ -127,7 +127,7 @@ export function MeetingsTable() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <SectionTitle>Meetings</SectionTitle>
-            <p className="mt-1 text-xs text-stone-500 dark:text-stone-400">
+            <p className="mt-1 text-xs text-quaternary">
               {rows.length} recurring
               {totalLoose > 0 && (
                 <>
@@ -171,7 +171,7 @@ export function MeetingsTable() {
         </div>
 
         {rows.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-stone-500 dark:text-stone-400">
+          <Card className="p-6 text-center text-sm text-quaternary">
             {meetings.length === 0
               ? "No recurring meetings yet. Add the ones you actually run — a 1:1 per person, a staff meeting per team."
               : "Nothing matches that."}
@@ -186,7 +186,7 @@ export function MeetingsTable() {
                   <button
                     type="button"
                     onClick={() => selectMeeting(r.meeting.id)}
-                    className="w-full rounded-xl border border-stone-200 bg-white p-3 text-left touch:min-h-11 dark:border-stone-800 dark:bg-stone-900"
+                    className="w-full rounded-xl border border-secondary bg-primary p-3 text-left touch:min-h-11"
                   >
                     <div className="flex items-center gap-2">
                       <StateDot readiness={r.readiness} />
@@ -200,7 +200,7 @@ export function MeetingsTable() {
                         {formatCountdown(r.readiness)}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4 text-[11px] text-stone-500 dark:text-stone-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4 text-[11px] text-quaternary">
                       <span>{RHYTHM_LABEL[r.meeting.rhythm]}</span>
                       <span>·</span>
                       <span>
@@ -213,7 +213,7 @@ export function MeetingsTable() {
               ))}
             </ul>
 
-            <div className="hidden overflow-hidden rounded-xl border border-stone-200 sm:block dark:border-stone-800">
+            <div className="hidden overflow-hidden rounded-xl border border-secondary sm:block">
               <table className="w-full text-sm">
                 <thead className="bg-stone-50 text-left dark:bg-stone-950/60">
                   <tr>
@@ -250,7 +250,7 @@ export function MeetingsTable() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-xs text-stone-500 dark:text-stone-400">
+                      <td className="px-3 py-2 text-xs text-quaternary">
                         {RHYTHM_LABEL[r.meeting.rhythm]}
                       </td>
                       <td className="px-3 py-2">
@@ -262,7 +262,7 @@ export function MeetingsTable() {
                         </span>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500 dark:text-stone-400">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-quaternary">
                           <span className="tabular-nums">{r.open}</span>
                           {r.loose > 0 && <LooseBadge count={r.loose} />}
                         </div>

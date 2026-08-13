@@ -32,7 +32,7 @@ export function EntityModeTabs({
     <Tabs
       selectedKey={mode}
       onSelectionChange={(key) => onMode(key as EntityMode)}
-      className="scroll-contain scrollbar-hide shrink-0 overflow-x-auto border-b border-stone-200 px-4 dark:border-stone-800"
+      className="scroll-contain scrollbar-hide shrink-0 overflow-x-auto border-b border-secondary px-4"
     >
       <TabList type="underline" size="sm" items={tabs}>
         {(t) => {

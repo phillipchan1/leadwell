@@ -213,7 +213,7 @@ export function TopicBoard({
                     ? "border-teal-500 ring-2 ring-teal-500/30 dark:border-teal-600"
                     : past
                       ? "border-amber-300 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-                      : "border-stone-200 dark:border-stone-800"
+                      : "border-secondary"
               )}
             >
               {isWeek ? (
@@ -229,12 +229,12 @@ export function TopicBoard({
                         "truncate text-[11px] font-semibold tracking-wide uppercase",
                         past
                           ? "text-amber-700 dark:text-amber-500"
-                          : "text-stone-500 dark:text-stone-400"
+                          : "text-quaternary"
                       )}
                     >
                       {col.label}
                     </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+                    <span className="shrink-0 text-[10px] tabular-nums text-quaternary">
                       {col.topics.length}
                     </span>
                   </div>
@@ -259,10 +259,10 @@ export function TopicBoard({
               ) : (
                 <div className="px-2.5 pt-2 pb-1">
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="truncate text-[11px] font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400">
+                    <span className="truncate text-[11px] font-semibold tracking-wide text-quaternary uppercase">
                       {col.label}
                     </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+                    <span className="shrink-0 text-[10px] tabular-nums text-quaternary">
                       {col.topics.length}
                     </span>
                   </div>
@@ -304,7 +304,7 @@ export function TopicBoard({
 
               {canAdd && (
                 <form
-                  className="border-t border-stone-200 p-2 dark:border-stone-800"
+                  className="border-t border-secondary p-2"
                   onSubmit={(e) => {
                     e.preventDefault();
                     submit(col);
@@ -323,7 +323,7 @@ export function TopicBoard({
               )}
 
               {col.covered && !allCovered && col.topics.length > 0 && (
-                <div className="border-t border-stone-200 p-2 dark:border-stone-800">
+                <div className="border-t border-secondary p-2">
                   <Button
                     size="sm"
                     color="link-gray"
@@ -343,7 +343,7 @@ export function TopicBoard({
       {drag && dragged && (
         <li
           aria-hidden
-          className="pointer-events-none fixed z-50 list-none rounded-lg border border-teal-400 bg-white px-2 py-1.5 text-xs leading-snug shadow-lg dark:border-teal-600 dark:bg-stone-900"
+          className="pointer-events-none fixed z-50 list-none rounded-lg border border-teal-400 bg-primary px-2 py-1.5 text-xs leading-snug shadow-lg dark:border-teal-600"
           style={{
             left: drag.x - drag.dx,
             top: drag.y - drag.dy,
@@ -395,7 +395,7 @@ function TopicCard({
     <li
       ref={ref}
       className={cx(
-        "group relative rounded-lg border bg-white dark:bg-stone-900",
+        "group relative rounded-lg border bg-primary",
         past
           ? "border-amber-300 dark:border-amber-800"
           : "border-stone-200 dark:border-stone-700",
@@ -432,7 +432,7 @@ function TopicCard({
             className={cx(
               "w-full resize-none border-0 bg-transparent p-0 text-xs leading-snug outline-none touch:text-md",
               covered
-                ? "text-stone-500 line-through dark:text-stone-400"
+                ? "text-quaternary line-through"
                 : "text-stone-700 dark:text-stone-200"
             )}
             // Auto-grows instead of clipping at two lines.
@@ -500,7 +500,7 @@ function TopicCard({
         <select
           value={columnKey}
           onChange={(e) => onMove(e.target.value)}
-          className="min-h-8 w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-[11px] text-stone-500 outline-none touch:text-md dark:text-stone-400"
+          className="min-h-8 w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-[11px] text-quaternary outline-none touch:text-md"
         >
           {moveOptions.map((o) => (
             <option key={o.key} value={o.key}>

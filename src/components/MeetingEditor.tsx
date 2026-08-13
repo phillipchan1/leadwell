@@ -553,7 +553,7 @@ function EntryMenu({ onDelete }: { onDelete: () => void }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900"
+          className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-primary py-1 shadow-xl dark:border-stone-700"
         >
           <button
             type="button"

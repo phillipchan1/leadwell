@@ -97,8 +97,8 @@ export function AICoach({
 
   if (!keyed) {
     return (
-      <div className="rounded-xl border border-dashed border-stone-300 p-4 text-sm text-stone-500 dark:border-stone-700">
-        <p className="font-medium text-stone-600 dark:text-stone-400">
+      <div className="rounded-xl border border-dashed border-primary p-4 text-sm text-stone-500">
+        <p className="font-medium text-tertiary">
           AI coach unavailable
         </p>
         <p className="mt-1 text-xs leading-relaxed">
@@ -119,7 +119,7 @@ export function AICoach({
               key={p.label}
               onClick={() => send(p.prompt)}
               disabled={streaming !== null}
-              className="touch:min-h-11 rounded-full border border-stone-300 px-3 py-2 text-xs text-stone-600 transition-colors hover:border-teal-500 hover:text-teal-600 active:bg-stone-100 disabled:opacity-50 dark:border-stone-700 dark:text-stone-400 dark:active:bg-stone-800"
+              className="touch:min-h-11 rounded-full border border-primary px-3 py-2 text-xs text-tertiary transition-colors hover:border-teal-500 hover:text-teal-600 active:bg-stone-100 disabled:opacity-50 dark:active:bg-stone-800"
             >
               {p.label}
             </button>
@@ -212,7 +212,7 @@ function MessageBubble({
         className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
           role === "user"
             ? "bg-teal-600 text-white"
-            : "border border-stone-200 bg-white text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-200"
+            : "border border-secondary bg-primary text-stone-700 dark:text-stone-200"
         }`}
       >
         {content}

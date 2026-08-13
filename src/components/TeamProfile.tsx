@@ -188,13 +188,13 @@ export function TeamProfile({
 
   return (
     <aside
-      className="flex h-full min-h-0 flex-col bg-white dark:bg-stone-900"
+      className="flex h-full min-h-0 flex-col bg-primary"
       data-team-mode={mode}
     >
       {/* Header — identity only. The name stays editable in place; everything
           that isn't identity moved into a mode. */}
       <header
-        className="entity-header shrink-0 border-b border-stone-200 px-4 py-4 sm:px-6 dark:border-stone-800"
+        className="entity-header shrink-0 border-b border-secondary px-4 py-4 sm:px-6"
         style={{ borderTop: `3px solid ${accent}` }}
       >
         <div>
@@ -365,7 +365,7 @@ export function TeamProfile({
                   setNewAction("");
                 }}
               >
-                <div className="flex items-center gap-3 rounded-xl border border-dashed border-stone-300 bg-stone-50/40 px-3 py-2.5 dark:border-stone-700 dark:bg-stone-950/30">
+                <div className="flex items-center gap-3 rounded-xl border border-dashed border-primary bg-stone-50/40 px-3 py-2.5 dark:bg-stone-950/30">
                   <span
                     className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-dashed border-stone-300 dark:border-stone-600"
                     aria-hidden
@@ -389,7 +389,7 @@ export function TeamProfile({
                   <div key={g.id} className="group">
                     <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                       <span className="flex-1">{g.title}</span>
-                      <span className="text-xs text-stone-500 dark:text-stone-400">
+                      <span className="text-xs text-quaternary">
                         {Math.round(g.progress)}%
                       </span>
                       <ButtonUtility
@@ -524,7 +524,7 @@ export function TeamProfile({
                 </Button>
               </div>
               {members.length === 0 ? (
-                <p className="text-sm text-stone-500 dark:text-stone-400">
+                <p className="text-sm text-quaternary">
                   No one on this team yet.
                 </p>
               ) : (
@@ -558,7 +558,7 @@ export function TeamProfile({
                               {p.name}
                             </div>
                             {p.role && (
-                              <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                              <div className="truncate text-[11px] text-quaternary">
                                 {p.role}
                               </div>
                             )}
@@ -598,7 +598,7 @@ export function TeamProfile({
                   )}
                 </div>
                 {subTeams.length === 0 ? (
-                  <p className="text-xs italic text-stone-500 dark:text-stone-400">
+                  <p className="text-xs italic text-quaternary">
                     No sub-teams — nest a team you specifically lead under this
                     broader purview.
                   </p>
@@ -614,12 +614,12 @@ export function TeamProfile({
                           <button
                             type="button"
                             onClick={() => selectTeam(st.id)}
-                            className="flex w-full items-center justify-between rounded-lg border border-stone-200 px-3 py-2 text-left text-sm hover:border-teal-400 dark:border-stone-800"
+                            className="flex w-full items-center justify-between rounded-lg border border-secondary px-3 py-2 text-left text-sm hover:border-teal-400"
                           >
                             <span className="truncate font-medium">
                               {st.name}
                             </span>
-                            <span className="shrink-0 text-[11px] text-stone-500 dark:text-stone-400">
+                            <span className="shrink-0 text-[11px] text-quaternary">
                               {stCap?.label}
                               {stMembers.length ? ` · ${stMembers.length}` : ""}
                             </span>
@@ -663,7 +663,7 @@ export function TeamProfile({
               />
             </form>
             {myNotes.length === 0 ? (
-              <p className="mt-4 text-center text-xs text-stone-500 dark:text-stone-400">
+              <p className="mt-4 text-center text-xs text-quaternary">
                 No notes yet.
               </p>
             ) : (
@@ -671,9 +671,9 @@ export function TeamProfile({
                 {myNotes.map((n) => (
                   <li
                     key={n.id}
-                    className="group flex items-start gap-2 text-sm text-stone-600 dark:text-stone-400"
+                    className="group flex items-start gap-2 text-sm text-tertiary"
                   >
-                    <span className="shrink-0 pt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+                    <span className="shrink-0 pt-0.5 text-[11px] text-quaternary">
                       {n.date}
                     </span>
                     <span className="flex-1 leading-relaxed">{n.body}</span>
@@ -736,7 +736,7 @@ function ActionRow({
       className={`group flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
         done
           ? "border-stone-200/80 bg-stone-50/60 dark:border-stone-800 dark:bg-stone-950/40"
-          : "border-stone-200 bg-white shadow-sm shadow-stone-900/3 hover:border-stone-300 dark:border-stone-700 dark:bg-stone-900 dark:shadow-none dark:hover:border-stone-600"
+          : "border-stone-200 bg-primary shadow-sm shadow-stone-900/3 hover:border-stone-300 dark:border-stone-700 dark:shadow-none dark:hover:border-stone-600"
       }`}
     >
       {/* The box a finger presses and the box it sees are different sizes: the
@@ -778,7 +778,7 @@ function ActionRow({
           rows={1}
           className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none touch:min-h-11 touch:text-md ${
             done
-              ? "text-stone-500 line-through decoration-stone-300 dark:text-stone-400"
+              ? "text-quaternary line-through decoration-stone-300"
               : "text-stone-800 dark:text-stone-100"
           }`}
           value={value}
@@ -792,7 +792,7 @@ function ActionRow({
           }}
         />
         {dueDate && (
-          <div className="pt-0.5 text-[11px] text-stone-500 dark:text-stone-400">
+          <div className="pt-0.5 text-[11px] text-quaternary">
             Due {dueDate}
           </div>
         )}
