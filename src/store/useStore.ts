@@ -35,6 +35,7 @@ import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
 import type { NodePosition, PersistedData } from "../lib/repo";
 import { clearDoc, loadDoc, saveDoc } from "../lib/docCache";
+import { clearUndo } from "../lib/undo";
 import { emptyMe } from "../lib/repo";
 import {
   capUp,
@@ -1680,6 +1681,7 @@ export const useStore = create<Store>((set, get) => ({
     // The local copy outlives the session unless we say otherwise, and the
     // next person to open this browser is not necessarily the same person.
     if (userId) clearDoc(userId);
+    clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
     set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
@@ -1963,6 +1965,7 @@ supabase.auth.onAuthStateChange((event) => {
     // session that was allowed to read it.
     const { userId } = useStore.getState();
     if (userId) clearDoc(userId);
+    clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
     useStore.setState({

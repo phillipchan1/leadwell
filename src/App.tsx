@@ -39,6 +39,7 @@ import {
 import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
 import { useSyncToasts } from "./hooks/use-sync-toasts";
+import { undoLast } from "./lib/undo";
 import { cx } from "@/utils/cx";
 
 /**
@@ -194,6 +195,18 @@ export default function App() {
       if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setPaletteOpen(true);
+        return;
+      }
+      /* ⌘Z, but not while typing — a text field's own undo is the one you
+         want there, and stealing it would be worse than not having this. */
+      if (
+        e.key.toLowerCase() === "z" &&
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !typing(e.target as HTMLElement | null)
+      ) {
+        e.preventDefault();
+        undoLast();
         return;
       }
       if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;

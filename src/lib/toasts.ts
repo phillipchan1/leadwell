@@ -1,4 +1,5 @@
 import { UNSTABLE_ToastQueue as AriaToastQueue } from "react-aria-components";
+import { dropUndo, pushUndo } from "./undo";
 
 /**
  * The app's transient feedback channel — the counterpart to `confirmAction`
@@ -77,5 +78,19 @@ export function deleteWithUndo(
   restore: () => void
 ): void {
   remove();
-  toast({ message, action: { label: "Undo", onAction: restore } });
+  /* The toast catches it while you're looking; the undo stack catches it after
+     the toast has gone. Both run the same `restore`, and taking the toast's
+     Undo drops the entry so ⌘Z doesn't restore the same record twice. */
+  const entry = { label: message, undo: restore };
+  pushUndo(entry);
+  toast({
+    message,
+    action: {
+      label: "Undo",
+      onAction: () => {
+        dropUndo(entry);
+        restore();
+      },
+    },
+  });
 }
