@@ -721,8 +721,20 @@ with `--ghost` expressed through its `wrapperClassName` seam. index.css is
 - **5.3** — 92 raw `<button>`s still bypass `Button`/`ButtonUtility`. This is now
   a consistency job rather than a correctness one: the zero-specificity
   `:focus-visible` floor in index.css already gives every one of them a ring,
-  and the structural touch block already gives them a 44px box. Worth doing a
-  file at a time; the densest are TableView, OrgTree, MeetingEditor and Prayer.
+  and the structural touch block already gives them a 44px box.
+
+  **Most of them should not become `<Button>`.** The densest cluster — the
+  health scan chips, the domain tabs, the prayer scans, the calendar filters —
+  are `aria-pressed` toggle chips whose selected state is a *runtime* colour
+  (`HEALTH_COLOR`, a domain's own colour). That is the case §5.1 explicitly
+  exempts: runtime-coloured things stay inline, because a token can't carry
+  user data. Pushing them through `Button` would either lose the colour or
+  fight the primitive.
+
+  What they actually want is a `ToggleChip` primitive of their own — pressed
+  state, pill radius, touch sizing and an optional runtime accent, in one
+  place instead of re-derived at each site. That is the shape of the remaining
+  5.3 work, and it is a different job from "migrate onto Button".
 - **The remaining bespoke CSS.** `.journal-*`, the TipTap/ProseMirror content
   styles and `.goal-range` are keepers. `.meeting-editor-*` (24 rules) goes if
   and when MeetingEditor's chrome is folded.
