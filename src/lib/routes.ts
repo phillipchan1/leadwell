@@ -41,7 +41,16 @@ const TABS: Tab[] = ["overview", "tree", "table", "people", "meetings"];
 /** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
 const ID_KINDS: EntityKind[] = ["team", "person", "manager", "meeting"];
 
-export const DEFAULT_TAB: Tab = "tree";
+/**
+ * Overview, not the tree.
+ *
+ * "Who sits under what" is a structural question, and it isn't the one anyone
+ * opens this app to ask — a pastor between hospital visits wants to know who's
+ * struggling, an exec before a board meeting wants the brief. Overview already
+ * answers both, it's the lightest screen in the app, and landing here keeps the
+ * React Flow chunk off the critical path for every cold open.
+ */
+export const DEFAULT_TAB: Tab = "overview";
 
 function isTab(value: string | undefined): value is Tab {
   return TABS.includes(value as Tab);

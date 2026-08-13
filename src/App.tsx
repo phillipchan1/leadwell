@@ -26,6 +26,7 @@ import {
   SyncIndicator,
   TABS,
 } from "./components/AppChrome";
+import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
 import { useSyncToasts } from "./hooks/use-sync-toasts";
 import { cx } from "@/utils/cx";
@@ -56,9 +57,9 @@ const SessionEditorView = lazy(() =>
 function PaneFallback() {
   return (
     <div className="space-y-3 p-1" aria-hidden="true">
-      <div className="h-6 w-40 animate-pulse rounded-md bg-stone-200 dark:bg-stone-800" />
-      <div className="h-32 animate-pulse rounded-xl bg-stone-200/70 dark:bg-stone-800/70" />
-      <div className="h-32 animate-pulse rounded-xl bg-stone-200/50 [animation-delay:150ms] dark:bg-stone-800/50" />
+      <Skeleton shape="line" className="h-6 w-40" />
+      <Skeleton shape="block" className="h-32" fade={0.7} />
+      <Skeleton shape="block" className="h-32" index={1} fade={0.5} />
     </div>
   );
 }
@@ -144,19 +145,17 @@ export default function App() {
   // session-editor route, which renders its own chrome and no header.
   useSyncToasts();
 
-  const {
-    phase,
-    tab,
-    setTab,
-    people,
-    teams,
-    focused,
-    sessionId,
-    askAIOpen,
-    setAskAIOpen,
-    settingsOpen,
-    setSettingsOpen,
-  } = useStore();
+  const phase = useStore((s) => s.phase);
+  const tab = useStore((s) => s.tab);
+  const setTab = useStore((s) => s.setTab);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const focused = useStore((s) => s.focused);
+  const sessionId = useStore((s) => s.sessionId);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
+  const settingsOpen = useStore((s) => s.settingsOpen);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const selected = useSelectedEntity();
 
   const dark = useStore((s) => s.dark);

@@ -36,22 +36,20 @@ export function ManagerProfile({
   manager: Manager;
   density?: Density;
 }) {
-  const {
-    domains,
-    meetings,
-    sessions,
-    notes,
-    trackMeeting,
-    addSession,
-    section,
-    setSection,
-    selectManager,
-    updateManagerLeadUp,
-    deleteManager,
-    modal,
-    askAIOpen,
-    settingsOpen,
-  } = useStore();
+  const domains = useStore((s) => s.domains);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const notes = useStore((s) => s.notes);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const addSession = useStore((s) => s.addSession);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const selectManager = useStore((s) => s.selectManager);
+  const updateManagerLeadUp = useStore((s) => s.updateManagerLeadUp);
+  const deleteManager = useStore((s) => s.deleteManager);
+  const modal = useStore((s) => s.modal);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const settingsOpen = useStore((s) => s.settingsOpen);
 
   const domain = domains.find((d) => d.id === manager.domainId);
   const [editing, setEditing] = useState(false);

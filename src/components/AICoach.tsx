@@ -31,7 +31,9 @@ export function AICoach({
   const chatKey =
     person?.id ??
     (manager ? `mgr:${manager.id}` : team ? `team:${team.id}` : "org");
-  const { chats, appendChat, clearChat } = useStore();
+  const chats = useStore((s) => s.chats);
+  const appendChat = useStore((s) => s.appendChat);
+  const clearChat = useStore((s) => s.clearChat);
   const presets = person
     ? coachPresets(person)
     : manager

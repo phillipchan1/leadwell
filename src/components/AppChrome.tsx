@@ -14,6 +14,7 @@ import {
 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import { useStore, type Tab } from "../store/useStore";
+import { SkeletonLines } from "./Skeleton";
 import { cx } from "@/utils/cx";
 
 export const TABS: {
@@ -73,7 +74,9 @@ export function BottomNav() {
  * where the header has no room for a three-button cluster beside the wordmark.
  */
 export function HeaderOverflow() {
-  const { dark, toggleDark, setSettingsOpen } = useStore();
+  const dark = useStore((s) => s.dark);
+  const toggleDark = useStore((s) => s.toggleDark);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -207,11 +210,7 @@ export function LoadingSplash() {
         height={56}
         className="rounded-[14px] shadow-sm"
       />
-      <div className="w-full max-w-xs space-y-2.5" aria-hidden="true">
-        <div className="h-3 w-2/3 animate-pulse rounded-full bg-stone-200 dark:bg-stone-800" />
-        <div className="h-3 w-full animate-pulse rounded-full bg-stone-200 [animation-delay:120ms] dark:bg-stone-800" />
-        <div className="h-3 w-5/6 animate-pulse rounded-full bg-stone-200 [animation-delay:240ms] dark:bg-stone-800" />
-      </div>
+      <SkeletonLines count={3} className="w-full max-w-xs" />
       <p className="text-sm text-stone-500 dark:text-stone-400">
         Loading your org…
       </p>

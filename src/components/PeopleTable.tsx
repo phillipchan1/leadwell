@@ -15,15 +15,13 @@ import { SearchLg } from "@untitledui/icons";
 type SortKey = "name" | "team" | "coverage" | "nextSession" | "health";
 
 export function PeopleTable() {
-  const {
-    people,
-    teams,
-    capacities,
-    meetings,
-    sessions,
-    selectPerson,
-    setHealth,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const capacities = useStore((s) => s.capacities);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const setHealth = useStore((s) => s.setHealth);
   const [query, setQuery] = useState("");
   const [teamFilter, setTeamFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");

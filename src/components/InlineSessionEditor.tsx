@@ -34,7 +34,8 @@ export function InlineSessionEditor({
   onDeleted?: () => void;
   autoFocus?: boolean;
 }) {
-  const { updateSession, deleteSession } = useStore();
+  const updateSession = useStore((s) => s.updateSession);
+  const deleteSession = useStore((s) => s.deleteSession);
   const [notes, setNotes] = useState(session.notes ?? "");
   const [point, setPoint] = useState(session.point ?? "");
   const notesRef = useRef<HTMLTextAreaElement>(null);

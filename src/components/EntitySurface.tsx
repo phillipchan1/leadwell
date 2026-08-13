@@ -3,6 +3,7 @@ import { PANEL_PCT_DEFAULT, useStore } from "../store/useStore";
 import type { Manager, Person, Team, TrackedMeeting } from "../types";
 import { EntityChrome, useEntityTrail } from "./EntityChrome";
 import { useSwipePager } from "@/hooks/use-sheet";
+import { Skeleton } from "./Skeleton";
 
 /**
  * The profiles pull in the whole markdown stack, the assessment editors and
@@ -31,14 +32,14 @@ function ProfileFallback() {
   return (
     <div className="space-y-4 p-6" aria-hidden="true">
       <div className="flex items-center gap-3">
-        <div className="size-13 animate-pulse rounded-full bg-stone-200 dark:bg-stone-800" />
+        <Skeleton shape="circle" className="size-13" />
         <div className="flex-1 space-y-2">
-          <div className="h-4 w-40 animate-pulse rounded bg-stone-200 dark:bg-stone-800" />
-          <div className="h-3 w-56 animate-pulse rounded bg-stone-200/70 dark:bg-stone-800/70" />
+          <Skeleton shape="line" className="h-4 w-40" />
+          <Skeleton shape="line" className="w-56" fade={0.7} />
         </div>
       </div>
-      <div className="h-24 animate-pulse rounded-xl bg-stone-200/60 dark:bg-stone-800/60" />
-      <div className="h-40 animate-pulse rounded-xl bg-stone-200/40 [animation-delay:150ms] dark:bg-stone-800/40" />
+      <Skeleton shape="block" className="h-24" fade={0.6} />
+      <Skeleton shape="block" className="h-40" index={1} fade={0.4} />
     </div>
   );
 }
@@ -60,17 +61,15 @@ type Selected =
 
 /** The single entity the route points at. A person outranks their team. */
 export function useSelectedEntity(): Selected {
-  const {
-    people,
-    teams,
-    managers,
-    meetings,
-    selectedPersonId,
-    selectedTeamId,
-    selectedManagerId,
-    selectedMeetingId,
-    selectedMe,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const meetings = useStore((s) => s.meetings);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const selectedTeamId = useStore((s) => s.selectedTeamId);
+  const selectedManagerId = useStore((s) => s.selectedManagerId);
+  const selectedMeetingId = useStore((s) => s.selectedMeetingId);
+  const selectedMe = useStore((s) => s.selectedMe);
 
   const person = people.find((p) => p.id === selectedPersonId);
   if (person) return { kind: "person", person };

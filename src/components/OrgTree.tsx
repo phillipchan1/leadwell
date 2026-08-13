@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useMemo,
   useState,
@@ -206,33 +207,24 @@ function defaultLayout(
   return pos;
 }
 
-const nodeTypes = {
-  me: MeNode,
-  team: TeamNode,
-  manager: ManagerNode,
-  report: DirectReportNode,
-};
-
 export function OrgTree() {
-  const {
-    teams,
-    people,
-    managers,
-    nodePositions,
-    setNodePosition,
-    resetLayout,
-    dark,
-    capacities,
-    domains,
-    treeDomainId,
-    setTreeDomainId,
-    setTreeMode,
-    modal,
-    openModal,
-    closeModal,
-    askAIOpen,
-    settingsOpen,
-  } = useStore();
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
+  const managers = useStore((s) => s.managers);
+  const nodePositions = useStore((s) => s.nodePositions);
+  const setNodePosition = useStore((s) => s.setNodePosition);
+  const resetLayout = useStore((s) => s.resetLayout);
+  const dark = useStore((s) => s.dark);
+  const capacities = useStore((s) => s.capacities);
+  const domains = useStore((s) => s.domains);
+  const treeDomainId = useStore((s) => s.treeDomainId);
+  const setTreeDomainId = useStore((s) => s.setTreeDomainId);
+  const setTreeMode = useStore((s) => s.setTreeMode);
+  const modal = useStore((s) => s.modal);
+  const openModal = useStore((s) => s.openModal);
+  const closeModal = useStore((s) => s.closeModal);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const settingsOpen = useStore((s) => s.settingsOpen);
 
   // 1–4 = modes; ⇧1–⇧9 = domains. Mode is the headline control now, so it takes
   // the bare digits and the domain filter moves up a shift.
@@ -695,17 +687,15 @@ function ReadinessSummary({
   teams: Team[];
   reports: Person[];
 }) {
-  const {
-    people,
-    managers,
-    meetings,
-    sessions,
-    topics,
-    treeMode,
-    selectPerson,
-    selectTeam,
-    openModal,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const managers = useStore((s) => s.managers);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const treeMode = useStore((s) => s.treeMode);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const openModal = useStore((s) => s.openModal);
   if (treeMode !== "prep") return null;
 
   const rdata: ReadinessData = { meetings, sessions, topics };
@@ -1174,11 +1164,29 @@ function ReadinessBar({ readings }: { readings: Readiness[] }) {
   );
 }
 
-function MeNode() {
-  const { me, teams, people, selectMe, selectedMe } = useStore();
+/**
+ * ── Why every node component is memo + narrow selectors ────────────────────
+ *
+ * These four used to call `useStore()` bare. Zustand's default equality
+ * compares the whole state object, which is a fresh reference after every
+ * `set()` — so a single keystroke in a note re-rendered every card on the
+ * canvas, and each one recomputed its own readiness while it was there.
+ *
+ * Selecting primitives where possible (`selectedManagerId === id` rather than
+ * `selectedManagerId`) is deliberate: it means selecting a *different* node
+ * doesn't re-render this one. `memo` then covers the case where React Flow
+ * re-renders the wrapper without any of this node's props changing.
+ */
+const MeNode = memo(function MeNode() {
+  const me = useStore((s) => s.me);
+  const teamCount = useStore((s) => s.teams.length);
+  const peopleCount = useStore((s) => s.people.length);
   // A count, not a mark. Coverage is worth one line on my own card; dimming
   // every unassessed face across the canvas was a fifth question nobody asked.
-  const assessed = people.filter(hasLeadershipRead).length;
+  // Selected as a number so a change to someone's name doesn't redraw this.
+  const assessed = useStore((s) => s.people.filter(hasLeadershipRead).length);
+  const selectMe = useStore((s) => s.selectMe);
+  const selectedMe = useStore((s) => s.selectedMe);
   return (
     <>
       <Handle type="target" position={Position.Top} className="!opacity-0" />
@@ -1192,42 +1200,42 @@ function MeNode() {
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{me.name}</div>
           <div className="text-xs text-stone-500">
-            {me.title ?? "Leader"} · {teams.length} teams · {assessed}/
-            {people.length} with a read
+            {me.title ?? "Leader"} · {teamCount} teams · {assessed}/
+            {peopleCount} with a read
           </div>
         </div>
       </Card>
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>
   );
-}
+});
 
-function ManagerNode({ data }: NodeProps) {
+const ManagerNode = memo(function ManagerNode({ data }: NodeProps) {
   const managerId = (data as { managerId: string }).managerId;
-  const {
-    managers,
-    domains,
-    meetings,
-    sessions,
-    topics,
-    treeMode,
-    openModal,
-    selectManager,
-    selectedManagerId,
-  } = useStore();
+  const manager = useStore((s) => s.managers.find((m) => m.id === managerId));
+  const domain = useStore((s) =>
+    s.domains.find((d) => d.id === manager?.domainId)
+  );
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const treeMode = useStore((s) => s.treeMode);
+  const openModal = useStore((s) => s.openModal);
+  const selectManager = useStore((s) => s.selectManager);
+  const selected = useStore((s) => s.selectedManagerId === managerId);
   const layers = MODE_LAYERS[treeMode];
   const dim = useScanDimmed("manager", managerId);
-  const manager = managers.find((m) => m.id === managerId);
+  // Keyed on the three collections readiness actually reads, so it recomputes
+  // when a session lands — not when someone edits an unrelated person. This is
+  // also what keeps `todayISO()` off the render path.
+  const readiness = useMemo(
+    () =>
+      layers.readiness
+        ? readinessFor("manager", managerId, { meetings, sessions, topics })
+        : null,
+    [layers.readiness, managerId, meetings, sessions, topics]
+  );
   if (!manager) return null;
-  const readiness = layers.readiness
-    ? readinessFor("manager", manager.id, {
-        meetings,
-        sessions,
-        topics,
-      })
-    : null;
-  const domain = domains.find((d) => d.id === manager.domainId);
-  const selected = selectedManagerId === manager.id;
   // How much of the operating manual is filled — the reason to open this node.
   const filled = Object.values(manager.leadUp ?? {}).filter(
     (v) => typeof v === "string" && v.trim()
@@ -1304,7 +1312,7 @@ function ManagerNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>
   );
-}
+});
 
 /**
  * Someone I manage who isn't part of a team I lead — a node in their own right.
@@ -1312,34 +1320,34 @@ function ManagerNode({ data }: NodeProps) {
  * them, but the readiness chip is about my 1:1 with the person, not their
  * meetings.
  */
-function DirectReportNode({ data }: NodeProps) {
+const DirectReportNode = memo(function DirectReportNode({ data }: NodeProps) {
   const personId = (data as { personId: string }).personId;
-  const {
-    people,
-    teams,
-    domains,
-    meetings,
-    sessions,
-    topics,
-    treeMode,
-    openModal,
-    selectPerson,
-    selectedPersonId,
-  } = useStore();
+  const person = useStore((s) => s.people.find((p) => p.id === personId));
+  const teams = useStore((s) => s.teams);
+  const domain = useStore((s) =>
+    s.domains.find((d) => d.id === person?.domainId)
+  );
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const treeMode = useStore((s) => s.treeMode);
+  const openModal = useStore((s) => s.openModal);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selected = useStore((s) => s.selectedPersonId === personId);
   const layers = MODE_LAYERS[treeMode];
   const dim = useScanDimmed("person", personId);
-  const person = people.find((p) => p.id === personId);
+  const readiness = useMemo(
+    () =>
+      layers.readiness
+        ? readinessFor("person", personId, { meetings, sessions, topics })
+        : null,
+    [layers.readiness, personId, meetings, sessions, topics]
+  );
+  const led = useMemo(
+    () => (person ? teamsLedBy(teams, person.id) : []),
+    [teams, person]
+  );
   if (!person) return null;
-  const readiness = layers.readiness
-    ? readinessFor("person", person.id, {
-        meetings,
-        sessions,
-        topics,
-      })
-    : null;
-  const domain = domains.find((d) => d.id === person.domainId);
-  const led = teamsLedBy(teams, person.id);
-  const selected = selectedPersonId === person.id;
 
   return (
     <>
@@ -1425,29 +1433,30 @@ function DirectReportNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>
   );
-}
+});
 
-function TeamNode({ data }: NodeProps) {
+const TeamNode = memo(function TeamNode({ data }: NodeProps) {
   const teamId = (data as { teamId: string }).teamId;
-  const {
-    teams,
-    people,
-    capacities,
-    domains,
-    meetings,
-    sessions,
-    topics,
-    teamActions,
-    addTeamAction,
-    updateTeamAction,
-    toggleTeamAction,
-    deleteTeamAction,
-    selectedPersonId,
-    selectPerson,
-    selectTeam,
-    treeMode,
-    openModal,
-  } = useStore();
+  const teams = useStore((s) => s.teams);
+  const team = useStore((s) => s.teams.find((t) => t.id === teamId));
+  const people = useStore((s) => s.people);
+  const capacity = useStore((s) =>
+    s.capacities.find((c) => c.id === team?.capacityId)
+  );
+  const domain = useStore((s) => s.domains.find((d) => d.id === team?.domainId));
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const teamActions = useStore((s) => s.teamActions);
+  const addTeamAction = useStore((s) => s.addTeamAction);
+  const updateTeamAction = useStore((s) => s.updateTeamAction);
+  const toggleTeamAction = useStore((s) => s.toggleTeamAction);
+  const deleteTeamAction = useStore((s) => s.deleteTeamAction);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const treeMode = useStore((s) => s.treeMode);
+  const openModal = useStore((s) => s.openModal);
   // Highlight the card while one of its members is open, not just the team.
   const activeTeamId = useActiveTeamId();
   const healthScan = useStore((s) => s.healthScan);
@@ -1465,17 +1474,44 @@ function TeamNode({ data }: NodeProps) {
         ? !matchesPrayer(p.prayer, prayerScan)
         : false;
 
-  const team = teams.find((t) => t.id === teamId);
+  const members = useMemo(
+    () => people.filter((p) => p.teamId === teamId),
+    [people, teamId]
+  );
+
+  // A card can carry two different things to be ready for: the team's own
+  // standing meeting, and a 1:1 with each member. Both are tracked meetings.
+  //
+  // This is the single most expensive thing on the canvas — one reading for the
+  // team plus one per member, on every card — so it is keyed on exactly the
+  // collections readiness reads. Everything else about the card (a name, a
+  // colour, a dimmed scan row) re-renders without touching it.
+  const { teamReading, readings, allReadings, roll } = useMemo(() => {
+    const rdata: ReadinessData = { meetings, sessions, topics };
+    const forTeam = readinessFor("team", teamId, rdata);
+    const byPerson = new Map(
+      members.flatMap((p) => {
+        const r = readinessFor("person", p.id, rdata);
+        return r ? [[p.id, r] as const] : [];
+      })
+    );
+    const all = [...(forTeam ? [forTeam] : []), ...byPerson.values()];
+    return {
+      teamReading: forTeam,
+      readings: byPerson,
+      allReadings: all,
+      roll: rollUp(all),
+    };
+  }, [meetings, sessions, topics, teamId, members]);
+
   if (!team) return null;
-  const capacity = capacities.find((c) => c.id === team.capacityId);
-  const domain = domains.find((d) => d.id === team.domainId);
   const parent = teams.find((t) => t.id === team.parentId);
   const leader = people.find((p) => p.id === team.leaderId);
-  const members = people.filter((p) => p.teamId === team.id);
   const subTeams = teams.filter((t) => t.parentId === team.id);
   const nextAction = teamActions.find((a) => a.teamId === team.id && !a.done);
   const selected = activeTeamId === team.id;
   const accent = domain?.color ?? capacity?.color ?? "#0D9488";
+  const teamMeeting = meetingFor(meetings, "team", team.id);
   const {
     people: showPeople,
     mandate,
@@ -1489,23 +1525,6 @@ function TeamNode({ data }: NodeProps) {
   // calls I've made on its people, marked as derived so it never poses as mine.
   const health = teamHealth(team, members);
   const memberHealth = rollUpHealth(members.map((m) => m.health));
-
-  // A card can carry two different things to be ready for: the team's own
-  // standing meeting, and a 1:1 with each member. Both are tracked meetings.
-  const rdata: ReadinessData = { meetings, sessions, topics };
-  const teamMeeting = meetingFor(meetings, "team", team.id);
-  const teamReading = readinessFor("team", team.id, rdata);
-  const readings = new Map(
-    members.flatMap((p) => {
-      const r = readinessFor("person", p.id, rdata);
-      return r ? [[p.id, r] as const] : [];
-    })
-  );
-  const allReadings = [
-    ...(teamReading ? [teamReading] : []),
-    ...readings.values(),
-  ];
-  const roll = rollUp(allReadings);
 
   return (
     <>
@@ -1738,7 +1757,7 @@ function TeamNode({ data }: NodeProps) {
       <Handle type="source" position={Position.Bottom} className="!opacity-0" />
     </>
   );
-}
+});
 
 /** Inline next-step field for sweeping through teams on the canvas. */
 function CardNextStep({
@@ -1923,3 +1942,16 @@ function PersonRow({
     </div>
   );
 }
+
+/**
+ * Declared here rather than above `OrgTree`, because the four node components
+ * are `memo(...)` consts now instead of hoisted function declarations. Module
+ * evaluation still finishes long before the first render reads this, and a
+ * module-level identity is what keeps React Flow from remounting every node.
+ */
+const nodeTypes = {
+  me: MeNode,
+  team: TeamNode,
+  manager: ManagerNode,
+  report: DirectReportNode,
+};

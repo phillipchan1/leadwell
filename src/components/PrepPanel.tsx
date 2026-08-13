@@ -48,14 +48,12 @@ export function PrepPanel({
   /** Jump to wherever this check gets fixed. */
   onFix: (fix: CheckFix, sessionId?: string) => void;
 }) {
-  const {
-    meetings,
-    people,
-    teams,
-    managers,
-    trackMeeting,
-    setNoMeeting,
-  } = useStore();
+  const meetings = useStore((s) => s.meetings);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const setNoMeeting = useStore((s) => s.setNoMeeting);
 
   const mine = meetingsFor(meetings, subjectKind, subjectId);
   const subject =
@@ -143,7 +141,10 @@ function MeetingPrep({
   showTitle: boolean;
   onFix: (fix: CheckFix, sessionId?: string) => void;
 }) {
-  const { sessions, topics, updateMeeting, untrackMeeting } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const updateMeeting = useStore((s) => s.updateMeeting);
+  const untrackMeeting = useStore((s) => s.untrackMeeting);
   const label = MEETING_LABEL[meeting.subjectKind];
 
   const agenda = meetingAgenda(topics, sessions, meeting.id);

@@ -270,11 +270,52 @@ export function formatCountdown(r: Readiness): string {
   return `${r.projected ? "~" : ""}${weekday} · ${when}`;
 }
 
-/** Sessions belonging to a meeting, oldest first. */
+/**
+ * One `sessions` array in, a meeting-id → sessions index out — cached against
+ * the array's identity.
+ *
+ * `sessionsFor` used to filter and sort *every session in the org* on each
+ * call, and it is called several times per readiness read: once in
+ * `meetingReadiness`, once in `meetingAgenda`, once in `explicitNextDate`. The
+ * canvas then reads readiness per node, per render. With a year of sessions
+ * that is O(nodes × sessions log sessions) for a single keystroke.
+ *
+ * The store hands out a fresh array only when sessions actually change, so
+ * identity is exactly the right cache key: one pass builds the whole index and
+ * every meeting reads its own slice for free. A single entry is enough — the
+ * app only ever holds one sessions array at a time, and keeping the previous
+ * one alive would pin a document in memory for no gain.
+ */
+let sessionIndexKey: Session[] | null = null;
+let sessionIndex: Map<string, Session[]> = new Map();
+
+/** Shared empty result, so a meeting with no sessions doesn't allocate. */
+const EMPTY_SESSIONS: Session[] = [];
+
+function indexOf(sessions: Session[]): Map<string, Session[]> {
+  if (sessionIndexKey === sessions) return sessionIndex;
+  const next = new Map<string, Session[]>();
+  for (const s of sessions) {
+    const bucket = next.get(s.meetingId);
+    if (bucket) bucket.push(s);
+    else next.set(s.meetingId, [s]);
+  }
+  for (const bucket of next.values()) {
+    bucket.sort((a, b) => a.date.localeCompare(b.date));
+  }
+  sessionIndexKey = sessions;
+  sessionIndex = next;
+  return next;
+}
+
+/**
+ * Sessions belonging to a meeting, oldest first.
+ *
+ * Returns a shared array — callers read it, they must not mutate or sort it in
+ * place. Every existing caller only filters, finds and maps.
+ */
 export function sessionsFor(meetingId: string, sessions: Session[]): Session[] {
-  return sessions
-    .filter((s) => s.meetingId === meetingId)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  return indexOf(sessions).get(meetingId) ?? EMPTY_SESSIONS;
 }
 
 /**

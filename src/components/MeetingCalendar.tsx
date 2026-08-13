@@ -56,7 +56,11 @@ export function MeetingCalendar({
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
 }) {
-  const { sessions, topics, addTopic, addSession, placeTopic } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const addTopic = useStore((s) => s.addTopic);
+  const addSession = useStore((s) => s.addSession);
+  const placeTopic = useStore((s) => s.placeTopic);
   const today = todayISO();
   const [month, setMonth] = useState(() => currentMonth(today));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);

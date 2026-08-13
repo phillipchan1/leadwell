@@ -34,7 +34,8 @@ export function MeetingPlanner({
   onCloseNotes: () => void;
   onOpenSession?: (sessionId: string) => void;
 }) {
-  const { sessions, addSession } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const addSession = useStore((s) => s.addSession);
   const [view, setView] = useState<PlanView>("board");
   const isMobile = useMediaQuery("(max-width: 767px)");
 

@@ -64,16 +64,14 @@ export function MeetingEditor({
   sessionId: string;
   onClose: () => void;
 }) {
-  const {
-    sessions,
-    meetings,
-    people,
-    teams,
-    managers,
-    updateSession,
-    deleteSession,
-    addTopic,
-  } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const meetings = useStore((s) => s.meetings);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const updateSession = useStore((s) => s.updateSession);
+  const deleteSession = useStore((s) => s.deleteSession);
+  const addTopic = useStore((s) => s.addTopic);
   const session = sessions.find((o) => o.id === sessionId);
   const meeting = meetings.find((m) => m.id === session?.meetingId);
   const person =

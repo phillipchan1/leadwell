@@ -28,7 +28,10 @@ const ROLE_OPTIONS: { label: string; value: MeetingRole }[] = [
  * Enter adds the next one.
  */
 export function NewMeetingRow({ onDone }: { onDone: () => void }) {
-  const { people, teams, managers, createMeeting } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const createMeeting = useStore((s) => s.createMeeting);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<MeetingSubjectKind>("person");
   const [subjectId, setSubjectId] = useState("");

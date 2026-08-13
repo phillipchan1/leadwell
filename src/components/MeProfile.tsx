@@ -39,7 +39,9 @@ function QuickAction({
 
 /** The signed-in leader's own profile — identity + self-assessment. */
 export function MeProfile({ density: _density = "peek" }: { density?: Density }) {
-  const { me, teams, people } = useStore();
+  const me = useStore((s) => s.me);
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
   const read = derivedRead(me);
   const enn = parseEnneagram(me.assessments.enneagram);
   const top5 = me.assessments.cliftonTop5 ?? [];

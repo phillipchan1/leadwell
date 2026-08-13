@@ -52,31 +52,29 @@ export function PersonProfile({
   person: Person;
   density?: Density;
 }) {
-  const {
-    teams,
-    capacities,
-    section,
-    setSection,
-    selectPerson,
-    selectTeam,
-    deletePerson,
-    updateLeadUp,
-    setHealth,
-    setHealthNote,
-    modal,
-    askAIOpen,
-    settingsOpen,
-    meetings,
-    sessions,
-    goals,
-    addGoal,
-    updateGoal,
-    deleteGoal,
-    restoreGoal,
-    notes,
-    trackMeeting,
-    addSession,
-  } = useStore();
+  const teams = useStore((s) => s.teams);
+  const capacities = useStore((s) => s.capacities);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const deletePerson = useStore((s) => s.deletePerson);
+  const updateLeadUp = useStore((s) => s.updateLeadUp);
+  const setHealth = useStore((s) => s.setHealth);
+  const setHealthNote = useStore((s) => s.setHealthNote);
+  const modal = useStore((s) => s.modal);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const settingsOpen = useStore((s) => s.settingsOpen);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const goals = useStore((s) => s.goals);
+  const addGoal = useStore((s) => s.addGoal);
+  const updateGoal = useStore((s) => s.updateGoal);
+  const deleteGoal = useStore((s) => s.deleteGoal);
+  const restoreGoal = useStore((s) => s.restoreGoal);
+  const notes = useStore((s) => s.notes);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const addSession = useStore((s) => s.addSession);
 
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);

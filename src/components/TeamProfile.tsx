@@ -47,40 +47,38 @@ export function TeamProfile({
   team: Team;
   density?: Density;
 }) {
-  const {
-    capacities,
-    domains,
-    teams,
-    people,
-    section,
-    setSection,
-    selectTeam,
-    selectPerson,
-    selectedPersonId,
-    updateTeam,
-    setHealth,
-    setHealthNote,
-    openModal,
-    modal,
-    askAIOpen,
-    meetings,
-    trackMeeting,
-    addSession,
-    teamActions,
-    addTeamAction,
-    updateTeamAction,
-    toggleTeamAction,
-    deleteTeamAction,
-    restoreTeamAction,
-    teamGoals,
-    addTeamGoal,
-    updateTeamGoal,
-    deleteTeamGoal,
-    restoreTeamGoal,
-    teamNotes,
-    addTeamNote,
-    deleteTeamNote,
-  } = useStore();
+  const capacities = useStore((s) => s.capacities);
+  const domains = useStore((s) => s.domains);
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const updateTeam = useStore((s) => s.updateTeam);
+  const setHealth = useStore((s) => s.setHealth);
+  const setHealthNote = useStore((s) => s.setHealthNote);
+  const openModal = useStore((s) => s.openModal);
+  const modal = useStore((s) => s.modal);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const meetings = useStore((s) => s.meetings);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const addSession = useStore((s) => s.addSession);
+  const teamActions = useStore((s) => s.teamActions);
+  const addTeamAction = useStore((s) => s.addTeamAction);
+  const updateTeamAction = useStore((s) => s.updateTeamAction);
+  const toggleTeamAction = useStore((s) => s.toggleTeamAction);
+  const deleteTeamAction = useStore((s) => s.deleteTeamAction);
+  const restoreTeamAction = useStore((s) => s.restoreTeamAction);
+  const teamGoals = useStore((s) => s.teamGoals);
+  const addTeamGoal = useStore((s) => s.addTeamGoal);
+  const updateTeamGoal = useStore((s) => s.updateTeamGoal);
+  const deleteTeamGoal = useStore((s) => s.deleteTeamGoal);
+  const restoreTeamGoal = useStore((s) => s.restoreTeamGoal);
+  const teamNotes = useStore((s) => s.teamNotes);
+  const addTeamNote = useStore((s) => s.addTeamNote);
+  const deleteTeamNote = useStore((s) => s.deleteTeamNote);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

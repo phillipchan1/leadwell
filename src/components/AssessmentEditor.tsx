@@ -39,7 +39,9 @@ export function AssessmentEditor({
   self?: boolean;
   onClose: () => void;
 }) {
-  const { me, updatePerson, updateMe } = useStore();
+  const me = useStore((s) => s.me);
+  const updatePerson = useStore((s) => s.updatePerson);
+  const updateMe = useStore((s) => s.updateMe);
   const subject = self ? me : person;
   if (!subject) {
     throw new Error("AssessmentEditor requires person or self");

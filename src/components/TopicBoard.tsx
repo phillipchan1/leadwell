@@ -62,18 +62,16 @@ export function TopicBoard({
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
 }) {
-  const {
-    sessions,
-    topics,
-    addTopic,
-    updateTopic,
-    placeTopic,
-    coverTopic,
-    rollTopic,
-    deleteTopic,
-    restoreTopic,
-    addSession,
-  } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const addTopic = useStore((s) => s.addTopic);
+  const updateTopic = useStore((s) => s.updateTopic);
+  const placeTopic = useStore((s) => s.placeTopic);
+  const coverTopic = useStore((s) => s.coverTopic);
+  const rollTopic = useStore((s) => s.rollTopic);
+  const deleteTopic = useStore((s) => s.deleteTopic);
+  const restoreTopic = useStore((s) => s.restoreTopic);
+  const addSession = useStore((s) => s.addSession);
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [allCovered, setAllCovered] = useState(false);

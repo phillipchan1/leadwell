@@ -114,26 +114,24 @@ type Line =
 export type TableVariant = "table" | "tree";
 
 export function TableView({ variant = "table" }: { variant?: TableVariant } = {}) {
-  const {
-    teams,
-    people,
-    domains,
-    capacities,
-    meetings,
-    sessions,
-    topics,
-    healthScan,
-    toggleHealthScan,
-    setHealthScan,
-    setHealth,
-    setHealthNote,
-    selectTeam,
-    selectPerson,
-    selectedTeamId,
-    selectedPersonId,
-    treeDomainId,
-    treeMode,
-  } = useStore();
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
+  const domains = useStore((s) => s.domains);
+  const capacities = useStore((s) => s.capacities);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const healthScan = useStore((s) => s.healthScan);
+  const toggleHealthScan = useStore((s) => s.toggleHealthScan);
+  const setHealthScan = useStore((s) => s.setHealthScan);
+  const setHealth = useStore((s) => s.setHealth);
+  const setHealthNote = useStore((s) => s.setHealthNote);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectedTeamId = useStore((s) => s.selectedTeamId);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const treeDomainId = useStore((s) => s.treeDomainId);
+  const treeMode = useStore((s) => s.treeMode);
 
   const isTree = variant === "tree";
 
