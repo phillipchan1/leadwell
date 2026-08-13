@@ -14,6 +14,7 @@ import {
 } from "../lib/topics";
 import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
+import { deleteWithUndo } from "../lib/toasts";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -61,17 +62,16 @@ export function TopicBoard({
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
 }) {
-  const {
-    sessions,
-    topics,
-    addTopic,
-    updateTopic,
-    placeTopic,
-    coverTopic,
-    rollTopic,
-    deleteTopic,
-    addSession,
-  } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const addTopic = useStore((s) => s.addTopic);
+  const updateTopic = useStore((s) => s.updateTopic);
+  const placeTopic = useStore((s) => s.placeTopic);
+  const coverTopic = useStore((s) => s.coverTopic);
+  const rollTopic = useStore((s) => s.rollTopic);
+  const deleteTopic = useStore((s) => s.deleteTopic);
+  const restoreTopic = useStore((s) => s.restoreTopic);
+  const addSession = useStore((s) => s.addSession);
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [allCovered, setAllCovered] = useState(false);
@@ -291,7 +291,13 @@ export function TopicBoard({
                     onCover={(covered) => coverTopic(t.id, covered)}
                     onRoll={() => roll(t)}
                     onBacklog={() => placeTopic(t.id, { lane: "backlog" })}
-                    onDelete={() => deleteTopic(t.id)}
+                    onDelete={() =>
+                      deleteWithUndo(
+                        "Topic deleted.",
+                        () => deleteTopic(t.id),
+                        () => restoreTopic(t)
+                      )
+                    }
                   />
                 ))}
               </ul>

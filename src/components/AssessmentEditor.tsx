@@ -39,7 +39,9 @@ export function AssessmentEditor({
   self?: boolean;
   onClose: () => void;
 }) {
-  const { me, updatePerson, updateMe } = useStore();
+  const me = useStore((s) => s.me);
+  const updatePerson = useStore((s) => s.updatePerson);
+  const updateMe = useStore((s) => s.updateMe);
   const subject = self ? me : person;
   if (!subject) {
     throw new Error("AssessmentEditor requires person or self");
@@ -52,6 +54,13 @@ export function AssessmentEditor({
 
   const [top5, setTop5] = useState<string[]>(
     subject.assessments.cliftonTop5 ?? []
+  );
+  // 34 themes in a 144px scroll box is the wrong control for a thumb no matter
+  // how big the chips are. Typing three letters is how you find "Woo".
+  const [themeQuery, setThemeQuery] = useState("");
+  const visibleThemes = ALL_THEMES.filter(
+    (t) =>
+      !top5.includes(t) && t.toLowerCase().includes(themeQuery.trim().toLowerCase())
   );
   const [enneagramType, setEnneagramType] = useState(() => {
     const m = subject.assessments.enneagram?.match(/^([1-9])/);
@@ -159,9 +168,14 @@ export function AssessmentEditor({
                 <li key={t}>
                   <button
                     onClick={() => toggleTheme(t)}
-                    className="rounded-full px-2 py-0.5 text-xs font-medium text-white"
+                    /* Tapping removes, so this one especially can't be a 22px
+                       target sitting 4px from its neighbour. Padding grows on
+                       touch; the type doesn't, so the desktop weight is
+                       unchanged. */
+                    className="outline-focus-ring touch:min-h-11 touch:px-3.5 rounded-full px-2 py-0.5 text-xs font-medium text-white focus-visible:outline-2 focus-visible:outline-offset-2"
                     style={{ backgroundColor: DOMAIN_COLOR[THEME_DOMAIN[t]] }}
                     title="Click to remove"
+                    aria-label={`Remove ${t} from the top five`}
                   >
                     {i + 1}. {t} ✕
                   </button>
@@ -169,13 +183,22 @@ export function AssessmentEditor({
               ))}
             </ol>
           )}
-          <div className="scroll-contain flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-lg border border-stone-200 p-2 dark:border-stone-800">
-            {ALL_THEMES.filter((t) => !top5.includes(t)).map((t) => (
+          <Input
+            size="sm"
+            className="mb-1.5"
+            placeholder="Find a theme…"
+            aria-label="Find a CliftonStrengths theme"
+            value={themeQuery}
+            onChange={setThemeQuery}
+            isDisabled={top5.length >= 5}
+          />
+          <div className="scroll-contain touch:max-h-72 flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-lg border border-stone-200 p-2 touch:gap-2 dark:border-stone-800">
+            {visibleThemes.map((t) => (
               <button
                 key={t}
                 onClick={() => toggleTheme(t)}
                 disabled={top5.length >= 5}
-                className="rounded-full border px-2 py-0.5 text-xs disabled:opacity-40"
+                className="outline-focus-ring touch:min-h-11 touch:px-3.5 rounded-full border px-2 py-0.5 text-xs focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
                 style={{
                   borderColor: DOMAIN_COLOR[THEME_DOMAIN[t]] + "66",
                   color: DOMAIN_COLOR[THEME_DOMAIN[t]],
@@ -184,6 +207,11 @@ export function AssessmentEditor({
                 {t}
               </button>
             ))}
+            {visibleThemes.length === 0 && (
+              <p className="px-1 py-2 text-xs text-stone-500 dark:text-stone-400">
+                No theme matches "{themeQuery}".
+              </p>
+            )}
           </div>
         </div>
 

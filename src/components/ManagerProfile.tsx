@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import type { Manager } from "../types";
 import { Avatar } from "./Avatar";
 import { TintBadge, ProfileAdminLinks, SectionTitle } from "./ui";
@@ -36,22 +37,17 @@ export function ManagerProfile({
   manager: Manager;
   density?: Density;
 }) {
-  const {
-    domains,
-    meetings,
-    sessions,
-    notes,
-    trackMeeting,
-    addSession,
-    section,
-    setSection,
-    selectManager,
-    updateManagerLeadUp,
-    deleteManager,
-    modal,
-    askAIOpen,
-    settingsOpen,
-  } = useStore();
+  const domains = useStore((s) => s.domains);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const notes = useStore((s) => s.notes);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const addSession = useStore((s) => s.addSession);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const selectManager = useStore((s) => s.selectManager);
+  const updateManagerLeadUp = useStore((s) => s.updateManagerLeadUp);
+  const deleteManager = useStore((s) => s.deleteManager);
 
   const domain = domains.find((d) => d.id === manager.domainId);
   const [editing, setEditing] = useState(false);
@@ -86,16 +82,9 @@ export function ManagerProfile({
     setMode("meetings");
   };
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (modal || askAIOpen || settingsOpen || editing) return;
-      e.preventDefault();
-      selectManager(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modal, askAIOpen, settingsOpen, editing, selectManager]);
+  // Ordering comes from the stack, not from a guard list — an editor
+  // opened inside this panel registers after it and gets Escape first.
+  useDismiss(() => selectManager(null));
 
   return (
     <aside

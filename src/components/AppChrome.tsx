@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import {
   AlertCircle,
   BarChartSquare02,
   CalendarCheck01,
   Dataflow03,
   DotsVertical,
+  Keyboard01,
   Moon01,
   Rows03,
   Settings01,
@@ -14,6 +21,8 @@ import {
 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import { useStore, type Tab } from "../store/useStore";
+import { SkeletonLines } from "./Skeleton";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { cx } from "@/utils/cx";
 
 export const TABS: {
@@ -72,26 +81,91 @@ export function BottomNav() {
  * Settings and the theme switch, collapsed behind one control below `sm`
  * where the header has no room for a three-button cluster beside the wordmark.
  */
-export function HeaderOverflow() {
-  const { dark, toggleDark, setSettingsOpen } = useStore();
+export function HeaderOverflow({
+  onShortcuts,
+}: {
+  /** Opens the shortcut list, which App owns. */
+  onShortcuts: () => void;
+}) {
+  const dark = useStore((s) => s.dark);
+  const toggleDark = useStore((s) => s.toggleDark);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  /* The design-system Button renders a React Aria button and doesn't forward a
+     ref, so the trigger is found through the wrapper it already has. */
+  const trigger = () =>
+    wrapRef.current?.querySelector("button") as HTMLButtonElement | null;
+
+  const close = useCallback((returnFocus = true) => {
+    setOpen(false);
+    // Focus has to come back to the trigger or a keyboard user is dropped at
+    // the top of the document with no idea where they were.
+    if (returnFocus) trigger()?.focus();
+  }, []);
+
+  // Escape goes through the shared stack so this can never close a panel
+  // behind it instead of itself.
+  useDismiss(() => close(), open);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (!wrapRef.current?.contains(e.target as Node)) close(false);
     };
     document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open, close]);
+
+  // Opening a menu puts you on its first item — otherwise Tab walks you into
+  // whatever follows in the DOM and the menu is unreachable by keyboard.
+  useEffect(() => {
+    if (open) itemsRef.current[0]?.focus();
   }, [open]);
+
+  /** Roving focus. A `role="menu"` is expected to answer arrow keys. */
+  const onMenuKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const items = itemsRef.current.filter(Boolean) as HTMLButtonElement[];
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const delta = e.key === "ArrowDown" ? 1 : -1;
+      items[(at + delta + items.length) % items.length]?.focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      items[0]?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      items[items.length - 1]?.focus();
+    } else if (e.key === "Tab") {
+      // A menu is a trap while it's open; Tab dismisses rather than escaping
+      // into the page behind it.
+      close();
+    }
+  };
+
+  const ITEM_CLASS =
+    "outline-focus-ring flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-stone-700 focus-visible:outline-2 focus-visible:-outline-offset-2 active:bg-stone-100 dark:text-stone-200 dark:active:bg-stone-800";
+
+  const items = [
+    {
+      label: "Settings",
+      icon: Settings01,
+      run: () => setSettingsOpen(true),
+    },
+    {
+      label: dark ? "Light mode" : "Dark mode",
+      icon: dark ? Sun : Moon01,
+      run: toggleDark,
+    },
+    {
+      label: "Keyboard shortcuts",
+      icon: Keyboard01,
+      run: onShortcuts,
+    },
+  ];
 
   return (
     <>
@@ -122,40 +196,71 @@ export function HeaderOverflow() {
         {open && (
           <div
             role="menu"
+            aria-label="More"
+            onKeyDown={onMenuKeyDown}
             className="absolute right-0 z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-xl dark:border-stone-700 dark:bg-stone-900"
           >
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                setSettingsOpen(true);
-              }}
-              className="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-stone-700 active:bg-stone-100 dark:text-stone-200 dark:active:bg-stone-800"
-            >
-              <Settings01 className="size-4.5 shrink-0 text-stone-500 dark:text-stone-400" />
-              Settings
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setOpen(false);
-                toggleDark();
-              }}
-              className="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-stone-700 active:bg-stone-100 dark:text-stone-200 dark:active:bg-stone-800"
-            >
-              {dark ? (
-                <Sun className="size-4.5 shrink-0 text-stone-500 dark:text-stone-400" />
-              ) : (
-                <Moon01 className="size-4.5 shrink-0 text-stone-500 dark:text-stone-400" />
-              )}
-              {dark ? "Light mode" : "Dark mode"}
-            </button>
+            {items.map(({ label, icon: Icon, run }, i) => (
+              <button
+                key={label}
+                ref={(el) => {
+                  itemsRef.current[i] = el;
+                }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                onClick={() => {
+                  close();
+                  run();
+                }}
+                className={ITEM_CLASS}
+              >
+                <Icon
+                  className="size-4.5 shrink-0 text-stone-500 dark:text-stone-400"
+                  aria-hidden="true"
+                />
+                {label}
+              </button>
+            ))}
           </div>
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Persistent read-out of whether the last edit reached the server.
+ *
+ * Quiet by design: at rest it is an empty reserved box, so the header does not
+ * shift when a write starts. Only the two states worth interrupting for get
+ * ink — a pulse while writing, an amber dot while a retry is outstanding. The
+ * announcement is the toast's job (`useSyncToasts`); this is the thing you can
+ * look at afterwards to check, which is why it carries a label but is not a
+ * live region — it would otherwise say everything twice.
+ */
+export function SyncIndicator() {
+  const syncStatus = useStore((s) => s.syncStatus);
+
+  if (syncStatus === "idle") {
+    return <span className="size-2.5 shrink-0" aria-hidden="true" />;
+  }
+
+  const failing = syncStatus === "error";
+  const label = failing ? "Not saved — retrying" : "Saving…";
+
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={cx(
+        "size-2.5 shrink-0 rounded-full",
+        failing
+          ? "bg-amber-500 dark:bg-amber-400"
+          : "animate-pulse bg-stone-300 dark:bg-stone-600"
+      )}
+    />
   );
 }
 
@@ -172,11 +277,7 @@ export function LoadingSplash() {
         height={56}
         className="rounded-[14px] shadow-sm"
       />
-      <div className="w-full max-w-xs space-y-2.5" aria-hidden="true">
-        <div className="h-3 w-2/3 animate-pulse rounded-full bg-stone-200 dark:bg-stone-800" />
-        <div className="h-3 w-full animate-pulse rounded-full bg-stone-200 [animation-delay:120ms] dark:bg-stone-800" />
-        <div className="h-3 w-5/6 animate-pulse rounded-full bg-stone-200 [animation-delay:240ms] dark:bg-stone-800" />
-      </div>
+      <SkeletonLines count={3} className="w-full max-w-xs" />
       <p className="text-sm text-stone-500 dark:text-stone-400">
         Loading your org…
       </p>

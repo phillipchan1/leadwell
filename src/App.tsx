@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
 import { parseRoute, routePath } from "./lib/routes";
@@ -9,6 +9,10 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
 import { ConfirmHost } from "./components/ConfirmDialog";
+import { ToastHost } from "./components/Toast";
+import { ModalHost } from "./components/ModalHost";
+import { CreateMenu } from "./components/CreateMenu";
+import { ShortcutsModal } from "./components/Shortcuts";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -22,9 +26,12 @@ import {
   HeaderOverflow,
   LoadErrorScreen,
   LoadingSplash,
+  SyncIndicator,
   TABS,
 } from "./components/AppChrome";
+import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
+import { useSyncToasts } from "./hooks/use-sync-toasts";
 import { cx } from "@/utils/cx";
 
 /**
@@ -53,9 +60,9 @@ const SessionEditorView = lazy(() =>
 function PaneFallback() {
   return (
     <div className="space-y-3 p-1" aria-hidden="true">
-      <div className="h-6 w-40 animate-pulse rounded-md bg-stone-200 dark:bg-stone-800" />
-      <div className="h-32 animate-pulse rounded-xl bg-stone-200/70 dark:bg-stone-800/70" />
-      <div className="h-32 animate-pulse rounded-xl bg-stone-200/50 [animation-delay:150ms] dark:bg-stone-800/50" />
+      <Skeleton shape="line" className="h-6 w-40" />
+      <Skeleton shape="block" className="h-32" fade={0.7} />
+      <Skeleton shape="block" className="h-32" index={1} fade={0.5} />
     </div>
   );
 }
@@ -137,26 +144,50 @@ export default function App() {
   useDropStaleSelection();
   // Above every phase gate: the sign-in screen has a field too.
   useKeyboardInset();
+  // Likewise above the gates — a failed write has to be announced on the
+  // session-editor route, which renders its own chrome and no header.
+  useSyncToasts();
 
-  const {
-    phase,
-    tab,
-    setTab,
-    people,
-    teams,
-    focused,
-    sessionId,
-    askAIOpen,
-    setAskAIOpen,
-    settingsOpen,
-    setSettingsOpen,
-  } = useStore();
+  const phase = useStore((s) => s.phase);
+  const tab = useStore((s) => s.tab);
+  const setTab = useStore((s) => s.setTab);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const focused = useStore((s) => s.focused);
+  const sessionId = useStore((s) => s.sessionId);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
+  const settingsOpen = useStore((s) => s.settingsOpen);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const selected = useSelectedEntity();
 
   const dark = useStore((s) => s.dark);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
+
+  /**
+   * `?` opens the shortcut list. Ignored while typing, obviously — and also
+   * while a modifier is held, so it can't shadow a browser or OS binding.
+   */
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (
+        el?.isContentEditable ||
+        el?.tagName === "INPUT" ||
+        el?.tagName === "TEXTAREA" ||
+        el?.tagName === "SELECT"
+      )
+        return;
+      e.preventDefault();
+      setShortcutsOpen(true);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Auth/loading gate: only the "ready" phase renders the full app.
   if (phase === "loading") return <LoadingSplash />;
@@ -176,6 +207,11 @@ export default function App() {
         </Suspense>
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         <ConfirmHost />
+        <ToastHost />
+        <ModalHost />
+        {shortcutsOpen && (
+          <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
+        )}
       </div>
     );
   }
@@ -196,10 +232,12 @@ export default function App() {
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <SyncIndicator />
+          <CreateMenu />
           <Button size="sm" onClick={() => setAskAIOpen(true)}>
             ✦ Ask AI
           </Button>
-          <HeaderOverflow />
+          <HeaderOverflow onShortcuts={() => setShortcutsOpen(true)} />
         </div>
       </header>
 
@@ -270,6 +308,11 @@ export default function App() {
       )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ConfirmHost />
+      <ToastHost />
+      <ModalHost />
+      {shortcutsOpen && (
+        <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
+      )}
     </div>
   );
 }

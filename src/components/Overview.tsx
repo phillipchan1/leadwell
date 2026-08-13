@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import { DOMAINS } from "../data/frameworks";
 import {
@@ -11,6 +11,7 @@ import {
   STATE_ORDER,
   isBehind,
   readinessFor,
+  todayISO,
 } from "../lib/readiness";
 import { allLooseTopics } from "../lib/topics";
 import {
@@ -31,83 +32,117 @@ import {
 } from "../lib/prayer";
 import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
 import { Card, SectionTitle } from "./ui";
+import { SkeletonLines } from "./Skeleton";
 import { Button } from "@/components/base/buttons/button";
 import { Avatar } from "./Avatar";
 import { HealthBar } from "./Health";
 import { PrayerIcon, PrayerMark } from "./Prayer";
 
 export function Overview() {
-  const {
-    people,
-    teams,
-    meetings,
-    sessions,
-    topics,
-    managers,
-    prayers,
-    selectPerson,
-    selectTeam,
-    selectManager,
-    setTab,
-    setHealthScan,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const managers = useStore((s) => s.managers);
+  const prayers = useStore((s) => s.prayers);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectManager = useStore((s) => s.selectManager);
+  const setTab = useStore((s) => s.setTab);
+  const setHealthScan = useStore((s) => s.setHealthScan);
   const [brief, setBrief] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const keyed = hasApiKey();
 
-  const unassessed = people.filter((p) => !hasLeadershipRead(p));
-  const spots = blindSpots(people);
-  const counts = domainCounts(people);
-  const openTopics = topics.filter((t) => t.status === "open");
+  /**
+   * ── Why everything below is memoized ──────────────────────────────────────
+   *
+   * This file had no `useMemo` at all, and it is now the tab the app opens on.
+   * Every value here is a scan over the whole org — `needAttention` calls
+   * `readinessFor` per person — and they were all recomputed on any render,
+   * including one caused by typing in the AI brief box.
+   *
+   * The dependency arrays are the collections each value genuinely reads, so
+   * setting a health level redraws the health card without re-deriving the
+   * prayer roll beside it.
+   */
+  const unassessed = useMemo(
+    () => people.filter((p) => !hasLeadershipRead(p)),
+    [people]
+  );
+  const spots = useMemo(() => blindSpots(people), [people]);
+  const counts = useMemo(() => domainCounts(people), [people]);
+  const openTopics = useMemo(
+    () => topics.filter((t) => t.status === "open"),
+    [topics]
+  );
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   // Planned into a meeting that's already been and gone. The one number worth
   // putting on the dashboard, because nothing else surfaces it.
-  const loose = allLooseTopics(topics, sessions, today);
-  const upcoming = sessions
-    .filter((o) => o.nextDate && o.nextDate >= today)
-    .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
+  const loose = useMemo(
+    () => allLooseTopics(topics, sessions, today),
+    [topics, sessions, today]
+  );
+  const upcoming = useMemo(
+    () =>
+      sessions
+        .filter((o) => o.nextDate && o.nextDate >= today)
+        .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!)),
+    [sessions, today]
+  );
   // Readiness, not a blanket 30-day rule: someone on a quarterly rhythm isn't
   // neglected at day 31, and someone weekly is already behind by then.
-  const needAttention = people
-    .flatMap((p) => {
-      // Worst-of when they have more than one meeting — one row per person,
-      // showing the one that's actually in trouble.
-      const readiness = readinessFor("person", p.id, {
-        meetings,
-        sessions,
-        topics,
-      });
-      if (!readiness) return [];
-      return isBehind(readiness.state) ? [{ person: p, readiness }] : [];
-    })
-    .sort(
-      (a, b) =>
-        STATE_ORDER.indexOf(a.readiness.state) -
-        STATE_ORDER.indexOf(b.readiness.state)
-    );
+  const needAttention = useMemo(
+    () =>
+      people
+        .flatMap((p) => {
+          // Worst-of when they have more than one meeting — one row per person,
+          // showing the one that's actually in trouble.
+          const readiness = readinessFor("person", p.id, {
+            meetings,
+            sessions,
+            topics,
+          });
+          if (!readiness) return [];
+          return isBehind(readiness.state) ? [{ person: p, readiness }] : [];
+        })
+        .sort(
+          (a, b) =>
+            STATE_ORDER.indexOf(a.readiness.state) -
+            STATE_ORDER.indexOf(b.readiness.state)
+        ),
+    [people, meetings, sessions, topics]
+  );
 
   // The health scan, boiled down to the one question worth a card: what am I
   // carrying that I've already told myself is in trouble?
-  const healthRoll = rollUpHealth([
-    ...teams.map((t) => t.health),
-    ...people.map((p) => p.health),
-  ]);
-  const weakest = [
-    ...teams.flatMap((t) =>
-      t.health && needsAttention(t.health.level)
-        ? [{ kind: "team" as const, id: t.id, name: t.name, health: t.health }]
-        : []
-    ),
-    ...people.flatMap((p) =>
-      p.health && needsAttention(p.health.level)
-        ? [{ kind: "person" as const, id: p.id, name: p.name, health: p.health, photo: p.photo }]
-        : []
-    ),
-  ].sort(
-    (a, b) =>
-      HEALTH_LEVELS.indexOf(b.health.level) - HEALTH_LEVELS.indexOf(a.health.level)
+  const healthRoll = useMemo(
+    () =>
+      rollUpHealth([...teams.map((t) => t.health), ...people.map((p) => p.health)]),
+    [teams, people]
+  );
+  const weakest = useMemo(
+    () =>
+      [
+        ...teams.flatMap((t) =>
+          t.health && needsAttention(t.health.level)
+            ? [{ kind: "team" as const, id: t.id, name: t.name, health: t.health }]
+            : []
+        ),
+        ...people.flatMap((p) =>
+          p.health && needsAttention(p.health.level)
+            ? [{ kind: "person" as const, id: p.id, name: p.name, health: p.health, photo: p.photo }]
+            : []
+        ),
+      ].sort(
+        (a, b) =>
+          HEALTH_LEVELS.indexOf(b.health.level) -
+          HEALTH_LEVELS.indexOf(a.health.level)
+      ),
+    [teams, people]
   );
 
   /**
@@ -115,47 +150,56 @@ export function Overview() {
    * dashboard: who I'm carrying, and who I've quietly stopped praying for.
    * Sorted by silence, longest first — that's the whole point of the card.
    */
-  const carried = [
-    ...teams.flatMap((t) =>
-      t.prayer
-        ? [{ kind: "team" as const, id: t.id, name: t.name, prayer: t.prayer }]
-        : []
-    ),
-    ...people.flatMap((p) =>
-      p.prayer
-        ? [
-            {
-              kind: "person" as const,
-              id: p.id,
-              name: p.name,
-              photo: p.photo,
-              prayer: p.prayer,
-            },
-          ]
-        : []
-    ),
-    ...managers.flatMap((m) =>
-      m.prayer
-        ? [
-            {
-              kind: "manager" as const,
-              id: m.id,
-              name: m.name,
-              photo: m.photo,
-              prayer: m.prayer,
-            },
-          ]
-        : []
-    ),
-  ].sort(
-    (a, b) => (daysSincePrayed(b.prayer) ?? 1e6) - (daysSincePrayed(a.prayer) ?? 1e6)
+  const carried = useMemo(
+    () =>
+      [
+        ...teams.flatMap((t) =>
+          t.prayer
+            ? [{ kind: "team" as const, id: t.id, name: t.name, prayer: t.prayer }]
+            : []
+        ),
+        ...people.flatMap((p) =>
+          p.prayer
+            ? [
+                {
+                  kind: "person" as const,
+                  id: p.id,
+                  name: p.name,
+                  photo: p.photo,
+                  prayer: p.prayer,
+                },
+              ]
+            : []
+        ),
+        ...managers.flatMap((m) =>
+          m.prayer
+            ? [
+                {
+                  kind: "manager" as const,
+                  id: m.id,
+                  name: m.name,
+                  photo: m.photo,
+                  prayer: m.prayer,
+                },
+              ]
+            : []
+        ),
+      ].sort(
+        (a, b) =>
+          (daysSincePrayed(b.prayer) ?? 1e6) - (daysSincePrayed(a.prayer) ?? 1e6)
+      ),
+    [teams, people, managers]
   );
-  const prayerRoll = rollUpPrayer([
-    ...teams.map((t) => t.prayer),
-    ...people.map((p) => p.prayer),
-    ...managers.map((m) => m.prayer),
-  ]);
-  const answers = recentAnswers(prayers);
+  const prayerRoll = useMemo(
+    () =>
+      rollUpPrayer([
+        ...teams.map((t) => t.prayer),
+        ...people.map((p) => p.prayer),
+        ...managers.map((m) => m.prayer),
+      ]),
+    [teams, people, managers]
+  );
+  const answers = useMemo(() => recentAnswers(prayers), [prayers]);
 
   const openPrayer = (kind: "team" | "person" | "manager", id: string) => {
     if (kind === "person") selectPerson(id, "prayer");
@@ -212,11 +256,7 @@ export function Overview() {
         {loading && !brief ? (
           /* Reserve the height the answer will occupy so the card doesn't
              reflow on every streamed token. */
-          <div className="min-h-[7rem] space-y-2.5" aria-hidden="true">
-            <div className="h-3.5 w-full animate-pulse rounded bg-stone-200 dark:bg-stone-800" />
-            <div className="h-3.5 w-11/12 animate-pulse rounded bg-stone-200 [animation-delay:120ms] dark:bg-stone-800" />
-            <div className="h-3.5 w-4/5 animate-pulse rounded bg-stone-200 [animation-delay:240ms] dark:bg-stone-800" />
-          </div>
+          <SkeletonLines count={3} className="min-h-[7rem]" />
         ) : brief ? (
           <div className="min-h-[7rem] text-sm leading-relaxed whitespace-pre-wrap text-stone-700 dark:text-stone-200">
             {brief}

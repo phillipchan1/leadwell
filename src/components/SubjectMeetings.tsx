@@ -14,6 +14,7 @@ import {
 } from "../lib/readiness";
 import { topicsFor } from "../lib/topics";
 import { MeetingPlanner } from "./MeetingPlanner";
+import { MeetingScheduleFields } from "./MeetingScheduleFields";
 import type { BoardDirection } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
@@ -52,7 +53,10 @@ export function SubjectMeetings({
   /** Entry to open on arrival, when a readiness fix sent you here. */
   focusSessionId?: string;
 }) {
-  const { meetings, trackMeeting, createMeeting, openSession } = useStore();
+  const meetings = useStore((s) => s.meetings);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const createMeeting = useStore((s) => s.createMeeting);
+  const openSession = useStore((s) => s.openSession);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -246,6 +250,12 @@ function MeetingBlock({
             updateMeeting(meeting.id, { name: name.trim() || undefined });
           }
         }}
+      />
+
+      <MeetingScheduleFields
+        meeting={meeting}
+        size="sm"
+        onChange={(patch) => updateMeeting(meeting.id, patch)}
       />
 
       <form

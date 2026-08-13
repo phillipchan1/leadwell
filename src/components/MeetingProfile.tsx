@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import type { MeetingRhythm, MeetingRole, TrackedMeeting } from "../types";
@@ -15,6 +16,7 @@ import { SectionTitle, TintBadge } from "./ui";
 import { MeetingPlanner } from "./MeetingPlanner";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
+import { MeetingScheduleFields } from "./MeetingScheduleFields";
 import { confirmAction } from "./ConfirmDialog";
 import {
   MEETING_LABEL,
@@ -22,7 +24,6 @@ import {
   RHYTHM_OPTIONS,
   STATE_COLOR,
   STATE_LABEL,
-  ANCHOR_WEEKDAY_OPTIONS,
   formatCountdown,
   meetingSubjectName,
   meetingTitle,
@@ -67,19 +68,19 @@ export function MeetingProfile({
   meeting: TrackedMeeting;
   density?: Density;
 }) {
-  const {
-    people,
-    teams,
-    managers,
-    sessions,
-    topics,
-    section,
-    setSection,
-    openSession,
-    updateMeeting,
-    untrackMeeting,
-    clearSelection,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const openSession = useStore((s) => s.openSession);
+  const updateMeeting = useStore((s) => s.updateMeeting);
+  const untrackMeeting = useStore((s) => s.untrackMeeting);
+  const clearSelection = useStore((s) => s.clearSelection);
+  // Escape closed every other entity panel and not this one.
+  useDismiss(() => clearSelection());
 
   const tab: MeetingTab = isMeetingTab(section) ? section : "plan";
   const pad = density === "focus" ? "p-6" : "p-4";
@@ -294,37 +295,7 @@ function MeetingSettings({
             }
           />
         )}
-        {meeting.rhythm !== "as_needed" && (
-          <NativeSelect
-            size="md"
-            label="Usually on"
-            hint="Projected dates snap here. Leave unset to echo the last logged date."
-            value={
-              meeting.anchorWeekday !== undefined
-                ? String(meeting.anchorWeekday)
-                : ""
-            }
-            onChange={(e) =>
-              onChange({
-                anchorWeekday: e.target.value
-                  ? Number(e.target.value)
-                  : undefined,
-              })
-            }
-            options={[
-              { label: "Not set", value: "" },
-              ...ANCHOR_WEEKDAY_OPTIONS,
-            ]}
-          />
-        )}
-        <Input
-          size="md"
-          type="date"
-          label="Next one is on"
-          hint="An explicit booking beats the rhythm projection."
-          value={meeting.nextDate ?? ""}
-          onChange={(value) => onChange({ nextDate: value || undefined })}
-        />
+        <MeetingScheduleFields meeting={meeting} onChange={onChange} />
         <NativeSelect
           size="md"
           label="My part in it"

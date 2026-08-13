@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import {
   DOMAIN_COLOR,
   DOMAINS,
@@ -39,7 +40,12 @@ function QuickAction({
 
 /** The signed-in leader's own profile — identity + self-assessment. */
 export function MeProfile({ density: _density = "peek" }: { density?: Density }) {
-  const { me, teams, people } = useStore();
+  const me = useStore((s) => s.me);
+  const selectMe = useStore((s) => s.selectMe);
+  // Escape closed every other entity panel and not this one.
+  useDismiss(() => selectMe(false));
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
   const read = derivedRead(me);
   const enn = parseEnneagram(me.assessments.enneagram);
   const top5 = me.assessments.cliftonTop5 ?? [];

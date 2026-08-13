@@ -29,14 +29,12 @@ type Row = {
  * them. Adding nine volunteers must not mean nine prompts.
  */
 export function TriageModal({ onClose }: { onClose: () => void }) {
-  const {
-    people,
-    teams,
-    managers,
-    meetings,
-    trackMeeting,
-    setNoMeeting,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const meetings = useStore((s) => s.meetings);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const setNoMeeting = useStore((s) => s.setNoMeeting);
   const [rhythm, setRhythm] = useState<MeetingRhythm>("biweekly");
 
   // Teams handed to a direct report — and anyone on them — are already decided:

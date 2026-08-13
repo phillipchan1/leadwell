@@ -6,6 +6,7 @@ import { X } from "@untitledui/icons";
 import { MarkdownBody } from "./MarkdownBody";
 import { WritingPad } from "./WritingPad";
 import { autoFocusUnlessTouch } from "../lib/pointer";
+import { confirmAction } from "./ConfirmDialog";
 
 /**
  * Dated notes about one subject. Keyed by subject id, so it serves people I
@@ -22,7 +23,10 @@ export function NotesPanel({
   /** Prompt in the composer; the job of a note differs up vs down. */
   placeholder?: string;
 }) {
-  const { notes, addNote, updateNote, deleteNote } = useStore();
+  const notes = useStore((s) => s.notes);
+  const addNote = useStore((s) => s.addNote);
+  const updateNote = useStore((s) => s.updateNote);
+  const deleteNote = useStore((s) => s.deleteNote);
   const mine = notes
     .filter((n) => n.personId === subjectId)
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -96,7 +100,15 @@ export function NotesPanel({
                 icon={X}
                 tooltip="Delete note"
                 className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                onClick={() => deleteNote(n.id)}
+                onClick={async () => {
+                  if (
+                    await confirmAction({
+                      title: "Delete this note?",
+                      body: `What you wrote on ${n.date} goes with it.`,
+                    })
+                  )
+                    deleteNote(n.id);
+                }}
               />
             </div>
             {editingId === n.id ? (

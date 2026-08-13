@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import type { Person } from "../types";
 import {
   DOMAIN_COLOR,
@@ -16,6 +17,7 @@ import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
 import { TintBadge, ProgressBar, ProfileAdminLinks, SectionTitle } from "./ui";
 import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
 import { EntityModeTabs } from "./EntityModeTabs";
 
 import { AssessmentEditor } from "./AssessmentEditor";
@@ -34,6 +36,7 @@ import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
 import { confirmAction } from "./ConfirmDialog";
+import { deleteWithUndo } from "../lib/toasts";
 
 /**
  * Person panel, in the five modes every entity shares (see lib/entityModes).
@@ -51,30 +54,27 @@ export function PersonProfile({
   person: Person;
   density?: Density;
 }) {
-  const {
-    teams,
-    capacities,
-    section,
-    setSection,
-    selectPerson,
-    selectTeam,
-    deletePerson,
-    updateLeadUp,
-    setHealth,
-    setHealthNote,
-    modal,
-    askAIOpen,
-    settingsOpen,
-    meetings,
-    sessions,
-    goals,
-    addGoal,
-    updateGoal,
-    deleteGoal,
-    notes,
-    trackMeeting,
-    addSession,
-  } = useStore();
+  const teams = useStore((s) => s.teams);
+  const capacities = useStore((s) => s.capacities);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const deletePerson = useStore((s) => s.deletePerson);
+  const updateLeadUp = useStore((s) => s.updateLeadUp);
+  const setHealth = useStore((s) => s.setHealth);
+  const setHealthNote = useStore((s) => s.setHealthNote);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const goals = useStore((s) => s.goals);
+  const addGoal = useStore((s) => s.addGoal);
+  const updateGoal = useStore((s) => s.updateGoal);
+  const movePerson = useStore((s) => s.movePerson);
+  const deleteGoal = useStore((s) => s.deleteGoal);
+  const restoreGoal = useStore((s) => s.restoreGoal);
+  const notes = useStore((s) => s.notes);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const addSession = useStore((s) => s.addSession);
 
   const team = teams.find((t) => t.id === person.teamId);
   const capacity = capacities.find((c) => c.id === team?.capacityId);
@@ -116,32 +116,9 @@ export function PersonProfile({
     setFocusSessionId(undefined);
   }, [person.id]);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (
-        modal ||
-        askAIOpen ||
-        settingsOpen ||
-        editingAssessments ||
-        editingPerson ||
-        fillingProfile
-      )
-        return;
-      e.preventDefault();
-      selectPerson(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    modal,
-    askAIOpen,
-    settingsOpen,
-    editingAssessments,
-    editingPerson,
-    fillingProfile,
-    selectPerson,
-  ]);
+  // Ordering comes from the stack, not from a guard list — an editor
+  // opened inside this panel registers after it and gets Escape first.
+  useDismiss(() => selectPerson(null));
 
   /**
    * Send a failing readiness check where it gets fixed. Every fix now lands in
@@ -193,7 +170,7 @@ export function PersonProfile({
                     key={t.id}
                     type="button"
                     onClick={() => selectTeam(t.id)}
-                    className="rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-stone-100 px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
                   >
                     {t.name}
                   </button>
@@ -269,7 +246,13 @@ export function PersonProfile({
                           icon={X}
                           tooltip="Delete goal"
                           className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                          onClick={() => deleteGoal(g.id)}
+                          onClick={() =>
+                            deleteWithUndo(
+                              "Goal deleted.",
+                              () => deleteGoal(g.id),
+                              () => restoreGoal(g)
+                            )
+                          }
                         />
                       </div>
                       <input
@@ -505,6 +488,30 @@ export function PersonProfile({
             <section className="space-y-2">
               <SectionTitle>AI coach</SectionTitle>
               <AICoach person={person} />
+            </section>
+
+            {/* Moving someone between teams was drag-only on the canvas, which
+                meant it had no keyboard or screen-reader path at all — and
+                `movePerson` had been sitting in the store with no UI of any
+                kind, so on a phone it was simply impossible. Same shape as
+                TopicBoard's "Move to" select, which is the pattern the rest of
+                the app owes its drags. */}
+            <section className="space-y-2">
+              <SectionTitle>Team</SectionTitle>
+              <label className="flex flex-col gap-1">
+                <span className="sr-only">Move {person.name} to a team</span>
+                <NativeSelect
+                  size="sm"
+                  value={person.teamId ?? ""}
+                  onChange={(e) =>
+                    movePerson(person.id, e.target.value || undefined)
+                  }
+                  options={[
+                    { label: "No team — reports directly to me", value: "" },
+                    ...teams.map((tm) => ({ label: tm.name, value: tm.id })),
+                  ]}
+                />
+              </label>
             </section>
 
             <ProfileAdminLinks

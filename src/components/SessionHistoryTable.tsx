@@ -27,7 +27,9 @@ export function SessionHistoryTable({
   meetingId: string;
   onOpen: (sessionId: string) => void;
 }) {
-  const { sessions, meetings, topics } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const meetings = useStore((s) => s.meetings);
+  const topics = useStore((s) => s.topics);
   const meeting = meetings.find((m) => m.id === meetingId);
   const today = todayISO();
   const notesElsewhere = Boolean(meeting?.trackerUrl?.trim());

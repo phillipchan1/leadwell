@@ -1505,31 +1505,62 @@ label:focus-within > .field-label,
   }
 
   /* Underline tabs give up the 44px floor here — in landscape the pointer is
-     still a finger, but height is the scarcer resource. */
+     still a finger, but height is the scarcer resource. 36px is where that
+     trade stops being defensible: below it the finger starts missing, and a
+     missed tab costs more height (and more time) than the 8px saved. */
   [role="tab"] {
-    min-height: 2rem !important;
+    min-height: 2.25rem !important;
     padding-bottom: 0.375rem !important;
   }
 
-  /* Chrome buttons stop reserving a 44px box; the pointer is still a finger,
-     but in a 360px-tall window height is the scarcer resource. */
+  /* Same trade, same floor. These are the controls that close a panel and open
+     Settings — the two you least want to mis-tap mid-meeting. */
   .chrome-compact .group,
   header.chrome-compact button {
-    min-height: 1.75rem !important;
+    min-height: 2.25rem !important;
     padding-top: 0.25rem !important;
     padding-bottom: 0.25rem !important;
   }
 
-  /* The entity's own header is the single biggest consumer of height, and it
-     restates what the breadcrumb directly above it already says. Drop it here
-     and let the body have the room; everything in it also appears below. */
+  /* The entity header is the biggest single consumer of height here, and it
+     used to be dropped outright. But it carries the avatar, the role, the team
+     and the meeting dates — which is exactly the context a leader is holding in
+     their head while looking at this in landscape, mid-conversation. So it
+     collapses to one line (avatar + name + role) rather than disappearing. */
   .entity-header {
-    display: none;
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
   }
 
+  .entity-header > * {
+    align-items: center !important;
+  }
+
+  .entity-header-avatar {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    font-size: 0.625rem !important;
+  }
+
+  /* The second and later lines are what actually costs the height; the name
+     and role stay. */
   .entity-header-secondary {
     display: none;
   }
+}
+
+/* ── Focus ring baseline ──
+   84 raw <button>s across 29 files each re-derived their own hover, active and
+   disabled treatment, and most of them never got as far as a focus ring — so
+   tabbing through a screen lost the caret repeatedly even where the tab order
+   itself was correct.
+
+   `:where()` contributes zero specificity, so this is a floor and not a fight:
+   anything that declares its own outline (the design-system Button, the nodes
+   on the canvas) still wins, and everything else stops being invisible. */
+:where(button, [role="button"], [role="menuitem"], a[href], select, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 /* ── Touch baseline (must stay last) ──

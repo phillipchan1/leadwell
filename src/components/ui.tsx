@@ -8,6 +8,7 @@ import {
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { useHistoryDismiss, useSwipeDismiss } from "@/hooks/use-sheet";
+import { useDismiss } from "@/hooks/use-dismiss";
 
 /**
  * Pill badge tinted by an arbitrary runtime color (domain and capacity colors
@@ -61,17 +62,53 @@ export function Card({
   className = "",
   onClick,
   style,
+  label,
 }: {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
   style?: CSSProperties;
+  /** Accessible name when the card is clickable. */
+  label?: string;
 }) {
+  /**
+   * A clickable card is a button, and has to answer to a keyboard like one.
+   *
+   * Every node on the canvas is one of these. They had `onClick` and
+   * `cursor-pointer` and nothing else — no role, no tabIndex, no key handler —
+   * so on the app's most complex screen a keyboard user could move focus
+   * around and select nothing. React Flow makes the *wrapper* focusable, but
+   * Enter there never reached this div's handler.
+   *
+   * Space is preventDefault'd because on a `role="button"` it would otherwise
+   * scroll the page as well as activate.
+   */
+  const interactive = Boolean(onClick);
+
   return (
     <div
       onClick={onClick}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? label : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              // A key pressed inside a nested control (the hover-revealed X,
+              // an inline field) belongs to that control, not to the card.
+              if (e.target !== e.currentTarget) return;
+              e.preventDefault();
+              onClick?.();
+            }
+          : undefined
+      }
       style={style}
-      className={`rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900 ${className}`}
+      className={`rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900 ${
+        interactive
+          ? "outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 "
+          : ""
+      }${className}`}
     >
       {children}
     </div>
@@ -133,6 +170,12 @@ export function Modal({
 }) {
   // Android's Back closes the sheet rather than leaving the app.
   useHistoryDismiss(onClose);
+  /* Ordering only. React Aria already handles Escape for a focused dialog and
+     stops it propagating, so this almost never fires — but registering means
+     an overlay is always the top of the stack while it's open, so the surface
+     underneath can never take an Escape that was meant for this. That is what
+     the per-component guard lists used to be for. */
+  useDismiss(onClose);
   const { offset, dragging, handleProps } = useSwipeDismiss(onClose);
 
   return (

@@ -6,7 +6,8 @@ import { MeetingEditor } from "./MeetingEditor";
  * session route is active (`/person/:id/sessions/:sessionId`, etc.).
  */
 export function SessionEditorView() {
-  const { sessionId, closeSession } = useStore();
+  const sessionId = useStore((s) => s.sessionId);
+  const closeSession = useStore((s) => s.closeSession);
 
   if (!sessionId) return null;
 

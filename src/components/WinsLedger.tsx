@@ -4,6 +4,7 @@ import { SectionTitle } from "./ui";
 import { Input } from "@/components/base/input/input";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
+import { confirmAction } from "./ConfirmDialog";
 
 /**
  * Value banked with someone I report to, in *their* currency — recallable
@@ -77,7 +78,16 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                   icon={X}
                   tooltip="Delete win"
                   className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                  onClick={() => deleteWin(w.id)}
+                  onClick={async () => {
+                    if (
+                      await confirmAction({
+                        title: "Remove this win?",
+                        body: "It stops counting as evidence in your next review or ask.",
+                        confirmLabel: "Remove",
+                      })
+                    )
+                      deleteWin(w.id);
+                  }}
                 />
               </div>
             </div>

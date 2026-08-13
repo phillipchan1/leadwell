@@ -39,7 +39,9 @@ export function TrackerLink({
   subjectKind,
   subjectId,
 }: TrackerLinkProps) {
-  const { meetings, trackMeeting, updateMeeting } = useStore();
+  const meetings = useStore((s) => s.meetings);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const updateMeeting = useStore((s) => s.updateMeeting);
   const meeting = meetingId
     ? meetings.find((m) => m.id === meetingId)
     : meetingFor(meetings, subjectKind!, subjectId!);

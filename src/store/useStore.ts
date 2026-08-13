@@ -34,6 +34,7 @@ import { isDescendant, personDomainId } from "../lib/teams";
 import { supabase } from "../lib/supabase";
 import * as repo from "../lib/repo";
 import type { NodePosition, PersistedData } from "../lib/repo";
+import { clearDoc, loadDoc, saveDoc } from "../lib/docCache";
 import { emptyMe } from "../lib/repo";
 import {
   capUp,
@@ -278,9 +279,20 @@ type Store = PersistedData &
     updateTeamAction: (id: string, patch: Partial<Pick<TeamAction, "text" | "dueDate" | "done">>) => void;
     toggleTeamAction: (id: string) => void;
     deleteTeamAction: (id: string) => void;
+    /**
+     * Put a deleted record back exactly as it was, id and all — the other half
+     * of an Undo toast (see `deleteWithUndo`).
+     *
+     * Deliberately not `add*`: those mint a new id and a fresh `order`, which
+     * would break every reference to the record and move it in its list. Undo
+     * has to mean "that didn't happen", not "here's a similar one".
+     */
+    restoreTeamAction: (action: TeamAction) => void;
     addTeamGoal: (teamId: string, title: string) => void;
     updateTeamGoal: (id: string, patch: Partial<TeamGoal>) => void;
     deleteTeamGoal: (id: string) => void;
+    /** See `restoreTeamAction`. */
+    restoreTeamGoal: (goal: TeamGoal) => void;
     addTeamNote: (teamId: string, body: string) => void;
     deleteTeamNote: (id: string) => void;
     // people
@@ -331,6 +343,8 @@ type Store = PersistedData &
      */
     rollTopic: (id: string, sessionId?: string) => void;
     deleteTopic: (id: string) => void;
+    /** See `restoreTeamAction`. */
+    restoreTopic: (topic: Topic) => void;
     // tracked meetings — the unit readiness is measured against
     /**
      * Opt in to being ready for a meeting with this subject. Idempotent — it
@@ -367,6 +381,8 @@ type Store = PersistedData &
     addGoal: (g: Omit<Goal, "id">) => void;
     updateGoal: (id: string, patch: Partial<Goal>) => void;
     deleteGoal: (id: string) => void;
+    /** See `restoreTeamAction`. */
+    restoreGoal: (goal: Goal) => void;
     addNote: (personId: string, body: string) => string;
     updateNote: (id: string, patch: Partial<Pick<Note, "body" | "date">>) => void;
     deleteNote: (id: string) => void;
@@ -382,7 +398,13 @@ type Store = PersistedData &
     bootstrap: () => Promise<void>;
     /** Re-run bootstrap after a load failure, resetting backoff. */
     retryBootstrap: () => Promise<void>;
-    hydrate: (data: PersistedData, userId: string, email: string | null) => void;
+    hydrate: (
+      data: PersistedData,
+      userId: string,
+      email: string | null,
+      /** Skips re-writing the local cache when the doc came out of it. */
+      opts?: { fromCache?: boolean }
+    ) => void;
     signOut: () => Promise<void>;
     // data management
     resetToSeed: () => Promise<void>;
@@ -1218,6 +1240,8 @@ export const useStore = create<Store>((set, get) => ({
     })),
   deleteTeamAction: (id) =>
     set((s) => ({ teamActions: s.teamActions.filter((a) => a.id !== id) })),
+  restoreTeamAction: (action) =>
+    set((s) => ({ teamActions: [...s.teamActions, action] })),
 
   addTeamGoal: (teamId, title) =>
     set((s) => ({
@@ -1229,6 +1253,8 @@ export const useStore = create<Store>((set, get) => ({
     })),
   deleteTeamGoal: (id) =>
     set((s) => ({ teamGoals: s.teamGoals.filter((g) => g.id !== id) })),
+  restoreTeamGoal: (goal) =>
+    set((s) => ({ teamGoals: [...s.teamGoals, goal] })),
 
   addTeamNote: (teamId, body) =>
     set((s) => ({
@@ -1420,6 +1446,9 @@ export const useStore = create<Store>((set, get) => ({
     })),
   deleteTopic: (id) =>
     set((s) => ({ topics: s.topics.filter((t) => t.id !== id) })),
+  // The board sorts by `order`, so the card comes back in its own place
+  // rather than at the end of the lane.
+  restoreTopic: (topic) => set((s) => ({ topics: [...s.topics, topic] })),
 
   trackMeeting: (subjectKind, subjectId, rhythm, patch) => {
     const existing = get().meetings.find(
@@ -1503,6 +1532,7 @@ export const useStore = create<Store>((set, get) => ({
     })),
   deleteGoal: (id) =>
     set((s) => ({ goals: s.goals.filter((g) => g.id !== id) })),
+  restoreGoal: (goal) => set((s) => ({ goals: [...s.goals, goal] })),
 
   addNote: (personId, body) => {
     const id = uid();
@@ -1568,6 +1598,26 @@ export const useStore = create<Store>((set, get) => ({
     const email = session.user.email ?? null;
     // Avoid redundant reloads if we're already ready for this user.
     if (get().phase === "ready" && get().userId === userId) return;
+
+    // Paint the local copy first when there is one. The full-screen skeleton
+    // is then reserved for the case where there is genuinely nothing to show,
+    // instead of being the cost of every return visit.
+    const cached = loadDoc(userId);
+    if (cached) {
+      get().hydrate(cached.doc, userId, email, { fromCache: true });
+      if (cached.pendingWrite) {
+        // These edits were made without a connection. The server has never
+        // seen this document, so there is nothing to refresh *from* — drop the
+        // baseline and push the whole thing up instead.
+        repo.clearBaseline();
+        fullSyncPending = true;
+        void runSync(userId);
+      } else {
+        void revalidate(userId, email);
+      }
+      return;
+    }
+
     set({ phase: "loading" });
     try {
       let doc = await repo.loadAll(userId);
@@ -1600,12 +1650,16 @@ export const useStore = create<Store>((set, get) => ({
     await get().bootstrap();
   },
 
-  hydrate: (doc, userId, email) => {
+  hydrate: (doc, userId, email, opts) => {
     clearBootstrapRetry();
     bootstrapAttempts = 0;
     // Record the loaded doc as the persistence baseline BEFORE it lands in the
     // store, so the resulting change event is a no-op (same array references).
     repo.setBaseline(doc);
+    // Keep the local copy level with whatever we just adopted, so the next
+    // cold open has something to paint. Skipped when this *is* that copy —
+    // re-serializing it would put the cost back on the boot path.
+    if (!opts?.fromCache) saveDoc(userId, doc, { pendingWrite: false });
     set({
       ...doc,
       userId,
@@ -1621,8 +1675,13 @@ export const useStore = create<Store>((set, get) => ({
     // Flush any pending debounced write first — otherwise a delete/edit in the
     // last ~600ms is lost when we clear the session.
     await flushPendingSync();
+    const userId = get().userId;
     await supabase.auth.signOut();
+    // The local copy outlives the session unless we say otherwise, and the
+    // next person to open this browser is not necessarily the same person.
+    if (userId) clearDoc(userId);
     repo.clearBaseline();
+    fullSyncPending = false;
     set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
   },
 
@@ -1662,6 +1721,39 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "nodePositions",
 ];
 
+/**
+ * Bumped on every change to the document. A background refresh captures it
+ * before loading and checks it after, which is how it can tell whether it is
+ * about to overwrite something the user typed while the response was in
+ * flight.
+ */
+let docRevision = 0;
+
+/**
+ * Refresh a cache-hydrated document from the server. Deliberately quiet: the
+ * app is already usable, so nothing here is allowed to take it away.
+ */
+async function revalidate(userId: string, email: string | null): Promise<void> {
+  const startedAt = docRevision;
+  try {
+    const doc = await repo.loadAll(userId);
+    // Nothing on the server for this user — an account wiped elsewhere, or a
+    // cache that outlived its data. Leave what's on screen alone rather than
+    // blanking it; the sync path owns reconciling the two.
+    if (!doc) return;
+    const state = useStore.getState();
+    if (state.userId !== userId || state.phase !== "ready") return;
+    // Edits landed while we were loading. In-memory wins — it is newer than
+    // this response, and it is already queued to sync.
+    if (docRevision !== startedAt) return;
+    state.hydrate(doc, userId, email);
+  } catch (e) {
+    // There is a document on screen and the app works. A failed refresh is
+    // not an error screen — the write path surfaces connectivity on its own.
+    console.error("LeadWell: background refresh failed", e);
+  }
+}
+
 /** Exponential backoff for a failed initial load, capped so it keeps trying. */
 let bootstrapAttempts = 0;
 let bootstrapRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1687,6 +1779,24 @@ function scheduleBootstrapRetry() {
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncInFlight: Promise<void> | null = null;
+/**
+ * A cache holding unsynced edits was adopted at boot. There is no baseline
+ * that reflects what the server has, so the next sync must write every table
+ * rather than diff against one. `syncData` already does exactly that when the
+ * baseline is null — this flag is what keeps the usual "nothing loaded yet, so
+ * don't write" guard from swallowing it.
+ */
+let fullSyncPending = false;
+
+/** Whether a write is allowed: we've loaded, or we're pushing a cached doc. */
+function canSync(): boolean {
+  return repo.hasBaseline() || fullSyncPending;
+}
+
+/** Edits exist that the server hasn't confirmed — pending, retrying, or in flight. */
+function hasUnsyncedEdits(): boolean {
+  return Boolean(syncTimer || syncRetryTimer || syncInFlight || fullSyncPending);
+}
 /** More edits arrived while a sync was writing — coalesce another pass. */
 let syncQueued = false;
 /** Consecutive failed writes, driving the retry backoff. */
@@ -1731,23 +1841,32 @@ function runSync(userId: string): Promise<void> {
     do {
       syncQueued = false;
       const latest = useStore.getState();
-      if (
-        latest.phase !== "ready" ||
-        latest.userId !== userId ||
-        !repo.hasBaseline()
-      ) {
+      if (latest.phase !== "ready" || latest.userId !== userId || !canSync()) {
         return;
       }
       try {
         useStore.setState({ syncStatus: "saving" });
-        await repo.syncData(userId, extractData(latest));
+        const written = extractData(latest);
+        await repo.syncData(userId, written);
         syncFailures = 0;
+        fullSyncPending = false;
         clearSyncRetry();
+        // Cache exactly what the server now holds. Marking it clean is what
+        // lets the next cold open refresh from the server instead of pushing
+        // this document back up.
+        saveDoc(userId, written, { pendingWrite: false });
         useStore.setState({ syncStatus: "idle" });
       } catch (e) {
         console.error("LeadWell: cloud sync failed", e);
         scheduleSyncRetry(userId);
-        useStore.setState({ syncStatus: "idle" });
+        // The edits are real and the server doesn't have them. Keep them where
+        // a hard quit can't take them, and mark them as still owed.
+        saveDoc(userId, extractData(useStore.getState()), {
+          pendingWrite: true,
+        });
+        // Not "idle" — a retry is pending and the edit is not on the server
+        // yet. Reporting that as saved is the one lie the UI cannot afford.
+        useStore.setState({ syncStatus: "error" });
         return;
       }
     } while (syncQueued);
@@ -1766,7 +1885,7 @@ async function flushPendingSync(): Promise<void> {
     syncTimer = null;
   }
   const latest = useStore.getState();
-  if (latest.phase !== "ready" || !latest.userId || !repo.hasBaseline()) {
+  if (latest.phase !== "ready" || !latest.userId || !canSync()) {
     if (syncInFlight) await syncInFlight;
     return;
   }
@@ -1785,8 +1904,12 @@ function scheduleSync(userId: string): void {
 
 useStore.subscribe((state, prev) => {
   if (state.phase !== "ready" || !state.userId) return;
-  if (!repo.hasBaseline()) return;
   if (!PERSISTED_KEYS.some((k) => state[k] !== prev[k])) return;
+  // Every document change bumps this, whether or not it can be written yet,
+  // so a background refresh can tell it's about to land on top of something
+  // the user just typed.
+  docRevision += 1;
+  if (!canSync()) return;
   scheduleSync(state.userId);
 });
 
@@ -1794,6 +1917,15 @@ useStore.subscribe((state, prev) => {
 // quick refresh / OAuth redirect doesn't drop the last edit.
 if (typeof window !== "undefined") {
   const flush = () => {
+    // Local copy first, and synchronously. The cloud write below is an async
+    // `fetch` that a backgrounded tab is entirely free to abandon — iOS
+    // reclaiming the tab is the normal case, not the edge case — but by the
+    // time this line returns, the last 600ms of edits are on disk. The cloud
+    // write then gets its chance, and the retry machinery covers the rest.
+    const state = useStore.getState();
+    if (state.phase === "ready" && state.userId && hasUnsyncedEdits()) {
+      saveDoc(state.userId, extractData(state), { pendingWrite: true });
+    }
     void flushPendingSync();
   };
   window.addEventListener("pagehide", flush);
@@ -1826,6 +1958,13 @@ if (typeof window !== "undefined") {
 // Re-run bootstrap on sign-in / sign-out / token refresh from Supabase.
 supabase.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") {
+    // Covers the sign-outs the store didn't initiate — an expired refresh
+    // token, a sign-out in another tab. The local copy must not outlive the
+    // session that was allowed to read it.
+    const { userId } = useStore.getState();
+    if (userId) clearDoc(userId);
+    repo.clearBaseline();
+    fullSyncPending = false;
     useStore.setState({
       phase: "anon",
       userId: null,

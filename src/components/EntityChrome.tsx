@@ -18,27 +18,25 @@ import {
  * same sequence.
  */
 export function useEntityTrail() {
-  const {
-    people,
-    teams,
-    managers,
-    meetings,
-    me,
-    selectedPersonId,
-    selectedManagerId,
-    selectedMeetingId,
-    selectedMe,
-    selectPerson,
-    selectTeam,
-    selectManager,
-    selectMeeting,
-    clearSelection,
-    openFocus,
-    closeFocus,
-    modal,
-    askAIOpen,
-    settingsOpen,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const meetings = useStore((s) => s.meetings);
+  const me = useStore((s) => s.me);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const selectedManagerId = useStore((s) => s.selectedManagerId);
+  const selectedMeetingId = useStore((s) => s.selectedMeetingId);
+  const selectedMe = useStore((s) => s.selectedMe);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectManager = useStore((s) => s.selectManager);
+  const selectMeeting = useStore((s) => s.selectMeeting);
+  const clearSelection = useStore((s) => s.clearSelection);
+  const openFocus = useStore((s) => s.openFocus);
+  const closeFocus = useStore((s) => s.closeFocus);
+  const modal = useStore((s) => s.modal);
+  const askAIOpen = useStore((s) => s.askAIOpen);
+  const settingsOpen = useStore((s) => s.settingsOpen);
 
   const activeTeamId = useActiveTeamId();
   const person = people.find((p) => p.id === selectedPersonId);
@@ -279,7 +277,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       {trail.siblings.length > 1 && (
         <div className="flex shrink-0 items-center gap-2">
           <PagerButton
-            label={prev ? `Previous — ${prev.name}` : "Previous"}
+            label={prev ? `Previous — ${prev.name} (←)` : "Previous (←)"}
             disabled={!prev}
             onClick={() => prev && trail.select(prev.id)}
             icon={ChevronLeft}
@@ -288,7 +286,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             {index + 1}/{trail.siblings.length}
           </span>
           <PagerButton
-            label={next ? `Next — ${next.name}` : "Next"}
+            label={next ? `Next — ${next.name} (→)` : "Next (→)"}
             disabled={!next}
             onClick={() => next && trail.select(next.id)}
             icon={ChevronRight}

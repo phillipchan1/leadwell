@@ -114,28 +114,34 @@ type Line =
 export type TableVariant = "table" | "tree";
 
 export function TableView({ variant = "table" }: { variant?: TableVariant } = {}) {
-  const {
-    teams,
-    people,
-    domains,
-    capacities,
-    meetings,
-    sessions,
-    topics,
-    healthScan,
-    toggleHealthScan,
-    setHealthScan,
-    setHealth,
-    setHealthNote,
-    selectTeam,
-    selectPerson,
-    selectedTeamId,
-    selectedPersonId,
-    treeDomainId,
-    treeMode,
-  } = useStore();
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
+  const domains = useStore((s) => s.domains);
+  const capacities = useStore((s) => s.capacities);
+  const meetings = useStore((s) => s.meetings);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const healthScan = useStore((s) => s.healthScan);
+  const toggleHealthScan = useStore((s) => s.toggleHealthScan);
+  const setHealthScan = useStore((s) => s.setHealthScan);
+  const setHealth = useStore((s) => s.setHealth);
+  const setHealthNote = useStore((s) => s.setHealthNote);
+  const openModal = useStore((s) => s.openModal);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectedTeamId = useStore((s) => s.selectedTeamId);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const treeDomainId = useStore((s) => s.treeDomainId);
+  const treeMode = useStore((s) => s.treeMode);
 
   const isTree = variant === "tree";
+  /**
+   * Nothing matched *because there is nothing* — a brand-new account, most
+   * likely on a phone, where this is the whole app. "Nothing matches this view"
+   * is true but useless there: the answer isn't to clear a filter, it's to add
+   * the first team.
+   */
+  const orgIsEmpty = teams.length === 0 && people.length === 0;
 
   const [query, setQuery] = useState("");
   // The outline *is* the hierarchy, so tree mode pins the grouping there —
@@ -540,12 +546,15 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
             />
           )
         )}
-        {rowCount === 0 && (
-          <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
-            Nothing matches this view.
-            {scanning && " Try clearing the scan."}
-          </p>
-        )}
+        {rowCount === 0 &&
+          (orgIsEmpty ? (
+            <EmptyOrg onAdd={openModal} />
+          ) : (
+            <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
+              Nothing matches this view.
+              {scanning && " Try clearing the scan."}
+            </p>
+          ))}
       </div>
 
       <Card className="max-lg:hidden overflow-x-auto">
@@ -645,8 +654,14 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
                   colSpan={visible.length + 1}
                   className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400"
                 >
-                  Nothing matches this view.
-                  {scanning && " Try clearing the scan."}
+                  {orgIsEmpty ? (
+                    <EmptyOrg onAdd={openModal} />
+                  ) : (
+                    <>
+                      Nothing matches this view.
+                      {scanning && " Try clearing the scan."}
+                    </>
+                  )}
                 </td>
               </tr>
             )}
@@ -1059,6 +1074,29 @@ function MobileRecordCard({
           {record.note}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * First-run state. Reached most often on a phone, where the tree tab renders
+ * this component and there is no canvas to carry the create buttons — so this
+ * has to be a real way in, not an apology.
+ */
+function EmptyOrg({
+  onAdd,
+}: {
+  onAdd: (modal: { kind: "team" }) => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+      <p className="max-w-xs text-sm text-stone-500 dark:text-stone-400">
+        Nothing here yet. Start with a team — the people you lead hang off it,
+        and everything else follows from there.
+      </p>
+      <Button size="md" onClick={() => onAdd({ kind: "team" })}>
+        Add your first team
+      </Button>
     </div>
   );
 }

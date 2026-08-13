@@ -5,7 +5,10 @@ import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { userEmail, dark, toggleDark, signOut } = useStore();
+  const userEmail = useStore((s) => s.userEmail);
+  const dark = useStore((s) => s.dark);
+  const toggleDark = useStore((s) => s.toggleDark);
+  const signOut = useStore((s) => s.signOut);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { useDismiss } from "@/hooks/use-dismiss";
 import type { Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
 import { hasApiKey, refineTeamMandate } from "../lib/ai";
@@ -20,6 +21,8 @@ import { PrepPanel } from "./PrepPanel";
 import { SubjectMeetings } from "./SubjectMeetings";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { meetingFor, type CheckFix } from "../lib/readiness";
+import { confirmAction } from "./ConfirmDialog";
+import { deleteWithUndo } from "../lib/toasts";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -45,49 +48,40 @@ export function TeamProfile({
   team: Team;
   density?: Density;
 }) {
-  const {
-    capacities,
-    domains,
-    teams,
-    people,
-    section,
-    setSection,
-    selectTeam,
-    selectPerson,
-    selectedPersonId,
-    updateTeam,
-    setHealth,
-    setHealthNote,
-    openModal,
-    modal,
-    askAIOpen,
-    meetings,
-    trackMeeting,
-    addSession,
-    teamActions,
-    addTeamAction,
-    updateTeamAction,
-    toggleTeamAction,
-    deleteTeamAction,
-    teamGoals,
-    addTeamGoal,
-    updateTeamGoal,
-    deleteTeamGoal,
-    teamNotes,
-    addTeamNote,
-    deleteTeamNote,
-  } = useStore();
+  const capacities = useStore((s) => s.capacities);
+  const domains = useStore((s) => s.domains);
+  const teams = useStore((s) => s.teams);
+  const people = useStore((s) => s.people);
+  const section = useStore((s) => s.section);
+  const setSection = useStore((s) => s.setSection);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectedPersonId = useStore((s) => s.selectedPersonId);
+  const updateTeam = useStore((s) => s.updateTeam);
+  const setHealth = useStore((s) => s.setHealth);
+  const setHealthNote = useStore((s) => s.setHealthNote);
+  const openModal = useStore((s) => s.openModal);
+  const meetings = useStore((s) => s.meetings);
+  const trackMeeting = useStore((s) => s.trackMeeting);
+  const addSession = useStore((s) => s.addSession);
+  const teamActions = useStore((s) => s.teamActions);
+  const addTeamAction = useStore((s) => s.addTeamAction);
+  const updateTeamAction = useStore((s) => s.updateTeamAction);
+  const toggleTeamAction = useStore((s) => s.toggleTeamAction);
+  const deleteTeamAction = useStore((s) => s.deleteTeamAction);
+  const restoreTeamAction = useStore((s) => s.restoreTeamAction);
+  const teamGoals = useStore((s) => s.teamGoals);
+  const addTeamGoal = useStore((s) => s.addTeamGoal);
+  const updateTeamGoal = useStore((s) => s.updateTeamGoal);
+  const deleteTeamGoal = useStore((s) => s.deleteTeamGoal);
+  const restoreTeamGoal = useStore((s) => s.restoreTeamGoal);
+  const teamNotes = useStore((s) => s.teamNotes);
+  const addTeamNote = useStore((s) => s.addTeamNote);
+  const deleteTeamNote = useStore((s) => s.deleteTeamNote);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (modal || askAIOpen) return;
-      e.preventDefault();
-      selectTeam(null);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [modal, askAIOpen, selectTeam]);
+  // Ordering comes from the stack, not from a guard list — an editor
+  // opened inside this panel registers after it and gets Escape first.
+  useDismiss(() => selectTeam(null));
 
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);
@@ -330,7 +324,13 @@ export function TeamProfile({
                       if (!text) deleteTeamAction(a.id);
                       else if (text !== a.text) updateTeamAction(a.id, { text });
                     }}
-                    onDelete={() => deleteTeamAction(a.id)}
+                    onDelete={() =>
+                      deleteWithUndo(
+                        "Action deleted.",
+                        () => deleteTeamAction(a.id),
+                        () => restoreTeamAction(a)
+                      )
+                    }
                   />
                 ))}
                 {showDone &&
@@ -346,7 +346,13 @@ export function TeamProfile({
                         else if (text !== a.text)
                           updateTeamAction(a.id, { text });
                       }}
-                      onDelete={() => deleteTeamAction(a.id)}
+                      onDelete={() =>
+                        deleteWithUndo(
+                          "Action deleted.",
+                          () => deleteTeamAction(a.id),
+                          () => restoreTeamAction(a)
+                        )
+                      }
                     />
                   ))}
               </ul>
@@ -392,7 +398,13 @@ export function TeamProfile({
                         icon={X}
                         tooltip="Delete goal"
                         className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                        onClick={() => deleteTeamGoal(g.id)}
+                        onClick={() =>
+                          deleteWithUndo(
+                            "Goal deleted.",
+                            () => deleteTeamGoal(g.id),
+                            () => restoreTeamGoal(g)
+                          )
+                        }
                       />
                     </div>
                     <input
@@ -671,7 +683,15 @@ export function TeamProfile({
                       icon={X}
                       tooltip="Delete note"
                       className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                      onClick={() => deleteTeamNote(n.id)}
+                      onClick={async () => {
+                        if (
+                          await confirmAction({
+                            title: "Delete this note?",
+                            body: `What you wrote about the team on ${n.date} goes with it.`,
+                          })
+                        )
+                          deleteTeamNote(n.id);
+                      }}
                     />
                   </li>
                 ))}

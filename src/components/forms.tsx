@@ -55,7 +55,8 @@ function DomainPicker({
   domainId?: string;
   onChange: (id: string | undefined) => void;
 }) {
-  const { domains, addDomain } = useStore();
+  const domains = useStore((s) => s.domains);
+  const addDomain = useStore((s) => s.addDomain);
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
 
@@ -399,7 +400,10 @@ export function ManagerModal({
   manager?: Manager; // present = edit
   onClose: () => void;
 }) {
-  const { addManager, updateManager, deleteManager, treeDomainId } = useStore();
+  const addManager = useStore((s) => s.addManager);
+  const updateManager = useStore((s) => s.updateManager);
+  const deleteManager = useStore((s) => s.deleteManager);
+  const treeDomainId = useStore((s) => s.treeDomainId);
   const [name, setName] = useState(manager?.name ?? "");
   const [role, setRole] = useState(manager?.role ?? "");
   const [domainId, setDomainId] = useState<string | undefined>(
@@ -483,7 +487,8 @@ export function ManagerModal({
 
 /** Edit the signed-in leader's identity (name, title, photo). */
 export function MeModal({ onClose }: { onClose: () => void }) {
-  const { me, updateMe } = useStore();
+  const me = useStore((s) => s.me);
+  const updateMe = useStore((s) => s.updateMe);
   const [name, setName] = useState(me.name);
   const [title, setTitle] = useState(me.title ?? "");
   const [photo, setPhoto] = useState<string | undefined>(me.photo);

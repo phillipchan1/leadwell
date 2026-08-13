@@ -58,7 +58,11 @@ export function ProfileFillModal({
   self?: boolean;
   onClose: () => void;
 }) {
-  const { me, teams, updatePerson, updateLeadUp, updateMe } = useStore();
+  const me = useStore((s) => s.me);
+  const teams = useStore((s) => s.teams);
+  const updatePerson = useStore((s) => s.updatePerson);
+  const updateLeadUp = useStore((s) => s.updateLeadUp);
+  const updateMe = useStore((s) => s.updateMe);
   const targetId: ProfileTargetId = self ? "me" : person!.id;
   const displayName = self ? me.name : person!.name;
   const team = self ? undefined : teams.find((t) => t.id === person!.teamId);

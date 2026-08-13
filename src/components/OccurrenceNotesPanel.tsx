@@ -74,7 +74,9 @@ export function OccurrenceNotesPanel({
   onClose?: () => void;
   onOpenFullEditor?: (sessionId: string) => void;
 }) {
-  const { sessions, topics, updateSession } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const updateSession = useStore((s) => s.updateSession);
   const session = useMemo(
     () => resolveSession(meeting.id, slotKey, sessions),
     [meeting.id, slotKey, sessions]
