@@ -1,4 +1,5 @@
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
+import { useState } from "react";
 import { useStore } from "../store/useStore";
 import {
   MEETING_LABEL,
@@ -15,6 +16,7 @@ import {
   type CheckFix,
 } from "../lib/readiness";
 import { SectionTitle } from "./ui";
+import { StartMeetingForm } from "./StartMeetingForm";
 import { TrackerLink } from "./TrackerLink";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
@@ -64,6 +66,7 @@ export function PrepPanel({
         : managers.find((m) => m.id === subjectId);
   const firstName = subjectName.split(" ")[0] ?? subjectName;
   const label = MEETING_LABEL[subjectKind];
+  const [starting, setStarting] = useState(false);
 
   // ── Not tracked: the opt-in, and nothing else ───────────────────────────
   if (!mine.length) {
@@ -78,10 +81,7 @@ export function PrepPanel({
               : `Track a ${label} to see whether you're ready for the next one. Nothing is measured until you do.`}
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5 touch:gap-2">
-            <Button
-              size="sm"
-              onClick={() => trackMeeting(subjectKind, subjectId, "weekly")}
-            >
+            <Button size="sm" onClick={() => setStarting((v) => !v)}>
               Set up a meeting
             </Button>
             {!decided && (
@@ -109,6 +109,24 @@ export function PrepPanel({
           <div className="mt-1">
             <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
           </div>
+          {starting && (
+            /* The canonical creation form, not a second one. This button used
+               to call `trackMeeting(kind, id, "weekly")` outright — a hardcoded
+               rhythm and no name, both of which then had to be corrected in
+               Settings afterwards. Asking here costs one screen and saves that
+               round trip. */
+            <div className="mt-3 border-t border-secondary pt-3">
+              <StartMeetingForm
+                subjectKind={subjectKind}
+                subjectName={subjectName}
+                submitLabel="Start tracking"
+                onStart={(rhythm, name) => {
+                  trackMeeting(subjectKind, subjectId, rhythm, { name });
+                  setStarting(false);
+                }}
+              />
+            </div>
+          )}
         </div>
       </section>
     );
