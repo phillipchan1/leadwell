@@ -455,10 +455,10 @@ export function ProfileFillModal({
             <div className="profile-fill-split">
               <div className="flex flex-col space-y-3">
                 {probeTurns.length > 0 && (
-                  <div className="scroll-contain max-h-28 space-y-2 overflow-y-auto rounded-lg bg-stone-50 p-2 text-[11px] text-stone-500 dark:bg-stone-950/50">
+                  <div className="scroll-contain max-h-28 space-y-2 overflow-y-auto rounded-lg bg-stone-50 p-2 text-caption text-stone-500 dark:bg-stone-950/50">
                     {probeTurns.map((t, i) => (
                       <div key={i}>
-                        <div className="font-medium text-stone-600 dark:text-stone-400">
+                        <div className="font-medium text-tertiary">
                           Q{i + 1}. {t.question}
                         </div>
                         <div className="pl-2">{t.answer}</div>
@@ -544,7 +544,7 @@ export function ProfileFillModal({
                   if (!draft.modalities.length) return null;
                   return (
                     <div key={group} className="space-y-2">
-                      <div className="text-[10px] font-medium tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+                      <div className="text-caption font-medium tracking-wider text-quaternary uppercase">
                         {GROUP_LABEL.custom}
                       </div>
                       {draft.modalities.map((m, i) => (
@@ -568,7 +568,7 @@ export function ProfileFillModal({
                 if (!items.length) return null;
                 return (
                   <div key={group} className="space-y-2">
-                    <div className="text-[10px] font-medium tracking-wider text-stone-500 dark:text-stone-400 uppercase">
+                    <div className="text-caption font-medium tracking-wider text-quaternary uppercase">
                       {GROUP_LABEL[group]}
                     </div>
                     {items.map((sg) => {
@@ -626,8 +626,8 @@ function SuggestionRow({
     <div
       className={`rounded-xl border p-3 transition-colors ${
         row.accepted
-          ? "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900"
-          : "border-dashed border-stone-200 bg-stone-50/60 opacity-70 dark:border-stone-800 dark:bg-stone-950/40"
+          ? "border-stone-200 bg-primary dark:border-stone-700"
+          : "border-dashed border-secondary bg-stone-50/60 opacity-70 dark:bg-stone-950/40"
       }`}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -650,9 +650,9 @@ function SuggestionRow({
         onChange={(text) => onChange({ text })}
       />
       {kind === "list" && (
-        <div className="mt-0.5 text-[10px] text-stone-500 dark:text-stone-400">One per line.</div>
+        <div className="mt-0.5 text-caption text-quaternary">One per line.</div>
       )}
-      <div className="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
+      <div className="mt-1 text-caption text-quaternary">
         Why: {suggestion.rationale}
       </div>
     </div>
@@ -677,8 +677,8 @@ function ModalityRow({
     <div
       className={`rounded-xl border p-3 transition-colors ${
         row.accepted
-          ? "border-stone-200 bg-white dark:border-stone-700 dark:bg-stone-900"
-          : "border-dashed border-stone-200 bg-stone-50/60 opacity-70 dark:border-stone-800 dark:bg-stone-950/40"
+          ? "border-stone-200 bg-primary dark:border-stone-700"
+          : "border-dashed border-secondary bg-stone-50/60 opacity-70 dark:bg-stone-950/40"
       }`}
     >
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -715,7 +715,7 @@ function ModalityRow({
         onChange={(notes) => onChange({ notes })}
         placeholder="Notes (optional)"
       />
-      <div className="mt-1 text-[10px] text-stone-500 dark:text-stone-400">
+      <div className="mt-1 text-caption text-quaternary">
         {suggestion.source} · Why: {suggestion.rationale}
       </div>
     </div>

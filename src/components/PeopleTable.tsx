@@ -117,7 +117,7 @@ export function PeopleTable() {
         {rows.map(({ p, team, capacity, next, coverage, domain }) => (
           <div
             key={p.id}
-            className="rounded-xl border border-stone-200 bg-white transition-colors dark:border-stone-800 dark:bg-stone-900"
+            className="rounded-xl border border-secondary bg-primary transition-colors"
           >
             <button
               type="button"
@@ -132,14 +132,14 @@ export function PeopleTable() {
               />
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{p.name}</span>
-                <span className="block truncate text-xs text-stone-500 dark:text-stone-400">
+                <span className="block truncate text-xs text-quaternary">
                   {[p.role, team?.name ?? "Direct report"]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
               </span>
               {next && (
-                <span className="shrink-0 text-xs tabular-nums text-stone-500 dark:text-stone-400">
+                <span className="shrink-0 text-xs tabular-nums text-quaternary">
                   {next}
                 </span>
               )}
@@ -162,14 +162,14 @@ export function PeopleTable() {
                   {domain}
                 </span>
               )}
-              <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
+              <span className="ml-auto text-xs text-quaternary">
                 Read {coverage}/3
               </span>
             </div>
           </div>
         ))}
         {rows.length === 0 && (
-          <p className="px-4 py-10 text-center text-sm text-stone-500 dark:text-stone-400">
+          <p className="px-4 py-10 text-center text-sm text-quaternary">
             No one matches this view.
           </p>
         )}
@@ -178,7 +178,7 @@ export function PeopleTable() {
       <Card className="max-lg:hidden overflow-x-auto">
         <table className="w-full min-w-[64rem] text-sm">
           <thead>
-            <tr className="border-b border-stone-200 text-left text-xs text-stone-500 dark:border-stone-800 dark:text-stone-400">
+            <tr className="border-b border-secondary text-left text-xs text-quaternary">
               <Th onClick={() => sortBy("name")} sorted={sortedDir("name")}>Name</Th>
               <Th onClick={() => sortBy("team")} sorted={sortedDir("team")}>Team</Th>
               <Th>Capacity</Th>
@@ -217,7 +217,7 @@ export function PeopleTable() {
                     <div>
                       <div className="font-medium">{p.name}</div>
                       {p.role && (
-                        <div className="text-[11px] text-stone-500 dark:text-stone-400">
+                        <div className="text-caption text-quaternary">
                           {p.role}
                         </div>
                       )}
@@ -226,7 +226,7 @@ export function PeopleTable() {
                 </td>
                 <td className="px-4 py-2.5 text-stone-500">
                   {team?.name ?? (
-                    <span className="text-stone-500 dark:text-stone-400">Direct report</span>
+                    <span className="text-quaternary">Direct report</span>
                   )}
                 </td>
                 <td className="px-4 py-2.5">
@@ -268,7 +268,7 @@ export function PeopleTable() {
               <tr>
                 <td
                   colSpan={9}
-                  className="px-4 py-8 text-center text-sm text-stone-500 dark:text-stone-400"
+                  className="px-4 py-8 text-center text-sm text-quaternary"
                 >
                   No people match.
                 </td>

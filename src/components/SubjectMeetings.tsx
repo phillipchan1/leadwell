@@ -79,11 +79,11 @@ export function SubjectMeetings({
   if (!mine.length) {
     return (
       <div className="space-y-3">
-        <div className="rounded-xl border border-dashed border-stone-300 px-4 py-8 text-center dark:border-stone-700">
-          <p className="text-sm text-stone-500 dark:text-stone-400">
+        <div className="rounded-xl border border-dashed border-primary px-4 py-8 text-center">
+          <p className="text-sm text-quaternary">
             No meetings tracked with {firstName} yet.
           </p>
-          <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500 dark:text-stone-400">
+          <p className="mx-auto mt-1 max-w-sm text-xs text-quaternary">
             Add as many as you actually have — a weekly {label}, a quarterly
             career check-in, whatever rhythm fits.
           </p>
@@ -113,7 +113,7 @@ export function SubjectMeetings({
       ))}
 
       {adding ? (
-        <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-4 dark:border-stone-800 dark:bg-stone-950/40">
+        <div className="rounded-xl border border-secondary bg-stone-50/60 p-4 dark:bg-stone-950/40">
           <p className="mb-3 text-sm font-medium text-stone-700 dark:text-stone-200">
             Another meeting with {firstName}
           </p>
@@ -197,7 +197,7 @@ function MeetingBlock({
         </h3>
         <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
         <span
-          className="shrink-0 font-mono text-[11px] tabular-nums"
+          className="shrink-0 font-mono text-caption tabular-nums"
           style={{ color }}
         >
           {formatCountdown(readiness)}
@@ -283,10 +283,10 @@ function MeetingBlock({
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between">
-          <span className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+          <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
             Plan
           </span>
-          <span className="text-[10px] tabular-nums text-stone-400 dark:text-stone-500">
+          <span className="text-caption tabular-nums text-stone-400 dark:text-stone-500">
             {openCount} open
           </span>
         </div>
@@ -301,7 +301,7 @@ function MeetingBlock({
       </div>
 
       <div className="space-y-1.5">
-        <span className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
           History
         </span>
         <SessionHistoryTable meetingId={meeting.id} onOpen={openSessionNotes} />

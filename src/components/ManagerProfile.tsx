@@ -88,11 +88,11 @@ export function ManagerProfile({
 
   return (
     <aside
-      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white dark:bg-stone-900"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-primary"
       data-manager-mode={mode}
     >
       {/* Header — identity only; everything else lives in a mode */}
-      <div className="entity-header shrink-0 border-b border-stone-200 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:border-stone-800 dark:bg-stone-900/90">
+      <div className="entity-header shrink-0 border-b border-secondary bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:bg-stone-900/90">
         <div className="flex items-start gap-3">
           <Avatar name={manager.name} photo={manager.photo} size={52} />
           <div className="min-w-0 flex-1">
@@ -104,7 +104,7 @@ export function ManagerProfile({
               <TintBadge color="#3B82F6">Leading up</TintBadge>
               {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
             </div>
-            <div className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+            <div className="mt-1 text-caption text-quaternary">
               {nextSession && `Next check-in ${nextSession}`}
               {nextSession && lastSession && " · "}
               {lastSession && `Last ${lastSession.date}`}

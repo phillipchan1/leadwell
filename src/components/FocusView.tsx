@@ -21,7 +21,7 @@ export function FocusView() {
     <div className="flex min-h-0 flex-1 flex-col bg-stone-100/60 dark:bg-stone-950">
       <EntityChrome mode="focus" />
       <div
-        className="flex min-h-0 flex-1 flex-col bg-white dark:bg-stone-900"
+        className="flex min-h-0 flex-1 flex-col bg-primary"
         {...swipe}
       >
         <EntityBody density="focus" />

@@ -65,11 +65,11 @@ export function InlineSessionEditor({
   return (
     <div
       ref={rootRef}
-      className="space-y-3 border-t border-stone-200 bg-stone-50/60 p-3 dark:border-stone-800 dark:bg-stone-950/40"
+      className="space-y-3 border-t border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40"
     >
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
+          <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
             Date
           </span>
           <input
@@ -80,7 +80,7 @@ export function InlineSessionEditor({
           />
         </label>
         <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
+          <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
             Next
           </span>
           <input
@@ -145,7 +145,7 @@ export function InlineSessionEditor({
 
       <textarea
         ref={notesRef}
-        className="w-full resize-none rounded-xl border border-stone-200 bg-white p-3 text-[0.95rem] leading-relaxed text-stone-800 outline-none touch:text-md placeholder:text-stone-400 focus:border-teal-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+        className="w-full resize-none rounded-xl border border-stone-200 bg-primary p-3 text-[0.95rem] leading-relaxed text-stone-800 outline-none touch:text-md placeholder:text-stone-400 focus:border-teal-400 dark:border-stone-700 dark:text-stone-100"
         placeholder="What did you cover? Markdown works — Expand for blocks, transcript and AI."
         value={notes}
         autoFocus={autoFocus && autoFocusUnlessTouch()}

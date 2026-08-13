@@ -46,7 +46,7 @@ export function StartMeetingForm({
         onChange={setName}
       />
       <div className="space-y-1.5">
-        <span className="text-[11px] font-semibold tracking-wide text-stone-500 uppercase dark:text-stone-400">
+        <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
           How often
         </span>
         <div className="flex flex-wrap gap-1.5">
@@ -58,7 +58,7 @@ export function StartMeetingForm({
               className={
                 rhythm === r
                   ? "rounded-full bg-teal-600 px-3 py-1.5 text-xs font-medium text-white"
-                  : "rounded-full border border-stone-300 px-3 py-1.5 text-xs text-stone-600 hover:border-teal-500 hover:text-teal-700 dark:border-stone-700 dark:text-stone-300"
+                  : "rounded-full border border-primary px-3 py-1.5 text-xs text-stone-600 hover:border-teal-500 hover:text-teal-700 dark:text-stone-300"
               }
             >
               {RHYTHM_LABEL[r]}

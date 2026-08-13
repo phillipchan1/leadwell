@@ -496,7 +496,7 @@ export function OrgTree() {
         >
           Filters
           {activeFilterCount > 0 && (
-            <span className="ml-1.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+            <span className="ml-1.5 rounded-full bg-teal-600 px-1.5 py-0.5 text-caption font-semibold text-white">
               {activeFilterCount}
             </span>
           )}
@@ -522,7 +522,7 @@ export function OrgTree() {
       <div className="hidden min-h-0 flex-1 flex-col gap-2 lg:flex">
       {filterRow}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-200 bg-white dark:border-stone-800 dark:bg-stone-900">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-secondary bg-primary">
         {/* React Flow captures one-finger drag to pan, which swallows the iOS
             interactive back-swipe. This gutter absorbs touches in the edge
             zone without panning, so Safari still gets the gesture. Only on
@@ -598,15 +598,15 @@ export function OrgTree() {
           {/* Legend: domains (in All) + capacities */}
           <Panel
             position="bottom-left"
-            className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white/90 px-2.5 py-1.5 backdrop-blur dark:border-stone-800 dark:bg-stone-900/90"
+            className="flex flex-col gap-1 rounded-lg border border-secondary bg-white/90 px-2.5 py-1.5 backdrop-blur dark:bg-stone-900/90"
           >
             {!treeDomainId && domains.length > 0 && (
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400">Domains</span>
+                <span className="text-caption font-medium text-quaternary">Domains</span>
                 {domains.map((d) => (
                   <span
                     key={d.id}
-                    className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                    className="flex items-center gap-1 text-caption text-quaternary"
                   >
                     <span
                       className="h-1.5 w-1.5 rounded-full"
@@ -618,11 +618,11 @@ export function OrgTree() {
               </div>
             )}
             <div className="flex flex-wrap gap-x-3 gap-y-1">
-              <span className="text-[10px] font-medium text-stone-500 dark:text-stone-400">Capacity</span>
+              <span className="text-caption font-medium text-quaternary">Capacity</span>
               {capacities.map((c) => (
                 <span
                   key={c.id}
-                  className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400"
+                  className="flex items-center gap-1 text-caption text-quaternary"
                 >
                   <span
                     className="h-1.5 w-1.5 rounded-full"
@@ -667,7 +667,7 @@ function DomainTab({
       className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors touch:min-h-11 touch:min-w-11 ${
         active
           ? "border-transparent font-medium text-white"
-          : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
+          : "border-primary text-tertiary hover:border-stone-400 dark:hover:border-stone-500"
       }`}
       style={
         active
@@ -684,8 +684,8 @@ function DomainTab({
       {children}
       {shortcut && (
         <kbd
-          className={`ml-0.5 hidden rounded px-1 font-mono text-[10px] sm:inline ${
-            active ? "bg-white/20 text-white/90" : "bg-stone-100 text-stone-500 dark:text-stone-400 dark:bg-stone-800"
+          className={`ml-0.5 hidden rounded px-1 font-mono text-caption sm:inline ${
+            active ? "bg-white/20 text-white/90" : "bg-tertiary text-quaternary"
           }`}
         >
           {shortcut}
@@ -775,7 +775,7 @@ function ReadinessSummary({
     )[0];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500 lg:ml-auto lg:flex-nowrap dark:text-stone-400">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-quaternary lg:ml-auto lg:flex-nowrap">
       {entries.length > 0 && (
         <span>
           <strong className="font-semibold text-stone-700 tabular-nums dark:text-stone-200">
@@ -818,7 +818,7 @@ function ReadinessSummary({
           <button
             type="button"
             onClick={() => openModal({ kind: "triage" })}
-            className="rounded-md px-1.5 py-0.5 whitespace-nowrap text-stone-500 touch:min-h-11 dark:text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-400"
+            className="rounded-md px-1.5 py-0.5 whitespace-nowrap text-quaternary touch:min-h-11 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-400"
             title="Not a backlog — decide once and they leave this count for good"
           >
             <span className="tabular-nums">{undecided}</span> undecided
@@ -867,7 +867,7 @@ function HealthScan({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 touch:gap-2">
-      <span className="text-[11px] font-medium tracking-wide text-stone-500 dark:text-stone-400 uppercase">
+      <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
         Health
       </span>
       {HEALTH_FILTER_VALUES.map((value) => {
@@ -889,7 +889,7 @@ function HealthScan({
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 disabled:opacity-40 ${
               active
                 ? "border-transparent font-medium text-white"
-                : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
+                : "border-primary text-tertiary hover:border-stone-400 dark:hover:border-stone-500"
             }`}
             style={active ? { backgroundColor: color } : undefined}
           >
@@ -913,7 +913,7 @@ function HealthScan({
           Clear
         </Button>
       )}
-      <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
+      <span className="ml-auto text-xs text-quaternary">
         {roll.rated === 0 ? (
           "Nothing rated yet — set a health on any card"
         ) : (
@@ -975,7 +975,7 @@ function PrayerScan({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 touch:gap-2">
-      <span className="flex items-center gap-1 text-[11px] font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
+      <span className="flex items-center gap-1 text-caption font-medium tracking-wide text-violet-700 uppercase dark:text-violet-300">
         <PrayerIcon className="size-3.5" />
         Prayer
       </span>
@@ -998,7 +998,7 @@ function PrayerScan({
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors touch:min-h-11 touch:px-3.5 disabled:opacity-40 ${
               active
                 ? "border-transparent font-medium text-white"
-                : "border-stone-300 text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:text-stone-400 dark:hover:border-stone-500"
+                : "border-primary text-tertiary hover:border-stone-400 dark:hover:border-stone-500"
             }`}
             style={active ? { backgroundColor: color } : undefined}
           >
@@ -1022,7 +1022,7 @@ function PrayerScan({
           Clear
         </Button>
       )}
-      <span className="ml-auto text-xs text-stone-500 dark:text-stone-400">
+      <span className="ml-auto text-xs text-quaternary">
         {roll.carried === 0 ? (
           "Take someone up from any card below"
         ) : (
@@ -1135,18 +1135,18 @@ function ModeBar() {
                 ? pray
                   ? "border-violet-500 bg-violet-50 font-medium text-violet-700 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300"
                   : "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-                : "border-stone-300 bg-white text-stone-600 hover:border-stone-400 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400 dark:hover:border-stone-500"
+                : "border-primary bg-primary text-tertiary hover:border-stone-400 dark:hover:border-stone-500"
             }`}
           >
             {pray && <PrayerIcon className="size-3.5" />}
             {mode.label}
             <kbd
-              className={`hidden rounded px-1 font-mono text-[10px] sm:inline ${
+              className={`hidden rounded px-1 font-mono text-caption sm:inline ${
                 on
                   ? pray
                     ? "bg-violet-100 text-violet-600 dark:bg-violet-900/60 dark:text-violet-300"
                     : "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
-                  : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                  : "bg-tertiary text-quaternary"
               }`}
             >
               {mode.key}
@@ -1171,7 +1171,7 @@ function ReadinessBar({ readings }: { readings: Readiness[] }) {
 
   return (
     <div
-      className="flex h-1.5 overflow-hidden rounded-full bg-stone-100 dark:bg-stone-800"
+      className="flex h-1.5 overflow-hidden rounded-full bg-tertiary"
       title={title}
       role="img"
       aria-label={title}
@@ -1279,11 +1279,11 @@ const ManagerNode = memo(function ManagerNode({ data }: NodeProps) {
           <Avatar name={manager.name} photo={manager.photo} size={34} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-xs font-semibold">{manager.name}</div>
-            <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
+            <div className="truncate text-caption text-quaternary">
               {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
                 "I report to"}
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+            <div className="flex items-center gap-1.5 text-caption text-quaternary">
               {filled > 0 ? (
                 <span className="text-blue-500 dark:text-blue-400">
                   manual {filled}/6
@@ -1389,11 +1389,11 @@ const DirectReportNode = memo(function DirectReportNode({ data }: NodeProps) {
           <Avatar name={person.name} photo={person.photo} size={34} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-xs font-semibold">{person.name}</div>
-            <div className="truncate text-[10px] text-stone-500 dark:text-stone-400">
+            <div className="truncate text-caption text-quaternary">
               {[person.role, domain?.name].filter(Boolean).join(" · ") ||
                 "Direct report"}
             </div>
-            <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+            <div className="flex min-w-0 items-center gap-1.5 text-caption text-quaternary">
               <span className="truncate">
                 {led.length > 0
                   ? `${led.length} team${led.length === 1 ? "" : "s"}`
@@ -1594,12 +1594,12 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
               <div className="truncate text-sm font-semibold">{team.name}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {parent && (
-                  <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                  <span className="text-caption text-quaternary">
                     under {parent.name}
                   </span>
                 )}
                 {leader && (
-                  <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                  <span className="text-caption text-quaternary">
                     led by {leader.name}
                   </span>
                 )}
@@ -1644,8 +1644,8 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
             <p
               className={`mt-3 line-clamp-2 text-xs leading-relaxed ${
                 team.purpose
-                  ? "text-stone-600 dark:text-stone-400"
-                  : "italic text-stone-500 dark:text-stone-400"
+                  ? "text-tertiary"
+                  : "italic text-quaternary"
               }`}
             >
               {team.purpose ?? "No mandate set — click to add"}
@@ -1655,14 +1655,14 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
           {showHealth && (team.health?.note || memberHealth.rated > 0) && (
             <div className="mt-3 flex flex-col gap-1">
               {team.health?.note && (
-                <p className="line-clamp-2 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+                <p className="line-clamp-2 text-caption leading-relaxed text-quaternary">
                   {team.health.note}
                 </p>
               )}
               {memberHealth.rated > 0 && (
                 <>
                   <HealthBar roll={memberHealth} />
-                  <div className="text-[10px] text-stone-500 dark:text-stone-400">
+                  <div className="text-caption text-quaternary">
                     {memberHealth.counts.strained + memberHealth.counts.critical >
                     0
                       ? `${
@@ -1679,7 +1679,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
           {showReadiness && roll.tracked > 0 && (
             <div className="mt-3 flex flex-col gap-1">
               <ReadinessBar readings={allReadings} />
-              <div className="text-[10px] text-stone-500 dark:text-stone-400">
+              <div className="text-caption text-quaternary">
                 {teamMeeting?.name ? `${teamMeeting.name} · ` : ""}
                 {roll.behind === 0
                   ? `${roll.tracked} tracked, all on track`
@@ -1726,7 +1726,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
           className="cursor-pointer border-t border-stone-100 px-4 py-2.5 dark:border-stone-800"
           onClick={() => selectTeam(team.id)}
         >
-          <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
+          <div className="flex items-center justify-between text-caption text-quaternary">
             <span>
               {members.length} {members.length === 1 ? "person" : "people"}
               {subTeams.length > 0
@@ -1740,7 +1740,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
                   <Avatar key={p.id} name={p.name} photo={p.photo} size={20} />
                 ))}
                 {members.length > 4 && (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-[9px] dark:bg-stone-700">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-stone-200 text-caption dark:bg-stone-700">
                     +{members.length - 4}
                   </span>
                 )}
@@ -1770,7 +1770,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
               ))}
               {members.length === 0 && (
                 <button
-                  className="rounded-lg border border-dashed border-stone-300 py-2 text-xs text-stone-500 dark:text-stone-400 hover:border-stone-400 hover:text-stone-500 dark:border-stone-700"
+                  className="rounded-lg border border-dashed border-primary py-2 text-xs text-quaternary hover:border-stone-400 hover:text-stone-500"
                   onClick={() => openModal({ kind: "person", teamId: team.id })}
                 >
                   + Add first person
@@ -1824,7 +1824,7 @@ function CardNextStep({
             : "bg-stone-50 dark:bg-stone-950/60"
       }`}
     >
-      <div className="text-[10px] font-medium tracking-wide text-teal-700/70 uppercase dark:text-teal-300/70">
+      <div className="text-caption font-medium tracking-wide text-teal-700/70 uppercase dark:text-teal-300/70">
         Next step
       </div>
       <div className="mt-0.5 flex items-start gap-1.5">
@@ -1859,7 +1859,7 @@ function CardNextStep({
         />
       </div>
       {action?.dueDate && !focused && (
-        <div className="mt-0.5 pl-5 text-[10px] text-teal-700/60 dark:text-teal-300/60">
+        <div className="mt-0.5 pl-5 text-caption text-teal-700/60 dark:text-teal-300/60">
           due {action.dueDate}
         </div>
       )}
@@ -1942,7 +1942,7 @@ function PersonRow({
           )}
         </div>
         {person.role && (
-          <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+          <div className="truncate text-caption text-quaternary">
             {person.role}
           </div>
         )}

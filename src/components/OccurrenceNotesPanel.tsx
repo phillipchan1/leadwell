@@ -109,14 +109,14 @@ export function OccurrenceNotesPanel({
   const heading = slotLabel(slot);
 
   return (
-    <div className="occurrence-notes-panel flex h-full min-h-0 flex-col bg-white dark:bg-stone-900">
-      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-stone-200 px-4 py-3 dark:border-stone-800">
+    <div className="occurrence-notes-panel flex h-full min-h-0 flex-col bg-primary">
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-secondary px-4 py-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-stone-800 dark:text-stone-100">
             {heading}
           </p>
           <label className="mt-1 flex items-center gap-1.5">
-            <span className="text-[10px] font-medium tracking-wide text-stone-500 uppercase dark:text-stone-400">
+            <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
               Date
             </span>
             <input

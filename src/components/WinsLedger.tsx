@@ -45,7 +45,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
     <section className="space-y-3">
       <div>
         <SectionTitle>Wins banked</SectionTitle>
-        <p className="mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+        <p className="mt-1 text-caption text-quaternary">
           Value delivered, phrased in their currency. Pull these up at reviews
           and before you ask for anything.
         </p>
@@ -69,7 +69,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+                <span className="text-caption tabular-nums text-quaternary">
                   {w.date}
                 </span>
                 <ButtonUtility
@@ -94,7 +94,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
           </li>
         ))}
         {wins.length === 0 && (
-          <li className="rounded-xl border border-dashed border-stone-300 py-4 text-center text-xs text-stone-500 dark:text-stone-400 dark:border-stone-700">
+          <li className="rounded-xl border border-dashed border-primary py-4 text-center text-xs text-quaternary">
             Nothing banked yet — log the next thing you deliver.
           </li>
         )}

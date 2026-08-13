@@ -71,15 +71,15 @@ export function CreateMenu() {
                   setOpen(false);
                   openKind(openModal);
                 }}
-                className="outline-focus-ring flex min-h-14 items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 text-left hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 active:bg-stone-100 dark:border-stone-800 dark:hover:bg-stone-800/50 dark:active:bg-stone-800"
+                className="outline-focus-ring flex min-h-14 items-center gap-3 rounded-xl border border-secondary px-4 py-3 text-left hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 active:bg-stone-100 dark:hover:bg-stone-800/50 dark:active:bg-stone-800"
               >
                 <Icon
-                  className="size-5 shrink-0 text-stone-500 dark:text-stone-400"
+                  className="size-5 shrink-0 text-quaternary"
                   aria-hidden="true"
                 />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium">{label}</span>
-                  <span className="block text-[11px] text-stone-500 dark:text-stone-400">
+                  <span className="block text-caption text-quaternary">
                     {hint}
                   </span>
                 </span>

@@ -96,7 +96,7 @@ export function SessionTable({
   };
 
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 dark:border-stone-800">
+    <div className="overflow-hidden rounded-xl border border-secondary">
       <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
         {rows.map((o) => (
           <li key={o.id}>
@@ -124,7 +124,7 @@ export function SessionTable({
       <button
         type="button"
         onClick={createNew}
-        className="flex w-full items-center gap-2 border-t border-dashed border-stone-200 px-3 py-2.5 text-left text-sm font-medium text-stone-500 transition-colors touch:min-h-11 hover:bg-teal-50/60 hover:text-teal-700 dark:border-stone-800 dark:text-stone-400 dark:hover:bg-teal-950/30 dark:hover:text-teal-300"
+        className="flex w-full items-center gap-2 border-t border-dashed border-secondary px-3 py-2.5 text-left text-sm font-medium text-quaternary transition-colors touch:min-h-11 hover:bg-teal-50/60 hover:text-teal-700 dark:hover:bg-teal-950/30 dark:hover:text-teal-300"
       >
         <span className="text-base leading-none">+</span>
         Log a meeting
@@ -178,7 +178,7 @@ function SessionRow({
           >
             ›
           </span>
-          <span className="shrink-0 font-mono text-xs tabular-nums text-stone-500 dark:text-stone-400">
+          <span className="shrink-0 font-mono text-xs tabular-nums text-quaternary">
             {row.date}
           </span>
           <Badge size="sm" color={STATUS_COLOR[status]} className="shrink-0">
@@ -187,8 +187,8 @@ function SessionRow({
           <span
             className={`min-w-0 flex-1 truncate text-sm ${
               summary
-                ? "text-stone-600 dark:text-stone-400"
-                : "italic text-stone-500 dark:text-stone-400"
+                ? "text-tertiary"
+                : "italic text-quaternary"
             }`}
           >
             {summary || (expanded ? "" : "Empty — open to write")}
@@ -200,7 +200,7 @@ function SessionRow({
         <label
           className={`shrink-0 items-center gap-1 ${expanded ? "hidden" : "hidden sm:flex"}`}
         >
-          <span className="text-[10px] tracking-wide text-stone-400 uppercase dark:text-stone-500">
+          <span className="text-caption tracking-wide text-stone-400 uppercase dark:text-stone-500">
             Next
           </span>
           <input

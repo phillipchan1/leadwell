@@ -48,7 +48,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
         className={`relative flex items-center gap-3 rounded-xl border border-dashed p-3 transition-colors ${
           dragging
             ? "border-teal-500 bg-teal-50/80 dark:border-teal-400 dark:bg-teal-950/40"
-            : "border-stone-300 bg-stone-50/60 dark:border-stone-700 dark:bg-stone-900/40"
+            : "border-primary bg-stone-50/60 dark:bg-stone-900/40"
         }`}
         onDragEnter={(e) => {
           e.preventDefault();
@@ -72,7 +72,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
           aria-label="Upload photo"
         >
           <Avatar name={name || "?"} photo={photo} size={64} />
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-[10px] font-medium text-white opacity-0 transition touch:bg-stone-900/45 touch:opacity-100 group-hover:bg-stone-900/45 group-hover:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-caption font-medium text-white opacity-0 transition touch:bg-stone-900/45 touch:opacity-100 group-hover:bg-stone-900/45 group-hover:opacity-100">
             Change
           </span>
         </button>
@@ -81,7 +81,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
           <div className="text-sm font-medium text-stone-800 dark:text-stone-100">
             {dragging ? "Drop to set photo" : "Photo or avatar"}
           </div>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-xs text-stone-500 dark:text-stone-400">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1 text-xs text-quaternary">
             {coarse ? "Tap to choose a photo" : "Drag an image here, or"}{" "}
             <Button
               size="sm"
@@ -153,13 +153,13 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
       </div>
 
       {showAvatars && (
-        <div className="space-y-2.5 rounded-xl border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-950/40">
+        <div className="space-y-2.5 rounded-xl border border-secondary bg-white p-3 dark:bg-stone-950/40">
           <div className="flex items-baseline justify-between gap-2">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Avatar themes
               </div>
-              <p className="text-[11px] text-stone-500 dark:text-stone-400">{theme.blurb}</p>
+              <p className="text-caption text-quaternary">{theme.blurb}</p>
             </div>
           </div>
 
@@ -174,7 +174,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
                   className={`rounded-md px-2 py-1 text-xs transition-colors touch:min-h-11 touch:min-w-11 touch:px-3 ${
                     active
                       ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                      : "bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700"
+                      : "bg-tertiary text-tertiary hover:bg-stone-200 dark:hover:bg-stone-700"
                   }`}
                 >
                   {t.label}
@@ -207,7 +207,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
                     className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                     draggable={false}
                   />
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-900/55 to-transparent px-1.5 pb-1 pt-4 text-left text-[10px] font-medium text-white opacity-0 touch:opacity-100 transition group-hover:opacity-100">
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-900/55 to-transparent px-1.5 pb-1 pt-4 text-left text-caption font-medium text-white opacity-0 touch:opacity-100 transition group-hover:opacity-100">
                     {a.label}
                   </span>
                 </button>

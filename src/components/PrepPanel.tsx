@@ -71,8 +71,8 @@ export function PrepPanel({
     return (
       <section className="space-y-2">
         <SectionTitle>Readiness</SectionTitle>
-        <div className="rounded-xl border border-dashed border-stone-300 px-3 py-3 dark:border-stone-700">
-          <p className="text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+        <div className="rounded-xl border border-dashed border-primary px-3 py-3">
+          <p className="text-caption leading-relaxed text-quaternary">
             {decided
               ? `No ${label} with ${firstName} — left out of readiness on purpose.`
               : `Track a ${label} to see whether you're ready for the next one. Nothing is measured until you do.`}
@@ -162,7 +162,7 @@ function MeetingPrep({
         ) : (
           <span />
         )}
-        <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+        <label className="flex shrink-0 items-center gap-1.5 text-caption text-quaternary">
           <span>Rhythm</span>
           <NativeSelect
             size="sm"
@@ -187,7 +187,7 @@ function MeetingPrep({
         </label>
       </div>
 
-      <div className="rounded-xl border border-stone-200 dark:border-stone-800">
+      <div className="rounded-xl border border-secondary">
         <div
           className="flex items-center gap-2.5 rounded-t-xl px-3 py-2.5"
           style={{ backgroundColor: color + "14" }}
@@ -207,12 +207,12 @@ function MeetingPrep({
             <div className="text-xs font-semibold" style={{ color }}>
               {STATE_LABEL[readiness.state]}
             </div>
-            <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+            <div className="truncate text-caption text-quaternary">
               {readiness.headline}
             </div>
           </div>
           <span
-            className="shrink-0 font-mono text-[10px] tabular-nums"
+            className="shrink-0 font-mono text-caption tabular-nums"
             style={{ color }}
             title={
               readiness.projected
@@ -231,7 +231,7 @@ function MeetingPrep({
               className="flex items-start gap-2.5 px-3 py-2 text-xs"
             >
               <span
-                className="mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-[8px] font-bold text-white"
+                className="mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-caption font-bold text-white"
                 style={
                   check.done
                     ? { backgroundColor: STATE_COLOR.ready }
@@ -245,14 +245,14 @@ function MeetingPrep({
                 <div
                   className={
                     check.done
-                      ? "text-stone-500 dark:text-stone-400"
+                      ? "text-quaternary"
                       : "font-medium text-stone-700 dark:text-stone-200"
                   }
                 >
                   {check.label}
                 </div>
                 {check.detail && (
-                  <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                  <div className="truncate text-caption text-quaternary">
                     {check.detail}
                   </div>
                 )}
@@ -273,7 +273,7 @@ function MeetingPrep({
 
         <div className="flex items-center justify-between gap-2 border-t border-stone-100 px-3 py-1.5 dark:border-stone-800/80">
           {meeting.rhythm === "as_needed" ? (
-            <label className="flex items-center gap-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+            <label className="flex items-center gap-1.5 text-caption text-quaternary">
               Nudge me after
               <Input
                 size="sm"
@@ -293,7 +293,7 @@ function MeetingPrep({
               days
             </label>
           ) : (
-            <span className="text-[10px] text-stone-500 dark:text-stone-400">
+            <span className="text-caption text-quaternary">
               {sessionCount} logged
             </span>
           )}

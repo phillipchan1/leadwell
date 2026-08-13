@@ -70,7 +70,7 @@ export function StrengthsDonut({
         x="50%"
         y="66%"
         textAnchor="middle"
-        className="fill-stone-400 text-[9px]"
+        className="fill-stone-400 text-caption"
       >
         themes
       </text>

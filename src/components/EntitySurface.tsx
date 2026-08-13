@@ -186,7 +186,7 @@ export function PeekPanel() {
     <div
       ref={ref}
       style={{ "--peek-w": `${panelPct}%` } as CSSProperties}
-      className="relative flex min-w-0 flex-1 shrink-0 flex-col bg-white lg:w-[var(--peek-w)] lg:min-w-[32rem] lg:flex-none lg:border-l lg:border-stone-200 lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:bg-stone-900 dark:lg:border-stone-800 dark:lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
+      className="relative flex min-w-0 flex-1 shrink-0 flex-col bg-primary lg:w-[var(--peek-w)] lg:min-w-[32rem] lg:flex-none lg:border-l lg:border-stone-200 lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:lg:border-stone-800 dark:lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
     >
       {/* The divider. Keyboard-resizable too, because a drag handle that only
           answers to a mouse is a control half the people here can't reach. */}

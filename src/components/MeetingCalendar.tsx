@@ -130,11 +130,11 @@ export function MeetingCalendar({
         )}
       </div>
 
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 dark:border-stone-800 dark:bg-stone-800">
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800">
         {WEEKDAYS.map((d) => (
           <div
             key={d}
-            className="bg-stone-50 px-1 py-1.5 text-center text-[10px] font-semibold tracking-wide text-stone-500 uppercase dark:bg-stone-950 dark:text-stone-400"
+            className="bg-secondary px-1 py-1.5 text-center text-caption font-semibold tracking-wide text-quaternary uppercase"
           >
             {d}
           </div>
@@ -166,7 +166,7 @@ export function MeetingCalendar({
 
       {selectedDay && !selectedDay.slot && (
         <form
-          className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/60 p-3 dark:border-stone-800 dark:bg-stone-950/40"
+          className="space-y-2 rounded-xl border border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40"
           onSubmit={(e) => {
             e.preventDefault();
             addToDay(selectedDay);
@@ -214,7 +214,7 @@ export function MeetingCalendar({
 
       {(unscheduled.backlog.length > 0 || unscheduled.parked.length > 0) && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-wide text-stone-400 uppercase dark:text-stone-500">
+          <p className="text-caption font-semibold tracking-wide text-stone-400 uppercase dark:text-stone-500">
             Unscheduled
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -236,7 +236,7 @@ export function MeetingCalendar({
             {unscheduled.parked.map((t) => (
               <span
                 key={t.id}
-                className="max-w-full truncate rounded-md border border-dashed border-stone-300 px-2 py-0.5 text-[11px] text-stone-500 dark:border-stone-700 dark:text-stone-400"
+                className="max-w-full truncate rounded-md border border-dashed border-primary px-2 py-0.5 text-caption text-quaternary"
                 title={t.text}
               >
                 {t.text}
@@ -269,7 +269,7 @@ function CalendarCell({
       type="button"
       onClick={onSelect}
       className={cx(
-        "flex min-h-[4.5rem] flex-col bg-white p-1 text-left transition dark:bg-stone-900",
+        "flex min-h-[4.5rem] flex-col bg-primary p-1 text-left transition",
         !day.inMonth && "opacity-40",
         selected && "ring-2 ring-teal-500 ring-inset dark:ring-teal-600",
         !selected && "hover:bg-stone-50 dark:hover:bg-stone-800/60"
@@ -277,7 +277,7 @@ function CalendarCell({
     >
       <span
         className={cx(
-          "mb-0.5 inline-flex size-5 items-center justify-center rounded-full text-[11px] tabular-nums",
+          "mb-0.5 inline-flex size-5 items-center justify-center rounded-full text-caption tabular-nums",
           isToday && "bg-teal-600 font-semibold text-white",
           !isToday && "text-stone-600 dark:text-stone-300"
         )}
@@ -301,13 +301,13 @@ function CalendarCell({
         {day.topics.slice(0, 2).map((t) => (
           <li
             key={t.id}
-            className="truncate text-[10px] leading-tight text-stone-600 dark:text-stone-300"
+            className="truncate text-caption leading-tight text-stone-600 dark:text-stone-300"
           >
             {t.text}
           </li>
         ))}
         {day.topics.length > 2 && (
-          <li className="text-[10px] text-stone-400">+{day.topics.length - 2}</li>
+          <li className="text-caption text-stone-400">+{day.topics.length - 2}</li>
         )}
       </ul>
     </button>
@@ -328,7 +328,7 @@ function UnscheduledChip({
   if (!dates.length) {
     return (
       <span
-        className="max-w-full truncate rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600 dark:bg-stone-800 dark:text-stone-300"
+        className="max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 dark:text-stone-300"
         title={text}
       >
         {text}
@@ -340,14 +340,14 @@ function UnscheduledChip({
     <span className="relative inline-block max-w-full">
       <button
         type="button"
-        className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-stone-100 px-2 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+        className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-700"
         title={`Schedule: ${text}`}
         onClick={() => setOpen((v) => !v)}
       >
         {text}
       </button>
       {open && (
-        <ul className="absolute z-10 mt-1 max-h-40 w-48 overflow-y-auto rounded-lg border border-stone-200 bg-white py-1 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+        <ul className="absolute z-10 mt-1 max-h-40 w-48 overflow-y-auto rounded-lg border border-stone-200 bg-primary py-1 shadow-lg dark:border-stone-700">
           {dates.map((d) => (
             <li key={d}>
               <button

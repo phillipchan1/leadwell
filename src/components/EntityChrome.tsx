@@ -220,7 +220,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
   if (!trail) return null;
 
   return (
-    <div className="chrome-compact flex shrink-0 items-center gap-2 border-b border-stone-200 bg-stone-50 px-3 py-2 sm:px-4 dark:border-stone-800 dark:bg-stone-950/60">
+    <div className="chrome-compact flex shrink-0 items-center gap-2 border-b border-secondary bg-stone-50 px-3 py-2 sm:px-4 dark:bg-stone-950/60">
       {/* In iOS standalone there is no browser back and no edge gesture out of
           a full-page surface, so this is the only exit — it gets a label. */}
       {mode === "focus" ? (
@@ -262,9 +262,10 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             >
               {trail.parent.label}
             </Button>
-            <span className="shrink-0 text-stone-400 dark:text-stone-600">
-              ›
-            </span>
+            <ChevronRight
+              className="size-3.5 shrink-0 text-stone-400 dark:text-stone-600"
+              aria-hidden="true"
+            />
           </>
         )}
         <span className="truncate px-1 py-1 font-medium text-stone-700 dark:text-stone-200">
@@ -282,7 +283,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             onClick={() => prev && trail.select(prev.id)}
             icon={ChevronLeft}
           />
-          <span className="text-[10px] tabular-nums text-stone-500 dark:text-stone-400">
+          <span className="text-caption tabular-nums text-quaternary">
             {index + 1}/{trail.siblings.length}
           </span>
           <PagerButton

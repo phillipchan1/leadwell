@@ -1,10 +1,48 @@
 @theme {
+    /* ── The neutral ramp is stone ──
+       Untitled UI's semantic tokens below are all defined against
+       `--color-neutral-*`, which this repo never defined — so they fell
+       through to Tailwind's default `neutral`, a pure grey. Meanwhile all 60
+       app components hard-code `stone-*`, which is warm. Two greys, and the
+       token layer was the one nothing used.
+
+       Aliasing the ramp here rather than rewriting the ~100 semantic
+       definitions below means the decision is stated once and reverts in one
+       line. It also makes the migration off `stone-*` a true refactor: a
+       component converted from `text-stone-500 dark:text-stone-400` to
+       `text-tertiary` renders the same pixels it did before.
+
+       Nothing in the app uses `neutral-*` utilities directly, so the only
+       other thing this moves is `components/base/**`, which should be warm
+       for the same reason everything around it is. */
+    --color-neutral-50: var(--color-stone-50);
+    --color-neutral-100: var(--color-stone-100);
+    --color-neutral-200: var(--color-stone-200);
+    --color-neutral-300: var(--color-stone-300);
+    --color-neutral-400: var(--color-stone-400);
+    --color-neutral-500: var(--color-stone-500);
+    --color-neutral-600: var(--color-stone-600);
+    --color-neutral-700: var(--color-stone-700);
+    --color-neutral-800: var(--color-stone-800);
+    --color-neutral-900: var(--color-stone-900);
+    --color-neutral-950: var(--color-stone-950);
+
     /* FONT FAMILY */
     --font-body: var(--font-inter, "Inter"), -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     --font-display: var(--font-inter, "Inter"), -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
     --font-mono: ui-monospace, "Roboto Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
     /* FONT SIZE */
+    /* ── caption ──
+       `text-[10px]` and `text-[11px]` were 146 uses between them — more than
+       `text-sm` — and neither is a scale step. They are the app's most common
+       way of saying anything that isn't a name: the "why this matters" line
+       under a health read, a metadata row, a badge label. A 1px distinction
+       nobody can see at arm's length in a car was carrying no meaning, only
+       drift, so they collapse to one step just below `text-xs`. */
+    --text-caption: 0.6875rem;
+    --text-caption--line-height: 1rem;
+
     --text-xs: calc(var(--spacing) * 3);
     --text-xs--line-height: calc(var(--spacing) * 4.5);
 
@@ -707,7 +745,18 @@
         --color-fg-brand-secondary_alt: var(--color-neutral-600);
         --color-fg-brand-secondary_hover: var(--color-neutral-500);
 
-        --color-bg-primary: var(--color-neutral-950);
+        /* ── Elevation runs the other way in dark ──
+           Untitled UI's dark block makes bg-primary the darkest surface (950)
+           and bg-secondary lighter (900). This app does the opposite, and is
+           right to: a card is `bg-white dark:bg-stone-900` sitting on a page
+           that is `bg-stone-50 dark:bg-stone-950`, so a raised surface gets
+           *lighter* in dark — the convention iOS and Material both use, and
+           the one the whole product was designed around.
+
+           Swapping the two here makes both of the app's surface pairs exact
+           no-ops when they convert to tokens, and brings `components/base/**`
+           onto the same elevation model as everything around it. */
+        --color-bg-primary: var(--color-neutral-900);
         --color-bg-tertiary: var(--color-neutral-800);
         --color-bg-brand-primary: var(--color-brand-500);
         --color-bg-error-secondary: var(--color-red-600);
@@ -726,7 +775,7 @@
         --color-bg-brand-solid_hover: var(--color-brand-500);
         --color-bg-error-primary: var(--color-red-950);
         --color-bg-brand-secondary: var(--color-brand-600);
-        --color-bg-secondary: var(--color-neutral-900);
+        --color-bg-secondary: var(--color-neutral-950);
         --color-bg-quaternary: var(--color-neutral-700);
         --color-bg-primary_alt: var(--color-bg-secondary);
         --color-bg-brand-primary_alt: var(--color-bg-secondary);

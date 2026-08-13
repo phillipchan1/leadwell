@@ -112,21 +112,21 @@ export function MeetingProfile({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
-        className={`entity-header shrink-0 border-b border-stone-200 dark:border-stone-800 ${pad}`}
+        className={`entity-header shrink-0 border-b border-secondary ${pad}`}
       >
         <h2 className="truncate text-lg font-semibold text-stone-800 dark:text-stone-100">
           {title}
         </h2>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
-          <span className="text-[11px] text-stone-500 dark:text-stone-400">
+          <span className="text-caption text-quaternary">
             {RHYTHM_LABEL[meeting.rhythm]}
             {subjectName && ` · with ${subjectName}`}
             {` · ${formatCountdown(readiness)}`}
           </span>
         </div>
         {loose.length > 0 && (
-          <p className="mt-1 text-[11px] font-medium text-amber-700 dark:text-amber-500">
+          <p className="mt-1 text-caption font-medium text-amber-700 dark:text-amber-500">
             {loose.length} topic{loose.length === 1 ? "" : "s"} planned for a
             meeting that's already been and gone.
           </p>
@@ -312,7 +312,7 @@ function MeetingSettings({
 
       <section className="space-y-2">
         <SectionTitle>Danger zone</SectionTitle>
-        <p className="text-[11px] text-stone-500 dark:text-stone-400">
+        <p className="text-caption text-quaternary">
           {sessionCount > 0
             ? `This meeting has ${sessionCount} write-up${sessionCount === 1 ? "" : "s"}. Consider switching it to As needed instead — history is worth keeping even when the rhythm stops.`
             : "Nothing has been logged against this meeting yet."}

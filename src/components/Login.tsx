@@ -37,12 +37,12 @@ export function Login() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center bg-stone-50 p-6 dark:bg-stone-950">
-      <div className="w-full max-w-sm rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm dark:border-stone-800 dark:bg-stone-900">
+    <div className="flex h-full items-center justify-center bg-secondary p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-secondary bg-primary p-8 text-center shadow-sm">
         <h1 className="text-2xl font-bold tracking-tight">
           Lead<span className="text-teal-600">Well</span>
         </h1>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">
+        <p className="mt-2 text-sm text-quaternary">
           Sign in to reach your teams, people, and coaching notes from anywhere.
         </p>
 
