@@ -17,7 +17,6 @@ import {
   Settings01,
   Sun,
   Table,
-  Users01,
 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import { useStore, type Tab } from "../store/useStore";
@@ -32,11 +31,15 @@ export const TABS: {
   short: string;
   icon: typeof Rows03;
 }[] = [
-  { id: "overview", label: "Overview", short: "Overview", icon: BarChartSquare02 },
+  /* "Today" rather than "Overview": this is the screen the app opens on, and
+     what it actually answers is "what needs me now" — who's drifting, who I
+     haven't prayed for, what came and went unlogged. Naming it for the job
+     rather than the format is the whole of the Today/Now framing; the surface
+     itself already did the work. */
+  { id: "overview", label: "Today", short: "Today", icon: BarChartSquare02 },
   { id: "tree", label: "Org tree", short: "Tree", icon: Dataflow03 },
   { id: "meetings", label: "Meetings", short: "Meetings", icon: CalendarCheck01 },
   { id: "table", label: "Table", short: "Table", icon: Table },
-  { id: "people", label: "People table", short: "People", icon: Users01 },
 ];
 
 /**

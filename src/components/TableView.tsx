@@ -14,6 +14,7 @@
  * matters more than the hierarchy.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useStore } from "../store/useStore";
 import type { HealthLevel } from "../types";
 import {
@@ -149,7 +150,27 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
   const [ownGroupBy, setOwnGroupBy] = useState<GroupBy>("team");
   const groupBy: GroupBy = isTree ? "team" : ownGroupBy;
   const setGroupBy = setOwnGroupBy;
-  const [show, setShow] = useState<ShowKind>("all");
+  /**
+   * The "show" filter is URL-backed, which is what lets `/table?type=person`
+   * be a real destination rather than a state you have to set by hand every
+   * time. `/people` used to be a whole nav slot for exactly this filter; it
+   * redirects here now, so the link in someone's bookmarks still lands on the
+   * view they saved.
+   *
+   * Selection stays the router's job (see lib/routes) — this is one filter
+   * that happens to be worth addressing, not a second source of truth.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlType = searchParams.get("type");
+  const show: ShowKind =
+    urlType === "person" ? "people" : urlType === "team" ? "teams" : "all";
+  const setShow = (next: ShowKind) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === "people") params.set("type", "person");
+    else if (next === "teams") params.set("type", "team");
+    else params.delete("type");
+    setSearchParams(params, { replace: true });
+  };
   const [ownDomainFilter, setOwnDomainFilter] = useState("");
   // In tree mode the domain chips above the outline are the filter, so this
   // instance follows them instead of carrying a second, conflicting control.

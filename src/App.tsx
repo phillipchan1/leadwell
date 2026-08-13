@@ -1,7 +1,12 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
-import { parseRoute, routePath } from "./lib/routes";
+import {
+  LEGACY_PEOPLE_PATH,
+  PEOPLE_FILTER_PATH,
+  parseRoute,
+  routePath,
+} from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
 import { Overview } from "./components/Overview";
 import { AICoach } from "./components/AICoach";
@@ -46,9 +51,6 @@ const OrgTree = lazy(() =>
 const TableView = lazy(() =>
   import("./components/TableView").then((m) => ({ default: m.TableView }))
 );
-const PeopleTable = lazy(() =>
-  import("./components/PeopleTable").then((m) => ({ default: m.PeopleTable }))
-);
 const MeetingsTable = lazy(() =>
   import("./components/MeetingsTable").then((m) => ({ default: m.MeetingsTable }))
 );
@@ -86,6 +88,12 @@ function useRouteSync() {
   }, [navigate]);
 
   useEffect(() => {
+    // `/people` is now a saved filter on the table. Old links, bookmarks and
+    // anything already in someone's history keep working.
+    if (location.pathname.replace(/\/$/, "") === LEGACY_PEOPLE_PATH) {
+      navigate(PEOPLE_FILTER_PATH + location.hash, { replace: true });
+      return;
+    }
     const route = parseRoute(location.pathname, location.search);
     if (route.view === "tab" && route.peek?.sessionId) {
       navigate(routePath({ view: "focus", target: route.peek }), { replace: true });
@@ -290,7 +298,6 @@ export default function App() {
                 {tab === "tree" && <OrgTree />}
                 {tab === "meetings" && <MeetingsTable />}
                 {tab === "table" && <TableView />}
-                {tab === "people" && <PeopleTable />}
               </Suspense>
             </main>
 

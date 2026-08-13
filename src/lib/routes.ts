@@ -20,7 +20,7 @@
  * second implementation of any of them.
  */
 
-export type Tab = "overview" | "tree" | "table" | "people" | "meetings";
+export type Tab = "overview" | "tree" | "table" | "meetings";
 export type EntityKind = "team" | "person" | "manager" | "meeting" | "me";
 
 export type Selection = {
@@ -37,7 +37,18 @@ export type Route =
   | { view: "tab"; tab: Tab; peek: Selection | null }
   | { view: "focus"; target: Selection };
 
-const TABS: Tab[] = ["overview", "tree", "table", "people", "meetings"];
+const TABS: Tab[] = ["overview", "tree", "table", "meetings"];
+
+/**
+ * `/people` was a fifth destination rendering a strict subset of `/table` —
+ * every column it had, the table already had — so it spent 20% of the primary
+ * nav on a filter. On a phone it was worse: the tree tab renders `TableView`
+ * too, so three of five bottom-nav items landed on the same component.
+ *
+ * It survives as a saved filter. Old links keep working; `App` rewrites them.
+ */
+export const LEGACY_PEOPLE_PATH = "/people";
+export const PEOPLE_FILTER_PATH = "/table?type=person";
 /** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
 const ID_KINDS: EntityKind[] = ["team", "person", "manager", "meeting"];
 
