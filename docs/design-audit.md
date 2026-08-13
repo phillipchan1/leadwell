@@ -625,17 +625,63 @@ widget carrying a 13px class comes out 16px/44px with no CSS of its own.
 width; the structural floor is touch-only, so removing them would shrink
 desktop controls.
 
-### What is left
+### Phase 6 — mostly shipped
 
-- **5.3 / 5.4** — the raw-control migration and retiring `.field-input` and the
-  other bespoke class families. Both are large and want to be done a file at a
-  time with eyes on each.
-- **Phase 6** — all four decision gates are answered (merge `people` into
-  `table` and spend the slot on a Today/Now home; two editors, fast in-place
-  plus full TipTap with the serif journal as a mode; `meeting` and `me` join
-  the five-mode contract; one canonical meeting-creation form; person keeps
-  "Notes", the occurrence artifact becomes "Write-up"). Unblocked.
-- **Phase 7** — the regression pass over 5 and 6.
+All four decision gates were answered in advance.
+
+| Item | State |
+|---|---|
+| Nav collapse (IA-2) | **Done** — `/people` is a saved filter at `/table?type=person`; five tabs → four; Overview relabelled "Today" |
+| Entity sub-navigation (IA-4) | **Done** — `meeting` and `me` on the five-mode contract; "Notes" collision resolved as person-Notes vs meeting-**Write-ups** |
+| Meeting creation (IA-6) | **Done** — PrepPanel routes through `StartMeetingForm` instead of hardcoding `"weekly"` with no name |
+| Undo stack (REL-3 / S5) | **Done** — six-deep, ⌘Z, shared with the per-action toast |
+| Global search (IA-8 / S7) | **Done** — ⌘K, matches initials, routes through the selection setters |
+| Editors (IA-5 / S2) | **Declined** — see below |
+
+**The `me` kind carries one mode, not five.** The approved answer was to bring
+both kinds fully onto the contract; a meeting genuinely takes three of the five,
+but `me` has no meetings with itself, no record distinct from its own profile
+and no sibling pager, so the contract gained an explicit `OMITS` list and the
+reasoning for it rather than four empty tabs. `entityModeFor` clamps a mode a
+kind doesn't have, so an old `?s=prayer` link on a meeting lands somewhere real.
+
+**IA-5 (nine editors → two) was not attempted.** The audit's count includes
+things that aren't surfaces. What actually exists is two editors —
+`InlineSessionEditor` (fast, in place) and `SessionEditor` (full, Blocks ↔
+Markdown) — plus two *engines* (`NotionBlockEditor`, `FullScreenMarkdown`), two
+*placements* (`OccurrenceNotesPanel` and its sheet, which render `SessionEditor`
+in a panel), one *page chrome* (`MeetingEditor`), and `WritingPad`/`NotesPanel`
+for person notes, which is a different noun and stays.
+
+So the contract is already close to the approved two. The one real
+consolidation left is folding `MeetingEditor` — 576 lines of full-page chrome
+carrying the agenda, topic board, transcript and AI structuring. Rebuilding
+that is a design-and-build task on the action leaders perform most, with no
+tests in the repo; it was left rather than half-done.
+
+### Phase 7 — regression pass
+
+- **Matrix:** 12 venues × light/dark = 24 combinations. All render, none
+  overflow horizontally, no console errors.
+- **Mobile matrix:** 6 venues × both themes at 375×812. No overflow, zero
+  targets under 44px, zero fields under 16px, four nav tabs, toast clears the
+  bottom nav.
+- **Found and fixed one real regression.** Wiring the undo stack into
+  `deleteWithUndo` created a `toasts ↔ undo` import cycle, which under Vite's
+  module graph produced a second `toastQueue`: `<ToastHost />` stayed subscribed
+  to one instance while every `toast()` landed in the other, so toasts silently
+  stopped appearing. `deleteWithUndo` moved into `undo.ts` and the dependency
+  now runs one way.
+- **Voice check:** the empty states and the Phase 1 confirm bodies survive
+  intact — "Nobody on the list yet…", "Nothing is measured until you do.",
+  "Every tracked 1:1 is on track. 🎉", "What you wrote on {date} goes with it.",
+  "It stops counting as evidence in your next review or ask."
+
+### What is left
+- **5.3 / 5.4** — the raw-control migration (84 buttons, 27 inputs onto the
+  primitives) and retiring `.field-input` and the other bespoke class families.
+  Both are large and want to be done a file at a time with eyes on each.
+- **IA-5** — folding `MeetingEditor`, as above.
 - **Still unverified from Phase 1** — cold start from cache, offline edit →
   reconnect, hard-quit-offline → reopen, and sign-out clearing the cache. These
   need `bootstrap()` against real Supabase, which needs `VITE_DEV_TEST_EMAIL`
