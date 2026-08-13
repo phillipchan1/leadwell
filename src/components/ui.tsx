@@ -117,7 +117,7 @@ export function Card({
 
 export function SectionTitle({ children }: { children: ReactNode }) {
   return (
-    <h3 className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+    <h3 className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
       {children}
     </h3>
   );

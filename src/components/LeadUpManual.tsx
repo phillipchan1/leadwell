@@ -70,7 +70,7 @@ export function LeadUpManual({
     <section className="space-y-3">
       <div>
         <SectionTitle>Operating manual</SectionTitle>
-        <p className="mt-1 text-[11px] text-quaternary">
+        <p className="mt-1 text-caption text-quaternary">
           How to win with {subject.name.split(" ")[0]} — not their personality,
           their wiring as your manager.
         </p>

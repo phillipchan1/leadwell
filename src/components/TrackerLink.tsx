@@ -158,7 +158,7 @@ export function TrackerLink({
           <div className="truncate text-xs font-medium text-stone-700 dark:text-stone-200">
             {name}
           </div>
-          <div className="truncate text-[11px] text-quaternary">
+          <div className="truncate text-caption text-quaternary">
             {trackerLocation(url)}
           </div>
         </div>
@@ -177,7 +177,7 @@ export function TrackerLink({
         )}
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-stone-100 px-3 py-1.5 dark:border-stone-800/80">
-        <span className="min-w-0 flex-1 truncate text-[10px] text-quaternary">
+        <span className="min-w-0 flex-1 truncate text-caption text-quaternary">
           {href
             ? `Notes for this ${label} live there — rhythm and topics stay here`
             : "Not a link — kept as a pointer to the notes"}

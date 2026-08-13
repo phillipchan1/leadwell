@@ -423,7 +423,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
           showing both would be two identical rows driving one store value. */}
       <div className={cx("flex flex-wrap items-center gap-1.5 touch:gap-2", isTree && "hidden")}>
         <Explain text="Shared with the org tree, so a scan follows you between the two views">
-          <span className="text-[11px] font-medium tracking-wide text-quaternary uppercase">
+          <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
             Health
           </span>
         </Explain>
@@ -744,7 +744,7 @@ function Row({
               {record.name}
             </div>
             {record.role && (
-              <div className="truncate text-[11px] text-quaternary" title={record.role}>
+              <div className="truncate text-caption text-quaternary" title={record.role}>
                 {record.role}
               </div>
             )}
@@ -809,7 +809,7 @@ function Cell({
           />
           {record.derived && (
             <Explain text="Averaged from the people on it — I haven't rated the team itself">
-              <span className="text-[10px] text-quaternary">
+              <span className="text-caption text-quaternary">
                 ~{filterLabel(record.derived.level).toLowerCase()}
               </span>
             </Explain>
@@ -832,7 +832,7 @@ function Cell({
           dot={false}
         />
       ) : (
-        <span className="text-[11px] text-stone-400 dark:text-stone-600">
+        <span className="text-caption text-stone-400 dark:text-stone-600">
           untracked
         </span>
       );

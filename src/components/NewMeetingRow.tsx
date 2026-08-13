@@ -128,7 +128,7 @@ export function NewMeetingRow({ onDone }: { onDone: () => void }) {
         </Button>
       </div>
       {added && (
-        <p className="mt-2 text-[11px] text-teal-700 dark:text-teal-400">
+        <p className="mt-2 text-caption text-teal-700 dark:text-teal-400">
           Added “{added}”. Add another, or press Done.
         </p>
       )}

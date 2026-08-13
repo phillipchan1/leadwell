@@ -48,7 +48,7 @@ export function ProfileBuildCanvas({
           <div className="min-w-0 flex-1 space-y-2.5">
             <div>
               <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className="text-[10px] font-medium tracking-wider text-quaternary uppercase">
+                <span className="text-caption font-medium tracking-wider text-quaternary uppercase">
                   Confidence
                 </span>
                 <span className="font-mono text-xs tabular-nums text-teal-700 dark:text-teal-300">
@@ -87,7 +87,7 @@ export function ProfileBuildCanvas({
                       title={`${d}: ${n}`}
                     />
                   </div>
-                  <span className="text-[9px] leading-tight text-quaternary">
+                  <span className="text-caption leading-tight text-quaternary">
                     {d === "Relationship Building"
                       ? "Rel"
                       : d === "Strategic Thinking"
@@ -159,7 +159,7 @@ export function ProfileBuildCanvas({
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="text-[10px] font-medium tracking-wider text-quaternary uppercase">
+    <div className="text-caption font-medium tracking-wider text-quaternary uppercase">
       {children}
     </div>
   );
@@ -181,7 +181,7 @@ function SignalRow({
         {signals.map((s, i) => (
           <span
             key={s.id}
-            className={`profile-build__chip profile-build__chip--enter inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium ${
+            className={`profile-build__chip profile-build__chip--enter inline-flex items-center gap-1 rounded-lg px-2 py-1 text-caption font-medium ${
               tone === "positive"
                 ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
                 : tone === "warning"
@@ -266,7 +266,7 @@ function MeterRing({
         <span className="font-mono text-sm font-semibold tabular-nums text-stone-800 dark:text-stone-100">
           {Math.round(value)}%
         </span>
-        <span className="text-[8px] tracking-wide text-quaternary uppercase">
+        <span className="text-caption tracking-wide text-quaternary uppercase">
           {label}
         </span>
       </div>

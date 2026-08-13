@@ -103,7 +103,7 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
           </p>
 
           <div className="flex items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 dark:bg-stone-950/50">
-            <label className="flex items-center gap-1.5 text-[11px] text-quaternary">
+            <label className="flex items-center gap-1.5 text-caption text-quaternary">
               Track at
               <NativeSelect
                 size="sm"
@@ -137,7 +137,7 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
                     <Avatar name={row.name} size={28} />
                   ) : (
                     <span
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-tertiary text-[10px] text-quaternary"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-tertiary text-caption text-quaternary"
                       aria-hidden
                     >
                       ▤
@@ -146,7 +146,7 @@ export function TriageModal({ onClose }: { onClose: () => void }) {
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm">{row.name}</div>
                     {row.sub && (
-                      <div className="truncate text-[11px] text-quaternary">
+                      <div className="truncate text-caption text-quaternary">
                         {row.sub}
                       </div>
                     )}

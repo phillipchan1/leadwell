@@ -62,7 +62,7 @@ export function BottomNav() {
             onClick={() => setTab(t.id)}
             aria-current={active ? "page" : undefined}
             className={cx(
-              "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 pt-2 pb-1.5 text-[11px] font-medium transition-colors active:bg-stone-100 dark:active:bg-stone-800",
+              "flex min-h-14 flex-1 flex-col items-center justify-center gap-1 px-1 pt-2 pb-1.5 text-caption font-medium transition-colors active:bg-stone-100 dark:active:bg-stone-800",
               active
                 ? "text-teal-700 dark:text-teal-400"
                 : "text-quaternary"

@@ -200,7 +200,7 @@ function SessionRow({
         <label
           className={`shrink-0 items-center gap-1 ${expanded ? "hidden" : "hidden sm:flex"}`}
         >
-          <span className="text-[10px] tracking-wide text-stone-400 uppercase dark:text-stone-500">
+          <span className="text-caption tracking-wide text-stone-400 uppercase dark:text-stone-500">
             Next
           </span>
           <input

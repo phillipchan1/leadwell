@@ -74,7 +74,7 @@ export function NotesPanel({
               size="sm"
               onClick={save}
               iconTrailing={
-                <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
+                <kbd className="rounded bg-white/20 px-1 font-mono text-caption font-normal text-white/90">
                   ⌘↵
                 </kbd>
               }
@@ -92,7 +92,7 @@ export function NotesPanel({
       <ul className="space-y-3">
         {mine.map((n) => (
           <li key={n.id} className="group space-y-1">
-            <div className="flex items-center justify-between text-[11px] text-quaternary">
+            <div className="flex items-center justify-between text-caption text-quaternary">
               <span>{n.date}</span>
               <ButtonUtility
                 size="xs"

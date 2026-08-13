@@ -64,7 +64,7 @@ export function SessionHistoryTable({
     <div className="overflow-x-auto rounded-xl border border-secondary">
       <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-secondary bg-secondary text-[10px] font-semibold tracking-wide text-quaternary uppercase">
+          <tr className="border-b border-secondary bg-secondary text-caption font-semibold tracking-wide text-quaternary uppercase">
             <th className="px-3 py-2 font-semibold">Date</th>
             <th className="px-3 py-2 font-semibold">Status</th>
             <th className="hidden px-3 py-2 font-semibold sm:table-cell">

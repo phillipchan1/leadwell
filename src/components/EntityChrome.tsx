@@ -282,7 +282,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             onClick={() => prev && trail.select(prev.id)}
             icon={ChevronLeft}
           />
-          <span className="text-[10px] tabular-nums text-quaternary">
+          <span className="text-caption tabular-nums text-quaternary">
             {index + 1}/{trail.siblings.length}
           </span>
           <PagerButton

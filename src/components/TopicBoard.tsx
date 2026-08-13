@@ -226,7 +226,7 @@ export function TopicBoard({
                   <div className="flex items-baseline justify-between gap-1">
                     <span
                       className={cx(
-                        "truncate text-[11px] font-semibold tracking-wide uppercase",
+                        "truncate text-caption font-semibold tracking-wide uppercase",
                         past
                           ? "text-amber-700 dark:text-amber-500"
                           : "text-quaternary"
@@ -234,14 +234,14 @@ export function TopicBoard({
                     >
                       {col.label}
                     </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-quaternary">
+                    <span className="shrink-0 text-caption tabular-nums text-quaternary">
                       {col.topics.length}
                     </span>
                   </div>
                   {col.hint && (
                     <div
                       className={cx(
-                        "truncate text-[10px]",
+                        "truncate text-caption",
                         past
                           ? "text-amber-700 dark:text-amber-500"
                           : "text-stone-400 dark:text-stone-500"
@@ -251,7 +251,7 @@ export function TopicBoard({
                     </div>
                   )}
                   {notesPreview && (
-                    <div className="mt-0.5 truncate text-[10px] text-teal-700 dark:text-teal-400">
+                    <div className="mt-0.5 truncate text-caption text-teal-700 dark:text-teal-400">
                       {notesPreview}
                     </div>
                   )}
@@ -259,15 +259,15 @@ export function TopicBoard({
               ) : (
                 <div className="px-2.5 pt-2 pb-1">
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="truncate text-[11px] font-semibold tracking-wide text-quaternary uppercase">
+                    <span className="truncate text-caption font-semibold tracking-wide text-quaternary uppercase">
                       {col.label}
                     </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-quaternary">
+                    <span className="shrink-0 text-caption tabular-nums text-quaternary">
                       {col.topics.length}
                     </span>
                   </div>
                   {col.hint && (
-                    <div className="truncate text-[10px] text-stone-400 dark:text-stone-500">
+                    <div className="truncate text-caption text-stone-400 dark:text-stone-500">
                       {col.hint}
                     </div>
                   )}
@@ -451,7 +451,7 @@ function TopicCard({
           />
           {topic.carried > 1 && !covered && (
             <span
-              className="mt-0.5 inline-block rounded bg-amber-100 px-1 py-px text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500"
+              className="mt-0.5 inline-block rounded bg-amber-100 px-1 py-px text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500"
               title="Pushed to a later meeting this many times"
             >
               pushed {topic.carried}×
@@ -500,7 +500,7 @@ function TopicCard({
         <select
           value={columnKey}
           onChange={(e) => onMove(e.target.value)}
-          className="min-h-8 w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-[11px] text-quaternary outline-none touch:text-md"
+          className="min-h-8 w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-caption text-quaternary outline-none touch:text-md"
         >
           {moveOptions.map((o) => (
             <option key={o.key} value={o.key}>

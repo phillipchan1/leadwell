@@ -217,7 +217,7 @@ export function PeopleTable() {
                     <div>
                       <div className="font-medium">{p.name}</div>
                       {p.role && (
-                        <div className="text-[11px] text-quaternary">
+                        <div className="text-caption text-quaternary">
                           {p.role}
                         </div>
                       )}

@@ -116,7 +116,7 @@ export function OccurrenceNotesPanel({
             {heading}
           </p>
           <label className="mt-1 flex items-center gap-1.5">
-            <span className="text-[10px] font-medium tracking-wide text-quaternary uppercase">
+            <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
               Date
             </span>
             <input

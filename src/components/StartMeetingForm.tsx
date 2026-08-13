@@ -46,7 +46,7 @@ export function StartMeetingForm({
         onChange={setName}
       />
       <div className="space-y-1.5">
-        <span className="text-[11px] font-semibold tracking-wide text-quaternary uppercase">
+        <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
           How often
         </span>
         <div className="flex flex-wrap gap-1.5">

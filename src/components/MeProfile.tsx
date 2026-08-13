@@ -68,7 +68,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
             <div className="text-xs text-stone-500">
               {me.title ?? "Leader"} · you
             </div>
-            <div className="mt-1 text-[11px] text-quaternary">
+            <div className="mt-1 text-caption text-quaternary">
               {teams.length} teams · {withRead}/{people.length} with a read
             </div>
           </div>
@@ -133,7 +133,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                     {DOMAINS.map((d) => (
                       <span
                         key={d}
-                        className="flex items-center gap-1 text-[10px] text-quaternary"
+                        className="flex items-center gap-1 text-caption text-quaternary"
                       >
                         <span
                           className="h-1.5 w-1.5 rounded-full"
@@ -148,7 +148,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
               <div className="grid grid-cols-2 gap-2">
                 {enn && (
                   <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                    <div className="text-[10px] tracking-wider text-quaternary uppercase">
+                    <div className="text-caption tracking-wider text-quaternary uppercase">
                       Enneagram
                     </div>
                     <div className="text-sm font-semibold">
@@ -159,7 +159,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                 )}
                 {mbtiKey && MBTI[mbtiKey] && (
                   <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                    <div className="text-[10px] tracking-wider text-quaternary uppercase">
+                    <div className="text-caption tracking-wider text-quaternary uppercase">
                       MBTI
                     </div>
                     <div className="text-sm font-semibold">{mbtiKey}</div>
@@ -176,7 +176,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
                       key={m.id}
                       className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
                     >
-                      <div className="text-[10px] tracking-wider text-quaternary uppercase">
+                      <div className="text-caption tracking-wider text-quaternary uppercase">
                         {m.name}
                       </div>
                       <div className="text-sm font-semibold">{m.result}</div>

@@ -104,7 +104,7 @@ export function ManagerProfile({
               <TintBadge color="#3B82F6">Leading up</TintBadge>
               {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
             </div>
-            <div className="mt-1 text-[11px] text-quaternary">
+            <div className="mt-1 text-caption text-quaternary">
               {nextSession && `Next check-in ${nextSession}`}
               {nextSession && lastSession && " · "}
               {lastSession && `Last ${lastSession.date}`}

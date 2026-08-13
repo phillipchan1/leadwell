@@ -33,6 +33,16 @@
     --font-mono: ui-monospace, "Roboto Mono", SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
     /* FONT SIZE */
+    /* ── caption ──
+       `text-[10px]` and `text-[11px]` were 146 uses between them — more than
+       `text-sm` — and neither is a scale step. They are the app's most common
+       way of saying anything that isn't a name: the "why this matters" line
+       under a health read, a metadata row, a badge label. A 1px distinction
+       nobody can see at arm's length in a car was carrying no meaning, only
+       drift, so they collapse to one step just below `text-xs`. */
+    --text-caption: 0.6875rem;
+    --text-caption--line-height: 1rem;
+
     --text-xs: calc(var(--spacing) * 3);
     --text-xs--line-height: calc(var(--spacing) * 4.5);
 

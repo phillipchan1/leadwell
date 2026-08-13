@@ -162,7 +162,7 @@ export function PersonProfile({
             </div>
             {led.length > 0 && (
               <div className="entity-header-secondary mt-1 flex flex-wrap items-center gap-1">
-                <span className="text-[11px] text-quaternary">
+                <span className="text-caption text-quaternary">
                   Leads
                 </span>
                 {led.map((t) => (
@@ -170,7 +170,7 @@ export function PersonProfile({
                     key={t.id}
                     type="button"
                     onClick={() => selectTeam(t.id)}
-                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-tertiary px-1.5 py-0.5 text-[11px] text-tertiary hover:bg-stone-200 dark:hover:bg-stone-700"
+                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-tertiary px-1.5 py-0.5 text-caption text-tertiary hover:bg-stone-200 dark:hover:bg-stone-700"
                   >
                     {t.name}
                   </button>
@@ -182,7 +182,7 @@ export function PersonProfile({
                 <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
               </div>
             )}
-            <div className="entity-header-secondary mt-1 text-[11px] text-quaternary">
+            <div className="entity-header-secondary mt-1 text-caption text-quaternary">
               {nextSession &&
                 `Next ${isLeadUp ? "check-in" : "1:1"} ${nextSession}`}
               {nextSession && lastSession && " · "}
@@ -372,7 +372,7 @@ export function PersonProfile({
                           {DOMAINS.map((d) => (
                             <span
                               key={d}
-                              className="flex items-center gap-1 text-[10px] text-quaternary"
+                              className="flex items-center gap-1 text-caption text-quaternary"
                             >
                               <span
                                 className="h-1.5 w-1.5 rounded-full"
@@ -387,7 +387,7 @@ export function PersonProfile({
                     <div className="grid grid-cols-2 gap-2">
                       {enn && (
                         <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                          <div className="text-[10px] tracking-wider text-quaternary uppercase">
+                          <div className="text-caption tracking-wider text-quaternary uppercase">
                             Enneagram
                           </div>
                           <div className="text-sm font-semibold">
@@ -400,7 +400,7 @@ export function PersonProfile({
                       )}
                       {mbtiKey && MBTI[mbtiKey] && (
                         <div className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60">
-                          <div className="text-[10px] tracking-wider text-quaternary uppercase">
+                          <div className="text-caption tracking-wider text-quaternary uppercase">
                             MBTI
                           </div>
                           <div className="text-sm font-semibold">{mbtiKey}</div>
@@ -417,7 +417,7 @@ export function PersonProfile({
                             key={m.id}
                             className="rounded-xl bg-stone-50 p-3 dark:bg-stone-950/60"
                           >
-                            <div className="text-[10px] tracking-wider text-quaternary uppercase">
+                            <div className="text-caption tracking-wider text-quaternary uppercase">
                               {m.name}
                               {m.source !== "self-report" && (
                                 <span className="ml-1.5 font-normal tracking-normal normal-case">

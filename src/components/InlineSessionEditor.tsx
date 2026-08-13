@@ -69,7 +69,7 @@ export function InlineSessionEditor({
     >
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-medium tracking-wide text-quaternary uppercase">
+          <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
             Date
           </span>
           <input
@@ -80,7 +80,7 @@ export function InlineSessionEditor({
           />
         </label>
         <label className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-medium tracking-wide text-quaternary uppercase">
+          <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
             Next
           </span>
           <input

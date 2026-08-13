@@ -45,7 +45,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
     <section className="space-y-3">
       <div>
         <SectionTitle>Wins banked</SectionTitle>
-        <p className="mt-1 text-[11px] text-quaternary">
+        <p className="mt-1 text-caption text-quaternary">
           Value delivered, phrased in their currency. Pull these up at reviews
           and before you ask for anything.
         </p>
@@ -69,7 +69,7 @@ export function WinsLedger({ subjectId }: { subjectId: string }) {
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="text-[10px] tabular-nums text-quaternary">
+                <span className="text-caption tabular-nums text-quaternary">
                   {w.date}
                 </span>
                 <ButtonUtility

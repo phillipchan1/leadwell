@@ -336,7 +336,7 @@ export function Overview() {
             <>
               <div className="mt-3 space-y-1">
                 <HealthBar roll={healthRoll} />
-                <div className="text-[11px] text-quaternary">
+                <div className="text-caption text-quaternary">
                   {healthRoll.rated} of {teams.length + people.length} rated
                   {healthRoll.level && (
                     <>
@@ -386,7 +386,7 @@ export function Overview() {
                           />
                           {w.name}
                         </div>
-                        <div className="truncate text-[11px] text-quaternary">
+                        <div className="truncate text-caption text-quaternary">
                           {w.health.note ?? HEALTH_LABEL[w.health.level]}
                         </div>
                       </div>
@@ -406,7 +406,7 @@ export function Overview() {
               <PrayerIcon className="size-3.5 text-violet-500 dark:text-violet-300" />
               <SectionTitle>Prayer list</SectionTitle>
             </div>
-            <span className="text-[11px] text-quaternary">
+            <span className="text-caption text-quaternary">
               {prayerRoll.carried > 0 && (
                 <>
                   carrying{" "}
@@ -448,7 +448,7 @@ export function Overview() {
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm">{c.name}</div>
-                      <div className="truncate text-[11px] text-quaternary">
+                      <div className="truncate text-caption text-quaternary">
                         {c.prayer.focus ??
                           [formatCarried(c.prayer), formatLastPrayed(c.prayer)]
                             .filter(Boolean)
@@ -465,12 +465,12 @@ export function Overview() {
             /* Answered in the last month. The one thing on this page worth
                reading twice. */
             <div className="mt-4 border-t border-stone-100 pt-3 dark:border-stone-800">
-              <div className="text-[10px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+              <div className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
                 Answered lately
               </div>
               <ul className="mt-2 space-y-1.5">
                 {answers.slice(0, 3).map((a) => (
-                  <li key={a.id} className="prayer-text !text-[13px]">
+                  <li key={a.id} className="prayer-text !text-sm">
                     {a.answerNote ?? a.text}
                   </li>
                 ))}
@@ -504,7 +504,7 @@ export function Overview() {
                       />
                       {p.name}
                     </div>
-                    <div className="truncate text-[11px] text-quaternary">
+                    <div className="truncate text-caption text-quaternary">
                       {readiness.headline}
                     </div>
                   </div>
@@ -531,7 +531,7 @@ export function Overview() {
                   <Avatar name={p.name} photo={p.photo} size={30} dimmed />
                   <div>
                     <div className="text-sm">{p.name}</div>
-                    <div className="text-[11px] text-quaternary">
+                    <div className="text-caption text-quaternary">
                       No profile read yet
                     </div>
                   </div>

@@ -79,7 +79,7 @@ export function CreateMenu() {
                 />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium">{label}</span>
-                  <span className="block text-[11px] text-quaternary">
+                  <span className="block text-caption text-quaternary">
                     {hint}
                   </span>
                 </span>

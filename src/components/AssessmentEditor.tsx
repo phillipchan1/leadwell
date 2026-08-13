@@ -284,7 +284,7 @@ export function AssessmentEditor({
               + Add modality
             </Button>
           </div>
-          <p className="mb-2 text-[11px] text-quaternary">
+          <p className="mb-2 text-caption text-quaternary">
             Working Genius, DISC, pastoral style — anything that isn’t Clifton /
             Enneagram / MBTI.
           </p>

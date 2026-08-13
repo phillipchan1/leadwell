@@ -676,7 +676,7 @@ export function PersonModal({
             size="md"
             isDisabled={!name.trim()}
             iconTrailing={
-              <kbd className="rounded bg-white/20 px-1 font-mono text-[10px] font-normal text-white/90">
+              <kbd className="rounded bg-white/20 px-1 font-mono text-caption font-normal text-white/90">
                 ↵
               </kbd>
             }
@@ -741,7 +741,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
                 onChange={(e) => updateDomain(d.id, { name: e.target.value })}
                 aria-label="Domain name"
               />
-              <span className="shrink-0 text-[10px] text-quaternary">
+              <span className="shrink-0 text-caption text-quaternary">
                 {n === 0 ? "unused" : `${n} tagged`}
               </span>
               <ButtonUtility
@@ -774,7 +774,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
       </ul>
 
       <div className="mt-4 rounded-xl border border-dashed border-primary p-3">
-        <div className="mb-2 text-[11px] font-medium tracking-wide text-quaternary uppercase">
+        <div className="mb-2 text-caption font-medium tracking-wide text-quaternary uppercase">
           Add domain
         </div>
         <div className="flex items-center gap-2">

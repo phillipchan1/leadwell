@@ -194,13 +194,13 @@ export function MeetingsTable() {
                         {r.title}
                       </span>
                       <span
-                        className="shrink-0 font-mono text-[10px] tabular-nums"
+                        className="shrink-0 font-mono text-caption tabular-nums"
                         style={{ color: STATE_COLOR[r.readiness.state] }}
                       >
                         {formatCountdown(r.readiness)}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4 text-[11px] text-quaternary">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4 text-caption text-quaternary">
                       <span>{RHYTHM_LABEL[r.meeting.rhythm]}</span>
                       <span>·</span>
                       <span>
@@ -314,7 +314,7 @@ function StateDot({ readiness }: { readiness: Readiness }) {
 function LooseBadge({ count }: { count: number }) {
   return (
     <span
-      className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500"
+      className="rounded bg-amber-100 px-1.5 py-0.5 text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500"
       title="Planned into a meeting that's already been and gone"
     >
       {count} loose

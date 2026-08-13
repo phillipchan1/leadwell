@@ -134,7 +134,7 @@ export function MeetingCalendar({
         {WEEKDAYS.map((d) => (
           <div
             key={d}
-            className="bg-secondary px-1 py-1.5 text-center text-[10px] font-semibold tracking-wide text-quaternary uppercase"
+            className="bg-secondary px-1 py-1.5 text-center text-caption font-semibold tracking-wide text-quaternary uppercase"
           >
             {d}
           </div>
@@ -214,7 +214,7 @@ export function MeetingCalendar({
 
       {(unscheduled.backlog.length > 0 || unscheduled.parked.length > 0) && (
         <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-wide text-stone-400 uppercase dark:text-stone-500">
+          <p className="text-caption font-semibold tracking-wide text-stone-400 uppercase dark:text-stone-500">
             Unscheduled
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -236,7 +236,7 @@ export function MeetingCalendar({
             {unscheduled.parked.map((t) => (
               <span
                 key={t.id}
-                className="max-w-full truncate rounded-md border border-dashed border-primary px-2 py-0.5 text-[11px] text-quaternary"
+                className="max-w-full truncate rounded-md border border-dashed border-primary px-2 py-0.5 text-caption text-quaternary"
                 title={t.text}
               >
                 {t.text}
@@ -277,7 +277,7 @@ function CalendarCell({
     >
       <span
         className={cx(
-          "mb-0.5 inline-flex size-5 items-center justify-center rounded-full text-[11px] tabular-nums",
+          "mb-0.5 inline-flex size-5 items-center justify-center rounded-full text-caption tabular-nums",
           isToday && "bg-teal-600 font-semibold text-white",
           !isToday && "text-stone-600 dark:text-stone-300"
         )}
@@ -301,13 +301,13 @@ function CalendarCell({
         {day.topics.slice(0, 2).map((t) => (
           <li
             key={t.id}
-            className="truncate text-[10px] leading-tight text-stone-600 dark:text-stone-300"
+            className="truncate text-caption leading-tight text-stone-600 dark:text-stone-300"
           >
             {t.text}
           </li>
         ))}
         {day.topics.length > 2 && (
-          <li className="text-[10px] text-stone-400">+{day.topics.length - 2}</li>
+          <li className="text-caption text-stone-400">+{day.topics.length - 2}</li>
         )}
       </ul>
     </button>
@@ -328,7 +328,7 @@ function UnscheduledChip({
   if (!dates.length) {
     return (
       <span
-        className="max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-[11px] text-stone-600 dark:text-stone-300"
+        className="max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 dark:text-stone-300"
         title={text}
       >
         {text}
@@ -340,7 +340,7 @@ function UnscheduledChip({
     <span className="relative inline-block max-w-full">
       <button
         type="button"
-        className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-700"
+        className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-700"
         title={`Schedule: ${text}`}
         onClick={() => setOpen((v) => !v)}
       >

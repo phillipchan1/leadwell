@@ -486,7 +486,7 @@ export function TeamProfile({
                 isReadOnly={refining}
               />
               {refineError && (
-                <p className="mt-1.5 text-[11px] text-red-500">{refineError}</p>
+                <p className="mt-1.5 text-caption text-red-500">{refineError}</p>
               )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {parent && (
@@ -558,7 +558,7 @@ export function TeamProfile({
                               {p.name}
                             </div>
                             {p.role && (
-                              <div className="truncate text-[11px] text-quaternary">
+                              <div className="truncate text-caption text-quaternary">
                                 {p.role}
                               </div>
                             )}
@@ -619,7 +619,7 @@ export function TeamProfile({
                             <span className="truncate font-medium">
                               {st.name}
                             </span>
-                            <span className="shrink-0 text-[11px] text-quaternary">
+                            <span className="shrink-0 text-caption text-quaternary">
                               {stCap?.label}
                               {stMembers.length ? ` · ${stMembers.length}` : ""}
                             </span>
@@ -673,7 +673,7 @@ export function TeamProfile({
                     key={n.id}
                     className="group flex items-start gap-2 text-sm text-tertiary"
                   >
-                    <span className="shrink-0 pt-0.5 text-[11px] text-quaternary">
+                    <span className="shrink-0 pt-0.5 text-caption text-quaternary">
                       {n.date}
                     </span>
                     <span className="flex-1 leading-relaxed">{n.body}</span>
@@ -792,7 +792,7 @@ function ActionRow({
           }}
         />
         {dueDate && (
-          <div className="pt-0.5 text-[11px] text-quaternary">
+          <div className="pt-0.5 text-caption text-quaternary">
             Due {dueDate}
           </div>
         )}

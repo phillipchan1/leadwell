@@ -63,7 +63,7 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-5">
         {GROUPS.map((group) => (
           <section key={group.title} className="space-y-1.5">
-            <h3 className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+            <h3 className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
               {group.title}
             </h3>
             <ul className="flex flex-col">
@@ -79,7 +79,7 @@ export function ShortcutsModal({ onClose }: { onClose: () => void }) {
                     {item.keys.map((k) => (
                       <kbd
                         key={k}
-                        className="rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 font-mono text-[11px] text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
+                        className="rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 font-mono text-caption text-stone-600 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300"
                       >
                         {k}
                       </kbd>

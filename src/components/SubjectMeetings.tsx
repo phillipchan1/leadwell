@@ -197,7 +197,7 @@ function MeetingBlock({
         </h3>
         <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
         <span
-          className="shrink-0 font-mono text-[11px] tabular-nums"
+          className="shrink-0 font-mono text-caption tabular-nums"
           style={{ color }}
         >
           {formatCountdown(readiness)}
@@ -283,10 +283,10 @@ function MeetingBlock({
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between">
-          <span className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+          <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
             Plan
           </span>
-          <span className="text-[10px] tabular-nums text-stone-400 dark:text-stone-500">
+          <span className="text-caption tabular-nums text-stone-400 dark:text-stone-500">
             {openCount} open
           </span>
         </div>
@@ -301,7 +301,7 @@ function MeetingBlock({
       </div>
 
       <div className="space-y-1.5">
-        <span className="text-[11px] font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
           History
         </span>
         <SessionHistoryTable meetingId={meeting.id} onOpen={openSessionNotes} />

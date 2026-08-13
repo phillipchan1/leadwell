@@ -64,10 +64,10 @@ export function SessionAgenda({
   return (
     <section className="meeting-editor-agenda mb-6 rounded-xl border border-secondary">
       <div className="flex items-baseline justify-between gap-2 border-b border-stone-100 px-3 py-2 dark:border-stone-800/80">
-        <span className="text-[11px] font-semibold tracking-wide text-quaternary uppercase">
+        <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
           Agenda
         </span>
-        <span className="text-[10px] tabular-nums text-quaternary">
+        <span className="text-caption tabular-nums text-quaternary">
           {mine.length === 0
             ? "nothing planned"
             : `${mine.length - open} of ${mine.length} covered`}
@@ -94,7 +94,7 @@ export function SessionAgenda({
               >
                 {t.text}
                 {t.carried > 1 && t.status === "open" && (
-                  <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500">
+                  <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500">
                     pushed {t.carried}×
                   </span>
                 )}

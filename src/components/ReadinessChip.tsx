@@ -22,7 +22,7 @@ export function ReadinessChip({
   return (
     <Explain text={title ?? STATE_LABEL[state]}>
       <span
-        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] tabular-nums"
+        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-caption tabular-nums"
         style={{ backgroundColor: color + "1f", color }}
       >
         {dot && (
