@@ -583,24 +583,60 @@ Notable beyond the brief: the five entity modals were rendered *inside* `OrgTree
 - **SPD-5, second half** — "only load the React Flow chunk when the tree tab is reachable". Avoiding the *import* requires extracting the canvas, the node components, the layout machinery and their helpers out of `OrgTree.tsx` — effectively all of it, which §"Out of scope" forbids. `DEFAULT_TAB = "overview"` already takes React Flow off the critical path for every cold open; what remains is a ~217KB download for a mobile user who taps Tree. Worth doing behind its own decision.
 - **The two `if (!text) deleteTeamAction(id)` blur handlers** — deleting an action whose text you just erased is the intended outcome. An undo toast there is noise.
 
-### Phase 5 is blocked on a real question
+### Phase 5 — partially shipped
 
-`theme.css` defines the semantic tokens against `--color-neutral-*`:
+**The blocking question was answered: point the semantic tokens at `stone`.**
 
-```
---color-text-primary:   var(--color-neutral-900);
---color-text-tertiary:  var(--color-neutral-600);
-```
+`theme.css` defined its tokens against `--color-neutral-*`, which this repo
+never defined, so they fell through to Tailwind's default `neutral` — a pure
+grey — while all 60 app components hard-coded warm `stone`. The ramp is now
+aliased to stone once, at the top of `theme.css`, which makes the migration a
+refactor rather than a redesign.
 
-**`--color-neutral-*` is never defined in this repo.** It falls through to Tailwind v4's default `neutral` ramp — a pure gray. The app's 1,240 hard-coded classes are `stone`, which is warm. So the codemod in 5.1 is not the mechanical no-op the phase assumes: converting `text-stone-500 dark:text-stone-400` to `text-tertiary` shifts every gray in the app from warm to neutral.
+One consequence worth recording: Untitled UI's dark block makes `bg-primary`
+the *darkest* surface, while this app raises surfaces in dark (a card is
+`dark:bg-stone-900` on a `dark:bg-stone-950` page — the iOS/Material
+convention). The two dark definitions are swapped so `components/base/**`
+follows the app's elevation model rather than fighting it.
 
-Two ways out, and it must be decided before the codemod, not after:
+| Item | State |
+|---|---|
+| 5.1 Connect the token layer | **Done** — 339 exact pairs across 48 files; 1,154 raw `stone-*` → 508 |
+| 5.2 Type scale | **Done** — one `--text-caption` step at 11px; all 152 `text-[Npx]` gone |
+| 5.3 Migrate raw controls onto primitives | **Not started** — 84 buttons, 27 inputs |
+| 5.4 Retire the fourth vocabulary | **Partly** — the touch allowlist and the doubled-selector hack are gone; `.field-input` and the other ~150 bespoke classes remain |
+| 5.5 Structural touch correctness | **Done** — element-based floors replace the allowlist |
+| 5.6 Iconography | **Done** — structural emoji are icons; tone-carrying ones kept |
 
-1. **Point the semantic tokens at `stone`.** The conversion becomes a true no-op for app components, but it also restyles every `components/base/**` primitive (Button, Input, Select) from neutral to stone — a subtle warm shift across the design system.
-2. **Accept the move to `neutral`.** The token layer is used as shipped, and the whole app's grays change. Defensible — it's one system instead of two — but it is a whole-product visual change that wants review, not a refactor.
+Only exact light/dark matches were converted. An earlier pass mapped four
+near-matches (`dark:text-stone-100` → `text-primary`, whose dark value is
+stone-50) and was reverted: a near-match is a visual change, not a refactor.
+That is also why `text-primary` and `text-secondary` show zero conversions —
+the app never used those exact pairs.
 
-Recommendation: (1). It makes Phase 5 a genuine refactor rather than a redesign, and keeps the warm palette the app was designed around.
+**Verification.** All 18 token/theme combinations were measured in the running
+app and resolve to exactly the stone value they replaced. A colour fingerprint
+across 9 venues in both themes is identical in 17 of 18 (the 18th differs only
+by which table rows were expanded). On a coarse pointer there are zero fields
+under 16px and zero targets under 44px across six venues, and a brand-new
+widget carrying a 13px class comes out 16px/44px with no CSS of its own.
 
-### Phases 6 and 7
+**Deliberately not done:** the 43 manual `min-h-11`s stay. They apply at every
+width; the structural floor is touch-only, so removing them would shrink
+desktop controls.
 
-Not started. Phase 6's four decision gates were answered in advance (nav merge, two editors, five-mode contract for `meeting` and `me`, one meeting-creation form; person keeps "Notes", the occurrence artifact becomes "Write-up"), so it is unblocked apart from being sequenced after Phase 5. Phase 7 is the regression pass over 5 and 6.
+### What is left
+
+- **5.3 / 5.4** — the raw-control migration and retiring `.field-input` and the
+  other bespoke class families. Both are large and want to be done a file at a
+  time with eyes on each.
+- **Phase 6** — all four decision gates are answered (merge `people` into
+  `table` and spend the slot on a Today/Now home; two editors, fast in-place
+  plus full TipTap with the serif journal as a mode; `meeting` and `me` join
+  the five-mode contract; one canonical meeting-creation form; person keeps
+  "Notes", the occurrence artifact becomes "Write-up"). Unblocked.
+- **Phase 7** — the regression pass over 5 and 6.
+- **Still unverified from Phase 1** — cold start from cache, offline edit →
+  reconnect, hard-quit-offline → reopen, and sign-out clearing the cache. These
+  need `bootstrap()` against real Supabase, which needs `VITE_DEV_TEST_EMAIL`
+  and `VITE_DEV_TEST_PASSWORD` in a gitignored `.env.local`.
