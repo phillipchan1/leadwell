@@ -18,7 +18,8 @@ import { ToastHost } from "./components/Toast";
 import { ModalHost } from "./components/ModalHost";
 import { CreateMenu } from "./components/CreateMenu";
 import { ShortcutsModal } from "./components/Shortcuts";
-import { Stars01 } from "@untitledui/icons";
+import { CommandPalette } from "./components/CommandPalette";
+import { SearchLg, Stars01 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -180,17 +181,23 @@ export default function App() {
    * while a modifier is held, so it can't shadow a browser or OS binding.
    */
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   useEffect(() => {
+    const typing = (el: HTMLElement | null) =>
+      Boolean(el?.isContentEditable) ||
+      el?.tagName === "INPUT" ||
+      el?.tagName === "TEXTAREA" ||
+      el?.tagName === "SELECT";
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
-      const el = e.target as HTMLElement | null;
-      if (
-        el?.isContentEditable ||
-        el?.tagName === "INPUT" ||
-        el?.tagName === "TEXTAREA" ||
-        el?.tagName === "SELECT"
-      )
+      // ⌘K works from inside a field too — it's a jump, not a character.
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletteOpen(true);
         return;
+      }
+      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (typing(e.target as HTMLElement | null)) return;
       e.preventDefault();
       setShortcutsOpen(true);
     };
@@ -221,6 +228,7 @@ export default function App() {
         {shortcutsOpen && (
           <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
         )}
+        {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
       </div>
     );
   }
@@ -242,6 +250,13 @@ export default function App() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <SyncIndicator />
+          <Button
+            size="sm"
+            color="secondary"
+            aria-label="Search"
+            iconLeading={SearchLg}
+            onClick={() => setPaletteOpen(true)}
+          />
           <CreateMenu />
           <Button size="sm" iconLeading={Stars01} onClick={() => setAskAIOpen(true)}>
             Ask AI
@@ -321,6 +336,7 @@ export default function App() {
       {shortcutsOpen && (
         <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
       )}
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
     </div>
   );
 }

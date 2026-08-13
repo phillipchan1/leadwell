@@ -16,6 +16,7 @@ const GROUPS: { title: string; items: { keys: string[]; label: string }[] }[] = 
   {
     title: "Anywhere",
     items: [
+      { keys: ["⌘", "K"], label: "Go to anyone, any team, any meeting" },
       { keys: ["?"], label: "Show this list" },
       { keys: ["Esc"], label: "Close the top-most panel, sheet or editor" },
     ],
