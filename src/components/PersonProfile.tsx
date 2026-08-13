@@ -34,6 +34,7 @@ import { WinsLedger } from "./WinsLedger";
 import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
 import { confirmAction } from "./ConfirmDialog";
+import { deleteWithUndo } from "../lib/toasts";
 
 /**
  * Person panel, in the five modes every entity shares (see lib/entityModes).
@@ -71,6 +72,7 @@ export function PersonProfile({
     addGoal,
     updateGoal,
     deleteGoal,
+    restoreGoal,
     notes,
     trackMeeting,
     addSession,
@@ -269,7 +271,13 @@ export function PersonProfile({
                           icon={X}
                           tooltip="Delete goal"
                           className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                          onClick={() => deleteGoal(g.id)}
+                          onClick={() =>
+                            deleteWithUndo(
+                              "Goal deleted.",
+                              () => deleteGoal(g.id),
+                              () => restoreGoal(g)
+                            )
+                          }
                         />
                       </div>
                       <input

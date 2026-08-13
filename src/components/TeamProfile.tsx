@@ -20,6 +20,8 @@ import { PrepPanel } from "./PrepPanel";
 import { SubjectMeetings } from "./SubjectMeetings";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { meetingFor, type CheckFix } from "../lib/readiness";
+import { confirmAction } from "./ConfirmDialog";
+import { deleteWithUndo } from "../lib/toasts";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -69,10 +71,12 @@ export function TeamProfile({
     updateTeamAction,
     toggleTeamAction,
     deleteTeamAction,
+    restoreTeamAction,
     teamGoals,
     addTeamGoal,
     updateTeamGoal,
     deleteTeamGoal,
+    restoreTeamGoal,
     teamNotes,
     addTeamNote,
     deleteTeamNote,
@@ -330,7 +334,13 @@ export function TeamProfile({
                       if (!text) deleteTeamAction(a.id);
                       else if (text !== a.text) updateTeamAction(a.id, { text });
                     }}
-                    onDelete={() => deleteTeamAction(a.id)}
+                    onDelete={() =>
+                      deleteWithUndo(
+                        "Action deleted.",
+                        () => deleteTeamAction(a.id),
+                        () => restoreTeamAction(a)
+                      )
+                    }
                   />
                 ))}
                 {showDone &&
@@ -346,7 +356,13 @@ export function TeamProfile({
                         else if (text !== a.text)
                           updateTeamAction(a.id, { text });
                       }}
-                      onDelete={() => deleteTeamAction(a.id)}
+                      onDelete={() =>
+                        deleteWithUndo(
+                          "Action deleted.",
+                          () => deleteTeamAction(a.id),
+                          () => restoreTeamAction(a)
+                        )
+                      }
                     />
                   ))}
               </ul>
@@ -392,7 +408,13 @@ export function TeamProfile({
                         icon={X}
                         tooltip="Delete goal"
                         className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                        onClick={() => deleteTeamGoal(g.id)}
+                        onClick={() =>
+                          deleteWithUndo(
+                            "Goal deleted.",
+                            () => deleteTeamGoal(g.id),
+                            () => restoreTeamGoal(g)
+                          )
+                        }
                       />
                     </div>
                     <input
@@ -671,7 +693,15 @@ export function TeamProfile({
                       icon={X}
                       tooltip="Delete note"
                       className="opacity-0 touch:opacity-100 group-hover:opacity-100"
-                      onClick={() => deleteTeamNote(n.id)}
+                      onClick={async () => {
+                        if (
+                          await confirmAction({
+                            title: "Delete this note?",
+                            body: `What you wrote about the team on ${n.date} goes with it.`,
+                          })
+                        )
+                          deleteTeamNote(n.id);
+                      }}
                     />
                   </li>
                 ))}

@@ -160,6 +160,41 @@ export function HeaderOverflow() {
 }
 
 /**
+ * Persistent read-out of whether the last edit reached the server.
+ *
+ * Quiet by design: at rest it is an empty reserved box, so the header does not
+ * shift when a write starts. Only the two states worth interrupting for get
+ * ink — a pulse while writing, an amber dot while a retry is outstanding. The
+ * announcement is the toast's job (`useSyncToasts`); this is the thing you can
+ * look at afterwards to check, which is why it carries a label but is not a
+ * live region — it would otherwise say everything twice.
+ */
+export function SyncIndicator() {
+  const syncStatus = useStore((s) => s.syncStatus);
+
+  if (syncStatus === "idle") {
+    return <span className="size-2.5 shrink-0" aria-hidden="true" />;
+  }
+
+  const failing = syncStatus === "error";
+  const label = failing ? "Not saved — retrying" : "Saving…";
+
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={cx(
+        "size-2.5 shrink-0 rounded-full",
+        failing
+          ? "bg-amber-500 dark:bg-amber-400"
+          : "animate-pulse bg-stone-300 dark:bg-stone-600"
+      )}
+    />
+  );
+}
+
+/**
  * Branded first paint, so a cold mobile connection is not a blank screen.
  */
 export function LoadingSplash() {

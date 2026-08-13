@@ -9,6 +9,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { Modal } from "./components/ui";
 import { ConfirmHost } from "./components/ConfirmDialog";
+import { ToastHost } from "./components/Toast";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -22,9 +23,11 @@ import {
   HeaderOverflow,
   LoadErrorScreen,
   LoadingSplash,
+  SyncIndicator,
   TABS,
 } from "./components/AppChrome";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
+import { useSyncToasts } from "./hooks/use-sync-toasts";
 import { cx } from "@/utils/cx";
 
 /**
@@ -137,6 +140,9 @@ export default function App() {
   useDropStaleSelection();
   // Above every phase gate: the sign-in screen has a field too.
   useKeyboardInset();
+  // Likewise above the gates — a failed write has to be announced on the
+  // session-editor route, which renders its own chrome and no header.
+  useSyncToasts();
 
   const {
     phase,
@@ -176,6 +182,7 @@ export default function App() {
         </Suspense>
         {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
         <ConfirmHost />
+        <ToastHost />
       </div>
     );
   }
@@ -196,6 +203,7 @@ export default function App() {
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <SyncIndicator />
           <Button size="sm" onClick={() => setAskAIOpen(true)}>
             ✦ Ask AI
           </Button>
@@ -270,6 +278,7 @@ export default function App() {
       )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ConfirmHost />
+      <ToastHost />
     </div>
   );
 }

@@ -5,7 +5,13 @@
  */
 export interface Storage {
   load<T>(key: string): T | null;
-  save<T>(key: string, value: T): void;
+  /**
+   * Returns false when the write didn't land — almost always quota, and the
+   * document cache is large enough that it has to be able to react (drop
+   * itself) rather than assume it's there. Callers persisting a preference can
+   * keep ignoring the result.
+   */
+  save<T>(key: string, value: T): boolean;
   remove(key: string): void;
 }
 
@@ -20,12 +26,14 @@ export const localStorageBackend: Storage = {
       return null;
     }
   },
-  save<T>(key: string, value: T): void {
+  save<T>(key: string, value: T): boolean {
     try {
       localStorage.setItem(PREFIX + key, JSON.stringify(value));
+      return true;
     } catch (e) {
       // Most likely quota (large photos). Surface loudly in dev.
       console.error("LeadWell: failed to persist", key, e);
+      return false;
     }
   },
   remove(key: string): void {
