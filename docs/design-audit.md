@@ -677,11 +677,55 @@ tests in the repo; it was left rather than half-done.
   "Every tracked 1:1 is on track. 🎉", "What you wrote on {date} goes with it.",
   "It stops counting as evidence in your next review or ask."
 
+### IA-5 revisited — the premise doesn't hold any more
+
+The finding says nine writing surfaces, and that "the surface he gets depends on
+whether he arrived from Overview, the person's Now tab, the Meetings tab, or the
+meeting's Plan board". That was worth checking before rebuilding anything, and
+it isn't what the code does.
+
+There are **two** editors, and every placement of them renders the same parts:
+
+| Surface | What it renders |
+|---|---|
+| `InlineSessionEditor` | `SessionAgenda` + plain fields — the fast in-place one |
+| `OccurrenceNotesPanel` | `SessionAgenda` + `SessionEditor`, in a sheet |
+| `MeetingEditor` | `SessionAgenda` + `SessionEditor`, full page, plus capture tools |
+
+The other files the audit counted are not surfaces: `NotionBlockEditor` and
+`FullScreenMarkdown` are the two *engines* behind `SessionEditor`'s Blocks and
+Markdown modes, `OccurrenceNotesSheet` is the sheet chrome, and
+`WritingPad`/`NotesPanel` are person notes — a different noun, kept.
+
+So the approved contract — one fast in-place editor, one full editor promoted by
+a consistent affordance — is what already ships. Arriving from any route gets
+the same agenda and the same editor; only the chrome differs, and the full-page
+placement additionally offers speech capture and AI structuring, which are
+heavyweight and belong there rather than in a sheet.
+
+**No code change made.** `MeetingEditor` is 561 lines because it mixes page
+chrome with those capture tools, and extracting them into a
+`SessionCaptureTools` component would be tidier — but that is refactoring for
+tidiness, not for the problem the finding names, and it would touch the action
+leaders perform most. Left deliberately, with the reasoning recorded here so the
+question doesn't get re-opened from the audit's original premise.
+
+### 5.4 — done
+
+`.field-input` was 228 lines implementing an input from scratch alongside
+`components/base/input/input.tsx`. Six call sites, all now on the primitive,
+with `--ghost` expressed through its `wrapperClassName` seam. index.css is
+1,719 → 1,478 lines and no longer mentions it anywhere.
+
 ### What is left
-- **5.3 / 5.4** — the raw-control migration (84 buttons, 27 inputs onto the
-  primitives) and retiring `.field-input` and the other bespoke class families.
-  Both are large and want to be done a file at a time with eyes on each.
-- **IA-5** — folding `MeetingEditor`, as above.
+- **5.3** — 92 raw `<button>`s still bypass `Button`/`ButtonUtility`. This is now
+  a consistency job rather than a correctness one: the zero-specificity
+  `:focus-visible` floor in index.css already gives every one of them a ring,
+  and the structural touch block already gives them a 44px box. Worth doing a
+  file at a time; the densest are TableView, OrgTree, MeetingEditor and Prayer.
+- **The remaining bespoke CSS.** `.journal-*`, the TipTap/ProseMirror content
+  styles and `.goal-range` are keepers. `.meeting-editor-*` (24 rules) goes if
+  and when MeetingEditor's chrome is folded.
 - **Still unverified from Phase 1** — cold start from cache, offline edit →
   reconnect, hard-quit-offline → reopen, and sign-out clearing the cache. These
   need `bootstrap()` against real Supabase, which needs `VITE_DEV_TEST_EMAIL`
