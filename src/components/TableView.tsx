@@ -13,7 +13,7 @@
  * health, capacity or type flattens it into buckets when the comparison
  * matters more than the hierarchy.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useStore } from "../store/useStore";
 import type { HealthLevel } from "../types";
@@ -55,6 +55,9 @@ import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SearchLg } from "@untitledui/icons";
+import { tableRowActivationProps } from "@/lib/rowActivation";
+import { useMenu } from "@/hooks/use-menu";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 import { cx } from "@/utils/cx";
 
 type ColumnKey = Exclude<SortKey, "name">;
@@ -189,6 +192,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
     [isTree, treeMode, ownColumns]
   );
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const searchRef = useSearchShortcut();
 
   const source: OrgSource = useMemo(
     () => ({
@@ -368,6 +372,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
           size="sm"
           icon={SearchLg}
           className="w-full sm:max-w-56"
+          ref={searchRef}
           placeholder="Search teams and people…"
           aria-label="Search"
           value={query}
@@ -605,31 +610,43 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
               line.kind === "group" ? (
                 <tr
                   key={`g-${line.key}`}
-                  className="cursor-pointer border-b border-stone-100 bg-stone-50/70 dark:border-stone-800/60 dark:bg-stone-950/40"
-                  onClick={() => toggleCollapsed(`group:${line.key}`)}
+                  className="border-b border-stone-100 bg-stone-50/70 dark:border-stone-800/60 dark:bg-stone-950/40"
                 >
                   <td
                     colSpan={visible.length + 1}
-                    className="px-4 py-2 text-xs font-medium text-quaternary"
+                    className="p-0 text-xs font-medium text-quaternary"
                   >
-                    <span className="mr-1.5 inline-block w-3 text-quaternary">
-                      {collapsed.has(`group:${line.key}`) ? "▸" : "▾"}
-                    </span>
-                    {line.color && (
+                    {/* A real button rather than a clickable <tr>: the group
+                        header does one thing, so it should be the one thing a
+                        keyboard can reach and Enter can press. */}
+                    <button
+                      type="button"
+                      onClick={() => toggleCollapsed(`group:${line.key}`)}
+                      aria-expanded={!collapsed.has(`group:${line.key}`)}
+                      className="flex w-full items-center px-4 py-2 text-left"
+                    >
                       <span
-                        className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
-                        style={{ backgroundColor: line.color }}
-                      />
-                    )}
-                    {line.label}
-                    <span className="ml-2 text-quaternary tabular-nums">
-                      {line.count}
-                    </span>
-                    <span className="ml-3 inline-block w-24 align-middle">
-                      <HealthBar
-                        roll={rollUpHealth(line.records.map((r) => r.health))}
-                      />
-                    </span>
+                        className="mr-1.5 inline-block w-3 text-quaternary"
+                        aria-hidden
+                      >
+                        {collapsed.has(`group:${line.key}`) ? "▸" : "▾"}
+                      </span>
+                      {line.color && (
+                        <span
+                          className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
+                          style={{ backgroundColor: line.color }}
+                        />
+                      )}
+                      {line.label}
+                      <span className="ml-2 text-quaternary tabular-nums">
+                        {line.count}
+                      </span>
+                      <span className="ml-3 inline-block w-24 align-middle">
+                        <HealthBar
+                          roll={rollUpHealth(line.records.map((r) => r.health))}
+                        />
+                      </span>
+                    </button>
                   </td>
                 </tr>
               ) : (
@@ -714,11 +731,19 @@ function Row({
   const isTeam = record.kind === "team";
 
   return (
+    /* The row opens the entity, and it also *contains* controls (expand, the
+       health picker, the note field). A <button> can't wrap those, so the row
+       takes the button contract explicitly — Tab reaches it, Enter and Space
+       open it, and the nested controls keep their own keys because
+       `rowActivationProps` only fires when the row itself has focus. */
     <tr
-      className={`cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 dark:border-stone-800/60 dark:hover:bg-stone-800/40 ${
+      {...tableRowActivationProps(onOpen, {
+        label: `Open ${record.name}`,
+        selected,
+      })}
+      className={`cursor-pointer border-b border-stone-100 last:border-0 hover:bg-stone-50 focus-visible:bg-stone-50 dark:border-stone-800/60 dark:hover:bg-stone-800/40 dark:focus-visible:bg-stone-800/40 ${
         selected ? "bg-teal-50/70 dark:bg-teal-950/30" : ""
       } ${context ? "opacity-55" : ""}`}
-      onClick={onOpen}
     >
       <td className="px-4 py-2">
         <div
@@ -932,42 +957,40 @@ function ColumnsMenu({
   columns: Set<ColumnKey>;
   onToggle: (key: ColumnKey) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onOpenChange(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [open, onOpenChange]);
+  // Escape, ↑/↓ between the checkboxes, and focus back on the trigger when it
+  // closes. Before this the menu could be Tabbed into and only a click outside
+  // would shut it — a keyboard had no way out but to Tab through the whole page.
+  const { triggerProps, menuProps } = useMenu(open, onOpenChange);
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <Button
+        {...triggerProps}
         size="sm"
         color="secondary"
         onClick={() => onOpenChange(!open)}
-        aria-expanded={open}
       >
         Columns
         <span className="ml-1 text-quaternary tabular-nums">{columns.size}</span>
       </Button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-secondary bg-primary p-1.5 shadow-lg">
+        <div
+          {...menuProps}
+          /* A group of checkboxes, not a menu of commands — `role="menu"`
+             would promise arrow-key menu semantics these don't have. */
+          role="group"
+          aria-label="Visible columns"
+          className="absolute left-0 top-full z-20 mt-1 w-48 rounded-xl border border-secondary bg-primary p-1.5 shadow-lg"
+        >
           {COLUMNS.map((c) => (
-            <label
+            <Checkbox
               key={c.key}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-stone-800"
-            >
-              <Checkbox
-                size="sm"
-                isSelected={columns.has(c.key)}
-                onChange={() => onToggle(c.key)}
-              />
-              {c.label}
-            </label>
+              size="sm"
+              label={c.label}
+              isSelected={columns.has(c.key)}
+              onChange={() => onToggle(c.key)}
+              className="cursor-pointer rounded-lg px-2 py-1.5 text-xs hover:bg-stone-50 dark:hover:bg-stone-800"
+            />
           ))}
         </div>
       )}

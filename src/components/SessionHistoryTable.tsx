@@ -8,6 +8,7 @@ import {
 import { topicsFor } from "../lib/topics";
 import { todayISO } from "../lib/readiness";
 import { Badge } from "@/components/base/badges/badges";
+import { tableRowActivationProps } from "@/lib/rowActivation";
 
 const STATUS_COLOR: Record<string, "sky" | "warning" | "success" | "gray"> = {
   scheduled: "sky",
@@ -81,8 +82,10 @@ export function SessionHistoryTable({
             return (
               <tr
                 key={row.id}
-                className="cursor-pointer transition-colors hover:bg-stone-50 dark:hover:bg-stone-950/50"
-                onClick={() => onOpen(row.id)}
+                {...tableRowActivationProps(() => onOpen(row.id), {
+                  label: `Open the write-up for ${row.date}`,
+                })}
+                className="cursor-pointer transition-colors hover:bg-stone-50 focus-visible:bg-stone-50 dark:hover:bg-stone-950/50 dark:focus-visible:bg-stone-950/50"
               >
                 <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-stone-600 dark:text-stone-300">
                   {row.date}

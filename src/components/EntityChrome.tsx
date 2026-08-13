@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useStore, useActiveTeamId } from "../store/useStore";
+import { useShortcut } from "@/hooks/use-shortcut";
 import { meetingSubjectName, meetingTitle } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -34,9 +35,6 @@ export function useEntityTrail() {
   const clearSelection = useStore((s) => s.clearSelection);
   const openFocus = useStore((s) => s.openFocus);
   const closeFocus = useStore((s) => s.closeFocus);
-  const modal = useStore((s) => s.modal);
-  const askAIOpen = useStore((s) => s.askAIOpen);
-  const settingsOpen = useStore((s) => s.settingsOpen);
 
   const activeTeamId = useActiveTeamId();
   const person = people.find((p) => p.id === selectedPersonId);
@@ -157,14 +155,11 @@ export function useEntityTrail() {
       ? trail.siblings[index + 1]
       : null;
 
-  const busy = modal || askAIOpen || settingsOpen;
-
   return {
     trail,
     index,
     prev,
     next,
-    busy,
     close: clearSelection,
     openFocus,
     closeFocus,
@@ -181,41 +176,43 @@ export function useEntityTrail() {
  * deep as the data does without running out of horizontal room.
  */
 export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
-  const { trail, index, prev, next, busy, close, openFocus, closeFocus } =
+  const { trail, index, prev, next, close, openFocus, closeFocus } =
     useEntityTrail();
 
-  // ←/→ page through siblings, ⌘↵ promotes to focus and back.
-  useEffect(() => {
-    if (!trail) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (busy) return;
-      const el = e.target as HTMLElement | null;
-      if (
-        el &&
-        (el.tagName === "INPUT" ||
-          el.tagName === "TEXTAREA" ||
-          el.isContentEditable)
-      )
-        return;
+  // ←/→ page through siblings, ⌘↵ promotes to focus and back. Registered
+  // rather than listened for: the registry already knows whether a dialog is
+  // open, whether the caret is in a field, and whether the focused control
+  // (the resize handle, a roving toolbar) has claimed the arrow keys.
+  useShortcut(() => (mode === "peek" ? openFocus() : closeFocus()), {
+    chord: "mod+Enter",
+    label:
+      mode === "peek"
+        ? "Expand the open entity to a full page"
+        : "Return the open entity to the split view",
+    group: "Navigation",
+    enabled: Boolean(trail),
+  });
 
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        if (mode === "peek") openFocus();
-        else closeFocus();
-        return;
-      }
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "ArrowLeft" && prev) {
-        e.preventDefault();
-        trail.select(prev.id);
-      } else if (e.key === "ArrowRight" && next) {
-        e.preventDefault();
-        trail.select(next.id);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [trail, prev, next, busy, mode, openFocus, closeFocus]);
+  useShortcut(() => trail && prev && trail.select(prev.id), {
+    chord: "ArrowLeft",
+    label: "Previous sibling — the teammate above in the list",
+    group: "Navigation",
+    enabled: Boolean(trail && prev),
+  });
+
+  useShortcut(() => trail && next && trail.select(next.id), {
+    chord: "ArrowRight",
+    label: "Next sibling",
+    group: "Navigation",
+    enabled: Boolean(trail && next),
+  });
+
+  useShortcut(close, {
+    chord: "Escape",
+    label: "Close the open entity",
+    group: "Navigation",
+    enabled: Boolean(trail),
+  });
 
   if (!trail) return null;
 

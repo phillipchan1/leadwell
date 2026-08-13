@@ -20,6 +20,12 @@ import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { DotsGrid, X } from "@untitledui/icons";
+import {
+  useReorderableRow,
+  type MoveResult,
+} from "@/hooks/use-reorderable-row";
+import { announce } from "@/lib/announce";
+import { MOD_LABEL } from "@/lib/keys";
 import { cx } from "@/utils/cx";
 
 /**
@@ -46,6 +52,16 @@ import { cx } from "@/utils/cx";
 /** Copy differs by direction: leading up you raise asks, not observations. */
 export type BoardDirection = "down" | "up";
 
+/**
+ * The handle's name and tooltip, shared by the two places it renders — left of
+ * an unslotted card, right of a slotted one. It spells the keys out because the
+ * handle is where they're bound, and a keyboard affordance nobody can see is
+ * one nobody uses.
+ */
+const HANDLE_LABEL = (name: string) =>
+  `Move “${name}” — Alt with up or down arrow to reorder, Delete to remove`;
+const HANDLE_TITLE = "Drag, or ⌥↑ / ⌥↓ to reorder · Delete to remove";
+
 const ADD_PLACEHOLDER: Record<BoardDirection, string> = {
   down: "Talk about…",
   up: "Ask, escalate, flag…",
@@ -71,7 +87,35 @@ export function TopicBoard({
   const rollTopic = useStore((s) => s.rollTopic);
   const deleteTopic = useStore((s) => s.deleteTopic);
   const restoreTopic = useStore((s) => s.restoreTopic);
+  const moveTopic = useStore((s) => s.moveTopic);
   const addSession = useStore((s) => s.addSession);
+
+  /**
+   * Delete, said out loud and taken back with ⌘Z.
+   *
+   * The board's delete used to be an X you had to hover to find, with nothing
+   * behind it. Now that a keypress can reach it, it needs a way back — so the
+   * removal is announced along with how to undo it, and the undo is bound below.
+   */
+  /* One undo path, not two. This used to call `deleteTopic` and keep its own
+     one-deep memory behind a local ⌘Z; `deleteWithUndo` puts the same delete on
+     the global stack and raises a toast with an Undo action, so ⌘Z works here,
+     from another screen, and after the toast has gone. The announcement is
+     theirs and stays — a screen reader shouldn't have to find the toast. */
+  const removeTopic = useCallback(
+    (topic: Topic) => {
+      deleteWithUndo(
+        "Topic deleted.",
+        () => deleteTopic(topic.id),
+        () => restoreTopic(topic)
+      );
+      announce(
+        `Deleted “${topic.text || "topic"}”. Press ${MOD_LABEL} Z to undo.`
+      );
+    },
+    [deleteTopic, restoreTopic]
+  );
+
 
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [allCovered, setAllCovered] = useState(false);
@@ -288,16 +332,11 @@ export function TopicBoard({
                     handleProps={handleProps}
                     onText={(text) => updateTopic(t.id, { text })}
                     onMove={(key) => place(t.id, key)}
+                    onReorder={(dir) => moveTopic(t.id, dir)}
                     onCover={(covered) => coverTopic(t.id, covered)}
                     onRoll={() => roll(t)}
                     onBacklog={() => placeTopic(t.id, { lane: "backlog" })}
-                    onDelete={() =>
-                      deleteWithUndo(
-                        "Topic deleted.",
-                        () => deleteTopic(t.id),
-                        () => restoreTopic(t)
-                      )
-                    }
+                    onDelete={() => removeTopic(t)}
                   />
                 ))}
               </ul>
@@ -368,6 +407,7 @@ function TopicCard({
   handleProps,
   onText,
   onMove,
+  onReorder,
   onCover,
   onRoll,
   onBacklog,
@@ -384,16 +424,25 @@ function TopicCard({
   handleProps: ReturnType<typeof useCardDrag>["handleProps"];
   onText: (text: string) => void;
   onMove: (key: string) => void;
+  /** Up or down one place within this column. */
+  onReorder: (direction: -1 | 1) => MoveResult;
   onCover: (covered: boolean) => void;
   onRoll: () => void;
   onBacklog: () => void;
   onDelete: () => void;
 }) {
   const ref = useRef<HTMLLIElement>(null);
+  const name = topic.text || "topic";
+  const { rowProps, handleProps: keyHandleProps } = useReorderableRow({
+    label: `“${name}”`,
+    onMove: onReorder,
+    onDelete,
+  });
 
   return (
     <li
       ref={ref}
+      {...rowProps}
       className={cx(
         "group relative rounded-lg border bg-primary",
         past
@@ -406,7 +455,7 @@ function TopicCard({
         {inSlot ? (
           <Checkbox
             size="sm"
-            aria-label={`Covered "${topic.text || "topic"}"`}
+            aria-label={`Covered "${name}"`}
             isSelected={covered}
             onChange={onCover}
             className="mt-1 shrink-0"
@@ -416,11 +465,18 @@ function TopicCard({
              press anywhere would fight text selection and the caret.
              `select-none` and the callout suppression matter because the touch
              drag starts on a 300ms hold — the same gesture iOS uses to raise
-             the selection handles and the copy/lookup callout. */
+             the selection handles and the copy/lookup callout.
+
+             It is also the keyboard's anchor for the card — the one place ⌥↑/⌥↓
+             and Delete are bound, which is why the label spells them out rather
+             than leaving them to be discovered. A slotted card puts the same
+             handle on the right instead, so every card has exactly one. */
           <button
             type="button"
-            aria-label={`Move "${topic.text || "topic"}"`}
+            aria-label={HANDLE_LABEL(name)}
+            title={HANDLE_TITLE}
             className="-ml-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 select-none touch:-my-1.5 touch:size-11 [-webkit-touch-callout:none] active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400"
+            {...keyHandleProps}
             {...handleProps(topic.id, columnKey, ref)}
           >
             <DotsGrid className="size-4" />
@@ -462,8 +518,10 @@ function TopicCard({
         {inSlot ? (
           <button
             type="button"
-            aria-label={`Move "${topic.text || "topic"}"`}
-            className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 opacity-0 select-none active:cursor-grabbing group-hover:opacity-100 hover:text-stone-500 touch:-my-2 touch:size-11 touch:opacity-100 [-webkit-touch-callout:none] dark:text-stone-600 dark:hover:text-stone-400"
+            aria-label={HANDLE_LABEL(name)}
+            title={HANDLE_TITLE}
+            className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 opacity-0 select-none active:cursor-grabbing group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-stone-500 touch:-my-2 touch:size-11 touch:opacity-100 [-webkit-touch-callout:none] dark:text-stone-600 dark:hover:text-stone-400"
+            {...keyHandleProps}
             {...handleProps(topic.id, columnKey, ref)}
           >
             <DotsGrid className="size-3.5" />
@@ -475,7 +533,7 @@ function TopicCard({
           color="tertiary"
           icon={X}
           tooltip="Delete topic"
-          className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100"
+          className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
           onClick={onDelete}
         />
       </div>

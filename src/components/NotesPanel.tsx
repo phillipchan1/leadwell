@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
+import { confirmAction } from "./ConfirmDialog";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { MarkdownBody } from "./MarkdownBody";
 import { WritingPad } from "./WritingPad";
 import { autoFocusUnlessTouch } from "../lib/pointer";
-import { confirmAction } from "./ConfirmDialog";
 
 /**
  * Dated notes about one subject. Keyed by subject id, so it serves people I
@@ -23,10 +23,7 @@ export function NotesPanel({
   /** Prompt in the composer; the job of a note differs up vs down. */
   placeholder?: string;
 }) {
-  const notes = useStore((s) => s.notes);
-  const addNote = useStore((s) => s.addNote);
-  const updateNote = useStore((s) => s.updateNote);
-  const deleteNote = useStore((s) => s.deleteNote);
+  const { notes, addNote, updateNote, deleteNote } = useStore();
   const mine = notes
     .filter((n) => n.personId === subjectId)
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -99,7 +96,7 @@ export function NotesPanel({
                 color="tertiary"
                 icon={X}
                 tooltip="Delete note"
-                className="opacity-0 touch:opacity-100 group-hover:opacity-100"
+                className="opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
                 onClick={async () => {
                   if (
                     await confirmAction({

@@ -72,7 +72,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
           aria-label="Upload photo"
         >
           <Avatar name={name || "?"} photo={photo} size={64} />
-          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-caption font-medium text-white opacity-0 transition touch:bg-stone-900/45 touch:opacity-100 group-hover:bg-stone-900/45 group-hover:opacity-100">
+          <span className="absolute inset-0 flex items-center justify-center rounded-full bg-stone-900/0 text-caption font-medium text-white opacity-0 transition touch:bg-stone-900/45 touch:opacity-100 group-hover:bg-stone-900/45 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100">
             Change
           </span>
         </button>
@@ -207,7 +207,7 @@ export function PhotoPicker({ name, photo, onChange }: Props) {
                     className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                     draggable={false}
                   />
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-900/55 to-transparent px-1.5 pb-1 pt-4 text-left text-caption font-medium text-white opacity-0 touch:opacity-100 transition group-hover:opacity-100">
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-stone-900/55 to-transparent px-1.5 pb-1 pt-4 text-left text-caption font-medium text-white opacity-0 touch:opacity-100 transition group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100">
                     {a.label}
                   </span>
                 </button>

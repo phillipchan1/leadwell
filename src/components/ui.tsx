@@ -9,6 +9,7 @@ import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { useHistoryDismiss, useSwipeDismiss } from "@/hooks/use-sheet";
 import { useDismiss } from "@/hooks/use-dismiss";
+import { useOverlayGuard } from "@/hooks/use-shortcut";
 
 /**
  * Pill badge tinted by an arbitrary runtime color (domain and capacity colors
@@ -170,11 +171,18 @@ export function Modal({
 }) {
   // Android's Back closes the sheet rather than leaving the app.
   useHistoryDismiss(onClose);
-  /* Ordering only. React Aria already handles Escape for a focused dialog and
-     stops it propagating, so this almost never fires — but registering means
-     an overlay is always the top of the stack while it's open, so the surface
-     underneath can never take an Escape that was meant for this. That is what
-     the per-component guard lists used to be for. */
+  /* Two different jobs, both needed.
+
+     `useOverlayGuard` is a depth counter: page-level shortcuts stand down while
+     a dialog has the screen, so `c` can't open a second "Add team" from inside
+     the first one.
+
+     `useDismiss` is the *ordering*. React Aria already handles Escape for a
+     focused dialog and stops it propagating, so it rarely fires — but
+     registering means an overlay is always the top of the dismiss stack while
+     it's open, so the surface underneath can never take an Escape meant for
+     this one. That is what the per-component guard lists used to be for. */
+  useOverlayGuard();
   useDismiss(onClose);
   const { offset, dragging, handleProps } = useSwipeDismiss(onClose);
 

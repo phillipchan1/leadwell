@@ -308,7 +308,7 @@ export function PrayerCarryToggle({
           type="button"
           aria-label={`Lay ${subjectName} down`}
           onClick={layDown}
-          className="rounded px-1 text-caption text-stone-400 opacity-0 transition-opacity touch:opacity-100 group-hover/person:opacity-100 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-400"
+          className="rounded px-1 text-caption text-stone-400 opacity-0 transition-opacity touch:opacity-100 group-hover/person:opacity-100 group-focus-within/person:opacity-100 focus-visible:opacity-100 hover:text-stone-600 dark:text-stone-500 dark:hover:text-stone-400"
         >
           ×
         </button>
@@ -324,7 +324,7 @@ export function PrayerCarryToggle({
         e.stopPropagation();
         setPrayer(subjectKind, subjectId, true);
       }}
-      className="shrink-0 rounded px-1.5 py-0.5 text-caption font-medium text-violet-600 opacity-0 transition-opacity touch:opacity-100 group-hover/person:opacity-100 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40"
+      className="shrink-0 rounded px-1.5 py-0.5 text-caption font-medium text-violet-600 opacity-0 transition-opacity touch:opacity-100 group-hover/person:opacity-100 group-focus-within/person:opacity-100 focus-visible:opacity-100 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40"
     >
       Take up
     </button>

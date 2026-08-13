@@ -217,7 +217,7 @@ function SessionRow({
           color="tertiary"
           icon={X}
           tooltip="Delete entry"
-          className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100"
+          className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
           onClick={(e: MouseEvent<HTMLButtonElement>) => {
             e.stopPropagation();
             onDelete();

@@ -1,9 +1,11 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useMemo,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -31,6 +33,10 @@ import {
 import type { Manager, Person, Prayer, Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
 import { MODE_LAYERS, MODE_SCAN, TREE_MODES } from "../lib/treeMode";
+import { useShortcut } from "@/hooks/use-shortcut";
+import { useRovingFocus } from "@/hooks/use-roving-focus";
+import { rowActivationProps } from "@/lib/rowActivation";
+import { DIGIT_CHORDS, SHIFT_DIGIT_CHORDS, keyboardOwner } from "@/lib/keys";
 import {
   HEALTH_COLOR,
   HEALTH_FILTER_VALUES,
@@ -220,49 +226,60 @@ export function OrgTree() {
   const prayerScan = useStore((s) => s.prayerScan);
   const setTreeDomainId = useStore((s) => s.setTreeDomainId);
   const setTreeMode = useStore((s) => s.setTreeMode);
-  const modal = useStore((s) => s.modal);
   const openModal = useStore((s) => s.openModal);
-  const askAIOpen = useStore((s) => s.askAIOpen);
-  const settingsOpen = useStore((s) => s.settingsOpen);
+  const me = useStore((s) => s.me);
+  const selectMe = useStore((s) => s.selectMe);
+  const selectManager = useStore((s) => s.selectManager);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
 
-  // 1–4 = modes; ⇧1–⇧9 = domains. Mode is the headline control now, so it takes
-  // the bare digits and the domain filter moves up a shift.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (modal || askAIOpen || settingsOpen) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      // `e.code`, not `e.key` — Shift+1 reports "!" on a US layout, and every
-      // other layout reports something different again.
+  /**
+   * 1–4 pick a mode, ⇧1–⇧9 pick a domain.
+   *
+   * Registered rather than listened for directly, so both appear in the ? panel
+   * and the palette, and so the "is a dialog open / is the user typing" test is
+   * the app's single one. The old hand-rolled version tested for `INPUT` but not
+   * for the canvas's own contenteditable cards.
+   *
+   * `e.code`, not `e.key` — Shift+1 reports "!" on a US layout and something
+   * different again on every other one.
+   */
+  useShortcut(
+    (e) => {
       const digit = /^Digit([1-9])$/.exec(e.code);
       if (!digit) return;
       const n = Number(digit[1]);
-
       if (e.shiftKey) {
         const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
         const id = options[n - 1];
-        if (id === undefined) return;
-        e.preventDefault();
-        setTreeDomainId(id);
+        if (id !== undefined) setTreeDomainId(id);
         return;
       }
       const mode = TREE_MODES[n - 1];
-      if (!mode) return;
-      e.preventDefault();
-      setTreeMode(mode.id);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [domains, modal, askAIOpen, settingsOpen, setTreeDomainId, setTreeMode]);
+      if (mode) setTreeMode(mode.id);
+    },
+    {
+      chord: DIGIT_CHORDS,
+      keysLabel: "1–4",
+      label: "Switch tree mode — Chart, Prep, Assess, Pray",
+      group: "Org tree",
+    }
+  );
+  useShortcut(
+    (e) => {
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (!digit) return;
+      const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
+      const id = options[Number(digit[1]) - 1];
+      if (id !== undefined) setTreeDomainId(id);
+    },
+    {
+      chord: SHIFT_DIGIT_CHORDS,
+      keysLabel: "⇧1–⇧9",
+      label: "Filter the tree by domain — ⇧1 is All",
+      group: "Org tree",
+    }
+  );
 
   const visibleTeams = useMemo(
     () =>
@@ -327,29 +344,36 @@ export function OrgTree() {
       return { x: d.x + dx, y: d.y + dy };
     };
 
+    // `ariaLabel` is what a screen reader reads when Tab lands on the node.
+    // Without it the canvas is a run of anonymous "group"s, because the card's
+    // text lives in nested divs the node wrapper doesn't summarise.
     setNodes([
       {
         id: "me",
         type: "me",
         position: resolvePos("me"),
+        ariaLabel: `${me.name} — me. Press Enter to open.`,
         data: {},
       },
       ...visibleManagers.map((m) => ({
         id: `mgr:${m.id}`,
         type: "manager",
         position: resolvePos(`mgr:${m.id}`),
+        ariaLabel: `${m.name} — someone I report to. Press Enter to open.`,
         data: { managerId: m.id },
       })),
       ...visibleReports.map((p) => ({
         id: reportNodeId(p.id),
         type: "report",
         position: resolvePos(reportNodeId(p.id)),
+        ariaLabel: `${p.name} — direct report. Press Enter to open.`,
         data: { personId: p.id },
       })),
       ...visibleTeams.map((t) => ({
         id: t.id,
         type: "team",
         position: resolvePos(t.id),
+        ariaLabel: `${t.name} — team. Press Enter to open.`,
         data: { teamId: t.id },
       })),
     ]);
@@ -359,8 +383,41 @@ export function OrgTree() {
     visibleReports,
     nodePositions,
     treeDomainId,
+    me.name,
     setNodes,
   ]);
+
+  /**
+   * Enter on a focused node opens it.
+   *
+   * React Flow makes every node a tab stop and answers Enter itself — but only
+   * to toggle *its own* selection, which paints a border and does nothing else.
+   * The card's `onClick` is a mouse-only path, so from the keyboard the canvas
+   * was navigable and inert: you could reach all forty cards and open none.
+   *
+   * Reading the id off the focused wrapper keeps this in one place rather than
+   * pushing a handler into all four node components.
+   */
+  const onCanvasKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "Enter") return;
+      const node = (e.target as HTMLElement).closest<HTMLElement>(
+        ".react-flow__node"
+      );
+      // Only the wrapper itself — Enter inside a card's own button or textarea
+      // belongs to that control.
+      if (!node || e.target !== node) return;
+      const id = node.dataset.id;
+      if (!id) return;
+
+      e.preventDefault();
+      if (id === "me") selectMe(true);
+      else if (id.startsWith("mgr:")) selectManager(id.slice(4));
+      else if (id.startsWith("person:")) selectPerson(id.slice(7));
+      else selectTeam(id);
+    },
+    [selectMe, selectManager, selectPerson, selectTeam]
+  );
 
   const edges: Edge[] = useMemo(() => {
     const visibleIds = new Set(visibleTeams.map((t) => t.id));
@@ -426,6 +483,7 @@ export function OrgTree() {
     (treeDomainId ? 1 : 0) +
     (healthScan.length ? 1 : 0) +
     (prayerScan.length ? 1 : 0);
+  const domainRoving = useRovingFocus();
 
   /* Mode over domain: what I'm doing, then where. Both are shared by the two
      surfaces — the outline is the same view of the same org, so it answers the
@@ -433,14 +491,16 @@ export function OrgTree() {
   const filters = (
     <>
       <div
+        {...domainRoving.groupProps}
         className="flex flex-wrap items-center gap-1.5 touch:gap-2"
-        role="tablist"
+        role="radiogroup"
         aria-label="Filter tree by domain"
       >
         <DomainTab
           active={treeDomainId === null}
           onClick={() => setTreeDomainId(null)}
           shortcut="⇧1"
+          roving={domainRoving.itemProps(treeDomainId === null)}
         >
           All
         </DomainTab>
@@ -451,6 +511,7 @@ export function OrgTree() {
             color={d.color}
             onClick={() => setTreeDomainId(d.id)}
             shortcut={i < 8 ? `⇧${i + 2}` : undefined}
+            roving={domainRoving.itemProps(treeDomainId === d.id)}
           >
             {d.name}
           </DomainTab>
@@ -522,7 +583,14 @@ export function OrgTree() {
       <div className="hidden min-h-0 flex-1 flex-col gap-2 lg:flex">
       {filterRow}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-secondary bg-primary">
+      {/* `keyboardOwner`: inside the canvas, arrow keys nudge the focused node
+          (React Flow's own binding). The global ←/→ sibling pager stands down
+          here rather than doing both at once. */}
+      <div
+        {...keyboardOwner}
+        onKeyDown={onCanvasKeyDown}
+        className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-secondary bg-primary"
+      >
         {/* React Flow captures one-finger drag to pan, which swallows the iOS
             interactive back-swipe. This gutter absorbs touches in the edge
             zone without panning, so Safari still gets the gesture. Only on
@@ -548,6 +616,12 @@ export function OrgTree() {
           maxZoom={1.75}
           nodesConnectable={false}
           deleteKeyCode={null}
+          /* Edges are focusable by default in React Flow. Here they're drawn
+             connectors — not selectable, not deletable, carrying nothing the
+             node labels don't already say — so every one of them was a tab stop
+             onto an invisible <g> that answered no key. Nodes stay focusable;
+             the lines between them stop being furniture in the tab order. */
+          edgesFocusable={false}
           panOnScroll
           panOnScrollMode={PanOnScrollMode.Free}
           zoomOnScroll={false}
@@ -649,19 +723,23 @@ function DomainTab({
   color,
   onClick,
   shortcut,
+  roving,
   children,
 }: {
   active: boolean;
   color?: string;
   onClick: () => void;
   shortcut?: string;
+  /** Roving tabindex from the group — see `useRovingFocus`. */
+  roving: { "data-roving": string; tabIndex: number };
   children: ReactNode;
 }) {
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={active}
+      role="radio"
+      aria-checked={active}
+      {...roving}
       onClick={onClick}
       title={shortcut ? `Filter (${shortcut})` : undefined}
       className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors touch:min-h-11 touch:min-w-11 ${
@@ -1113,10 +1191,16 @@ const dimStyle = (dim: boolean): CSSProperties => ({
 function ModeBar() {
   const treeMode = useStore((s) => s.treeMode);
   const setTreeMode = useStore((s) => s.setTreeMode);
+  // These were `role="tablist"`/`role="tab"` with no arrow-key handling and no
+  // tabpanel to control — a promise to assistive tech that the widget didn't
+  // keep. They're a set of exclusive filters, so: a radiogroup, and now with
+  // the roving arrow keys a radiogroup is supposed to have.
+  const { groupProps, itemProps } = useRovingFocus();
   return (
     <div
+      {...groupProps}
       className="flex flex-wrap gap-1.5 touch:gap-2"
-      role="tablist"
+      role="radiogroup"
       aria-label="What I'm here to do"
     >
       {TREE_MODES.map((mode) => {
@@ -1126,8 +1210,9 @@ function ModeBar() {
           <button
             key={mode.id}
             type="button"
-            role="tab"
-            aria-selected={on}
+            role="radio"
+            aria-checked={on}
+            {...itemProps(on)}
             onClick={() => setTreeMode(mode.id)}
             title={`${mode.question} (${mode.key})`}
             className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm shadow-sm transition-colors touch:min-h-11 ${
@@ -1308,7 +1393,7 @@ const ManagerNode = memo(function ManagerNode({ data }: NodeProps) {
             />
           )}
           <div
-            className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
+            className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <ButtonUtility
@@ -1423,7 +1508,7 @@ const DirectReportNode = memo(function DirectReportNode({ data }: NodeProps) {
             />
           )}
           <div
-            className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
+            className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
             <ButtonUtility
@@ -1620,7 +1705,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
               </div>
             </div>
             <div
-              className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100"
+              className="nodrag flex opacity-0 touch:opacity-100 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
               onClick={(e) => e.stopPropagation()}
             >
               <ButtonUtility
@@ -1898,7 +1983,14 @@ function PersonRow({
   // signal, and capacity is already carried by the card around it.
   const barColor = readiness ? STATE_COLOR[readiness.state] : capacityColor;
   return (
+    /* A `<div onClick>` until now: reachable by no key, activated by no key.
+       It holds its own edit button and prayer toggle, so it can't be a
+       `<button>` — it takes the contract explicitly instead. */
     <div
+      {...rowActivationProps(onSelect, {
+        label: `Open ${person.name}`,
+        selected,
+      })}
       className={`person-row group/person relative flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 ${
         selected ? "is-selected" : ""
       }`}
@@ -1908,7 +2000,6 @@ function PersonRow({
           ...dimStyle(dimmed),
         } as CSSProperties
       }
-      onClick={onSelect}
     >
       <span
         className="person-row__bar absolute top-1/2 left-0 h-7 w-[3px] origin-center -translate-y-1/2 rounded-full"
@@ -1959,7 +2050,7 @@ function PersonRow({
         color="tertiary"
         icon={Edit01}
         tooltip="Edit"
-        className="opacity-0 touch:opacity-100 transition-opacity group-hover/person:opacity-100"
+        className="opacity-0 touch:opacity-100 transition-opacity group-hover/person:opacity-100 group-focus-within/person:opacity-100 focus-visible:opacity-100"
         onClick={(e: MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
           onEdit();

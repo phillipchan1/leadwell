@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
 import {
@@ -17,9 +17,7 @@ import { ConfirmHost } from "./components/ConfirmDialog";
 import { ToastHost } from "./components/Toast";
 import { ModalHost } from "./components/ModalHost";
 import { CreateMenu } from "./components/CreateMenu";
-import { ShortcutsModal } from "./components/Shortcuts";
-import { CommandPalette } from "./components/CommandPalette";
-import { SearchLg, Stars01 } from "@untitledui/icons";
+import { Stars01 } from "@untitledui/icons";
 import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
@@ -40,6 +38,12 @@ import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
 import { useSyncToasts } from "./hooks/use-sync-toasts";
 import { undoLast } from "./lib/undo";
+import { SearchLg } from "@untitledui/icons";
+import { MOD_LABEL } from "@/lib/keys";
+import { ShortcutHost, type GoTarget } from "./components/ShortcutHost";
+import { CommandPalette } from "./components/CommandPalette";
+import { ShortcutsPanel } from "./components/ShortcutsPanel";
+import { useShortcut } from "@/hooks/use-shortcut";
 import { cx } from "@/utils/cx";
 
 /**
@@ -150,6 +154,67 @@ function useDropStaleSelection() {
   ]);
 }
 
+/**
+ * The bindings that belong to the app rather than to any one surface.
+ *
+ * They live in a hook rather than inline so they're registered once, from the
+ * shell, in every phase of the app — including the full-screen session editor,
+ * which returns early from `App` and used to be a shortcut dead zone.
+ */
+function useGlobalShortcuts() {
+  const {
+    paletteOpen,
+    setPaletteOpen,
+    helpOpen,
+    setHelpOpen,
+    setAskAIOpen,
+    setSettingsOpen,
+    openModal,
+    tab,
+  } = useStore();
+
+  useShortcut(() => setPaletteOpen(!paletteOpen), {
+    chord: "mod+k",
+    label: "Open the command palette",
+    group: "Global",
+    overlay: true,
+  });
+
+  useShortcut(() => setHelpOpen(!helpOpen), {
+    chord: "?",
+    label: "Show keyboard shortcuts",
+    group: "Global",
+    overlay: true,
+  });
+
+  useShortcut(() => setAskAIOpen(true), {
+    chord: "mod+shift+a",
+    label: "Ask AI about your org",
+    group: "Global",
+  });
+
+  useShortcut(() => setSettingsOpen(true), {
+    chord: "mod+shift+,",
+    label: "Open settings",
+    group: "Global",
+  });
+
+  // `c` means "make a new one of whatever this tab is about". A single letter
+  // for the single most frequent action, and it stands down inside any field.
+  useShortcut(
+    () => {
+      if (tab === "meetings" || tab === "table")
+        openModal({ kind: "person", teamId: null });
+      else openModal({ kind: "team" });
+    },
+    {
+      chord: "c",
+      label: "Create — a team on the tree, a person on the people views",
+      group: "Global",
+    }
+  );
+}
+
 export default function App() {
   useRouteSync();
   useDropStaleSelection();
@@ -158,6 +223,15 @@ export default function App() {
   // Likewise above the gates — a failed write has to be announced on the
   // session-editor route, which renders its own chrome and no header.
   useSyncToasts();
+  useGlobalShortcuts();
+  /* Registered here rather than as a raw listener so it is documented by
+     construction — the help panel and the palette are rendered from this
+     registry, so a binding cannot exist without an entry. */
+  useShortcut(() => undoLast(), {
+    chord: "mod+z",
+    label: "Undo the last delete",
+    group: "Global",
+  });
 
   const phase = useStore((s) => s.phase);
   const tab = useStore((s) => s.tab);
@@ -170,53 +244,38 @@ export default function App() {
   const setAskAIOpen = useStore((s) => s.setAskAIOpen);
   const settingsOpen = useStore((s) => s.settingsOpen);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const paletteOpen = useStore((s) => s.paletteOpen);
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen);
+  const helpOpen = useStore((s) => s.helpOpen);
+  const setHelpOpen = useStore((s) => s.setHelpOpen);
   const selected = useSelectedEntity();
+
+  // `g` then a letter. Jumping to a tab also drops whatever entity is open —
+  // "go to People" that leaves a team panel covering half the screen has not
+  // gone anywhere.
+  const clearSelection = useStore((s) => s.clearSelection);
+  const onGo = useCallback(
+    (target: GoTarget) => {
+      clearSelection();
+      setTab(target);
+    },
+    [clearSelection, setTab]
+  );
+
+  /** Mounted in every phase, so no surface is a shortcut dead zone. */
+  const overlays = (
+    <>
+      <ShortcutHost onGo={onGo} />
+      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {helpOpen && <ShortcutsPanel onClose={() => setHelpOpen(false)} />}
+    </>
+  );
 
   const dark = useStore((s) => s.dark);
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  /**
-   * `?` opens the shortcut list. Ignored while typing, obviously — and also
-   * while a modifier is held, so it can't shadow a browser or OS binding.
-   */
-  const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
-  useEffect(() => {
-    const typing = (el: HTMLElement | null) =>
-      Boolean(el?.isContentEditable) ||
-      el?.tagName === "INPUT" ||
-      el?.tagName === "TEXTAREA" ||
-      el?.tagName === "SELECT";
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      // ⌘K works from inside a field too — it's a jump, not a character.
-      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setPaletteOpen(true);
-        return;
-      }
-      /* ⌘Z, but not while typing — a text field's own undo is the one you
-         want there, and stealing it would be worse than not having this. */
-      if (
-        e.key.toLowerCase() === "z" &&
-        (e.metaKey || e.ctrlKey) &&
-        !e.shiftKey &&
-        !typing(e.target as HTMLElement | null)
-      ) {
-        e.preventDefault();
-        undoLast();
-        return;
-      }
-      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (typing(e.target as HTMLElement | null)) return;
-      e.preventDefault();
-      setShortcutsOpen(true);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
 
   // Auth/loading gate: only the "ready" phase renders the full app.
   if (phase === "loading") return <LoadingSplash />;
@@ -238,10 +297,7 @@ export default function App() {
         <ConfirmHost />
         <ToastHost />
         <ModalHost />
-        {shortcutsOpen && (
-          <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
-        )}
-        {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+        {overlays}
       </div>
     );
   }
@@ -263,18 +319,25 @@ export default function App() {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <SyncIndicator />
-          <Button
-            size="sm"
-            color="secondary"
-            aria-label="Search"
-            iconLeading={SearchLg}
+          {/* The palette needs a visible door. A ⌘K that only exists as a
+              keystroke is a feature for people who already know it's there —
+              this is how they find out, and it shows the chord while doing it. */}
+          <button
+            type="button"
             onClick={() => setPaletteOpen(true)}
-          />
+            className="hidden items-center gap-2 rounded-lg border border-primary px-2.5 py-1.5 text-xs text-quaternary transition-colors hover:border-stone-400 hover:text-stone-600 sm:flex dark:hover:border-stone-500"
+          >
+            <SearchLg className="size-3.5" aria-hidden />
+            Search or jump to…
+            <kbd className="rounded bg-tertiary px-1 font-mono text-caption">
+              {MOD_LABEL}K
+            </kbd>
+          </button>
           <CreateMenu />
           <Button size="sm" iconLeading={Stars01} onClick={() => setAskAIOpen(true)}>
             Ask AI
           </Button>
-          <HeaderOverflow onShortcuts={() => setShortcutsOpen(true)} />
+          <HeaderOverflow onShortcuts={() => setHelpOpen(true)} />
         </div>
       </header>
 
@@ -346,10 +409,7 @@ export default function App() {
       <ConfirmHost />
       <ToastHost />
       <ModalHost />
-      {shortcutsOpen && (
-        <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
-      )}
-      {paletteOpen && <CommandPalette onClose={() => setPaletteOpen(false)} />}
+      {overlays}
     </div>
   );
 }
