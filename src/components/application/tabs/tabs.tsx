@@ -57,7 +57,7 @@ const sizes = {
         "button-gray": "py-2 px-2.5 touch:min-h-11",
         "button-border": "py-2 px-2.5 touch:min-h-11",
         "button-minimal": "py-2 px-2.5 touch:min-h-11",
-        underline: "px-0.5 pb-2.5 pt-0 touch:min-h-11 touch:px-3",
+        underline: "px-0.5 pt-2.5 pb-2.5 touch:min-h-11 touch:px-3",
         line: "pl-2.5 pr-3 py-0.5 touch:min-h-11",
     },
     md: {
@@ -66,7 +66,7 @@ const sizes = {
         "button-gray": "py-2.5 px-2.5 touch:min-h-11",
         "button-border": "py-2.5 px-2.5 touch:min-h-11",
         "button-minimal": "py-2.5 px-2.5 touch:min-h-11",
-        underline: "px-0.5 pb-2.5 pt-0 touch:min-h-11 touch:px-3",
+        underline: "px-0.5 pt-2.5 pb-2.5 touch:min-h-11 touch:px-3",
         line: "pr-3.5 pl-3 py-1 touch:min-h-11",
     },
 };
