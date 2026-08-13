@@ -162,16 +162,14 @@ function useDropStaleSelection() {
  * which returns early from `App` and used to be a shortcut dead zone.
  */
 function useGlobalShortcuts() {
-  const {
-    paletteOpen,
-    setPaletteOpen,
-    helpOpen,
-    setHelpOpen,
-    setAskAIOpen,
-    setSettingsOpen,
-    openModal,
-    tab,
-  } = useStore();
+  const paletteOpen = useStore((s) => s.paletteOpen);
+  const setPaletteOpen = useStore((s) => s.setPaletteOpen);
+  const helpOpen = useStore((s) => s.helpOpen);
+  const setHelpOpen = useStore((s) => s.setHelpOpen);
+  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const openModal = useStore((s) => s.openModal);
+  const tab = useStore((s) => s.tab);
 
   useShortcut(() => setPaletteOpen(!paletteOpen), {
     chord: "mod+k",

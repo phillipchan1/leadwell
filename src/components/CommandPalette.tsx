@@ -82,24 +82,22 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const listId = useId();
 
   const shortcuts = useShortcutList();
-  const {
-    people,
-    teams,
-    managers,
-    meetings,
-    setTab,
-    selectPerson,
-    selectTeam,
-    selectManager,
-    selectMeeting,
-    selectMe,
-    setTreeMode,
-    openModal,
-    setAskAIOpen,
-    setSettingsOpen,
-    toggleDark,
-    dark,
-  } = useStore();
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const meetings = useStore((s) => s.meetings);
+  const setTab = useStore((s) => s.setTab);
+  const selectPerson = useStore((s) => s.selectPerson);
+  const selectTeam = useStore((s) => s.selectTeam);
+  const selectManager = useStore((s) => s.selectManager);
+  const selectMeeting = useStore((s) => s.selectMeeting);
+  const selectMe = useStore((s) => s.selectMe);
+  const setTreeMode = useStore((s) => s.setTreeMode);
+  const openModal = useStore((s) => s.openModal);
+  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
+  const setSettingsOpen = useStore((s) => s.setSettingsOpen);
+  const toggleDark = useStore((s) => s.toggleDark);
+  const dark = useStore((s) => s.dark);
 
   const items = useMemo<Item[]>(() => {
     const go = (fn: () => void) => () => {

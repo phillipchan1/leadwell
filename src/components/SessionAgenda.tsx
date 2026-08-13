@@ -31,16 +31,14 @@ export function SessionAgenda({
   session: Session;
   meeting: TrackedMeeting;
 }) {
-  const {
-    sessions,
-    topics,
-    addTopic,
-    coverTopic,
-    rollTopic,
-    addSession,
-    placeTopic,
-    moveTopic,
-  } = useStore();
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const addTopic = useStore((s) => s.addTopic);
+  const coverTopic = useStore((s) => s.coverTopic);
+  const rollTopic = useStore((s) => s.rollTopic);
+  const addSession = useStore((s) => s.addSession);
+  const placeTopic = useStore((s) => s.placeTopic);
+  const moveTopic = useStore((s) => s.moveTopic);
   const [draft, setDraft] = useState("");
   const [pulling, setPulling] = useState(false);
   const today = todayISO();
