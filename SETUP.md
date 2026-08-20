@@ -1,8 +1,7 @@
 # LeadWell cloud setup
 
 LeadWell now runs on **Supabase** (Postgres + Auth) with **Google sign-in**, so
-your data lives in the cloud and syncs across every device. The AI coach runs
-through a **Supabase Edge Function** that keeps the Anthropic key server-side.
+your data lives in the cloud and syncs across every device.
 
 You do this once. It takes ~15 minutes.
 
@@ -84,28 +83,7 @@ starter data on first login.
 
 ---
 
-## 4. Deploy the AI Edge Function
-
-The AI coach calls [`supabase/functions/anthropic`](supabase/functions/anthropic/index.ts),
-which holds the Anthropic key server-side and streams Claude's replies back.
-Supabase verifies the user's login before the function runs.
-
-```sh
-supabase functions deploy anthropic
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-your-key-here
-```
-
-`supabase/config.toml` sets `verify_jwt = false` for this function so browser
-CORS preflight works; the function still requires a signed-in user JWT before
-calling Anthropic.
-
-Get a key at <https://console.anthropic.com>. If you skip this step the app
-works fully — only the AI coach / 1:1 structuring will show an error until it's
-deployed.
-
----
-
-## 5. Run it
+## 4. Run it
 
 ```sh
 npm install
@@ -127,8 +105,8 @@ people are imported automatically the first time you sign in — nothing is lost
 Google sign-in can't be automated, and nobody should be handing your Google
 credentials to a script or a coding agent. So dev builds can offer a second,
 password-based sign-in for a throwaway account. It exercises the real thing —
-auth, row-level security, cloud sync, the server-side AI coach — while your own
-account stays untouched.
+auth, row-level security, and cloud sync — while your own account stays
+untouched.
 
 **1. Create the user.** Supabase dashboard → **Authentication → Users → Add
 user → Create new user**. Use an address you control (e.g.
@@ -179,4 +157,3 @@ Netlify, Cloudflare Pages, Supabase Hosting…). Then:
 | App stuck on "Backend not configured" | `.env.local` missing/typo'd; restart `npm run dev` after editing. |
 | Google sign-in loops or 400s | Redirect URI in Google must be the Supabase `/auth/v1/callback` URL; your app URL must be in Supabase → Auth → URL Configuration. |
 | Signed in but no data / permission errors | The SQL migration didn't run (RLS/tables missing). Re-run step 2. |
-| AI coach errors | Edge Function not deployed or `ANTHROPIC_API_KEY` secret not set (step 4). |

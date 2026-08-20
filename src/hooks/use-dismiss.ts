@@ -7,8 +7,8 @@ import { useEffect, useRef } from "react";
  * and `ManagerProfile` each carried the same ~25-line effect and the same
  * hand-maintained guard list:
  *
- *     if (modal || askAIOpen || settingsOpen || editingAssessments ||
- *         editingPerson || fillingProfile) return;
+ *     if (modal || settingsOpen || editingAssessments ||
+ *         editingPerson) return;
  *
  * That had three costs. `MeProfile` and `MeetingProfile` never got one, so
  * Escape closed a person panel but not those. Any new overlay had to be added

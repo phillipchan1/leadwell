@@ -7,8 +7,8 @@ import { Skeleton } from "./Skeleton";
 import { keyboardOwner } from "@/lib/keys";
 
 /**
- * The profiles pull in the whole markdown stack, the assessment editors and
- * the AI coach — none of which the Overview tab needs. Loading them with the
+ * The profiles pull in the whole markdown stack and the assessment editors —
+ * none of which the Overview tab needs. Loading them with the
  * first selection instead of with the shell keeps the initial download on
  * mobile data to what actually paints.
  */

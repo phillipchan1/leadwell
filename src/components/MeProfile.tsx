@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, Stars01 } from "@untitledui/icons";
+import { AlertTriangle } from "@untitledui/icons";
 import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import {
@@ -16,7 +16,6 @@ import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { AssessmentEditor } from "./AssessmentEditor";
 import { MeModal } from "./forms";
-import { ProfileFillModal } from "./ProfileFillModal";
 import type { Density } from "./EntitySurface";
 
 function QuickAction({
@@ -66,7 +65,6 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
 
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [editingAssessments, setEditingAssessments] = useState(false);
-  const [fillingProfile, setFillingProfile] = useState(false);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-primary">
@@ -84,13 +82,6 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <QuickAction onClick={() => setFillingProfile(true)}>
-            <Stars01
-              className="mr-1 inline size-3.5 shrink-0 align-[-0.15em]"
-              aria-hidden="true"
-            />
-            AI fill
-          </QuickAction>
           <QuickAction onClick={() => setEditingAssessments(true)}>
             Assessments
           </QuickAction>
@@ -104,32 +95,20 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
         <section className="space-y-3">
           <SectionTitle>My profile</SectionTitle>
           <p className="text-xs text-stone-500">
-            Self-assess so coaching and team reads know how you&apos;re wired —
-            not only the people you lead.
+            Self-assess so team reads know how you&apos;re wired — not only the
+            people you lead.
           </p>
 
           {!hasRead ? (
-            <div className="space-y-2">
-              <button
-                onClick={() => setFillingProfile(true)}
-                className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
-              >
-                <Stars01
-                  className="mr-1 inline size-3.5 shrink-0 align-[-0.15em]"
-                  aria-hidden="true"
-                />
-                Map my profile
-                <div className="mt-1 text-xs">
-                  Brain dump or guided mapping
-                </div>
-              </button>
-              <button
-                onClick={() => setEditingAssessments(true)}
-                className="w-full rounded-xl border border-dashed border-primary py-3 text-xs text-quaternary hover:border-teal-500 hover:text-teal-600"
-              >
-                Or enter assessments manually
-              </button>
-            </div>
+            <button
+              onClick={() => setEditingAssessments(true)}
+              className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
+            >
+              Enter assessments
+              <div className="mt-1 text-xs">
+                CliftonStrengths, Enneagram, MBTI, or other modalities
+              </div>
+            </button>
           ) : (
             <>
               {top5.length > 0 && (
@@ -246,9 +225,6 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
       {editingIdentity && <MeModal onClose={() => setEditingIdentity(false)} />}
       {editingAssessments && (
         <AssessmentEditor self onClose={() => setEditingAssessments(false)} />
-      )}
-      {fillingProfile && (
-        <ProfileFillModal self onClose={() => setFillingProfile(false)} />
       )}
     </div>
   );

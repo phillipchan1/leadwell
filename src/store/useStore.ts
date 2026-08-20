@@ -161,7 +161,6 @@ type UIState = {
   dark: boolean;
   /** Entity panel width beside the canvas, as a percentage of the split. */
   panelPct: number;
-  askAIOpen: boolean;
   modal: ModalState;
   settingsOpen: boolean;
   /** ⌘K. Lives in the store so any surface can open it, and the palette itself
@@ -214,7 +213,6 @@ type Store = PersistedData &
     toggleDark: () => void;
     /** Resize the entity panel. Clamped and remembered across sessions. */
     setPanelPct: (pct: number) => void;
-    setAskAIOpen: (open: boolean) => void;
     setPaletteOpen: (open: boolean) => void;
     setHelpOpen: (open: boolean) => void;
     openModal: (modal: NonNullable<ModalState>) => void;
@@ -748,7 +746,6 @@ export const useStore = create<Store>((set, get) => ({
   collapsedTeams: [],
   dark: initialDark(),
   panelPct: initialPanelPct(),
-  askAIOpen: false,
   paletteOpen: false,
   helpOpen: false,
   modal: null,
@@ -980,7 +977,6 @@ export const useStore = create<Store>((set, get) => ({
     storage.save("panelPct", next);
     set({ panelPct: next });
   },
-  setAskAIOpen: (open) => set({ askAIOpen: open }),
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   setHelpOpen: (open) => set({ helpOpen: open }),
   openModal: (modal) => set({ modal }),

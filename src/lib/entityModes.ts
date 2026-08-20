@@ -3,7 +3,7 @@
  *
  * Person, team and manager panels used to each invent their own shape: a
  * person had five tabs whose first one was a dumping ground (health, prep,
- * assessments, goals and the AI coach in one scroll), a manager had a
+ * assessments and goals in one scroll), a manager had a
  * different five, and a team had none at all — eleven sections stacked in a
  * single column. Same job, three layouts, nothing transferable.
  *

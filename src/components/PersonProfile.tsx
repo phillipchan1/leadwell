@@ -26,14 +26,12 @@ import { PrayerPanel } from "./Prayer";
 import { Badge } from "@/components/base/badges/badges";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { AlertTriangle, Stars01, X } from "@untitledui/icons";
+import { AlertTriangle, X } from "@untitledui/icons";
 import { PersonModal } from "./forms";
-import { AICoach } from "./AICoach";
 import { SubjectMeetings } from "./SubjectMeetings";
 import { NotesPanel } from "./NotesPanel";
 import { LeadUpManual } from "./LeadUpManual";
 import { WinsLedger } from "./WinsLedger";
-import { ProfileFillModal } from "./ProfileFillModal";
 import { PrepPanel } from "./PrepPanel";
 import { confirmAction } from "./ConfirmDialog";
 import { deleteWithUndo } from "../lib/undo";
@@ -105,14 +103,12 @@ export function PersonProfile({
 
   const [editingAssessments, setEditingAssessments] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
-  const [fillingProfile, setFillingProfile] = useState(false);
   const [newGoal, setNewGoal] = useState("");
   // Set when a readiness check sends you to Meetings for a specific write-up.
   const [focusSessionId, setFocusSessionId] = useState<string | undefined>();
 
   // Editors are per-person; the mode resets itself via the route.
   useEffect(() => {
-    setFillingProfile(false);
     setFocusSessionId(undefined);
   }, [person.id]);
 
@@ -334,27 +330,15 @@ export function PersonProfile({
                   )}
                 </div>
                 {!hasRead ? (
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => setFillingProfile(true)}
-                      className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
-                    >
-                      <Stars01
-                        className="mr-1.5 inline size-4 shrink-0 align-[-0.2em]"
-                        aria-hidden="true"
-                      />
-                      AI fill from a brain dump
-                      <div className="mt-1 text-xs">
-                        Free text or guided mapping → traits & modalities
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => setEditingAssessments(true)}
-                      className="w-full rounded-xl border border-dashed border-primary py-3 text-xs text-quaternary hover:border-teal-500 hover:text-teal-600"
-                    >
-                      Or enter assessments manually
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setEditingAssessments(true)}
+                    className="w-full rounded-xl border border-dashed border-primary py-6 text-sm text-quaternary hover:border-teal-500 hover:text-teal-600"
+                  >
+                    Enter assessments
+                    <div className="mt-1 text-xs">
+                      CliftonStrengths, Enneagram, MBTI, or other modalities
+                    </div>
+                  </button>
                 ) : (
                   <>
                     {top5.length > 0 && (
@@ -490,11 +474,6 @@ export function PersonProfile({
               </section>
             )}
 
-            <section className="space-y-2">
-              <SectionTitle>AI coach</SectionTitle>
-              <AICoach person={person} />
-            </section>
-
             {/* Moving someone between teams was drag-only on the canvas, which
                 meant it had no keyboard or screen-reader path at all — and
                 `movePerson` had been sitting in the store with no UI of any
@@ -560,12 +539,6 @@ export function PersonProfile({
       )}
       {editingPerson && (
         <PersonModal person={person} onClose={() => setEditingPerson(false)} />
-      )}
-      {fillingProfile && (
-        <ProfileFillModal
-          person={person}
-          onClose={() => setFillingProfile(false)}
-        />
       )}
     </aside>
   );

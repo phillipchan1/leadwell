@@ -1,14 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
-import {
-  hasApiKey,
-  structureMeetingNotes,
-  type StructuredMeeting,
-} from "../lib/ai";
 import { SessionEditor } from "./SessionEditor";
 import { SessionAgenda } from "./SessionAgenda";
-import { Button } from "@/components/base/buttons/button";
-import { Checkbox } from "@/components/base/checkbox/checkbox";
 
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
@@ -72,7 +65,6 @@ export function MeetingEditor({
   const managers = useStore((s) => s.managers);
   const updateSession = useStore((s) => s.updateSession);
   const deleteSession = useStore((s) => s.deleteSession);
-  const addTopic = useStore((s) => s.addTopic);
   const session = sessions.find((o) => o.id === sessionId);
   const meeting = meetings.find((m) => m.id === session?.meetingId);
   const person =
@@ -104,11 +96,7 @@ export function MeetingEditor({
   const [showCapture, setShowCapture] = useState(
     Boolean(session?.transcript?.trim())
   );
-  const [structuring, setStructuring] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [parsed, setParsed] = useState<StructuredMeeting | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [createTopics, setCreateTopics] = useState(true);
   const [editingMeta, setEditingMeta] = useState(false);
   const [showTools, setShowTools] = useState(false);
 
@@ -134,12 +122,6 @@ export function MeetingEditor({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (preview !== null && !structuring) {
-        e.preventDefault();
-        setPreview(null);
-        setParsed(null);
-        return;
-      }
       if (showCapture || showTools || editingMeta) {
         e.preventDefault();
         setShowCapture(false);
@@ -152,7 +134,7 @@ export function MeetingEditor({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [preview, structuring, showCapture, showTools, editingMeta, onClose]);
+  }, [showCapture, showTools, editingMeta, onClose]);
 
   if (!session || !meeting) {
     return null;
@@ -237,58 +219,6 @@ export function MeetingEditor({
       setError("Could not start the microphone.");
       setListening(false);
     }
-  };
-
-  const runStructure = async () => {
-    if (!hasApiKey()) {
-      setError("AI structuring needs a signed-in session and the server AI function.");
-      return;
-    }
-    setError(null);
-    setStructuring(true);
-    setPreview("");
-    setParsed(null);
-    setShowTools(true);
-    try {
-      const result = await structureMeetingNotes({
-        personId: person?.id,
-        teamId: team?.id,
-        managerId: manager?.id,
-        label: meetingLabel,
-        transcript,
-        draftNotes: notes,
-        onDelta: (t) => setPreview(t),
-      });
-      setParsed(result);
-      setPreview(result.notes);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not structure notes.");
-      setPreview(null);
-    } finally {
-      setStructuring(false);
-    }
-  };
-
-  const acceptStructured = () => {
-    if (!parsed) return;
-    saveNotes(parsed.notes);
-    if (parsed.suggestedNextDate) {
-      setNextDate(parsed.suggestedNextDate);
-      updateSession(session.id, {
-        notes: parsed.notes,
-        nextDate: parsed.suggestedNextDate,
-      });
-    }
-    // Onto the meeting's board, not a person's — which is what makes this
-    // work for a staff meeting, where there is no person to hang it on and the
-    // commitments used to be quietly dropped.
-    if (createTopics && parsed.commitments.length) {
-      for (const text of parsed.commitments) {
-        addTopic(meeting.id, text, { lane: "backlog" });
-      }
-    }
-    setParsed(null);
-    setPreview(null);
   };
 
   const firstName = subjectName.split(" ")[0] ?? subjectName;
@@ -424,14 +354,6 @@ export function MeetingEditor({
                 >
                   Transcript
                 </button>
-                <button
-                  type="button"
-                  className="meeting-editor-chip is-primary"
-                  disabled={structuring}
-                  onClick={runStructure}
-                >
-                  {structuring ? "Structuring…" : "✦ Structure"}
-                </button>
               </div>
 
               {error && (
@@ -451,64 +373,14 @@ export function MeetingEditor({
             </div>
           )}
 
-          {preview !== null ? (
-            <div className="meeting-editor-preview-block">
-              <div className="meeting-editor-preview-label">
-                {structuring ? "Writing draft…" : "AI draft — review"}
-              </div>
-              <SessionEditor
-                sessionId={session.id}
-                value={preview}
-                onChange={(v) => {
-                  setPreview(v);
-                  if (parsed) setParsed({ ...parsed, notes: v });
-                }}
-                readOnly={structuring}
-                autoFocus={!structuring && autoFocusUnlessTouch()}
-              />
-              {parsed && !structuring && (
-                <div className="meeting-editor-preview-actions">
-                  {parsed.commitments.length > 0 && (
-                    <Checkbox
-                      size="sm"
-                      isSelected={createTopics}
-                      onChange={setCreateTopics}
-                      label={`Add ${parsed.commitments.length} commitment${
-                        parsed.commitments.length === 1 ? "" : "s"
-                      } as topics`}
-                    />
-                  )}
-                  <Button type="button" size="md" onClick={acceptStructured}>
-                    Accept into notes
-                  </Button>
-                  <Button
-                    type="button"
-                    size="md"
-                    color="secondary"
-                    onClick={() => {
-                      setPreview(null);
-                      setParsed(null);
-                    }}
-                  >
-                    Discard
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* What we planned to cover, where ticking it off is a tick and
-                  not a trip back to the board. */}
-              <SessionAgenda session={session} meeting={meeting} />
-              <SessionEditor
-                sessionId={session.id}
-                value={notes}
-                onChange={saveNotes}
-                placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
-                autoFocus={!notes.trim() && autoFocusUnlessTouch()}
-              />
-            </>
-          )}
+          <SessionAgenda session={session} meeting={meeting} />
+          <SessionEditor
+            sessionId={session.id}
+            value={notes}
+            onChange={saveNotes}
+            placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
+            autoFocus={!notes.trim() && autoFocusUnlessTouch()}
+          />
         </div>
       </div>
     </div>

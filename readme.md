@@ -32,10 +32,6 @@ imported automatically on first sign-in.
   signed-in user. The Zustand store still works optimistically in memory; a thin
   repository layer ([`src/lib/repo.ts`](src/lib/repo.ts)) syncs changed
   collections to Supabase (debounced) and hydrates on login.
-- **AI**: a Supabase Edge Function ([`supabase/functions/anthropic`](supabase/functions/anthropic/index.ts))
-  holds the Anthropic key server-side and streams Claude's replies — no key ever
-  touches the browser. Powers the per-person AI coach, the header **Ask AI**
-  chat, the Overview brief, and 1:1 note structuring (model: `claude-sonnet-5`).
 
 ## Navigation model
 
@@ -154,7 +150,7 @@ Meghan above three M-names you've never touched.
 
 React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
 
-The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles and the AI coach frames them as *leading up*. The cards themselves are driven by **mode** (see below), not by a row of toggles, and mode composes with the domain filter. **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
+The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles framed as *leading up*. The cards themselves are driven by **mode** (see below), not by a row of toggles, and mode composes with the domain filter. **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 
 ```
 src/
@@ -174,13 +170,12 @@ src/
     search.ts            # the offline quick-search index: documents, tokens, ranking
     recents.ts           # what you opened last — the resting list and the frecency term
     docCache.ts          # the local copy of the document, so a cold open needs no network
-    ai.ts                # Anthropic client, system prompts, streaming chat
   store/useStore.ts      # Zustand store; persists on every data change
   components/
-    App shell: App.tsx (header, tabs, route sync, Ask AI)
+    App shell: App.tsx (header, tabs, route sync)
     Surfaces: EntitySurface.tsx (peek), FocusView.tsx (page), EntityChrome.tsx
     Tree: OrgTree.tsx, StatsBar.tsx, StrengthsDonut.tsx, Avatar.tsx
-    Profile: PersonProfile.tsx, AssessmentEditor.tsx, AICoach.tsx
+    Profile: PersonProfile.tsx, AssessmentEditor.tsx
     Shared records: TopicKanban.tsx, NotesPanel.tsx    # keyed by subject id — people and managers alike
     Leading up: ManagerProfile.tsx, LeadUpManual.tsx, WinsLedger.tsx
     Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx

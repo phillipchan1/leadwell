@@ -3,12 +3,11 @@ import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import type { Manager } from "../types";
 import { Avatar } from "./Avatar";
-import { TintBadge, ProfileAdminLinks, SectionTitle } from "./ui";
+import { TintBadge, ProfileAdminLinks } from "./ui";
 import { ManagerModal } from "./forms";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 
-import { AICoach } from "./AICoach";
 import { LeadUpManual } from "./LeadUpManual";
 import { PrepPanel } from "./PrepPanel";
 import { SubjectMeetings } from "./SubjectMeetings";
@@ -154,10 +153,6 @@ export function ManagerProfile({
               subject={manager}
               onChange={(patch) => updateManagerLeadUp(manager.id, patch)}
             />
-            <section className="space-y-2">
-              <SectionTitle>AI coach</SectionTitle>
-              <AICoach manager={manager} />
-            </section>
             <ProfileAdminLinks
               onEdit={() => setEditing(true)}
               onRemove={async () => {

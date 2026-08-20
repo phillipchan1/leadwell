@@ -78,16 +78,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             />
           </div>
         </section>
-
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium text-stone-800 dark:text-stone-100">
-            AI coach
-          </h3>
-          <p className="text-xs leading-relaxed text-stone-500">
-            Coaching and 1:1 note structuring run through a secure server
-            function. There is no API key to paste in the browser.
-          </p>
-        </section>
       </div>
     </Modal>
   );

@@ -370,7 +370,7 @@ export type Session = {
   point?: string;
   notes?: string;
   nextDate?: string;
-  /** Raw mic / pasted transcript before AI structuring. */
+  /** Raw mic / pasted transcript for this write-up. */
   transcript?: string;
 };
 

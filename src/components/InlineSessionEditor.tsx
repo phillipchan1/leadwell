@@ -97,7 +97,7 @@ export function InlineSessionEditor({
             color="link-gray"
             iconLeading={Expand01}
             onClick={onExpand}
-            aria-label="Open the full editor — transcript, AI structuring, blocks"
+            aria-label="Open the full editor — transcript and blocks"
           >
             Expand
           </Button>

@@ -3,7 +3,6 @@ import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import type { Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
-import { hasApiKey, refineTeamMandate } from "../lib/ai";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
@@ -12,8 +11,7 @@ import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
-import { Stars01, X } from "@untitledui/icons";
-import { AICoach } from "./AICoach";
+import { X } from "@untitledui/icons";
 import { HealthField } from "./Health";
 import { PrayerPanel } from "./Prayer";
 import { StatsBar } from "./StatsBar";
@@ -33,7 +31,7 @@ function today() {
  *
  * This used to be eleven sections in one scroll — health, prayer, readiness,
  * sessions, topics, mandate, sub-teams, next steps, people, notes and a
- * collapsible drawer of goals, stats and AI — with no tab strip at all, while
+ * collapsible drawer of goals and stats — with no tab strip at all, while
  * a person right next to it had five tabs. Same modes now, same order, same
  * place: Now is the audit loop, Meetings is the standing meeting, Profile is
  * the charter and the roster, Notes is the record, Prayer is the posture.
@@ -106,8 +104,6 @@ export function TeamProfile({
 
   const [name, setName] = useState(team.name);
   const [mandate, setMandate] = useState(team.purpose ?? "");
-  const [refining, setRefining] = useState(false);
-  const [refineError, setRefineError] = useState<string | null>(null);
   const [newAction, setNewAction] = useState("");
   const [newGoal, setNewGoal] = useState("");
   const [newNote, setNewNote] = useState("");
@@ -120,8 +116,6 @@ export function TeamProfile({
   useEffect(() => {
     setName(team.name);
     setMandate(team.purpose ?? "");
-    setRefining(false);
-    setRefineError(null);
     setNewAction("");
     setNewGoal("");
     setNewNote("");
@@ -156,34 +150,9 @@ export function TeamProfile({
   };
 
   const saveMandate = () => {
-    if (refining) return;
     const nextPurpose = mandate.trim() || undefined;
     if (nextPurpose === team.purpose) return;
     updateTeam(team.id, { purpose: nextPurpose });
-  };
-
-  const runRefineMandate = async () => {
-    if (!hasApiKey()) {
-      setRefineError("Sign in to refine with AI.");
-      return;
-    }
-    setRefineError(null);
-    setRefining(true);
-    try {
-      const result = await refineTeamMandate({
-        teamId: team.id,
-        purpose: mandate,
-        onDelta: (text) => setMandate(text),
-      });
-      setMandate(result);
-      updateTeam(team.id, { purpose: result || undefined });
-    } catch (e) {
-      setRefineError(
-        e instanceof Error ? e.message : "Could not refine the mandate."
-      );
-    } finally {
-      setRefining(false);
-    }
   };
 
   return (
@@ -461,34 +430,16 @@ export function TeamProfile({
         {mode === "profile" && (
           <div className="flex flex-col gap-8 px-4 py-5 sm:px-6">
             <section>
-              <div className="mb-2 flex items-baseline justify-between gap-2">
-                <SectionTitle>Mandate</SectionTitle>
-                <Button
-                  size="sm"
-                  color="link-color"
-                  iconLeading={refining ? undefined : Stars01}
-                  onClick={runRefineMandate}
-                  isLoading={refining}
-                  showTextWhileLoading
-                >
-                  {refining ? "Refining…" : "Refine"}
-                </Button>
-              </div>
+              <SectionTitle>Mandate</SectionTitle>
               <TextArea
                 size="md"
                 aria-label="Mandate"
-                textAreaClassName={`min-h-[88px] resize-y leading-relaxed ${
-                  refining ? "opacity-80" : ""
-                }`}
+                textAreaClassName="mt-2 min-h-[88px] resize-y leading-relaxed"
                 placeholder="What am I responsible to lead this team toward?"
                 value={mandate}
                 onChange={setMandate}
                 onBlur={saveMandate}
-                isReadOnly={refining}
               />
-              {refineError && (
-                <p className="mt-1.5 text-caption text-red-500">{refineError}</p>
-              )}
               <div className="mt-2 flex flex-wrap gap-2">
                 {parent && (
                   <Button
@@ -634,13 +585,6 @@ export function TeamProfile({
             )}
 
             <StatsBar people={members} />
-
-            <section>
-              <SectionTitle>AI coach</SectionTitle>
-              <div className="mt-2">
-                <AICoach team={team} />
-              </div>
-            </section>
           </div>
         )}
 

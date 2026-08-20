@@ -1,6 +1,0 @@
-# Edge Function settings. Gateway JWT verification blocks browser CORS
-# preflight (OPTIONS has no Authorization), so anthropic verifies the user
-# JWT inside the function instead.
-
-[functions.anthropic]
-verify_jwt = false

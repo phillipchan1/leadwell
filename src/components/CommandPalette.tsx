@@ -107,7 +107,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const openSession = useStore((s) => s.openSession);
   const setTreeMode = useStore((s) => s.setTreeMode);
   const openModal = useStore((s) => s.openModal);
-  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const toggleDark = useStore((s) => s.toggleDark);
   const dark = useStore((s) => s.dark);
@@ -226,7 +225,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         }),
       })),
 
-      { id: "app:ai", label: "Ask AI about your org", group: "App", run: go("app:ai", () => setAskAIOpen(true)) },
       { id: "app:settings", label: "Open settings", group: "App", run: go("app:settings", () => setSettingsOpen(true)) },
       {
         id: "app:theme",
@@ -257,7 +255,6 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     selectMe,
     setTreeMode,
     openModal,
-    setAskAIOpen,
     setSettingsOpen,
     toggleDark,
   ]);

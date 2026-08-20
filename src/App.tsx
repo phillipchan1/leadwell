@@ -9,16 +9,12 @@ import {
 } from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
 import { Overview } from "./components/Overview";
-import { AICoach } from "./components/AICoach";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
-import { Modal } from "./components/ui";
 import { ConfirmHost } from "./components/ConfirmDialog";
 import { ToastHost } from "./components/Toast";
 import { ModalHost } from "./components/ModalHost";
 import { CreateMenu } from "./components/CreateMenu";
-import { Stars01 } from "@untitledui/icons";
-import { Button } from "@/components/base/buttons/button";
 import {
   Tab as TabItem,
   TabList,
@@ -166,7 +162,6 @@ function useGlobalShortcuts() {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen);
   const helpOpen = useStore((s) => s.helpOpen);
   const setHelpOpen = useStore((s) => s.setHelpOpen);
-  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const openModal = useStore((s) => s.openModal);
   const tab = useStore((s) => s.tab);
@@ -183,12 +178,6 @@ function useGlobalShortcuts() {
     label: "Show keyboard shortcuts",
     group: "Global",
     overlay: true,
-  });
-
-  useShortcut(() => setAskAIOpen(true), {
-    chord: "mod+shift+a",
-    label: "Ask AI about your org",
-    group: "Global",
   });
 
   useShortcut(() => setSettingsOpen(true), {
@@ -238,8 +227,6 @@ export default function App() {
   const teams = useStore((s) => s.teams);
   const focused = useStore((s) => s.focused);
   const sessionId = useStore((s) => s.sessionId);
-  const askAIOpen = useStore((s) => s.askAIOpen);
-  const setAskAIOpen = useStore((s) => s.setAskAIOpen);
   const settingsOpen = useStore((s) => s.settingsOpen);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const paletteOpen = useStore((s) => s.paletteOpen);
@@ -332,9 +319,6 @@ export default function App() {
             </kbd>
           </button>
           <CreateMenu />
-          <Button size="sm" iconLeading={Stars01} onClick={() => setAskAIOpen(true)}>
-            Ask AI
-          </Button>
           <HeaderOverflow onShortcuts={() => setHelpOpen(true)} />
         </div>
       </header>
@@ -397,12 +381,6 @@ export default function App() {
 
       <BottomNav />
 
-      {/* Global Ask AI */}
-      {askAIOpen && (
-        <Modal title="Ask AI about your org" onClose={() => setAskAIOpen(false)}>
-          <AICoach />
-        </Modal>
-      )}
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ConfirmHost />
       <ToastHost />

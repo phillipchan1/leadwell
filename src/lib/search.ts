@@ -187,8 +187,7 @@ function leadUpText(profile: Person["leadUp"]): string | undefined {
  * Flatten the workspace into documents.
  *
  * Every record that carries prose a leader would search for is here. What is
- * deliberately *not* here: ids, colors, positions, chat transcripts with the
- * AI coach (a conversation about a person is not a record of them), and the
+ * deliberately *not* here: ids, colors, positions, chat transcripts, and the
  * deprecated `actions` table.
  */
 export function buildDocs(src: SearchSource): SearchDoc[] {

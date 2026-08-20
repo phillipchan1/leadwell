@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useStore } from "../store/useStore";
 import { DOMAINS } from "../data/frameworks";
 import {
@@ -30,10 +30,7 @@ import {
   recentAnswers,
   rollUpPrayer,
 } from "../lib/prayer";
-import { hasApiKey, orgSystemPrompt, streamChat } from "../lib/ai";
-import { Stars01 } from "@untitledui/icons";
 import { Card, SectionTitle } from "./ui";
-import { SkeletonLines } from "./Skeleton";
 import { Button } from "@/components/base/buttons/button";
 import { Avatar } from "./Avatar";
 import { HealthBar } from "./Health";
@@ -52,18 +49,13 @@ export function Overview() {
   const selectManager = useStore((s) => s.selectManager);
   const setTab = useStore((s) => s.setTab);
   const setHealthScan = useStore((s) => s.setHealthScan);
-  const [brief, setBrief] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const keyed = hasApiKey();
 
   /**
    * ── Why everything below is memoized ──────────────────────────────────────
    *
    * This file had no `useMemo` at all, and it is now the tab the app opens on.
    * Every value here is a scan over the whole org — `needAttention` calls
-   * `readinessFor` per person — and they were all recomputed on any render,
-   * including one caused by typing in the AI brief box.
+   * `readinessFor` per person — and they were all recomputed on any render.
    *
    * The dependency arrays are the collections each value genuinely reads, so
    * setting a health level redraws the health card without re-deriving the
@@ -208,107 +200,48 @@ export function Overview() {
     else selectManager(id, "prayer");
   };
 
-  const generateBrief = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      let acc = "";
-      const text = await streamChat(
-        orgSystemPrompt(),
-        [
-          {
-            role: "user",
-            content:
-              "Give me an executive brief on my leadership right now: (1) assessment coverage gaps and who to assess next, (2) who needs attention and why, (3) team strengths blind spots and what they mean practically. Use short sections with headers. Be direct.",
-          },
-        ],
-        (delta) => {
-          acc += delta;
-          setBrief(acc);
-        }
-      );
-      setBrief(text);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to generate brief.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-      {/* AI executive brief */}
       <Card className="order-last p-6 lg:order-first lg:col-span-2">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <SectionTitle>Executive brief</SectionTitle>
-          {keyed && (
-            <Button
-              size="md"
-              iconLeading={loading || brief ? undefined : Stars01}
-              onClick={generateBrief}
-              isDisabled={loading}
-              isLoading={loading}
-              showTextWhileLoading
-            >
-              {loading ? "Thinking…" : brief ? "Regenerate" : "Generate with AI"}
-            </Button>
-          )}
-        </div>
-        {error && <p className="mb-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
-        {loading && !brief ? (
-          /* Reserve the height the answer will occupy so the card doesn't
-             reflow on every streamed token. */
-          <SkeletonLines count={3} className="min-h-[7rem]" />
-        ) : brief ? (
-          <div className="min-h-[7rem] text-sm leading-relaxed whitespace-pre-wrap text-stone-700 dark:text-stone-200">
-            {brief}
-          </div>
-        ) : (
-          <div className="space-y-3 text-sm text-tertiary">
-            {/* Local (non-AI) brief so the tab is useful without a key */}
+        <SectionTitle>Executive brief</SectionTitle>
+        <div className="mt-3 space-y-3 text-sm text-tertiary">
+          <p>
+            You lead <strong>{people.length} people</strong> across{" "}
+            <strong>{teams.length} teams</strong>.{" "}
+            {unassessed.length === 0
+              ? "Everyone has a leadership read."
+              : `${unassessed.length} still need a profile read: ${unassessed
+                  .map((p) => p.name)
+                  .join(", ")}.`}
+          </p>
+          {spots.length > 0 && (
             <p>
-              You lead <strong>{people.length} people</strong> across{" "}
-              <strong>{teams.length} teams</strong>.{" "}
-              {unassessed.length === 0
-                ? "Everyone has a leadership read."
-                : `${unassessed.length} still need a profile read: ${unassessed
-                    .map((p) => p.name)
-                    .join(", ")}.`}
-            </p>
-            {spots.length > 0 && (
-              <p>
-                ⚠ Strengths blind spot: no one's Top 5 includes{" "}
-                <strong>{spots.join(" or ")}</strong> themes
-                {" — "}watch for gaps in{" "}
-                {spots
-                  .map((d) =>
-                    d === "Executing"
-                      ? "follow-through"
-                      : d === "Influencing"
-                        ? "selling the vision"
-                        : d === "Relationship Building"
-                          ? "team cohesion"
-                          : "long-range planning"
-                  )
-                  .join(" and ")}
-                .
-              </p>
-            )}
-            <p>
-              {openTopics.length} open topic{openTopics.length === 1 ? "" : "s"}
-              {loose.length > 0 &&
-                ` · ${loose.length} planned and never covered`}
-              {upcoming.length > 0 &&
-                ` · next 1:1 on ${upcoming[0].nextDate}`}
+              ⚠ Strengths blind spot: no one's Top 5 includes{" "}
+              <strong>{spots.join(" or ")}</strong> themes
+              {" — "}watch for gaps in{" "}
+              {spots
+                .map((d) =>
+                  d === "Executing"
+                    ? "follow-through"
+                    : d === "Influencing"
+                      ? "selling the vision"
+                      : d === "Relationship Building"
+                        ? "team cohesion"
+                        : "long-range planning"
+                )
+                .join(" and ")}
               .
             </p>
-            {!keyed && (
-              <p className="text-xs text-quaternary">
-                AI brief needs a signed-in session and the server AI function.
-              </p>
-            )}
-          </div>
-        )}
+          )}
+          <p>
+            {openTopics.length} open topic{openTopics.length === 1 ? "" : "s"}
+            {loose.length > 0 &&
+              ` · ${loose.length} planned and never covered`}
+            {upcoming.length > 0 &&
+              ` · next 1:1 on ${upcoming[0].nextDate}`}
+            .
+          </p>
+        </div>
       </Card>
 
       {/* Who needs attention */}
