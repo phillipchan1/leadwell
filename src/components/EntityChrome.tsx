@@ -101,10 +101,10 @@ export function useEntityTrail() {
             label: subjectName ?? "Subject",
             go: () =>
               meeting.subjectKind === "person"
-                ? selectPerson(meeting.subjectId)
+                ? selectPerson(meeting.subjectId, "profile")
                 : meeting.subjectKind === "team"
-                  ? selectTeam(meeting.subjectId)
-                  : selectManager(meeting.subjectId),
+                  ? selectTeam(meeting.subjectId, "profile")
+                  : selectManager(meeting.subjectId, "profile"),
           }
         : null;
       return {
@@ -178,6 +178,8 @@ export function useEntityTrail() {
 export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
   const { trail, index, prev, next, close, openFocus, closeFocus } =
     useEntityTrail();
+  const selectedMeetingId = useStore((s) => s.selectedMeetingId);
+  const setSection = useStore((s) => s.setSection);
 
   // ←/→ page through siblings, ⌘↵ promotes to focus and back. Registered
   // rather than listened for: the registry already knows whether a dialog is
@@ -293,6 +295,16 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       )}
 
       <div className="ml-1 flex shrink-0 items-center gap-2">
+        {selectedMeetingId && (
+          <Button
+            size="sm"
+            color="link-gray"
+            className="shrink-0"
+            onClick={() => setSection("profile")}
+          >
+            Settings
+          </Button>
+        )}
         {/* Peek↔focus promotion is a split-pane idea; below lg there is only
             ever one surface, so the control has nothing to mean. */}
         {mode === "peek" ? (
