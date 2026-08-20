@@ -35,11 +35,11 @@ import type {
 } from "../types";
 import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, weekdayUTC } from "./readiness";
 
-/** How far the planner looks by default — a month of weekly meetings. */
-export const SLOTS_AHEAD = 4;
+/** How far the planner looks by default — a quarter of weekly meetings, not three weeks. */
+export const SLOTS_AHEAD = 8;
 
 export type Horizon = 4 | 8 | 12 | "all";
-export const HORIZON_DEFAULT: Horizon = 4;
+export const HORIZON_DEFAULT: Horizon = 8;
 
 export function aheadForHorizon(horizon: Horizon): number {
   return horizon === "all" ? 26 : horizon;
@@ -117,8 +117,7 @@ export type Slot = {
 export type ColumnTarget =
   | { kind: "lane"; lane: TopicLane; slotId?: string }
   | { kind: "session"; sessionId: string; slotId?: string }
-  | { kind: "projected"; date: string; slotId?: string }
-  | { kind: "done" };
+  | { kind: "projected"; date: string; slotId?: string };
 
 export type BucketGroup = {
   key: string;
@@ -147,7 +146,6 @@ export type WeekColumn = {
 export type BoardLayout = {
   bucket: BucketGroup[];
   weeks: WeekColumn[];
-  done: Topic[];
 };
 
 export type SlotBalance = {
@@ -171,7 +169,6 @@ export function parseColumnKey(key: string): ColumnTarget {
   const base = hash >= 0 ? key.slice(0, hash) : key;
   const slotId = hash >= 0 ? key.slice(hash + 1) || undefined : undefined;
 
-  if (base === "done") return { kind: "done" };
   if (base.startsWith("s:")) {
     return { kind: "session", sessionId: base.slice(2), slotId };
   }
@@ -187,7 +184,6 @@ export function parseColumnKey(key: string): ColumnTarget {
 
 /** Which drop target a topic currently sits in. */
 export function columnKeyOf(topic: Topic): string {
-  if (topic.status === "covered") return "done";
   if (topic.sessionId) return cellKey(`s:${topic.sessionId}`, topic.slotId);
   if (topic.lane === "parked") return "parked";
   return cellKey("backlog", topic.slotId);
@@ -370,8 +366,8 @@ function slotHint(slot: Slot, topics: Topic[], today: string): string {
  * occurrence. Each week is the standing skeleton — empty cells stay visible
  * so an unbalanced meeting is obvious without opening anything.
  *
- * Done is its own pile. Checking a card (or the write-up) moves it there so
- * the week stays the plan. Parked lives in the bucket, not beside the weeks.
+ * Covered is not a column. Marking a topic done is a checkbox on the card
+ * (and on the write-up). Parked lives in the bucket, not beside the weeks.
  */
 export function boardLayout(
   meeting: TrackedMeeting,
@@ -413,7 +409,7 @@ export function boardLayout(
   } else {
     bucket.push({
       key: "backlog",
-      label: "Backlog",
+      label: "Ideas",
       lane: "backlog",
       topics: backlog,
     });
@@ -427,15 +423,12 @@ export function boardLayout(
 
   const weeks: WeekColumn[] = slots.map((slot) => {
     const inWeek = slot.sessionId
-      ? mine.filter(
-          (t) => t.sessionId === slot.sessionId && t.status !== "dropped"
-        )
+      ? mine.filter((t) => t.sessionId === slot.sessionId && t.status !== "dropped")
       : [];
-    const openInWeek = inWeek.filter((t) => t.status === "open");
     const occ = slotKey(slot);
     const cells: WeekCell[] = [];
     if (curriculum.length) {
-      const untagged = openInWeek.filter((t) => !knownId(t));
+      const untagged = inWeek.filter((t) => !knownId(t));
       if (untagged.length) {
         cells.push({ key: occ, label: "Other", topics: untagged });
       }
@@ -444,11 +437,11 @@ export function boardLayout(
           key: cellKey(occ, cs.id),
           slotId: cs.id,
           label: cs.label,
-          topics: openInWeek.filter((t) => t.slotId === cs.id),
+          topics: inWeek.filter((t) => t.slotId === cs.id),
         });
       }
     } else {
-      cells.push({ key: occ, label: "", topics: openInWeek });
+      cells.push({ key: occ, label: "", topics: inWeek });
     }
     return {
       key: occ,
@@ -456,15 +449,11 @@ export function boardLayout(
       hint: slotHint(slot, inWeek, today) || undefined,
       slot,
       cells,
-      topics: openInWeek,
+      topics: inWeek,
     };
   });
 
-  const done = mine
-    .filter((t) => t.status === "covered")
-    .sort((a, b) => (b.closedOn ?? "").localeCompare(a.closedOn ?? ""));
-
-  return { bucket, weeks, done };
+  return { bucket, weeks };
 }
 
 /** How many upcoming weeks already have something in each skeleton slot. */
