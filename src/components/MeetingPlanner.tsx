@@ -1,13 +1,20 @@
 import { useCallback, useId, useState } from "react";
 import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
-import { ensureSessionId, type Slot } from "../lib/topics";
+import {
+  aheadForHorizon,
+  ensureSessionId,
+  HORIZON_DEFAULT,
+  type Horizon,
+  type Slot,
+} from "../lib/topics";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { TopicBoard, type BoardDirection } from "./TopicBoard";
 import { MeetingCalendar } from "./MeetingCalendar";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
+import { NativeSelect } from "@/components/base/select/select-native";
 import { cx } from "@/utils/cx";
 
 export type PlanView = "board" | "calendar";
@@ -15,6 +22,13 @@ export type PlanView = "board" | "calendar";
 const VIEWS: { id: PlanView; label: string }[] = [
   { id: "board", label: "Board" },
   { id: "calendar", label: "Calendar" },
+];
+
+const HORIZON_OPTIONS: { label: string; value: Horizon }[] = [
+  { label: "Next 4", value: 4 },
+  { label: "Next 8", value: 8 },
+  { label: "Quarter", value: 12 },
+  { label: "All booked", value: "all" },
 ];
 
 /**
@@ -38,6 +52,7 @@ export function MeetingPlanner({
   const sessions = useStore((s) => s.sessions);
   const addSession = useStore((s) => s.addSession);
   const [view, setView] = useState<PlanView>("board");
+  const [horizon, setHorizon] = useState<Horizon>(HORIZON_DEFAULT);
   const isMobile = useMediaQuery("(max-width: 767px)");
 
   const viewRoving = useRovingFocus();
@@ -71,6 +86,7 @@ export function MeetingPlanner({
         direction={direction}
         selectedSlotKey={selectedSlotKey}
         onSelectWeek={openWeek}
+        ahead={aheadForHorizon(horizon)}
       />
     ) : (
       <MeetingCalendar
@@ -82,38 +98,52 @@ export function MeetingPlanner({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      {/* A real tablist: roving arrow keys, and each tab pointing at the panel
-          it actually controls. `role="tab"` without either is a promise to
-          assistive tech that the widget doesn't keep. */}
-      <div
-        {...viewRoving.groupProps}
-        className="inline-flex shrink-0 gap-0.5 rounded-lg bg-tertiary p-0.5 touch:gap-2"
-        role="tablist"
-        aria-label="Plan view"
-      >
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            role="tab"
-            id={`${panelId}-tab-${v.id}`}
-            aria-selected={view === v.id}
-            aria-controls={panelId}
-            {...viewRoving.itemProps(view === v.id)}
-            className={cx(
-              "rounded-md px-3 py-1 text-xs font-semibold transition",
-              // Hand-rolled rather than the design system's tabs, so it needs
-              // the touch floor spelled out.
-              "touch:min-h-11 touch:min-w-11",
-              view === v.id
-                ? "bg-primary text-stone-800 shadow-sm dark:text-stone-100"
-                : "text-quaternary hover:text-stone-700 dark:hover:text-stone-200"
-            )}
-            onClick={() => setView(v.id)}
-          >
-            {v.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          {...viewRoving.groupProps}
+          className="inline-flex shrink-0 gap-0.5 rounded-lg bg-tertiary p-0.5 touch:gap-2"
+          role="tablist"
+          aria-label="Plan view"
+        >
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              id={`${panelId}-tab-${v.id}`}
+              aria-selected={view === v.id}
+              aria-controls={panelId}
+              {...viewRoving.itemProps(view === v.id)}
+              className={cx(
+                "rounded-md px-3 py-1 text-xs font-semibold transition",
+                "touch:min-h-11 touch:min-w-11",
+                view === v.id
+                  ? "bg-primary text-stone-800 shadow-sm dark:text-stone-100"
+                  : "text-quaternary hover:text-stone-700 dark:hover:text-stone-200"
+              )}
+              onClick={() => setView(v.id)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        {view === "board" && meeting.rhythm !== "as_needed" && (
+          <NativeSelect
+            size="sm"
+            className="w-auto shrink-0"
+            aria-label="How far ahead to plan"
+            value={String(horizon)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setHorizon(v === "all" ? "all" : (Number(v) as Horizon));
+            }}
+            options={HORIZON_OPTIONS.map((o) => ({
+              label: o.label,
+              value: String(o.value),
+            }))}
+          />
+        )}
       </div>
 
       <div

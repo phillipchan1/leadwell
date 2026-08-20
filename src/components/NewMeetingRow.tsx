@@ -75,7 +75,7 @@ export function NewMeetingRow({ onDone }: { onDone: () => void }) {
           <Input
             size="sm"
             label="Name (optional)"
-            placeholder="Staff meeting, 1:1, Practice"
+            placeholder="Staff meeting, weekly sync, Practice"
             value={name}
             onChange={setName}
             autoFocus={autoFocusUnlessTouch()}

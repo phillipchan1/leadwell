@@ -3,8 +3,11 @@ import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import {
   calendarGrid,
+  curriculumOf,
+  slotDotClass,
   slotKey,
   slotLabel,
+  slotLabelOf,
   topicsFor,
   type CalendarDay,
   type Slot,
@@ -65,6 +68,8 @@ export function MeetingCalendar({
   const [month, setMonth] = useState(() => currentMonth(today));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+
+  const curriculum = curriculumOf(meeting);
 
   const grid = useMemo(
     () => calendarGrid(month, meeting, sessions, topics, today),
@@ -150,6 +155,7 @@ export function MeetingCalendar({
               key={day.date}
               day={day}
               today={today}
+              curriculum={curriculum}
               selected={selectedDate === day.date || notesSelected}
               onSelect={() => {
                 if (day.slot && onSelectWeek) {
@@ -222,13 +228,14 @@ export function MeetingCalendar({
               <UnscheduledChip
                 key={t.id}
                 text={t.text}
+                tag={slotLabelOf(curriculum, t.slotId)}
                 onPlace={(date) => {
                   const day = grid.find((d) => d.date === date);
                   if (!day?.slot) return;
                   const sessionId =
                     day.slot.sessionId ??
                     addSession({ meetingId: meeting.id, date: day.slot.date });
-                  placeTopic(t.id, { sessionId });
+                  placeTopic(t.id, { sessionId, slotId: t.slotId });
                 }}
                 dates={grid.filter((d) => d.inMonth && d.slot).map((d) => d.date)}
               />
@@ -254,11 +261,13 @@ function CalendarCell({
   today,
   selected,
   onSelect,
+  curriculum,
 }: {
   day: CalendarDay;
   today: string;
   selected: boolean;
   onSelect: () => void;
+  curriculum: ReturnType<typeof curriculumOf>;
 }) {
   const isToday = day.date === today;
   const hasOccurrence = Boolean(day.slot);
@@ -301,9 +310,18 @@ function CalendarCell({
         {day.topics.slice(0, 2).map((t) => (
           <li
             key={t.id}
-            className="truncate text-caption leading-tight text-stone-600 dark:text-stone-300"
+            className="flex items-center gap-1 truncate text-caption leading-tight text-stone-600 dark:text-stone-300"
           >
-            {t.text}
+            {t.slotId && (
+              <span
+                className={cx(
+                  "size-1.5 shrink-0 rounded-full",
+                  slotDotClass(curriculum, t.slotId)
+                )}
+                aria-hidden
+              />
+            )}
+            <span className="truncate">{t.text}</span>
           </li>
         ))}
         {day.topics.length > 2 && (
@@ -316,22 +334,26 @@ function CalendarCell({
 
 function UnscheduledChip({
   text,
+  tag,
   dates,
   onPlace,
 }: {
   text: string;
+  tag?: string;
   dates: string[];
   onPlace: (date: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
+  const label = tag ? `${tag} · ${text}` : text;
+
   if (!dates.length) {
     return (
       <span
         className="max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 dark:text-stone-300"
-        title={text}
+        title={label}
       >
-        {text}
+        {label}
       </span>
     );
   }
@@ -341,10 +363,10 @@ function UnscheduledChip({
       <button
         type="button"
         className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-700"
-        title={`Schedule: ${text}`}
+        title={`Schedule: ${label}`}
         onClick={() => setOpen((v) => !v)}
       >
-        {text}
+        {label}
       </button>
       {open && (
         <ul className="absolute z-10 mt-1 max-h-40 w-48 overflow-y-auto rounded-lg border border-stone-200 bg-primary py-1 shadow-lg dark:border-stone-700">

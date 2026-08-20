@@ -405,13 +405,61 @@ export const seedActions: Action[] = [
  * absent: most of the men's team has no meeting and no decision, which is what
  * the undecided count is for.
  */
+const ONE_ON_ONE_SLOTS = [
+  { id: "cs-checkin", label: "Check-in" },
+  { id: "cs-work", label: "Work" },
+  { id: "cs-develop", label: "Develop" },
+];
+
+const STAFF_SLOTS = [
+  { id: "cs-prayer", label: "Prayer" },
+  { id: "cs-training", label: "Training" },
+  { id: "cs-discussion", label: "Discussion" },
+];
+
 export const seedMeetings: TrackedMeeting[] = [
-  { id: "m-p-sarah", subjectKind: "person", subjectId: "p-sarah", rhythm: "weekly" },
-  { id: "m-p-marcus", subjectKind: "person", subjectId: "p-marcus", rhythm: "biweekly" },
-  { id: "m-p-elena", subjectKind: "person", subjectId: "p-elena", rhythm: "monthly" },
-  { id: "m-p-dave", subjectKind: "person", subjectId: "p-dave", rhythm: "monthly" },
-  { id: "m-p-priya", subjectKind: "person", subjectId: "p-priya", rhythm: "weekly" },
-  { id: "m-p-alex", subjectKind: "person", subjectId: "p-alex", rhythm: "biweekly" },
+  {
+    id: "m-p-sarah",
+    subjectKind: "person",
+    subjectId: "p-sarah",
+    rhythm: "weekly",
+    curriculum: ONE_ON_ONE_SLOTS,
+  },
+  {
+    id: "m-p-marcus",
+    subjectKind: "person",
+    subjectId: "p-marcus",
+    rhythm: "biweekly",
+    curriculum: ONE_ON_ONE_SLOTS,
+  },
+  {
+    id: "m-p-elena",
+    subjectKind: "person",
+    subjectId: "p-elena",
+    rhythm: "monthly",
+    curriculum: ONE_ON_ONE_SLOTS,
+  },
+  {
+    id: "m-p-dave",
+    subjectKind: "person",
+    subjectId: "p-dave",
+    rhythm: "monthly",
+    curriculum: ONE_ON_ONE_SLOTS,
+  },
+  {
+    id: "m-p-priya",
+    subjectKind: "person",
+    subjectId: "p-priya",
+    rhythm: "weekly",
+    curriculum: ONE_ON_ONE_SLOTS,
+  },
+  {
+    id: "m-p-alex",
+    subjectKind: "person",
+    subjectId: "p-alex",
+    rhythm: "biweekly",
+    curriculum: ONE_ON_ONE_SLOTS,
+  },
   // The staff meeting itself — a gathering, not a relationship.
   {
     id: "m-staff",
@@ -420,6 +468,8 @@ export const seedMeetings: TrackedMeeting[] = [
     name: "Staff meeting",
     rhythm: "weekly",
     role: "convene",
+    anchorWeekday: 1,
+    curriculum: STAFF_SLOTS,
   },
   // Led, real, and genuinely not on a rhythm — a floor, not a cadence.
   {
@@ -430,6 +480,7 @@ export const seedMeetings: TrackedMeeting[] = [
     rhythm: "as_needed",
     floorDays: 45,
     role: "convene",
+    curriculum: STAFF_SLOTS,
   },
   // A practice I run for peers — I convene it, nobody reports to me.
   {
@@ -439,6 +490,7 @@ export const seedMeetings: TrackedMeeting[] = [
     name: "Practice meeting",
     rhythm: "biweekly",
     role: "convene",
+    curriculum: STAFF_SLOTS,
   },
 ];
 
@@ -456,6 +508,7 @@ export const seedTopics: Topic[] = [
     text: "Ask about volunteer pipeline for fall",
     status: "open",
     lane: "backlog",
+    slotId: "cs-work",
     carried: 0,
     createdOn: "2026-06-24",
     order: 0,
@@ -466,6 +519,7 @@ export const seedTopics: Topic[] = [
     text: "How is the setup checklist landing?",
     status: "open",
     lane: "backlog",
+    slotId: "cs-work",
     // Slotted into a 1:1 that has been and gone — this is what loose looks like.
     sessionId: "o-1",
     carried: 0,
@@ -478,6 +532,7 @@ export const seedTopics: Topic[] = [
     text: "Follow up on song-selection conflict",
     status: "covered",
     lane: "backlog",
+    slotId: "cs-work",
     sessionId: "o-1",
     carried: 0,
     createdOn: "2026-06-18",
@@ -490,6 +545,7 @@ export const seedTopics: Topic[] = [
     text: "Check in on mom's health",
     status: "open",
     lane: "backlog",
+    slotId: "cs-checkin",
     carried: 0,
     createdOn: "2026-07-02",
     order: 3,
@@ -500,6 +556,7 @@ export const seedTopics: Topic[] = [
     text: "Sunday setup handoff plan",
     status: "open",
     lane: "parked",
+    slotId: "cs-work",
     carried: 0,
     createdOn: "2026-06-24",
     order: 4,
@@ -511,6 +568,7 @@ export const seedTopics: Topic[] = [
     text: "Review summer camp budget together",
     status: "open",
     lane: "backlog",
+    slotId: "cs-work",
     dueDate: "2026-07-15",
     carried: 0,
     createdOn: "2026-06-30",
@@ -522,6 +580,7 @@ export const seedTopics: Topic[] = [
     text: "Preaching cohort — is he actually going to do it?",
     status: "open",
     lane: "backlog",
+    slotId: "cs-develop",
     // Pushed twice already. The badge is the whole message.
     carried: 2,
     createdOn: "2026-06-02",
@@ -534,20 +593,47 @@ export const seedTopics: Topic[] = [
     text: "Share Q3 roadmap draft before planning meeting",
     status: "open",
     lane: "backlog",
+    slotId: "cs-work",
     carried: 0,
     createdOn: "2026-07-08",
     order: 0,
   },
-  // The staff meeting — a board that has nothing to do with any one person.
+  // The staff meeting — a curriculum, not a pile. Some weeks are filled,
+  // some skeleton cells stay empty so the arc is visible.
+  {
+    id: "t-staff-prayer-1",
+    meetingId: "m-staff",
+    text: "Pray for the building season",
+    status: "open",
+    lane: "backlog",
+    slotId: "cs-prayer",
+    sessionId: "o-staff-1",
+    carried: 0,
+    createdOn: "2026-08-10",
+    order: 0,
+  },
+  {
+    id: "t-staff-train-1",
+    meetingId: "m-staff",
+    text: "Claude Cowork — how we'll actually use it",
+    status: "open",
+    lane: "backlog",
+    slotId: "cs-training",
+    sessionId: "o-staff-2",
+    carried: 0,
+    createdOn: "2026-08-12",
+    order: 1,
+  },
   {
     id: "t-7",
     meetingId: "m-staff",
     text: "Fall calendar — lock the retreat weekend",
     status: "open",
     lane: "backlog",
+    slotId: "cs-discussion",
     carried: 0,
     createdOn: "2026-07-20",
-    order: 0,
+    order: 2,
   },
   {
     id: "t-8",
@@ -555,9 +641,11 @@ export const seedTopics: Topic[] = [
     text: "Budget: where we landed vs. what we projected",
     status: "open",
     lane: "backlog",
+    slotId: "cs-discussion",
+    sessionId: "o-staff-3",
     carried: 0,
     createdOn: "2026-07-22",
-    order: 1,
+    order: 3,
   },
   {
     id: "t-9",
@@ -565,9 +653,10 @@ export const seedTopics: Topic[] = [
     text: "Hiring plan for the worship associate role",
     status: "open",
     lane: "backlog",
+    slotId: "cs-discussion",
     carried: 1,
     createdOn: "2026-07-01",
-    order: 2,
+    order: 4,
   },
   {
     id: "t-10",
@@ -575,9 +664,44 @@ export const seedTopics: Topic[] = [
     text: "Offsite — worth doing this year?",
     status: "open",
     lane: "parked",
+    slotId: "cs-discussion",
     carried: 0,
     createdOn: "2026-06-15",
-    order: 3,
+    order: 5,
+  },
+  {
+    id: "t-staff-train-2",
+    meetingId: "m-staff",
+    text: "Strengths workshop for the team",
+    status: "open",
+    lane: "backlog",
+    slotId: "cs-training",
+    carried: 0,
+    createdOn: "2026-08-01",
+    order: 6,
+  },
+  {
+    id: "t-staff-prayer-2",
+    meetingId: "m-staff",
+    text: "Staff unity through the fall",
+    status: "open",
+    lane: "backlog",
+    slotId: "cs-prayer",
+    carried: 0,
+    createdOn: "2026-08-08",
+    order: 7,
+  },
+  {
+    id: "t-staff-disc-1",
+    meetingId: "m-staff",
+    text: "Volunteer pipeline — who's owning it?",
+    status: "open",
+    lane: "backlog",
+    slotId: "cs-discussion",
+    sessionId: "o-staff-4",
+    carried: 0,
+    createdOn: "2026-08-05",
+    order: 8,
   },
 ];
 
@@ -617,6 +741,26 @@ Energy was lower than usual — mom's health is weighing on her. Lead with care 
     meetingId: "m-p-dave",
     date: "2026-06-10",
     nextDate: "2026-07-10",
+  },
+  {
+    id: "o-staff-1",
+    meetingId: "m-staff",
+    date: "2026-08-17",
+  },
+  {
+    id: "o-staff-2",
+    meetingId: "m-staff",
+    date: "2026-08-24",
+  },
+  {
+    id: "o-staff-3",
+    meetingId: "m-staff",
+    date: "2026-09-07",
+  },
+  {
+    id: "o-staff-4",
+    meetingId: "m-staff",
+    date: "2026-09-21",
   },
 ];
 

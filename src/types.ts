@@ -244,6 +244,18 @@ export type TrackedMeeting = {
   trackerUrl?: string;
   /** Override for the service name derived from the link ("Notion", "Word"). */
   trackerName?: string;
+  /**
+   * Standing shape of each occurrence, set on the meeting — not inferred from
+   * who it's with. Topics point at one of these via `slotId`. Empty or omitted
+   * means the board is an ungrouped list.
+   */
+  curriculum?: CurriculumSlot[];
+};
+
+/** One named slot in a meeting's standing agenda. */
+export type CurriculumSlot = {
+  id: string;
+  label: string;
 };
 
 export type Person = {
@@ -336,6 +348,11 @@ export type Topic = {
   lane: TopicLane;
   /** Slotted into this occurrence. Overrides `lane` while it's set. */
   sessionId?: string;
+  /**
+   * Which standing agenda slot this belongs to (`CurriculumSlot.id`). Untagged
+   * when unset — still on the board, just not filling a skeleton cell.
+   */
+  slotId?: string;
   /** Times it's been pushed to a later meeting. The honest nag. */
   carried: number;
   dueDate?: string;

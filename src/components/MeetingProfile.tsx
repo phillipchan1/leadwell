@@ -12,9 +12,9 @@ import { MeetingPlanner } from "./MeetingPlanner";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { MeetingScheduleFields } from "./MeetingScheduleFields";
+import { CurriculumEditor } from "./CurriculumEditor";
 import { confirmAction } from "./ConfirmDialog";
 import {
-  MEETING_LABEL,
   RHYTHM_LABEL,
   RHYTHM_OPTIONS,
   STATE_COLOR,
@@ -170,6 +170,7 @@ export function MeetingProfile({
           <MeetingSettings
             meeting={meeting}
             title={title}
+            unnamedFallback={subjectName ? `Meeting · ${subjectName}` : "Meeting"}
             sessionCount={sessionCount}
             pad={pad}
             onChange={(patch) => updateMeeting(meeting.id, patch)}
@@ -195,6 +196,7 @@ export function MeetingProfile({
 function MeetingSettings({
   meeting,
   title,
+  unnamedFallback,
   sessionCount,
   pad,
   onChange,
@@ -202,13 +204,14 @@ function MeetingSettings({
 }: {
   meeting: TrackedMeeting;
   title: string;
+  unnamedFallback: string;
   sessionCount: number;
   pad: string;
   onChange: (patch: Partial<Omit<TrackedMeeting, "id">>) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(meeting.name ?? "");
-  const label = MEETING_LABEL[meeting.subjectKind];
+  const setCurriculum = useStore((s) => s.setCurriculum);
 
   return (
     <div className={`flex flex-col gap-6 ${pad}`}>
@@ -217,8 +220,8 @@ function MeetingSettings({
         <Input
           size="md"
           label="Name"
-          placeholder={`Staff meeting, 1:1, Practice…`}
-          hint={`Left blank it's just "${label}".`}
+          placeholder={`Staff meeting, weekly sync, Practice…`}
+          hint={`Left blank it's “${unnamedFallback}”.`}
           value={name}
           onChange={setName}
           onBlur={() => onChange({ name: name.trim() || undefined })}
@@ -270,6 +273,18 @@ function MeetingSettings({
           value={meeting.role ?? "convene"}
           onChange={(e) => onChange({ role: e.target.value as MeetingRole })}
           options={ROLE_OPTIONS}
+        />
+      </section>
+
+      <section className="space-y-2.5">
+        <SectionTitle>Standing agenda</SectionTitle>
+        <p className="text-caption text-quaternary">
+          Every occurrence inherits these slots. Empty ones stay visible on the
+          plan so you can see when a meeting is unbalanced.
+        </p>
+        <CurriculumEditor
+          slots={meeting.curriculum ?? []}
+          onChange={(next) => setCurriculum(meeting.id, next)}
         />
       </section>
 

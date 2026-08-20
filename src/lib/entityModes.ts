@@ -16,8 +16,9 @@
  *   notes     My running record.
  *   prayer    My posture toward them. Not a metric, so not mixed in.
  *
- * The nouns change by entity ("Meetings" vs "Check-ins") because that's how
- * the thing is actually spoken about, but the position and the meaning never do.
+ * The meetings mode is always "Meetings". Who it's with lives on the subject;
+ * the gathering itself is the same room whether you lead them, report to them,
+ * or sit on their team.
  *
  * ── Why meetings is one mode and not two ─────────────────────────────────
  * "Topics" and session history were separate tabs, which split one activity
@@ -41,7 +42,8 @@
  * What the contract actually guarantees is that a mode *id* means the same
  * thing everywhere — `?s=notes` is always "the record", `?s=profile` is always
  * "the slow-moving stuff" — and that shared modes keep their order. That still
- * holds for all five kinds. Labels vary, as they always have.
+ * holds for all five kinds. Profile is the one label that still bends
+ * (Leading up vs Profile); meetings do not.
  */
 
 export type EntityMode = "now" | "meetings" | "profile" | "notes" | "prayer";
@@ -109,7 +111,7 @@ const LABELS: Record<ModeSubject, Record<EntityMode, string>> = {
   },
   leadUpPerson: {
     now: "Now",
-    meetings: "Check-ins",
+    meetings: "Meetings",
     profile: "Leading up",
     notes: "Notes",
     prayer: "Prayer",
@@ -123,7 +125,7 @@ const LABELS: Record<ModeSubject, Record<EntityMode, string>> = {
   },
   manager: {
     now: "Now",
-    meetings: "Check-ins",
+    meetings: "Meetings",
     profile: "Leading up",
     notes: "Notes",
     prayer: "Prayer",

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Session, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
-import { nextSlotAfter, plannedSlots, topicsFor } from "../lib/topics";
+import { nextSlotAfter, plannedSlots, topicsFor, curriculumOf } from "../lib/topics";
 import { todayISO } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -69,6 +69,23 @@ export function SessionAgenda({
     rollTopic(topicId, sessionId);
   };
 
+  const curriculum = curriculumOf(meeting);
+  const known = new Set(curriculum.map((s) => s.id));
+  const grouped = curriculum.length
+    ? [
+        ...curriculum.map((slot) => ({
+          id: slot.id,
+          label: slot.label,
+          topics: mine.filter((t) => t.slotId === slot.id),
+        })),
+        {
+          id: "other",
+          label: "Other",
+          topics: mine.filter((t) => !t.slotId || !known.has(t.slotId)),
+        },
+      ].filter((g) => g.id !== "other" || g.topics.length > 0)
+    : [{ id: "all", label: "", topics: mine }];
+
   const open = mine.filter((t) => t.status === "open").length;
 
   return (
@@ -84,16 +101,33 @@ export function SessionAgenda({
         </span>
       </div>
 
-      {mine.length > 0 && (
+      {(mine.length > 0 || curriculum.length > 0) && (
         <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
-          {mine.map((t) => (
-            <AgendaRow
-              key={t.id}
-              topic={t}
-              onCover={(selected) => coverTopic(t.id, selected)}
-              onReorder={(dir) => moveTopic(t.id, dir)}
-              onRoll={() => roll(t.id)}
-            />
+          {grouped.map((group) => (
+            <li key={group.id} className="list-none">
+              {group.label && (
+                <p className="px-3 pt-2 text-caption font-semibold tracking-wide text-quaternary uppercase">
+                  {group.label}
+                </p>
+              )}
+              {group.topics.length === 0 ? (
+                <p className="px-3 py-2 text-caption text-stone-400 dark:text-stone-500">
+                  Nothing planned
+                </p>
+              ) : (
+                <ul>
+                  {group.topics.map((t) => (
+                    <AgendaRow
+                      key={t.id}
+                      topic={t}
+                      onCover={(selected) => coverTopic(t.id, selected)}
+                      onReorder={(dir) => moveTopic(t.id, dir)}
+                      onRoll={() => roll(t.id)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -134,7 +168,12 @@ export function SessionAgenda({
                   <li key={t.id}>
                     <button
                       type="button"
-                      onClick={() => placeTopic(t.id, { sessionId: session.id })}
+                      onClick={() =>
+                        placeTopic(t.id, {
+                          sessionId: session.id,
+                          slotId: t.slotId,
+                        })
+                      }
                       className="rounded-full border border-primary px-2.5 py-1 text-xs text-stone-600 touch:min-h-11 hover:border-teal-500 hover:text-teal-600 dark:text-stone-300"
                     >
                       + {t.text}

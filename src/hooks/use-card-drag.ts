@@ -84,12 +84,16 @@ export function useCardDrag(onDrop: (id: string, column: string) => void): CardD
   );
 
   const columnAt = useCallback((x: number, y: number): string | null => {
+    let best: { key: string; area: number } | null = null;
     for (const [key, el] of columns.current) {
       if (!el) continue;
       const r = el.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return key;
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        const area = r.width * r.height;
+        if (!best || area < best.area) best = { key, area };
+      }
     }
-    return null;
+    return best?.key ?? null;
   }, []);
 
   useEffect(() => {

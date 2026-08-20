@@ -1,16 +1,22 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import type { Topic, TrackedMeeting } from "../types";
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CurriculumSlot, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useCardDrag } from "@/hooks/use-card-drag";
 import {
-  boardColumns,
+  boardLayout,
+  curriculumBalance,
+  curriculumOf,
   looseTopics,
   nextSlotAfter,
   parseColumnKey,
   plannedSlots,
+  slotChipClass,
+  slotDotClass,
   slotKey,
-  type BoardColumn,
+  type BucketGroup,
   type Slot,
+  type WeekCell,
+  type WeekColumn,
 } from "../lib/topics";
 import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
@@ -29,42 +35,38 @@ import { MOD_LABEL } from "@/lib/keys";
 import { cx } from "@/utils/cx";
 
 /**
- * The planner: a running list of topics on the left, the next few occurrences
- * of this meeting as columns, and somewhere for what's covered.
- *
- * ── Why the columns are dates ─────────────────────────────────────────────
- * The board this replaces had one queue column, "This 1:1", which could only
- * mean *the next one*. That lets you queue but not plan. Making each column an
- * occurrence is what turns it into a scaffold: budget on the 17th, hiring on
- * the 24th, and you can see the shape of the next month.
- *
- * ── Why covered is a column and not a drawer ──────────────────────────────
- * Dragging a card into "Covered" is how you say you talked about it. The
- * gesture only exists if the target does, and a topic that can be finished is
- * the difference between this and a list that only grows.
- *
- * ── The amber ─────────────────────────────────────────────────────────────
- * A column whose date has passed keeps anything still open in it, in amber,
- * with the two buttons that resolve it. That's the failure mode this feature
- * exists to catch: a topic assigned to a meeting and quietly never finished.
+ * Curriculum scaffolder — ideas on top, schedule below. Both stay mounted so
+ * drag-and-drop works without switching views.
  */
 
-/** Copy differs by direction: leading up you raise asks, not observations. */
 export type BoardDirection = "down" | "up";
 
-/**
- * The handle's name and tooltip, shared by the two places it renders — left of
- * an unslotted card, right of a slotted one. It spells the keys out because the
- * handle is where they're bound, and a keyboard affordance nobody can see is
- * one nobody uses.
- */
 const HANDLE_LABEL = (name: string) =>
   `Move “${name}” — Alt with up or down arrow to reorder, Delete to remove`;
 const HANDLE_TITLE = "Drag, or ⌥↑ / ⌥↓ to reorder · Delete to remove";
 
-const ADD_PLACEHOLDER: Record<BoardDirection, string> = {
-  down: "Talk about…",
+const CAPTURE_PLACEHOLDER: Record<BoardDirection, string> = {
+  down: "Something to raise…",
   up: "Ask, escalate, flag…",
+};
+
+const newSlotId = () => Math.random().toString(36).slice(2, 10);
+
+type MoveGroup = { label: string; options: { key: string; label: string }[] };
+
+type CardHandlers = {
+  curriculum: CurriculumSlot[];
+  moveGroups: MoveGroup[];
+  handleProps: ReturnType<typeof useCardDrag>["handleProps"];
+  onText: (id: string, text: string) => void;
+  onMove: (id: string, key: string) => void;
+  onReorder: (id: string, direction: -1 | 1) => MoveResult;
+  onCover: (id: string, covered: boolean) => void;
+  onTag: (id: string, slotId?: string) => void;
+  onAddTag?: (label: string) => string | undefined;
+  onRoll: (topic: Topic) => void;
+  onBacklog: (id: string) => void;
+  onDelete: (topic: Topic) => void;
 };
 
 export function TopicBoard({
@@ -72,11 +74,13 @@ export function TopicBoard({
   direction = "down",
   selectedSlotKey,
   onSelectWeek,
+  ahead,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
+  ahead?: number;
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
@@ -89,19 +93,8 @@ export function TopicBoard({
   const restoreTopic = useStore((s) => s.restoreTopic);
   const moveTopic = useStore((s) => s.moveTopic);
   const addSession = useStore((s) => s.addSession);
+  const setCurriculum = useStore((s) => s.setCurriculum);
 
-  /**
-   * Delete, said out loud and taken back with ⌘Z.
-   *
-   * The board's delete used to be an X you had to hover to find, with nothing
-   * behind it. Now that a keypress can reach it, it needs a way back — so the
-   * removal is announced along with how to undo it, and the undo is bound below.
-   */
-  /* One undo path, not two. This used to call `deleteTopic` and keep its own
-     one-deep memory behind a local ⌘Z; `deleteWithUndo` puts the same delete on
-     the global stack and raises a toast with an Undo action, so ⌘Z works here,
-     from another screen, and after the toast has gone. The announcement is
-     theirs and stays — a screen reader shouldn't have to find the toast. */
   const removeTopic = useCallback(
     (topic: Topic) => {
       deleteWithUndo(
@@ -116,60 +109,57 @@ export function TopicBoard({
     [deleteTopic, restoreTopic]
   );
 
-
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [allCovered, setAllCovered] = useState(false);
   const today = todayISO();
+  const curriculum = curriculumOf(meeting);
 
-  const columns = useMemo(
-    () => boardColumns(meeting, sessions, topics, today, { allCovered }),
-    [meeting, sessions, topics, today, allCovered]
+  const layout = useMemo(
+    () => boardLayout(meeting, sessions, topics, today, { ahead }),
+    [meeting, sessions, topics, today, ahead]
   );
   const loose = useMemo(
     () => looseTopics(topics, sessions, meeting.id, today),
     [topics, sessions, meeting.id, today]
   );
+  const balance = useMemo(
+    () =>
+      curriculum.length ? curriculumBalance(layout.weeks, curriculum) : [],
+    [curriculum, layout.weeks]
+  );
 
-  /**
-   * Put a topic in a column. Dropping on a projected date is what makes the
-   * occurrence real — planning into it is the booking.
-   */
   const place = useCallback(
     (topicId: string, key: string) => {
       const target = parseColumnKey(key);
       switch (target.kind) {
-        case "covered":
-          coverTopic(topicId);
-          return;
         case "lane":
-          placeTopic(topicId, { lane: target.lane });
+          placeTopic(topicId, { lane: target.lane, slotId: target.slotId });
           return;
         case "session":
-          placeTopic(topicId, { sessionId: target.sessionId });
+          placeTopic(topicId, {
+            sessionId: target.sessionId,
+            slotId: target.slotId,
+          });
           return;
         case "projected": {
           const sessionId = addSession({
             meetingId: meeting.id,
             date: target.date,
           });
-          placeTopic(topicId, { sessionId });
+          placeTopic(topicId, { sessionId, slotId: target.slotId });
           return;
         }
       }
     },
-    [addSession, coverTopic, meeting.id, placeTopic]
+    [addSession, meeting.id, placeTopic]
   );
 
   const { drag, columnRef, handleProps } = useCardDrag(place);
   const dragged = drag ? topics.find((t) => t.id === drag.id) : null;
 
-  /** Push a topic into the next occurrence, materializing it if it's a guess. */
   const roll = useCallback(
     (topic: Topic) => {
-      const slots = plannedSlots(meeting, sessions, topics, today);
+      const slots = plannedSlots(meeting, sessions, topics, today, ahead);
       const next = nextSlotAfter(slots, topic.sessionId);
       if (!next) {
-        // Nothing ahead to push into — back to the running list, still counted.
         rollTopic(topic.id, undefined);
         return;
       }
@@ -178,36 +168,50 @@ export function TopicBoard({
         addSession({ meetingId: meeting.id, date: next.date });
       rollTopic(topic.id, sessionId);
     },
-    [addSession, meeting, rollTopic, sessions, today, topics]
+    [addSession, ahead, meeting, rollTopic, sessions, today, topics]
   );
 
-  const submit = (column: BoardColumn) => {
-    const text = drafts[column.key]?.trim();
-    if (!text) return;
-    const target = parseColumnKey(column.key);
-    if (target.kind === "projected") {
-      const sessionId = addSession({
-        meetingId: meeting.id,
-        date: target.date,
-      });
-      addTopic(meeting.id, text, { sessionId });
-    } else if (target.kind === "session") {
-      addTopic(meeting.id, text, { sessionId: target.sessionId });
-    } else if (target.kind === "lane") {
-      addTopic(meeting.id, text, { lane: target.lane });
-    }
-    setDrafts((d) => ({ ...d, [column.key]: "" }));
+  const moveGroups: MoveGroup[] = [
+    {
+      label: "Ideas",
+      options: layout.bucket.map((g) => ({ key: g.key, label: g.label })),
+    },
+    ...layout.weeks.map((week) => ({
+      label: week.label,
+      options: week.cells.map((c) => ({
+        key: c.key,
+        label: c.label ? `${week.label} · ${c.label}` : week.label,
+      })),
+    })),
+  ];
+
+  const cardProps: CardHandlers = {
+    curriculum,
+    moveGroups,
+    handleProps,
+    onText: (id, text) => updateTopic(id, { text }),
+    onMove: place,
+    onReorder: (id, dir) => moveTopic(id, dir),
+    onCover: (id, covered) => coverTopic(id, covered),
+    onTag: (id, slotId) => updateTopic(id, { slotId }),
+    onAddTag: (label) => {
+      const text = label.trim();
+      if (!text) return undefined;
+      const id = newSlotId();
+      setCurriculum(meeting.id, [...curriculum, { id, label: text }]);
+      return id;
+    },
+    onRoll: roll,
+    onBacklog: (id) => placeTopic(id, { lane: "backlog" }),
+    onDelete: removeTopic,
   };
 
-  const moveOptions = columns.map((c) => ({ key: c.key, label: c.label }));
-
-  const sessionForColumn = (col: BoardColumn) => {
-    if (!col.slot?.sessionId) return null;
-    return sessions.find((s) => s.id === col.slot!.sessionId) ?? null;
-  };
+  const parked = layout.bucket[layout.bucket.length - 1];
+  const ideaGroups = layout.bucket.slice(0, -1);
+  const ideaCount = ideaGroups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {loose.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-900 dark:bg-amber-950/40">
           <p className="min-w-0 flex-1 text-xs text-amber-900 dark:text-amber-400">
@@ -226,159 +230,41 @@ export function TopicBoard({
         </div>
       )}
 
-      <div
-        className={cx(
-          "scroll-contain flex gap-2 overflow-x-auto pb-1",
-          // One column nearly fills a phone, and the strip snaps to it so a
-          // horizontal flick lands somewhere sensible.
-          "snap-x snap-mandatory [overscroll-behavior-x:contain]"
-        )}
-      >
-        {columns.map((col) => {
-          const past = Boolean(col.slot?.past);
-          const canAdd = !col.covered;
-          const isWeek = Boolean(col.slot);
-          const isActive = col.slot
-            ? selectedSlotKey === slotKey(col.slot)
-            : false;
-          const session = sessionForColumn(col);
-          const notesPreview = session ? sessionSummary(session) : "";
-          return (
-            <div
-              key={col.key}
-              ref={columnRef(col.key)}
-              className={cx(
-                // The panel it lives in is now the wide half of the split, so
-                // a column can hold a phrase on one line instead of four.
-                "flex w-[78vw] max-w-[15rem] shrink-0 snap-start flex-col rounded-xl border bg-stone-50/60 sm:w-[14rem] sm:max-w-none dark:bg-stone-950/40",
-                drag?.over === col.key
-                  ? "border-teal-400 bg-teal-50/70 dark:border-teal-600 dark:bg-teal-950/30"
-                  : isActive
-                    ? "border-teal-500 ring-2 ring-teal-500/30 dark:border-teal-600"
-                    : past
-                      ? "border-amber-300 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20"
-                      : "border-secondary"
-              )}
-            >
-              {isWeek ? (
-                <button
-                  type="button"
-                  onClick={() => col.slot && onSelectWeek?.(col.key, col.slot)}
-                  aria-expanded={isActive}
-                  className="px-2.5 pt-2 pb-1 text-left transition-colors hover:bg-white/50 dark:hover:bg-stone-900/40"
-                >
-                  <div className="flex items-baseline justify-between gap-1">
-                    <span
-                      className={cx(
-                        "truncate text-caption font-semibold tracking-wide uppercase",
-                        past
-                          ? "text-amber-700 dark:text-amber-500"
-                          : "text-quaternary"
-                      )}
-                    >
-                      {col.label}
-                    </span>
-                    <span className="shrink-0 text-caption tabular-nums text-quaternary">
-                      {col.topics.length}
-                    </span>
-                  </div>
-                  {col.hint && (
-                    <div
-                      className={cx(
-                        "truncate text-caption",
-                        past
-                          ? "text-amber-700 dark:text-amber-500"
-                          : "text-stone-400 dark:text-stone-500"
-                      )}
-                    >
-                      {col.hint}
-                    </div>
-                  )}
-                  {notesPreview && (
-                    <div className="mt-0.5 truncate text-caption text-teal-700 dark:text-teal-400">
-                      {notesPreview}
-                    </div>
-                  )}
-                </button>
-              ) : (
-                <div className="px-2.5 pt-2 pb-1">
-                  <div className="flex items-baseline justify-between gap-1">
-                    <span className="truncate text-caption font-semibold tracking-wide text-quaternary uppercase">
-                      {col.label}
-                    </span>
-                    <span className="shrink-0 text-caption tabular-nums text-quaternary">
-                      {col.topics.length}
-                    </span>
-                  </div>
-                  {col.hint && (
-                    <div className="truncate text-caption text-stone-400 dark:text-stone-500">
-                      {col.hint}
-                    </div>
-                  )}
-                </div>
-              )}
+      <IdeasPanel
+        direction={direction}
+        curriculum={curriculum}
+        groups={ideaGroups}
+        parked={parked}
+        ideaCount={ideaCount}
+        drag={drag}
+        columnRef={columnRef}
+        cardProps={cardProps}
+        onCapture={(text, slotId) =>
+          addTopic(meeting.id, text, { lane: "backlog", slotId })
+        }
+        onAddTag={(label) => {
+          const text = label.trim();
+          if (!text) return undefined;
+          const id = newSlotId();
+          setCurriculum(meeting.id, [...curriculum, { id, label: text }]);
+          return id;
+        }}
+      />
 
-              <ul className="flex min-h-[4rem] flex-1 flex-col gap-1.5 px-2 pb-2">
-                {col.topics.map((t) => (
-                  <TopicCard
-                    key={t.id}
-                    topic={t}
-                    columnKey={col.key}
-                    past={past}
-                    inSlot={Boolean(col.slot?.sessionId)}
-                    covered={t.status !== "open"}
-                    isDragging={drag?.id === t.id}
-                    moveOptions={moveOptions}
-                    handleProps={handleProps}
-                    onText={(text) => updateTopic(t.id, { text })}
-                    onMove={(key) => place(t.id, key)}
-                    onReorder={(dir) => moveTopic(t.id, dir)}
-                    onCover={(covered) => coverTopic(t.id, covered)}
-                    onRoll={() => roll(t)}
-                    onBacklog={() => placeTopic(t.id, { lane: "backlog" })}
-                    onDelete={() => removeTopic(t)}
-                  />
-                ))}
-              </ul>
+      {balance.length > 0 && (
+        <BalanceStrip balance={balance} curriculum={curriculum} />
+      )}
 
-              {canAdd && (
-                <form
-                  className="border-t border-secondary p-2"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    submit(col);
-                  }}
-                >
-                  <Input
-                    size="sm"
-                    placeholder={ADD_PLACEHOLDER[direction]}
-                    aria-label={`Add to ${col.label}`}
-                    value={drafts[col.key] ?? ""}
-                    onChange={(value) =>
-                      setDrafts((d) => ({ ...d, [col.key]: value }))
-                    }
-                  />
-                </form>
-              )}
+      <ScheduleGrid
+        weeks={layout.weeks}
+        curriculum={curriculum}
+        selectedSlotKey={selectedSlotKey}
+        drag={drag}
+        columnRef={columnRef}
+        cardProps={cardProps}
+        onSelectWeek={onSelectWeek}
+      />
 
-              {col.covered && !allCovered && col.topics.length > 0 && (
-                <div className="border-t border-secondary p-2">
-                  <Button
-                    size="sm"
-                    color="link-gray"
-                    onClick={() => setAllCovered(true)}
-                  >
-                    Show all
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* The card under the pointer, lifted out of the strip so it can cross
-          column boundaries and the scroll container's clipping. */}
       {drag && dragged && (
         <li
           aria-hidden
@@ -396,6 +282,653 @@ export function TopicBoard({
   );
 }
 
+function BalanceStrip({
+  balance,
+  curriculum,
+}: {
+  balance: ReturnType<typeof curriculumBalance>;
+  curriculum: CurriculumSlot[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {balance.map((b) => {
+        const thin = b.filled === 0;
+        const low = b.total > 0 && b.filled <= Math.floor(b.total / 3);
+        return (
+          <div
+            key={b.slot.id}
+            className={cx(
+              "flex min-w-[7rem] flex-1 items-center gap-2 rounded-lg border px-2.5 py-1.5",
+              thin
+                ? "border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/30"
+                : "border-secondary bg-stone-50/60 dark:bg-stone-950/40"
+            )}
+          >
+            <span
+              className={cx(
+                "size-2 shrink-0 rounded-full",
+                slotDotClass(curriculum, b.slot.id)
+              )}
+              aria-hidden
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-xs font-medium text-stone-700 dark:text-stone-200">
+                {b.slot.label}
+              </div>
+              <div
+                className={cx(
+                  "text-caption tabular-nums",
+                  low
+                    ? "text-amber-700 dark:text-amber-500"
+                    : "text-quaternary"
+                )}
+              >
+                {b.filled} of {b.total} weeks
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScheduleGrid({
+  weeks,
+  curriculum,
+  selectedSlotKey,
+  drag,
+  columnRef,
+  cardProps,
+  onSelectWeek,
+}: {
+  weeks: WeekColumn[];
+  curriculum: CurriculumSlot[];
+  selectedSlotKey?: string | null;
+  drag: ReturnType<typeof useCardDrag>["drag"];
+  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
+  cardProps: CardHandlers;
+  onSelectWeek?: (slotKey: string, slot: Slot) => void;
+}) {
+  const sessions = useStore((s) => s.sessions);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollLeftRef = useRef(0);
+
+  const weekCount = Math.max(weeks.length, 1);
+  const colWidth = "9.25rem";
+  const gridCols = curriculum.length
+    ? `6.5rem repeat(${weekCount}, ${colWidth})`
+    : `repeat(${weekCount}, ${colWidth})`;
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = scrollLeftRef.current;
+  });
+
+  const onScroll = () => {
+    scrollLeftRef.current = scrollRef.current?.scrollLeft ?? 0;
+  };
+
+  const sessionForWeek = (week: WeekColumn) => {
+    if (!week.slot.sessionId) return null;
+    return sessions.find((s) => s.id === week.slot.sessionId) ?? null;
+  };
+
+  const cellFor = (week: WeekColumn, slotId?: string) =>
+    week.cells.find((c) => c.slotId === slotId) ??
+    week.cells.find((c) => !c.slotId && !slotId);
+
+  const weekIsActive = (week: WeekColumn): boolean => {
+    if (!selectedSlotKey) return false;
+    const occ = slotKey(week.slot);
+    if (selectedSlotKey === occ) return true;
+    return Boolean(
+      week.slot.sessionId && selectedSlotKey === `s:${week.slot.sessionId}`
+    );
+  };
+
+  if (!curriculum.length) {
+    return (
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="scroll-contain overflow-x-auto pb-1"
+      >
+        <div
+          className="inline-grid gap-px rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800"
+          style={{ gridTemplateColumns: gridCols }}
+        >
+          {weeks.map((week) => {
+            const past = week.slot.past;
+            const isActive = weekIsActive(week);
+            const cell = week.cells[0];
+            return (
+              <div key={week.slot.date} className="flex flex-col bg-primary">
+                <WeekHeader
+                  week={week}
+                  isActive={isActive}
+                  notesPreview={
+                    sessionForWeek(week)
+                      ? sessionSummary(sessionForWeek(week)!)
+                      : ""
+                  }
+                  onSelect={() => onSelectWeek?.(slotKey(week.slot), week.slot)}
+                />
+                {cell && (
+                  <GridCell
+                    cell={cell}
+                    past={past}
+                    inSlot={Boolean(week.slot.sessionId)}
+                    drag={drag}
+                    columnRef={columnRef}
+                    cardProps={cardProps}
+                    compact
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const rows: { id: string; label: string; slotId?: string }[] = [
+    ...curriculum.map((s) => ({ id: s.id, label: s.label, slotId: s.id })),
+  ];
+  const hasOther = weeks.some((w) =>
+    w.cells.some((c) => !c.slotId && c.topics.length > 0)
+  );
+  if (hasOther) rows.push({ id: "other", label: "Other" });
+
+  return (
+    <div
+      ref={scrollRef}
+      onScroll={onScroll}
+      className="scroll-contain overflow-x-auto pb-1"
+    >
+      <div
+        className="inline-grid gap-px rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800"
+        style={{ gridTemplateColumns: gridCols }}
+      >
+        <div className="sticky left-0 z-20 bg-stone-100/95 px-2 py-2 dark:bg-stone-900/95" />
+
+        {weeks.map((week) => {
+          const isActive = weekIsActive(week);
+          return (
+            <WeekHeader
+              key={week.slot.date}
+              week={week}
+              isActive={isActive}
+              notesPreview={
+                sessionForWeek(week)
+                  ? sessionSummary(sessionForWeek(week)!)
+                  : ""
+              }
+              onSelect={() => onSelectWeek?.(slotKey(week.slot), week.slot)}
+              grid
+            />
+          );
+        })}
+
+        {rows.map((row) => (
+          <Fragment key={row.id}>
+            <div className="sticky left-0 z-10 flex items-start bg-stone-100/95 px-2 py-2 dark:bg-stone-900/95">
+              <span
+                className={cx(
+                  "text-caption font-semibold leading-snug",
+                  row.slotId
+                    ? slotChipClass(curriculum, row.slotId)
+                    : "text-quaternary",
+                  "rounded px-1.5 py-0.5"
+                )}
+              >
+                {row.label}
+              </span>
+            </div>
+            {weeks.map((week) => {
+              const cell = row.slotId
+                ? cellFor(week, row.slotId)
+                : week.cells.find((c) => c.label === "Other");
+              if (!cell) {
+                return (
+                  <div
+                    key={`${row.id}-${week.slot.date}`}
+                    className="min-h-[2.75rem] border-l border-stone-200/80 bg-primary dark:border-stone-800/80"
+                  />
+                );
+              }
+              return (
+                <GridCell
+                  key={cell.key}
+                  cell={cell}
+                  past={week.slot.past}
+                  inSlot={Boolean(week.slot.sessionId)}
+                  drag={drag}
+                  columnRef={columnRef}
+                  cardProps={cardProps}
+                  compact
+                />
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WeekHeader({
+  week,
+  isActive,
+  notesPreview,
+  onSelect,
+  grid,
+}: {
+  week: WeekColumn;
+  isActive: boolean;
+  notesPreview: string;
+  onSelect: () => void;
+  grid?: boolean;
+}) {
+  const past = week.slot.past;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-expanded={isActive}
+      className={cx(
+        "px-2 py-2 text-left transition-colors",
+        grid ? "bg-primary" : "border-b border-secondary",
+        isActive && "ring-2 ring-inset ring-teal-500 dark:ring-teal-600",
+        !isActive && "hover:bg-stone-50 dark:hover:bg-stone-900/40",
+        past && "bg-amber-50/80 dark:bg-amber-950/25"
+      )}
+    >
+      <div
+        className={cx(
+          "truncate text-caption font-semibold uppercase",
+          past ? "text-amber-700 dark:text-amber-500" : "text-quaternary"
+        )}
+      >
+        {week.label}
+      </div>
+      {week.hint && (
+        <div
+          className={cx(
+            "truncate text-caption",
+            past
+              ? "text-amber-700 dark:text-amber-500"
+              : "text-stone-400 dark:text-stone-500"
+          )}
+        >
+          {week.hint}
+        </div>
+      )}
+      {notesPreview && (
+        <div className="mt-0.5 truncate text-caption text-teal-700 dark:text-teal-400">
+          {notesPreview}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function GridCell({
+  cell,
+  past,
+  inSlot,
+  drag,
+  columnRef,
+  cardProps,
+  compact,
+}: {
+  cell: WeekCell;
+  past: boolean;
+  inSlot: boolean;
+  drag: ReturnType<typeof useCardDrag>["drag"];
+  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
+  cardProps: CardHandlers;
+  compact?: boolean;
+}) {
+  const empty = cell.topics.length === 0;
+  const active = drag?.over === cell.key;
+
+  return (
+    <div
+      ref={columnRef(cell.key)}
+      className={cx(
+        "min-h-[2.75rem] border-l border-stone-200/80 bg-primary px-1 py-1 dark:border-stone-800/80",
+        empty && !active && "bg-stone-50/50 dark:bg-stone-950/20",
+        active &&
+          "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
+      )}
+    >
+      <ul className="flex flex-col gap-1">
+        {cell.topics.map((t) => (
+          <TopicCard
+            key={t.id}
+            topic={t}
+            columnKey={cell.key}
+            past={past}
+            inSlot={inSlot}
+            covered={t.status !== "open"}
+            isDragging={drag?.id === t.id}
+            compact={compact}
+            showTag={false}
+            showMove
+            {...cardProps}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function IdeasPanel({
+  direction,
+  curriculum,
+  groups,
+  parked,
+  ideaCount,
+  drag,
+  columnRef,
+  cardProps,
+  onCapture,
+  onAddTag,
+}: {
+  direction: BoardDirection;
+  curriculum: CurriculumSlot[];
+  groups: BucketGroup[];
+  parked?: BucketGroup;
+  ideaCount: number;
+  drag: ReturnType<typeof useCardDrag>["drag"];
+  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
+  cardProps: CardHandlers;
+  onCapture: (text: string, slotId?: string) => void;
+  onAddTag: (label: string) => string | undefined;
+}) {
+  const [draft, setDraft] = useState("");
+  const [tag, setTag] = useState("");
+  const [filter, setFilter] = useState<string>("all");
+  const [parkedOpen, setParkedOpen] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+
+  const capture = () => {
+    const text = draft.trim();
+    if (!text) return;
+    onCapture(text, tag || undefined);
+    setDraft("");
+  };
+
+  const submitTag = () => {
+    const label = tagDraft.trim();
+    const id = onAddTag(label);
+    if (!id) return;
+    setTag(id);
+    setTagDraft("");
+    setAddingTag(false);
+    announce(`Added tag “${label}”.`);
+  };
+
+  const dropActive = (key: string) =>
+    drag?.over === key || (key === "backlog" && drag?.over?.startsWith("backlog"));
+
+  const visible = groups.flatMap((g) => {
+    if (filter === "all") return g.topics.length ? [{ group: g, topics: g.topics }] : [];
+    if (filter === "untagged" && g.key === "backlog")
+      return g.topics.length ? [{ group: g, topics: g.topics }] : [];
+    if (g.slotId === filter)
+      return g.topics.length ? [{ group: g, topics: g.topics }] : [];
+    return [];
+  });
+
+  const listGroups = drag
+    ? groups.map((g) => ({ group: g, topics: g.topics }))
+    : visible;
+
+  const filters: { id: string; label: string; count: number }[] = [
+    { id: "all", label: "All", count: ideaCount },
+  ];
+  if (groups.some((g) => g.key === "backlog" && g.topics.length))
+    filters.push({
+      id: "untagged",
+      label: "Untagged",
+      count: groups.find((g) => g.key === "backlog")?.topics.length ?? 0,
+    });
+  for (const s of curriculum) {
+    const n =
+      groups.find((g) => g.slotId === s.id)?.topics.length ?? 0;
+    if (n > 0) filters.push({ id: s.id, label: s.label, count: n });
+  }
+
+  return (
+    <div className="rounded-xl border border-secondary bg-stone-50/40 dark:bg-stone-950/30">
+      <div className="flex items-baseline justify-between gap-2 border-b border-secondary px-3 py-2">
+        <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">
+          Ideas
+        </span>
+        <span className="text-caption tabular-nums text-quaternary">
+          {ideaCount} unscheduled
+        </span>
+      </div>
+
+      <div className="space-y-2 p-3">
+        <form
+          className="flex flex-wrap items-end gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            capture();
+          }}
+        >
+          <Input
+            size="sm"
+            placeholder={CAPTURE_PLACEHOLDER[direction]}
+            aria-label="Add an idea"
+            value={draft}
+            onChange={setDraft}
+            className="min-w-[10rem] flex-1"
+            enterKeyHint="done"
+          />
+          {curriculum.length > 0 && (
+            <label className="shrink-0">
+              <span className="sr-only">Tag</span>
+              <select
+                value={tag}
+                onChange={(e) => setTag(e.target.value)}
+                className="min-h-9 rounded-lg border-0 bg-primary px-2 text-sm shadow-xs ring-1 ring-primary ring-inset"
+              >
+                <option value="">Untagged</option>
+                {curriculum.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <Button size="sm" color="secondary" type="submit" isDisabled={!draft.trim()}>
+            Add
+          </Button>
+        </form>
+
+        {filters.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className={cx(
+                  "rounded-full px-2.5 py-0.5 text-caption font-medium transition",
+                  filter === f.id
+                    ? "bg-teal-600 text-white dark:bg-teal-700"
+                    : "bg-tertiary text-quaternary hover:text-stone-700 dark:hover:text-stone-200"
+                )}
+              >
+                {f.label}
+                <span className="ml-1 tabular-nums opacity-80">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          {addingTag ? (
+            <form
+              className="flex min-w-0 flex-1 items-center gap-1.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitTag();
+              }}
+            >
+              <Input
+                size="sm"
+                placeholder="Tag name…"
+                aria-label="New tag name"
+                value={tagDraft}
+                onChange={setTagDraft}
+                className="min-w-[6rem] flex-1"
+                autoFocus
+              />
+              <Button
+                size="sm"
+                color="secondary"
+                type="submit"
+                isDisabled={!tagDraft.trim()}
+              >
+                Add
+              </Button>
+              <Button
+                size="sm"
+                color="tertiary"
+                type="button"
+                onClick={() => {
+                  setAddingTag(false);
+                  setTagDraft("");
+                }}
+              >
+                Cancel
+              </Button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingTag(true)}
+              className="rounded-full bg-tertiary px-2.5 py-0.5 text-caption font-medium text-quaternary transition hover:text-stone-700 dark:hover:text-stone-200"
+            >
+              + Tag
+            </button>
+          )}
+        </div>
+
+        <div
+          ref={columnRef("backlog")}
+          className={cx(
+            "max-h-[min(11rem,28vh)] space-y-2 overflow-y-auto rounded-lg",
+            drag && "min-h-[4rem]",
+            dropActive("backlog") &&
+              "ring-2 ring-teal-400 dark:ring-teal-600"
+          )}
+        >
+        {listGroups.length === 0 && (
+          <p className="py-6 text-center text-sm text-quaternary">
+            {ideaCount === 0
+              ? drag
+                ? "Drop here to return to ideas."
+                : "Nothing in the bucket yet — capture something above."
+              : "No ideas match this filter."}
+          </p>
+        )}
+        {listGroups.map(({ group, topics: list }) => (
+          <div
+            key={group.key}
+            ref={columnRef(group.key)}
+            className={cx(
+              "rounded-md px-1",
+              dropActive(group.key) &&
+                "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
+            )}
+          >
+            {filter === "all" && group.label !== "Ideas" && (
+              <p className="mb-1.5 text-caption font-semibold tracking-wide text-quaternary uppercase">
+                {group.label}
+              </p>
+            )}
+            {(drag || list.length > 0) && (
+            <ul className="space-y-1.5">
+              {list.map((t) => (
+                <TopicCard
+                  key={t.id}
+                  topic={t}
+                  columnKey={group.key}
+                  past={false}
+                  inSlot={false}
+                  covered={false}
+                  isDragging={drag?.id === t.id}
+                  showTag
+                  showMove
+                  {...cardProps}
+                />
+              ))}
+            </ul>
+            )}
+            {drag && list.length === 0 && (
+              <p className="py-2 text-center text-caption text-quaternary">
+                Drop in {group.label.toLowerCase()}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {parked && (
+        <div
+          ref={columnRef(parked.key)}
+          className={cx(
+            "border-t border-secondary pt-2",
+            drag?.over === parked.key && "rounded-lg ring-2 ring-teal-400"
+          )}
+        >
+          <button
+            type="button"
+            className="flex w-full items-baseline justify-between py-1 text-left"
+            onClick={() => setParkedOpen((v) => !v)}
+            aria-expanded={parkedOpen}
+          >
+            <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
+              Parked
+            </span>
+            <span className="text-caption tabular-nums text-quaternary">
+              {parked.topics.length}
+            </span>
+          </button>
+          {parkedOpen && parked.topics.length > 0 && (
+            <ul className="mt-1.5 space-y-1.5">
+              {parked.topics.map((t) => (
+                <TopicCard
+                  key={t.id}
+                  topic={t}
+                  columnKey={parked.key}
+                  past={false}
+                  inSlot={false}
+                  covered={false}
+                  isDragging={drag?.id === t.id}
+                  showTag
+                  showMove
+                  {...cardProps}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      </div>
+    </div>
+  );
+}
+
 function TopicCard({
   topic,
   columnKey,
@@ -403,12 +936,18 @@ function TopicCard({
   inSlot,
   covered,
   isDragging,
-  moveOptions,
+  compact,
+  showTag = true,
+  showMove = true,
+  curriculum,
+  moveGroups,
   handleProps,
   onText,
   onMove,
   onReorder,
   onCover,
+  onTag,
+  onAddTag,
   onRoll,
   onBacklog,
   onDelete,
@@ -416,27 +955,21 @@ function TopicCard({
   topic: Topic;
   columnKey: string;
   past: boolean;
-  /** Slotted into a booked occurrence — gets a covered checkbox. */
   inSlot: boolean;
   covered: boolean;
   isDragging: boolean;
-  moveOptions: { key: string; label: string }[];
-  handleProps: ReturnType<typeof useCardDrag>["handleProps"];
-  onText: (text: string) => void;
-  onMove: (key: string) => void;
-  /** Up or down one place within this column. */
-  onReorder: (direction: -1 | 1) => MoveResult;
-  onCover: (covered: boolean) => void;
-  onRoll: () => void;
-  onBacklog: () => void;
-  onDelete: () => void;
-}) {
+  compact?: boolean;
+  showTag?: boolean;
+  showMove?: boolean;
+} & CardHandlers) {
   const ref = useRef<HTMLLIElement>(null);
   const name = topic.text || "topic";
+  const [newTagOpen, setNewTagOpen] = useState(false);
+  const [newTagLabel, setNewTagLabel] = useState("");
   const { rowProps, handleProps: keyHandleProps } = useReorderableRow({
     label: `“${name}”`,
-    onMove: onReorder,
-    onDelete,
+    onMove: (dir) => onReorder(topic.id, dir),
+    onDelete: () => onDelete(topic),
   });
 
   return (
@@ -448,50 +981,39 @@ function TopicCard({
         past
           ? "border-amber-300 dark:border-amber-800"
           : "border-stone-200 dark:border-stone-700",
-        isDragging && "opacity-40"
+        isDragging && "opacity-40",
+        compact && "text-xs"
       )}
     >
-      <div className="flex items-start gap-1 px-2 py-1.5 touch:gap-2">
-        {inSlot ? (
-          <Checkbox
-            size="sm"
-            aria-label={`Covered "${name}"`}
-            isSelected={covered}
-            onChange={onCover}
-            className="mt-1 shrink-0"
-          />
-        ) : (
-          /* An explicit handle: the card also holds an editable textarea, and a
-             press anywhere would fight text selection and the caret.
-             `select-none` and the callout suppression matter because the touch
-             drag starts on a 300ms hold — the same gesture iOS uses to raise
-             the selection handles and the copy/lookup callout.
-
-             It is also the keyboard's anchor for the card — the one place ⌥↑/⌥↓
-             and Delete are bound, which is why the label spells them out rather
-             than leaving them to be discovered. A slotted card puts the same
-             handle on the right instead, so every card has exactly one. */
-          <button
-            type="button"
-            aria-label={HANDLE_LABEL(name)}
-            title={HANDLE_TITLE}
-            className="-ml-0.5 flex size-8 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 select-none touch:-my-1.5 touch:size-11 [-webkit-touch-callout:none] active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400"
-            {...keyHandleProps}
-            {...handleProps(topic.id, columnKey, ref)}
-          >
-            <DotsGrid className="size-4" />
-          </button>
+      <div
+        className={cx(
+          "flex items-start gap-1 touch:gap-2",
+          compact ? "px-1.5 py-1" : "px-2 py-1.5"
         )}
+      >
+        <button
+          type="button"
+          aria-label={HANDLE_LABEL(name)}
+          title={HANDLE_TITLE}
+          className={cx(
+            "flex shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 select-none active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400",
+            compact ? "size-6 -ml-0.5" : "size-8 -ml-0.5 touch:size-11"
+          )}
+          {...keyHandleProps}
+          {...handleProps(topic.id, columnKey, ref)}
+        >
+          <DotsGrid className={compact ? "size-3" : "size-4"} />
+        </button>
 
         <div className="min-w-0 flex-1">
           <textarea
             className={cx(
-              "w-full resize-none border-0 bg-transparent p-0 text-xs leading-snug outline-none touch:text-md",
+              "w-full resize-none border-0 bg-transparent p-0 leading-snug outline-none",
+              compact ? "text-xs" : "text-xs touch:text-md",
               covered
                 ? "text-quaternary line-through"
                 : "text-stone-700 dark:text-stone-200"
             )}
-            // Auto-grows instead of clipping at two lines.
             rows={1}
             ref={(el) => {
               if (!el) return;
@@ -502,30 +1024,87 @@ function TopicCard({
             onChange={(e) => {
               e.target.style.height = "auto";
               e.target.style.height = `${e.target.scrollHeight}px`;
-              onText(e.target.value);
+              onText(topic.id, e.target.value);
             }}
           />
-          {topic.carried > 1 && !covered && (
-            <span
-              className="mt-0.5 inline-block rounded bg-amber-100 px-1 py-px text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500"
-              title="Pushed to a later meeting this many times"
-            >
-              pushed {topic.carried}×
-            </span>
+          {!compact && showTag && curriculum.length > 0 && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+              {newTagOpen ? (
+                <form
+                  className="inline-flex min-w-0 items-center gap-1"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const id = onAddTag?.(newTagLabel);
+                    if (!id) return;
+                    onTag(topic.id, id);
+                    setNewTagLabel("");
+                    setNewTagOpen(false);
+                  }}
+                >
+                  <Input
+                    size="sm"
+                    placeholder="New tag…"
+                    aria-label={`New tag for “${name}”`}
+                    value={newTagLabel}
+                    onChange={setNewTagLabel}
+                    className="min-w-[5rem]"
+                    autoFocus
+                  />
+                  <Button
+                    size="sm"
+                    color="secondary"
+                    type="submit"
+                    isDisabled={!newTagLabel.trim()}
+                  >
+                    Add
+                  </Button>
+                </form>
+              ) : (
+                <label className="inline-flex min-w-0">
+                  <span className="sr-only">Tag for “{name}”</span>
+                  <select
+                    value={topic.slotId ?? ""}
+                    onChange={(e) => {
+                      if (e.target.value === "__new__") {
+                        setNewTagOpen(true);
+                        return;
+                      }
+                      onTag(topic.id, e.target.value || undefined);
+                    }}
+                    className={cx(
+                      "max-w-full cursor-pointer truncate rounded px-1 py-px text-caption font-medium outline-none",
+                      topic.slotId
+                        ? slotChipClass(curriculum, topic.slotId)
+                        : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
+                    )}
+                  >
+                    <option value="">Untagged</option>
+                    {curriculum.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                    {onAddTag && <option value="__new__">+ New tag…</option>}
+                  </select>
+                </label>
+              )}
+              {topic.carried > 1 && !covered && (
+                <span className="inline-block rounded bg-amber-100 px-1 py-px text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500">
+                  pushed {topic.carried}×
+                </span>
+              )}
+            </div>
           )}
         </div>
 
         {inSlot ? (
-          <button
-            type="button"
-            aria-label={HANDLE_LABEL(name)}
-            title={HANDLE_TITLE}
-            className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 opacity-0 select-none active:cursor-grabbing group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:text-stone-500 touch:-my-2 touch:size-11 touch:opacity-100 [-webkit-touch-callout:none] dark:text-stone-600 dark:hover:text-stone-400"
-            {...keyHandleProps}
-            {...handleProps(topic.id, columnKey, ref)}
-          >
-            <DotsGrid className="size-3.5" />
-          </button>
+          <Checkbox
+            size="sm"
+            aria-label={`Covered "${name}"`}
+            isSelected={covered}
+            onChange={(selected) => onCover(topic.id, selected)}
+            className="mt-0.5 shrink-0"
+          />
         ) : null}
 
         <ButtonUtility
@@ -534,39 +1113,44 @@ function TopicCard({
           icon={X}
           tooltip="Delete topic"
           className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-          onClick={onDelete}
+          onClick={() => onDelete(topic)}
         />
       </div>
 
-      {/* Past weeks: quick outs for what didn't get covered. Both are routing
-          choices rather than opposites, so they take the 8px peer spacing. */}
-      {past && !covered && (
+      {past && !covered && !compact && (
         <div className="flex flex-wrap items-center gap-1 border-t border-amber-200 px-2 py-1 touch:gap-2 dark:border-amber-900/70">
-          <Button size="sm" color="link-gray" onClick={onRoll}>
+          <Button size="sm" color="link-gray" onClick={() => onRoll(topic)}>
             → Next week
           </Button>
-          <Button size="sm" color="link-gray" onClick={onBacklog}>
-            Backlog
+          <Button size="sm" color="link-gray" onClick={() => onBacklog(topic.id)}>
+            Ideas
           </Button>
         </div>
       )}
 
-      {/* The guaranteed path. Dragging is a nicety; this always works — with a
-          keyboard, with a screen reader, and with a thumb. */}
-      <label className="flex items-center gap-1 border-t border-stone-100 px-2 py-1 dark:border-stone-800">
-        <span className="sr-only">Move "{topic.text || "topic"}" to</span>
-        <select
-          value={columnKey}
-          onChange={(e) => onMove(e.target.value)}
-          className="min-h-8 w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-caption text-quaternary outline-none touch:text-md"
-        >
-          {moveOptions.map((o) => (
-            <option key={o.key} value={o.key}>
-              Move to {o.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {showMove && (
+        <label className="flex items-center gap-1 border-t border-stone-100 px-2 py-1 dark:border-stone-800">
+          <span className="sr-only">Move "{topic.text || "topic"}" to</span>
+          <select
+            value={columnKey}
+            onChange={(e) => onMove(topic.id, e.target.value)}
+            className={cx(
+              "w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-quaternary outline-none",
+              compact ? "min-h-7 text-caption" : "min-h-8 text-caption touch:text-md"
+            )}
+          >
+            {moveGroups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+      )}
     </li>
   );
 }

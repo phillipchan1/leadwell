@@ -25,14 +25,77 @@
  * comparison against today, so storing it would only be a second copy that
  * goes stale overnight, every night.
  */
-import type { Session, Topic, TopicLane, TrackedMeeting } from "../types";
+import type {
+  CurriculumSlot,
+  MeetingSubjectKind,
+  Session,
+  Topic,
+  TopicLane,
+  TrackedMeeting,
+} from "../types";
 import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, weekdayUTC } from "./readiness";
 
-/** How many occurrences ahead the planner offers to scaffold into. */
-export const SLOTS_AHEAD = 3;
+/** How far the planner looks by default — a quarter of weekly meetings, not three weeks. */
+export const SLOTS_AHEAD = 8;
 
-/** How far back the Covered column reaches before it needs a "show all". */
-export const COVERED_WINDOW_DAYS = 30;
+export type Horizon = 4 | 8 | 12 | "all";
+export const HORIZON_DEFAULT: Horizon = 8;
+
+export function aheadForHorizon(horizon: Horizon): number {
+  return horizon === "all" ? 26 : horizon;
+}
+
+const slotUid = () => Math.random().toString(36).slice(2, 10);
+
+/**
+ * Standing skeleton offered when a meeting is created. Empty on purpose —
+ * Check-in / Work / Develop is a 1:1 shape, Prayer / Training / Discussion
+ * is a staff-meeting shape, and neither belongs to "who this is with".
+ * Set the slots on the meeting, the way a named gathering does.
+ */
+export function defaultCurriculum(_kind?: MeetingSubjectKind): CurriculumSlot[] {
+  return [];
+}
+
+export function curriculumOf(meeting: TrackedMeeting): CurriculumSlot[] {
+  return meeting.curriculum ?? [];
+}
+
+export function slotLabelOf(
+  curriculum: CurriculumSlot[],
+  slotId?: string
+): string | undefined {
+  if (!slotId) return undefined;
+  return curriculum.find((s) => s.id === slotId)?.label;
+}
+
+const SLOT_CHIP = [
+  "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-400",
+  "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-400",
+  "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400",
+  "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-400",
+  "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400",
+  "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-400",
+] as const;
+
+const SLOT_DOT = [
+  "bg-teal-500",
+  "bg-violet-500",
+  "bg-amber-500",
+  "bg-sky-500",
+  "bg-rose-500",
+  "bg-orange-500",
+] as const;
+
+export function slotChipClass(curriculum: CurriculumSlot[], slotId?: string): string {
+  const i = curriculum.findIndex((s) => s.id === slotId);
+  return SLOT_CHIP[i < 0 ? 0 : i % SLOT_CHIP.length];
+}
+
+export function slotDotClass(curriculum: CurriculumSlot[], slotId?: string): string {
+  const i = curriculum.findIndex((s) => s.id === slotId);
+  return SLOT_DOT[i < 0 ? 0 : i % SLOT_DOT.length];
+}
 
 /** One occurrence on the planner — a real session, or a date we expect. */
 export type Slot = {
@@ -46,26 +109,52 @@ export type Slot = {
 };
 
 /**
- * A planner column. The key is what the drag engine hit-tests and what the
- * accessible "Move to…" select stores, so it has to survive a round trip
- * through a `<select value>` — hence strings, not objects.
+ * Drop target for the drag engine and the "Move to…" select. Keys are strings
+ * so they survive a round trip through `<select value>`.
+ *
+ * A `#slotId` suffix names the skeleton cell inside a week or the tagged
+ * group inside the bucket. No suffix means untagged (or a meeting with no
+ * curriculum).
  */
-export type BoardColumn = {
+export type ColumnTarget =
+  | { kind: "lane"; lane: TopicLane; slotId?: string }
+  | { kind: "session"; sessionId: string; slotId?: string }
+  | { kind: "projected"; date: string; slotId?: string };
+
+export type BucketGroup = {
   key: string;
   label: string;
-  /** Second line: the countdown, or why the column is amber. */
-  hint?: string;
-  slot?: Slot;
-  lane?: TopicLane;
-  covered?: boolean;
+  lane: TopicLane;
+  slotId?: string;
   topics: Topic[];
 };
 
-export type ColumnTarget =
-  | { kind: "lane"; lane: TopicLane }
-  | { kind: "covered" }
-  | { kind: "session"; sessionId: string }
-  | { kind: "projected"; date: string };
+export type WeekCell = {
+  key: string;
+  slotId?: string;
+  label: string;
+  topics: Topic[];
+};
+
+export type WeekColumn = {
+  key: string;
+  label: string;
+  hint?: string;
+  slot: Slot;
+  cells: WeekCell[];
+  topics: Topic[];
+};
+
+export type BoardLayout = {
+  bucket: BucketGroup[];
+  weeks: WeekColumn[];
+};
+
+export type SlotBalance = {
+  slot: CurriculumSlot;
+  filled: number;
+  total: number;
+};
 
 // ── Keys ──────────────────────────────────────────────────────────────────
 
@@ -73,18 +162,33 @@ export function slotKey(slot: Slot): string {
   return slot.sessionId ? `s:${slot.sessionId}` : `p:${slot.date}`;
 }
 
-export function parseColumnKey(key: string): ColumnTarget {
-  if (key.startsWith("s:")) return { kind: "session", sessionId: key.slice(2) };
-  if (key.startsWith("p:")) return { kind: "projected", date: key.slice(2) };
-  if (key === "covered") return { kind: "covered" };
-  return { kind: "lane", lane: key === "parked" ? "parked" : "backlog" };
+export function cellKey(occurrenceKey: string, slotId?: string): string {
+  return slotId ? `${occurrenceKey}#${slotId}` : occurrenceKey;
 }
 
-/** Which column a topic currently sits in. */
+export function parseColumnKey(key: string): ColumnTarget {
+  const hash = key.indexOf("#");
+  const base = hash >= 0 ? key.slice(0, hash) : key;
+  const slotId = hash >= 0 ? key.slice(hash + 1) || undefined : undefined;
+
+  if (base.startsWith("s:")) {
+    return { kind: "session", sessionId: base.slice(2), slotId };
+  }
+  if (base.startsWith("p:")) {
+    return { kind: "projected", date: base.slice(2), slotId };
+  }
+  return {
+    kind: "lane",
+    lane: base === "parked" ? "parked" : "backlog",
+    slotId,
+  };
+}
+
+/** Which drop target a topic currently sits in. */
 export function columnKeyOf(topic: Topic): string {
-  if (topic.status !== "open") return "covered";
-  if (topic.sessionId) return `s:${topic.sessionId}`;
-  return topic.lane;
+  if (topic.sessionId) return cellKey(`s:${topic.sessionId}`, topic.slotId);
+  if (topic.lane === "parked") return "parked";
+  return cellKey("backlog", topic.slotId);
 }
 
 /** Materialize a projected occurrence so notes and topics can attach to it. */
@@ -260,58 +364,110 @@ function slotHint(slot: Slot, topics: Topic[], today: string): string {
 }
 
 /**
- * The full strip, left to right: the running list, the occurrences, the
- * someday pile, then what's been covered.
+ * The scaffolder: a tagged idea bucket, then one column per upcoming
+ * occurrence. Each week is the standing skeleton — empty cells stay visible
+ * so an unbalanced meeting is obvious without opening anything.
  *
- * Covered sits on the board rather than in a drawer because dragging a card
- * into it is how you say "we talked about it" — the gesture only exists if the
- * target does.
+ * Covered is not a column. Marking a topic done is a checkbox on the card
+ * (and on the write-up). Parked lives in the bucket, not beside the weeks.
  */
-export function boardColumns(
+export function boardLayout(
   meeting: TrackedMeeting,
   sessions: Session[],
   topics: Topic[],
   today: string = todayISO(),
-  opts: { ahead?: number; allCovered?: boolean } = {}
-): BoardColumn[] {
+  opts: { ahead?: number } = {}
+): BoardLayout {
   const mine = topicsFor(topics, meeting.id);
   const slots = plannedSlots(meeting, sessions, topics, today, opts.ahead);
   const open = mine.filter((t) => t.status === "open");
+  const curriculum = curriculumOf(meeting);
+  const known = new Set(curriculum.map((s) => s.id));
 
-  const coveredCutoff = addDays(today, -COVERED_WINDOW_DAYS);
-  const covered = mine
-    .filter((t) => t.status !== "open" && !t.sessionId)
-    .filter((t) => opts.allCovered || !t.closedOn || t.closedOn >= coveredCutoff)
-    .sort((a, b) => (b.closedOn ?? "").localeCompare(a.closedOn ?? ""));
-
-  const inLane = (lane: TopicLane) =>
+  const unslotted = (lane: TopicLane) =>
     open.filter((t) => !t.sessionId && t.lane === lane);
 
-  const slotColumns: BoardColumn[] = slots.map((slot) => {
-    const inSlot = slot.sessionId
+  const backlog = unslotted("backlog");
+  const parked = unslotted("parked");
+  const knownId = (t: Topic) => t.slotId && known.has(t.slotId);
+
+  const bucket: BucketGroup[] = [];
+  if (curriculum.length) {
+    bucket.push({
+      key: "backlog",
+      label: "Untagged",
+      lane: "backlog",
+      topics: backlog.filter((t) => !knownId(t)),
+    });
+    for (const slot of curriculum) {
+      bucket.push({
+        key: cellKey("backlog", slot.id),
+        label: slot.label,
+        lane: "backlog",
+        slotId: slot.id,
+        topics: backlog.filter((t) => t.slotId === slot.id),
+      });
+    }
+  } else {
+    bucket.push({
+      key: "backlog",
+      label: "Ideas",
+      lane: "backlog",
+      topics: backlog,
+    });
+  }
+  bucket.push({
+    key: "parked",
+    label: "Parked",
+    lane: "parked",
+    topics: parked,
+  });
+
+  const weeks: WeekColumn[] = slots.map((slot) => {
+    const inWeek = slot.sessionId
       ? mine.filter((t) => t.sessionId === slot.sessionId && t.status !== "dropped")
       : [];
+    const occ = slotKey(slot);
+    const cells: WeekCell[] = [];
+    if (curriculum.length) {
+      const untagged = inWeek.filter((t) => !knownId(t));
+      if (untagged.length) {
+        cells.push({ key: occ, label: "Other", topics: untagged });
+      }
+      for (const cs of curriculum) {
+        cells.push({
+          key: cellKey(occ, cs.id),
+          slotId: cs.id,
+          label: cs.label,
+          topics: inWeek.filter((t) => t.slotId === cs.id),
+        });
+      }
+    } else {
+      cells.push({ key: occ, label: "", topics: inWeek });
+    }
     return {
-      key: slotKey(slot),
+      key: occ,
       label: slotLabel(slot),
-      hint: slotHint(slot, inSlot, today) || undefined,
+      hint: slotHint(slot, inWeek, today) || undefined,
       slot,
-      topics: inSlot,
+      cells,
+      topics: inWeek,
     };
   });
 
-  return [
-    { key: "backlog", label: "Backlog", lane: "backlog", topics: inLane("backlog") },
-    ...slotColumns,
-    { key: "parked", label: "Parked", lane: "parked", topics: inLane("parked") },
-    {
-      key: "covered",
-      label: "Covered",
-      hint: opts.allCovered ? undefined : "last 30 days",
-      covered: true,
-      topics: covered,
-    },
-  ];
+  return { bucket, weeks };
+}
+
+/** How many upcoming weeks already have something in each skeleton slot. */
+export function curriculumBalance(weeks: WeekColumn[], curriculum: CurriculumSlot[]): SlotBalance[] {
+  const upcoming = weeks.filter((w) => !w.slot.past);
+  return curriculum.map((slot) => ({
+    slot,
+    filled: upcoming.filter((w) =>
+      w.cells.some((c) => c.slotId === slot.id && c.topics.length > 0)
+    ).length,
+    total: upcoming.length,
+  }));
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────

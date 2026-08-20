@@ -37,9 +37,9 @@ type Row = {
 
 const KIND_FILTERS: { label: string; value: "" | MeetingSubjectKind }[] = [
   { label: "Everything", value: "" },
-  { label: "1:1s", value: "person" },
+  { label: "People", value: "person" },
   { label: "Teams", value: "team" },
-  { label: "Check-ins", value: "manager" },
+  { label: "Managers", value: "manager" },
 ];
 
 /**

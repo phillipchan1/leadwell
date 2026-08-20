@@ -37,6 +37,7 @@ import type {
   Team,
   Topic,
   TrackedMeeting,
+  CurriculumSlot,
   TeamAction,
   TeamGoal,
   TeamNote,
@@ -75,6 +76,20 @@ export type PersistedData = {
 const nn = <T>(v: T | undefined | null): T | null => (v === undefined ? null : v);
 const opt = <T>(v: T | null | undefined): T | undefined =>
   v === null || v === undefined ? undefined : v;
+
+function parseCurriculum(v: unknown): CurriculumSlot[] | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined;
+  const slots: CurriculumSlot[] = [];
+  for (const item of v) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { id?: unknown; label?: unknown };
+    if (typeof row.id !== "string" || typeof row.label !== "string") continue;
+    const label = row.label.trim();
+    if (!label) continue;
+    slots.push({ id: row.id, label });
+  }
+  return slots.length ? slots : undefined;
+}
 
 type Row = Record<string, unknown>;
 
@@ -361,6 +376,7 @@ const map = {
       role: nn(m.role),
       tracker_url: nn(m.trackerUrl),
       tracker_name: nn(m.trackerName),
+      curriculum: m.curriculum?.length ? m.curriculum : null,
     }),
     fromRow: (r: Row): TrackedMeeting => ({
       id: r.id as string,
@@ -374,6 +390,7 @@ const map = {
       role: opt(r.role as TrackedMeeting["role"] | null),
       trackerUrl: opt(r.tracker_url as string | null),
       trackerName: opt(r.tracker_name as string | null),
+      curriculum: parseCurriculum(r.curriculum),
     }),
   },
   topics: {
@@ -392,6 +409,7 @@ const map = {
       created_on: t.createdOn,
       closed_on: nn(t.closedOn),
       sort_order: t.order,
+      slot_id: nn(t.slotId),
     }),
     fromRow: (r: Row): Topic => ({
       id: r.id as string,
@@ -401,6 +419,7 @@ const map = {
       status: (r.status as Topic["status"]) ?? "open",
       lane: (r.lane as Topic["lane"]) ?? "backlog",
       sessionId: opt(r.session_id as string | null),
+      slotId: opt(r.slot_id as string | null),
       carried: (r.carried as number) ?? 0,
       dueDate: opt(r.due_date as string | null),
       // Backfilled rows have no creation date — the old table never kept one.

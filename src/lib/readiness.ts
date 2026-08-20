@@ -99,11 +99,11 @@ export const RHYTHM_LABEL: Record<MeetingRhythm, string> = {
   as_needed: "As needed",
 };
 
-/** What to call a tracked meeting in copy — you don't have a "1:1" with your boss. */
+/** Mid-sentence noun. Same word everywhere — the gathering, not the relationship. */
 export const MEETING_LABEL: Record<MeetingSubjectKind, string> = {
-  person: "1:1",
+  person: "meeting",
   team: "meeting",
-  manager: "check-in",
+  manager: "meeting",
 };
 
 export const RHYTHM_OPTIONS: MeetingRhythm[] = [
@@ -687,15 +687,14 @@ export function meetingFor(
   return meetingsFor(meetings, kind, subjectId)[0];
 }
 
-/** What to call a meeting: its own name, or the kind it is. */
+/** What to call a meeting: its own name, or a neutral fallback. */
 export function meetingTitle(
   meeting: TrackedMeeting,
   subjectName?: string
 ): string {
   const name = meeting.name?.trim();
   if (name) return name;
-  const label = MEETING_LABEL[meeting.subjectKind];
-  return subjectName ? `${label} · ${subjectName}` : label;
+  return subjectName ? `Meeting · ${subjectName}` : "Meeting";
 }
 
 /** Who or what a meeting is with. Named things only — the id is never shown. */

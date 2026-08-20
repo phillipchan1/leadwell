@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
-  MEETING_LABEL,
+  ANCHOR_WEEKDAY_OPTIONS,
   RHYTHM_LABEL,
   RHYTHM_OPTIONS,
   STATE_COLOR,
@@ -14,7 +14,6 @@ import {
 } from "../lib/readiness";
 import { topicsFor } from "../lib/topics";
 import { MeetingPlanner } from "./MeetingPlanner";
-import { MeetingScheduleFields } from "./MeetingScheduleFields";
 import type { BoardDirection } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
@@ -37,7 +36,7 @@ const DEFAULT_FLOOR_DAYS = 45;
  * goes: you decide what to raise *while* reading what you said last time. Here
  * they're one column per meeting — what's coming, then what happened — and a
  * subject with two meetings gets two of these rather than one merged board,
- * because a 1:1 and a career check-in are different rooms.
+ * because a weekly sync and a quarterly review are different rooms.
  */
 export function SubjectMeetings({
   subjectKind,
@@ -64,7 +63,6 @@ export function SubjectMeetings({
   }, [focusSessionId, openSession]);
 
   const mine = meetingsFor(meetings, subjectKind, subjectId);
-  const label = MEETING_LABEL[subjectKind];
   const firstName = subjectName.split(" ")[0] ?? subjectName;
 
   const startMeeting = (rhythm: MeetingRhythm, name?: string) => {
@@ -81,11 +79,11 @@ export function SubjectMeetings({
       <div className="space-y-3">
         <div className="rounded-xl border border-dashed border-primary px-4 py-8 text-center">
           <p className="text-sm text-quaternary">
-            No meetings tracked with {firstName} yet.
+            No meetings tracked yet.
           </p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-quaternary">
-            Add as many as you actually have — a weekly {label}, a quarterly
-            career check-in, whatever rhythm fits.
+            Same as a staff meeting: name it, plan topics, write it up. Add as
+            many as you actually run with {firstName}.
           </p>
           <div className="mt-4">
             <StartMeetingForm
@@ -115,7 +113,10 @@ export function SubjectMeetings({
       {adding ? (
         <div className="rounded-xl border border-secondary bg-stone-50/60 p-4 dark:bg-stone-950/40">
           <p className="mb-3 text-sm font-medium text-stone-700 dark:text-stone-200">
-            Another meeting with {firstName}
+            Another meeting
+          </p>
+          <p className="mb-3 text-xs text-quaternary">
+            A separate gathering — its own name, topics and history.
           </p>
           <StartMeetingForm
             subjectKind={subjectKind}
@@ -163,14 +164,8 @@ function MeetingBlock({
   direction: BoardDirection;
   onOpenSession: (id: string) => void;
 }) {
-  const { sessions, topics, meetings, addTopic, updateMeeting, selectMeeting } =
+  const { sessions, topics, meetings, updateMeeting, selectMeeting } =
     useStore();
-  const [draft, setDraft] = useState("");
-  const [name, setName] = useState(meeting.name ?? "");
-
-  useEffect(() => {
-    setName(meeting.name ?? "");
-  }, [meeting.id, meeting.name]);
 
   const readiness = readinessOf(meeting, { meetings, sessions, topics });
   const color = STATE_COLOR[readiness.state];
@@ -179,6 +174,7 @@ function MeetingBlock({
   ).length;
   const [planSlotKey, setPlanSlotKey] = useState<string | null>(null);
   const [historySlotKey, setHistorySlotKey] = useState<string | null>(null);
+  const [name, setName] = useState(meeting.name ?? "");
 
   const closePlanNotes = useCallback(() => setPlanSlotKey(null), []);
   const closeHistoryNotes = useCallback(() => setHistorySlotKey(null), []);
@@ -189,12 +185,35 @@ function MeetingBlock({
     setPlanSlotKey(slotKey);
   }, []);
 
+  const weekday =
+    meeting.anchorWeekday !== undefined
+      ? ANCHOR_WEEKDAY_OPTIONS.find(
+          (o) => o.value === String(meeting.anchorWeekday)
+        )?.label
+      : undefined;
+
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
-          {meetingTitle(meeting, subjectName)}
-        </h3>
+        <div className="min-w-0 flex-1">
+          <Input
+            size="sm"
+            label="Name"
+            placeholder={meetingTitle({ ...meeting, name: undefined }, subjectName)}
+            hint="Name it like a gathering — Staff meeting, weekly sync — not the relationship."
+            value={name}
+            onChange={setName}
+            onBlur={() =>
+              updateMeeting(meeting.id, { name: name.trim() || undefined })
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                updateMeeting(meeting.id, { name: name.trim() || undefined });
+              }
+            }}
+          />
+        </div>
         <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
         <span
           className="shrink-0 font-mono text-caption tabular-nums"
@@ -222,6 +241,12 @@ function MeetingBlock({
             value: r,
           }))}
         />
+        <span className="text-caption text-quaternary">
+          {weekday ? `Usually ${weekday}` : "Day not set"}
+          {readiness.nextDate
+            ? ` · next ${readiness.projected ? "~" : ""}${readiness.nextDate.slice(5).replace("-", "/")}`
+            : ""}
+        </span>
         <Button
           size="sm"
           color="link-gray"
@@ -233,53 +258,6 @@ function MeetingBlock({
           <span className="sr-only">Open meeting page</span>
         </Button>
       </div>
-
-      <Input
-        size="sm"
-        label="Meeting name"
-        placeholder={meetingTitle(meeting, subjectName)}
-        hint="Rename if this isn't just a generic 1:1 — e.g. Weekly sync."
-        value={name}
-        onChange={setName}
-        onBlur={() =>
-          updateMeeting(meeting.id, { name: name.trim() || undefined })
-        }
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            updateMeeting(meeting.id, { name: name.trim() || undefined });
-          }
-        }}
-      />
-
-      <MeetingScheduleFields
-        meeting={meeting}
-        size="sm"
-        onChange={(patch) => updateMeeting(meeting.id, patch)}
-      />
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const text = draft.trim();
-          if (!text) return;
-          addTopic(meeting.id, text, { lane: "backlog" });
-          setDraft("");
-        }}
-      >
-        <Input
-          size="md"
-          placeholder={
-            direction === "up"
-              ? "Ask, escalate, flag… ↵"
-              : "Something to raise next time… ↵"
-          }
-          aria-label="Add a topic"
-          value={draft}
-          onChange={setDraft}
-          enterKeyHint="done"
-        />
-      </form>
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between">

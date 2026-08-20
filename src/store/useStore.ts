@@ -39,6 +39,7 @@ import { clearIndex } from "../lib/search";
 import { clearRecents } from "../lib/recents";
 import { clearUndo } from "../lib/undo";
 import { emptyMe } from "../lib/repo";
+import { defaultCurriculum } from "../lib/topics";
 import {
   capUp,
   seedActions,
@@ -334,16 +335,23 @@ type Store = PersistedData &
     addTopic: (
       meetingId: string,
       text: string,
-      opts?: { lane?: TopicLane; sessionId?: string; dueDate?: string }
+      opts?: {
+        lane?: TopicLane;
+        sessionId?: string;
+        dueDate?: string;
+        slotId?: string;
+      }
     ) => string;
     updateTopic: (
       id: string,
-      patch: Partial<Pick<Topic, "text" | "detail" | "dueDate">>
+      patch: Partial<Pick<Topic, "text" | "detail" | "dueDate" | "slotId">>
     ) => void;
     /** Move a topic into a lane or onto one occurrence. Reopens it if closed. */
     placeTopic: (
       id: string,
-      target: { lane: TopicLane } | { sessionId: string }
+      target:
+        | { lane: TopicLane; slotId?: string }
+        | { sessionId: string; slotId?: string }
     ) => void;
     /** "We talked about it." Passing false puts it back on the board. */
     coverTopic: (id: string, covered?: boolean) => void;
@@ -386,6 +394,14 @@ type Store = PersistedData &
       patch?: Partial<Omit<TrackedMeeting, "id" | "subjectKind" | "subjectId">>
     ) => string;
     updateMeeting: (id: string, patch: Partial<Omit<TrackedMeeting, "id">>) => void;
+    /**
+     * Replace a meeting's standing skeleton. Topics pointing at a removed
+     * slot become untagged rather than disappearing.
+     */
+    setCurriculum: (
+      meetingId: string,
+      curriculum: TrackedMeeting["curriculum"]
+    ) => void;
     /** Only offered when the meeting has no sessions — history is never dropped. */
     untrackMeeting: (id: string) => void;
     /** Record (or clear) the explicit "I don't sit down with them" decision. */
@@ -1421,6 +1437,7 @@ export const useStore = create<Store>((set, get) => ({
             status: "open",
             lane: opts.lane ?? "backlog",
             sessionId: opts.sessionId,
+            slotId: opts.slotId,
             carried: 0,
             dueDate: opts.dueDate,
             createdOn: todayISO(),
@@ -1442,9 +1459,24 @@ export const useStore = create<Store>((set, get) => ({
         // Dragging a covered card back onto the board reopens it — the board
         // only ever shows what's still live, so being there means it is.
         const reopened = { ...t, status: "open" as const, closedOn: undefined };
-        return "sessionId" in target
-          ? { ...reopened, sessionId: target.sessionId }
-          : { ...reopened, lane: target.lane, sessionId: undefined };
+        if ("sessionId" in target) {
+          return {
+            ...reopened,
+            sessionId: target.sessionId,
+            slotId: target.slotId,
+          };
+        }
+        // Parked is defer-not-now; the tag stays so it returns to the same
+        // skeleton cell when it comes back.
+        if (target.lane === "parked") {
+          return { ...reopened, lane: "parked", sessionId: undefined };
+        }
+        return {
+          ...reopened,
+          lane: target.lane,
+          sessionId: undefined,
+          slotId: target.slotId,
+        };
       }),
     })),
   coverTopic: (id, covered = true) =>
@@ -1527,10 +1559,18 @@ export const useStore = create<Store>((set, get) => ({
   },
   createMeeting: (subjectKind, subjectId, patch) => {
     const id = uid();
+    const curriculum = patch?.curriculum ?? defaultCurriculum(subjectKind);
     set((s) => ({
       meetings: [
         ...s.meetings,
-        { id, subjectKind, subjectId, rhythm: "weekly", ...patch },
+        {
+          id,
+          subjectKind,
+          subjectId,
+          rhythm: "weekly",
+          ...patch,
+          curriculum: curriculum.length ? curriculum : undefined,
+        },
       ],
       // Tracking answers the opt-in question, so the decision flag is moot.
       ...clearNoMeeting(s, subjectKind, subjectId),
@@ -1541,6 +1581,22 @@ export const useStore = create<Store>((set, get) => ({
     set((s) => ({
       meetings: s.meetings.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     })),
+  setCurriculum: (meetingId, curriculum) => {
+    const slots = curriculum?.filter((s) => s.label.trim()) ?? [];
+    const ids = new Set(slots.map((s) => s.id));
+    set((s) => ({
+      meetings: s.meetings.map((m) =>
+        m.id === meetingId
+          ? { ...m, curriculum: slots.length ? slots : undefined }
+          : m
+      ),
+      topics: s.topics.map((t) =>
+        t.meetingId === meetingId && t.slotId && !ids.has(t.slotId)
+          ? { ...t, slotId: undefined }
+          : t
+      ),
+    }));
+  },
   untrackMeeting: (id) =>
     set((s) => ({
       meetings: s.meetings.filter((m) => m.id !== id),

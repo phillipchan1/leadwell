@@ -97,7 +97,8 @@ export function OccurrenceNotesPanel({
     if (!session) return;
     const seeded = seedNotesFromTopics(
       session,
-      topicsFor(topics, meeting.id)
+      topicsFor(topics, meeting.id),
+      meeting.curriculum ?? []
     );
     if (seeded) {
       updateSession(session.id, { notes: seeded });

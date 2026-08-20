@@ -1,10 +1,6 @@
 import { useState } from "react";
 import type { MeetingRhythm, MeetingSubjectKind } from "../types";
-import {
-  MEETING_LABEL,
-  RHYTHM_LABEL,
-  RHYTHM_OPTIONS,
-} from "../lib/readiness";
+import { RHYTHM_LABEL, RHYTHM_OPTIONS } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 
@@ -13,22 +9,18 @@ import { Input } from "@/components/base/input/input";
  * in settings after the fact.
  */
 export function StartMeetingForm({
-  subjectKind,
+  subjectKind: _subjectKind,
   subjectName,
   onStart,
   submitLabel = "Start tracking",
 }: {
   subjectKind: MeetingSubjectKind;
   subjectName: string;
-  onStart: (
-    rhythm: MeetingRhythm,
-    name?: string
-  ) => void;
+  onStart: (rhythm: MeetingRhythm, name?: string) => void;
   submitLabel?: string;
 }) {
   const [name, setName] = useState("");
   const [rhythm, setRhythm] = useState<MeetingRhythm>("weekly");
-  const label = MEETING_LABEL[subjectKind];
   const firstName = subjectName.split(" ")[0] ?? subjectName;
 
   return (
@@ -36,12 +28,8 @@ export function StartMeetingForm({
       <Input
         size="md"
         label="What to call it"
-        placeholder={
-          subjectKind === "person"
-            ? `Weekly 1:1, career check-in…`
-            : `${label} with ${firstName}…`
-        }
-        hint="Optional — left blank it uses the rhythm and their name."
+        placeholder="Staff meeting, weekly sync…"
+        hint={`Rename if this isn’t just a generic meeting with ${firstName}.`}
         value={name}
         onChange={setName}
       />
@@ -69,9 +57,7 @@ export function StartMeetingForm({
       <Button
         size="md"
         className="w-full"
-        onClick={() =>
-          onStart(rhythm, name.trim() || undefined)
-        }
+        onClick={() => onStart(rhythm, name.trim() || undefined)}
       >
         {submitLabel}
       </Button>

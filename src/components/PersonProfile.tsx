@@ -184,7 +184,7 @@ export function PersonProfile({
             )}
             <div className="entity-header-secondary mt-1 text-caption text-quaternary">
               {nextSession &&
-                `Next ${isLeadUp ? "check-in" : "1:1"} ${nextSession}`}
+                `Next meeting ${nextSession}`}
               {nextSession && lastSession && " · "}
               {lastSession && `Last ${lastSession.date}`}
             </div>
