@@ -22,7 +22,6 @@ import {
   formatCountdown,
   meetingSubjectName,
   meetingTitle,
-  meetingsFor,
   readinessOf,
 } from "../lib/readiness";
 import { looseTopics, topicsFor } from "../lib/topics";
@@ -56,16 +55,12 @@ export function MeetingProfile({
   const managers = useStore((s) => s.managers);
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
-  const meetings = useStore((s) => s.meetings);
   const section = useStore((s) => s.section);
   const setSection = useStore((s) => s.setSection);
   const openSession = useStore((s) => s.openSession);
   const updateMeeting = useStore((s) => s.updateMeeting);
   const untrackMeeting = useStore((s) => s.untrackMeeting);
   const clearSelection = useStore((s) => s.clearSelection);
-  const selectPerson = useStore((s) => s.selectPerson);
-  const selectTeam = useStore((s) => s.selectTeam);
-  const selectManager = useStore((s) => s.selectManager);
   // Escape closed every other entity panel and not this one.
   useDismiss(() => clearSelection());
 
@@ -99,11 +94,6 @@ export function MeetingProfile({
   const openCount = mine.filter((t) => t.status === "open").length;
   const loose = looseTopics(topics, sessions, meeting.id);
   const sessionCount = sessions.filter((s) => s.meetingId === meeting.id).length;
-  const siblings = meetingsFor(
-    meetings,
-    meeting.subjectKind,
-    meeting.subjectId
-  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -117,27 +107,9 @@ export function MeetingProfile({
           <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
           <span className="text-caption text-quaternary">
             {RHYTHM_LABEL[meeting.rhythm]}
+            {subjectName && ` · with ${subjectName}`}
             {` · ${formatCountdown(readiness)}`}
           </span>
-          {subjectName && (
-            <Button
-              size="sm"
-              color="link-gray"
-              className="min-w-0"
-              onClick={() => {
-                const section = "profile";
-                if (meeting.subjectKind === "person") {
-                  selectPerson(meeting.subjectId, section);
-                } else if (meeting.subjectKind === "team") {
-                  selectTeam(meeting.subjectId, section);
-                } else {
-                  selectManager(meeting.subjectId, section);
-                }
-              }}
-            >
-              With {subjectName}
-            </Button>
-          )}
         </div>
         {loose.length > 0 && (
           <p className="mt-1 text-caption font-medium text-amber-700 dark:text-amber-500">
@@ -163,8 +135,6 @@ export function MeetingProfile({
               onSelectWeek={onSelectWeek}
               onCloseNotes={closeNotes}
               onOpenSession={openSession}
-              siblingMeetings={siblings}
-              subjectName={subjectName}
             />
           </div>
         )}
@@ -200,20 +170,9 @@ export function MeetingProfile({
           <MeetingSettings
             meeting={meeting}
             title={title}
-            subjectName={subjectName}
             unnamedFallback={subjectName ? `Meeting · ${subjectName}` : "Meeting"}
             sessionCount={sessionCount}
             pad={pad}
-            onOpenSubject={() => {
-              const section = "profile";
-              if (meeting.subjectKind === "person") {
-                selectPerson(meeting.subjectId, section);
-              } else if (meeting.subjectKind === "team") {
-                selectTeam(meeting.subjectId, section);
-              } else {
-                selectManager(meeting.subjectId, section);
-              }
-            }}
             onChange={(patch) => updateMeeting(meeting.id, patch)}
             onDelete={async () => {
               if (
@@ -237,37 +196,25 @@ export function MeetingProfile({
 function MeetingSettings({
   meeting,
   title,
-  subjectName,
   unnamedFallback,
   sessionCount,
   pad,
   onChange,
   onDelete,
-  onOpenSubject,
 }: {
   meeting: TrackedMeeting;
   title: string;
-  subjectName?: string;
   unnamedFallback: string;
   sessionCount: number;
   pad: string;
   onChange: (patch: Partial<Omit<TrackedMeeting, "id">>) => void;
   onDelete: () => void;
-  onOpenSubject: () => void;
 }) {
   const [name, setName] = useState(meeting.name ?? "");
   const setCurriculum = useStore((s) => s.setCurriculum);
 
   return (
     <div className={`flex flex-col gap-6 ${pad}`}>
-      {subjectName && (
-        <section className="space-y-2">
-          <SectionTitle>Who it's with</SectionTitle>
-          <Button size="sm" color="secondary" onClick={onOpenSubject}>
-            Open {subjectName}
-          </Button>
-        </section>
-      )}
       <section className="space-y-2.5">
         <SectionTitle>What it's called</SectionTitle>
         <Input

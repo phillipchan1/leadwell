@@ -41,8 +41,6 @@ export function MeetingPlanner({
   onSelectWeek,
   onCloseNotes,
   onOpenSession,
-  siblingMeetings,
-  subjectName,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
@@ -50,9 +48,6 @@ export function MeetingPlanner({
   onSelectWeek: (slotKey: string, slot: Slot) => void;
   onCloseNotes: () => void;
   onOpenSession?: (sessionId: string) => void;
-  /** Other meetings with the same subject — enables Move to meeting. */
-  siblingMeetings?: TrackedMeeting[];
-  subjectName?: string;
 }) {
   const sessions = useStore((s) => s.sessions);
   const addSession = useStore((s) => s.addSession);
@@ -92,8 +87,6 @@ export function MeetingPlanner({
         selectedSlotKey={selectedSlotKey}
         onSelectWeek={openWeek}
         ahead={aheadForHorizon(horizon)}
-        siblingMeetings={siblingMeetings}
-        subjectName={subjectName}
       />
     ) : (
       <MeetingCalendar

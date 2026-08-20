@@ -370,11 +370,6 @@ type Store = PersistedData &
       id: string,
       direction: -1 | 1
     ) => { index: number; total: number } | null;
-    /**
-     * Move a topic onto another meeting with the same subject. Clears
-     * occurrence/curriculum placement and lands it in the destination backlog.
-     */
-    reassignTopicToMeeting: (id: string, meetingId: string) => void;
     // tracked meetings — the unit readiness is measured against
     /**
      * Opt in to being ready for a meeting with this subject. Idempotent — it
@@ -1546,41 +1541,6 @@ export const useStore = create<Store>((set, get) => ({
       ),
     }));
     return { index: to, total: siblings.length };
-  },
-  reassignTopicToMeeting: (id, meetingId) => {
-    const topic = get().topics.find((t) => t.id === id);
-    if (!topic || topic.meetingId === meetingId) return;
-    const source = get().meetings.find((m) => m.id === topic.meetingId);
-    const dest = get().meetings.find((m) => m.id === meetingId);
-    if (
-      !source ||
-      !dest ||
-      source.subjectKind !== dest.subjectKind ||
-      source.subjectId !== dest.subjectId
-    ) {
-      return;
-    }
-    set((s) => {
-      const last = s.topics
-        .filter((t) => t.meetingId === meetingId)
-        .reduce((max, t) => Math.max(max, t.order), -1);
-      return {
-        topics: s.topics.map((t) =>
-          t.id === id
-            ? {
-                ...t,
-                meetingId,
-                status: "open" as const,
-                closedOn: undefined,
-                lane: "backlog" as const,
-                sessionId: undefined,
-                slotId: undefined,
-                order: last + 1,
-              }
-            : t
-        ),
-      };
-    });
   },
 
   trackMeeting: (subjectKind, subjectId, rhythm, patch) => {

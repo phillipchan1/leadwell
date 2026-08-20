@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CurriculumSlot, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useCardDrag } from "@/hooks/use-card-drag";
@@ -18,24 +18,24 @@ import {
   type WeekCell,
   type WeekColumn,
 } from "../lib/topics";
-import { MEETING_LABEL, meetingTitle, todayISO } from "../lib/readiness";
+import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
 import { deleteWithUndo } from "../lib/undo";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
-import { DotsGrid, DotsVertical } from "@untitledui/icons";
+import { DotsGrid, X } from "@untitledui/icons";
 import {
   useReorderableRow,
   type MoveResult,
 } from "@/hooks/use-reorderable-row";
-import { useMenu } from "@/hooks/use-menu";
 import { announce } from "@/lib/announce";
 import { MOD_LABEL } from "@/lib/keys";
 import { cx } from "@/utils/cx";
 
 /**
- * Curriculum scaffolder — backlog on top, schedule below. Both stay mounted so
+ * Curriculum scaffolder — ideas on top, schedule below. Both stay mounted so
  * drag-and-drop works without switching views.
  */
 
@@ -58,8 +58,6 @@ type CardHandlers = {
   curriculum: CurriculumSlot[];
   moveGroups: MoveGroup[];
   handleProps: ReturnType<typeof useCardDrag>["handleProps"];
-  siblingMeetings: TrackedMeeting[];
-  subjectName?: string;
   onText: (id: string, text: string) => void;
   onMove: (id: string, key: string) => void;
   onReorder: (id: string, direction: -1 | 1) => MoveResult;
@@ -68,7 +66,6 @@ type CardHandlers = {
   onAddTag?: (label: string) => string | undefined;
   onRoll: (topic: Topic) => void;
   onBacklog: (id: string) => void;
-  onReassign: (id: string, meetingId: string) => void;
   onDelete: (topic: Topic) => void;
 };
 
@@ -78,16 +75,12 @@ export function TopicBoard({
   selectedSlotKey,
   onSelectWeek,
   ahead,
-  siblingMeetings,
-  subjectName,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
   ahead?: number;
-  siblingMeetings?: TrackedMeeting[];
-  subjectName?: string;
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
@@ -99,7 +92,6 @@ export function TopicBoard({
   const deleteTopic = useStore((s) => s.deleteTopic);
   const restoreTopic = useStore((s) => s.restoreTopic);
   const moveTopic = useStore((s) => s.moveTopic);
-  const reassignTopicToMeeting = useStore((s) => s.reassignTopicToMeeting);
   const addSession = useStore((s) => s.addSession);
   const setCurriculum = useStore((s) => s.setCurriculum);
 
@@ -138,9 +130,6 @@ export function TopicBoard({
     (topicId: string, key: string) => {
       const target = parseColumnKey(key);
       switch (target.kind) {
-        case "done":
-          coverTopic(topicId, true);
-          return;
         case "lane":
           placeTopic(topicId, { lane: target.lane, slotId: target.slotId });
           return;
@@ -160,7 +149,7 @@ export function TopicBoard({
         }
       }
     },
-    [addSession, coverTopic, meeting.id, placeTopic]
+    [addSession, meeting.id, placeTopic]
   );
 
   const { drag, columnRef, handleProps } = useCardDrag(place);
@@ -184,7 +173,7 @@ export function TopicBoard({
 
   const moveGroups: MoveGroup[] = [
     {
-      label: "Backlog",
+      label: "Ideas",
       options: layout.bucket.map((g) => ({ key: g.key, label: g.label })),
     },
     ...layout.weeks.map((week) => ({
@@ -194,18 +183,12 @@ export function TopicBoard({
         label: c.label ? `${week.label} · ${c.label}` : week.label,
       })),
     })),
-    {
-      label: "Done",
-      options: [{ key: "done", label: "Done" }],
-    },
   ];
 
   const cardProps: CardHandlers = {
     curriculum,
     moveGroups,
     handleProps,
-    siblingMeetings: (siblingMeetings ?? []).filter((m) => m.id !== meeting.id),
-    subjectName,
     onText: (id, text) => updateTopic(id, { text }),
     onMove: place,
     onReorder: (id, dir) => moveTopic(id, dir),
@@ -220,7 +203,6 @@ export function TopicBoard({
     },
     onRoll: roll,
     onBacklog: (id) => placeTopic(id, { lane: "backlog" }),
-    onReassign: (id, meetingId) => reassignTopicToMeeting(id, meetingId),
     onDelete: removeTopic,
   };
 
@@ -248,7 +230,7 @@ export function TopicBoard({
         </div>
       )}
 
-      <BacklogPanel
+      <IdeasPanel
         direction={direction}
         curriculum={curriculum}
         groups={ideaGroups}
@@ -273,26 +255,14 @@ export function TopicBoard({
         <BalanceStrip balance={balance} curriculum={curriculum} />
       )}
 
-      <div className="space-y-1.5">
-        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
-          Upcoming
-        </span>
-        <ScheduleGrid
-          weeks={layout.weeks}
-          curriculum={curriculum}
-          selectedSlotKey={selectedSlotKey}
-          drag={drag}
-          columnRef={columnRef}
-          cardProps={cardProps}
-          onSelectWeek={onSelectWeek}
-        />
-      </div>
-
-      <DonePanel
-        topics={layout.done}
+      <ScheduleGrid
+        weeks={layout.weeks}
+        curriculum={curriculum}
+        selectedSlotKey={selectedSlotKey}
         drag={drag}
         columnRef={columnRef}
         cardProps={cardProps}
+        onSelectWeek={onSelectWeek}
       />
 
       {drag && dragged && (
@@ -655,7 +625,7 @@ function GridCell({
   );
 }
 
-function BacklogPanel({
+function IdeasPanel({
   direction,
   curriculum,
   groups,
@@ -737,7 +707,7 @@ function BacklogPanel({
     <div className="rounded-xl border border-secondary bg-stone-50/40 dark:bg-stone-950/30">
       <div className="flex items-baseline justify-between gap-2 border-b border-secondary px-3 py-2">
         <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">
-          Backlog
+          Ideas
         </span>
         <span className="text-caption tabular-nums text-quaternary">
           {ideaCount} unscheduled
@@ -866,9 +836,9 @@ function BacklogPanel({
           <p className="py-6 text-center text-sm text-quaternary">
             {ideaCount === 0
               ? drag
-                ? "Drop here to return to the backlog."
-                : "Nothing in the backlog yet — capture something above."
-              : "No topics match this filter."}
+                ? "Drop here to return to ideas."
+                : "Nothing in the bucket yet — capture something above."
+              : "No ideas match this filter."}
           </p>
         )}
         {listGroups.map(({ group, topics: list }) => (
@@ -881,7 +851,7 @@ function BacklogPanel({
                 "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
             )}
           >
-            {filter === "all" && group.label !== "Ideas" && group.label !== "Backlog" && (
+            {filter === "all" && group.label !== "Ideas" && (
               <p className="mb-1.5 text-caption font-semibold tracking-wide text-quaternary uppercase">
                 {group.label}
               </p>
@@ -895,7 +865,7 @@ function BacklogPanel({
                   columnKey={group.key}
                   past={false}
                   inSlot={false}
-                  covered={t.status !== "open"}
+                  covered={false}
                   isDragging={drag?.id === t.id}
                   showTag
                   showMove
@@ -943,7 +913,7 @@ function BacklogPanel({
                   columnKey={parked.key}
                   past={false}
                   inSlot={false}
-                  covered={t.status !== "open"}
+                  covered={false}
                   isDragging={drag?.id === t.id}
                   showTag
                   showMove
@@ -959,81 +929,11 @@ function BacklogPanel({
   );
 }
 
-function DonePanel({
-  topics,
-  drag,
-  columnRef,
-  cardProps,
-}: {
-  topics: Topic[];
-  drag: ReturnType<typeof useCardDrag>["drag"];
-  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
-  cardProps: CardHandlers;
-}) {
-  const [open, setOpen] = useState(false);
-  const active = drag?.over === "done";
-
-  return (
-    <div
-      ref={columnRef("done")}
-      className={cx(
-        "rounded-xl border border-secondary px-3 py-2",
-        active && "ring-2 ring-teal-400 dark:ring-teal-600"
-      )}
-    >
-      <button
-        type="button"
-        className="flex w-full items-baseline justify-between py-1 text-left"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
-          Done
-        </span>
-        <span className="text-caption tabular-nums text-quaternary">
-          {topics.length}
-        </span>
-      </button>
-      {open && (
-        <div className="mt-1.5">
-          {topics.length === 0 && !drag ? (
-            <p className="py-2 text-center text-caption text-quaternary">
-              Check a topic to park it here.
-            </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {topics.map((t) => (
-                <TopicCard
-                  key={t.id}
-                  topic={t}
-                  columnKey="done"
-                  past={false}
-                  inSlot
-                  covered
-                  isDragging={drag?.id === t.id}
-                  showTag
-                  showMove
-                  {...cardProps}
-                />
-              ))}
-            </ul>
-          )}
-          {drag && topics.length === 0 && (
-            <p className="py-2 text-center text-caption text-quaternary">
-              Drop to mark done
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TopicCard({
   topic,
   columnKey,
   past,
-  inSlot: _inSlot,
+  inSlot,
   covered,
   isDragging,
   compact,
@@ -1042,8 +942,6 @@ function TopicCard({
   curriculum,
   moveGroups,
   handleProps,
-  siblingMeetings,
-  subjectName,
   onText,
   onMove,
   onReorder,
@@ -1052,7 +950,6 @@ function TopicCard({
   onAddTag,
   onRoll,
   onBacklog,
-  onReassign,
   onDelete,
 }: {
   topic: Topic;
@@ -1069,27 +966,11 @@ function TopicCard({
   const name = topic.text || "topic";
   const [newTagOpen, setNewTagOpen] = useState(false);
   const [newTagLabel, setNewTagLabel] = useState("");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [reassignOpen, setReassignOpen] = useState(false);
-  const { triggerProps, menuProps, close } = useMenu(menuOpen, setMenuOpen);
-  useEffect(() => {
-    if (!menuOpen) {
-      setMoveOpen(false);
-      setReassignOpen(false);
-    }
-  }, [menuOpen]);
   const { rowProps, handleProps: keyHandleProps } = useReorderableRow({
     label: `“${name}”`,
     onMove: (dir) => onReorder(topic.id, dir),
     onDelete: () => onDelete(topic),
   });
-
-  const closeMenu = (restore = true) => {
-    setMoveOpen(false);
-    setReassignOpen(false);
-    close(restore);
-  };
 
   return (
     <li
@@ -1216,166 +1097,60 @@ function TopicCard({
           )}
         </div>
 
-        <Checkbox
-          size="sm"
-          aria-label={covered ? `Done “${name}”` : `Mark “${name}” done`}
-          isSelected={covered}
-          onChange={(selected) => onCover(topic.id, selected)}
-          className="mt-0.5 shrink-0"
-        />
+        {inSlot ? (
+          <Checkbox
+            size="sm"
+            aria-label={`Covered "${name}"`}
+            isSelected={covered}
+            onChange={(selected) => onCover(topic.id, selected)}
+            className="mt-0.5 shrink-0"
+          />
+        ) : null}
 
-        {showMove && (
-          <div className="relative shrink-0">
-            <button
-              {...triggerProps}
-              type="button"
-              aria-label={`Actions for “${name}”`}
-              title="Topic actions"
-              onClick={() => setMenuOpen((v) => !v)}
-              className={cx(
-                "flex shrink-0 items-center justify-center rounded text-stone-400 transition hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-300",
-                "opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100",
-                menuOpen && "opacity-100",
-                compact ? "size-6" : "size-8 touch:size-11"
-              )}
-            >
-              <DotsVertical className={compact ? "size-3.5" : "size-4"} />
-            </button>
-            {menuOpen && (
-              <div
-                {...menuProps}
-                aria-label={`Actions for “${name}”`}
-                className="absolute right-0 z-50 mt-1 max-h-[min(20rem,50vh)] w-56 overflow-y-auto rounded-xl border border-stone-200 bg-primary py-1 shadow-xl dark:border-stone-700"
-              >
-                {reassignOpen ? (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => setReassignOpen(false)}
-                      className="flex min-h-11 w-full items-center px-3 text-left text-caption font-semibold text-quaternary"
-                    >
-                      ← Meetings
-                    </button>
-                    {siblingMeetings.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          onReassign(topic.id, m.id);
-                          announce(
-                            `Moved “${name}” to ${meetingTitle(m, subjectName)}.`
-                          );
-                          closeMenu(false);
-                        }}
-                        className="flex min-h-11 w-full items-center px-3 text-left text-sm text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-800"
-                      >
-                        {meetingTitle(m, subjectName)}
-                      </button>
-                    ))}
-                  </>
-                ) : moveOpen ? (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => setMoveOpen(false)}
-                      className="flex min-h-11 w-full items-center px-3 text-left text-caption font-semibold text-quaternary"
-                    >
-                      ← Schedule
-                    </button>
-                    {moveGroups.map((g) => (
-                      <div key={g.label}>
-                        <p className="px-3 pt-2 pb-1 text-caption font-semibold tracking-wide text-quaternary uppercase">
-                          {g.label}
-                        </p>
-                        {g.options.map((o) => (
-                          <button
-                            key={o.key}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              onMove(topic.id, o.key);
-                              closeMenu(false);
-                            }}
-                            className={cx(
-                              "flex min-h-11 w-full items-center px-3 text-left text-sm hover:bg-stone-50 dark:hover:bg-stone-800",
-                              o.key === columnKey
-                                ? "font-medium text-teal-700 dark:text-teal-400"
-                                : "text-stone-700 dark:text-stone-200"
-                            )}
-                          >
-                            {o.label}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </>
-                ) : (
-                  <>
-                    {past && !covered && (
-                      <>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onRoll(topic);
-                            closeMenu(false);
-                          }}
-                          className="flex min-h-11 w-full items-center px-3 text-left text-sm text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-800"
-                        >
-                          → Next week
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() => {
-                            onBacklog(topic.id);
-                            closeMenu(false);
-                          }}
-                          className="flex min-h-11 w-full items-center px-3 text-left text-sm text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-800"
-                        >
-                          Back to backlog
-                        </button>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => setMoveOpen(true)}
-                      className="flex min-h-11 w-full items-center px-3 text-left text-sm text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-800"
-                    >
-                      Move to…
-                    </button>
-                    {siblingMeetings.length > 0 && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => setReassignOpen(true)}
-                        className="flex min-h-11 w-full items-center px-3 text-left text-sm text-stone-700 hover:bg-stone-50 dark:text-stone-200 dark:hover:bg-stone-800"
-                      >
-                        Move to meeting…
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        closeMenu(false);
-                        onDelete(topic);
-                      }}
-                      className="flex min-h-11 w-full items-center px-3 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        <ButtonUtility
+          size="xs"
+          color="tertiary"
+          icon={X}
+          tooltip="Delete topic"
+          className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+          onClick={() => onDelete(topic)}
+        />
       </div>
+
+      {past && !covered && !compact && (
+        <div className="flex flex-wrap items-center gap-1 border-t border-amber-200 px-2 py-1 touch:gap-2 dark:border-amber-900/70">
+          <Button size="sm" color="link-gray" onClick={() => onRoll(topic)}>
+            → Next week
+          </Button>
+          <Button size="sm" color="link-gray" onClick={() => onBacklog(topic.id)}>
+            Ideas
+          </Button>
+        </div>
+      )}
+
+      {showMove && (
+        <label className="flex items-center gap-1 border-t border-stone-100 px-2 py-1 dark:border-stone-800">
+          <span className="sr-only">Move "{topic.text || "topic"}" to</span>
+          <select
+            value={columnKey}
+            onChange={(e) => onMove(topic.id, e.target.value)}
+            className={cx(
+              "w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-quaternary outline-none",
+              compact ? "min-h-7 text-caption" : "min-h-8 text-caption touch:text-md"
+            )}
+          >
+            {moveGroups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.options.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+      )}
     </li>
   );
 }

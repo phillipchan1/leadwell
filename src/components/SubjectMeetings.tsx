@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
   ANCHOR_WEEKDAY_OPTIONS,
   RHYTHM_LABEL,
+  RHYTHM_OPTIONS,
   STATE_COLOR,
   STATE_LABEL,
   formatCountdown,
@@ -19,20 +20,23 @@ import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { StartMeetingForm } from "./StartMeetingForm";
 import { TrackerLink } from "./TrackerLink";
-import { Modal, TintBadge } from "./ui";
+import { TintBadge } from "./ui";
 import { Button } from "@/components/base/buttons/button";
-import { Expand01, Plus } from "@untitledui/icons";
-import { useRovingFocus } from "@/hooks/use-roving-focus";
-import { cx } from "@/utils/cx";
+import { Input } from "@/components/base/input/input";
+import { NativeSelect } from "@/components/base/select/select-native";
+import { Expand01 } from "@untitledui/icons";
 
-type WorkspaceView = "plan" | "history";
+/** Default tolerance offered when a meeting is switched to as-needed. */
+const DEFAULT_FLOOR_DAYS = 45;
 
 /**
  * Everything about the recurring meetings with one subject, in one mode.
  *
- * One meeting is active at a time. A compact switcher picks the room; Plan and
- * History live below it. Settings and identity editing live on the meeting's
- * own page — this surface is for planning and looking back.
+ * Topics and history used to be two tabs, which is a lie about how the work
+ * goes: you decide what to raise *while* reading what you said last time. Here
+ * they're one column per meeting — what's coming, then what happened — and a
+ * subject with two meetings gets two of these rather than one merged board,
+ * because a weekly sync and a quarterly review are different rooms.
  */
 export function SubjectMeetings({
   subjectKind,
@@ -53,44 +57,30 @@ export function SubjectMeetings({
   const createMeeting = useStore((s) => s.createMeeting);
   const openSession = useStore((s) => s.openSession);
   const [adding, setAdding] = useState(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
     if (focusSessionId) openSession(focusSessionId);
   }, [focusSessionId, openSession]);
 
-  const mine = useMemo(
-    () => meetingsFor(meetings, subjectKind, subjectId),
-    [meetings, subjectKind, subjectId]
-  );
+  const mine = meetingsFor(meetings, subjectKind, subjectId);
   const firstName = subjectName.split(" ")[0] ?? subjectName;
 
-  useEffect(() => {
-    if (!mine.length) {
-      setActiveId(null);
-      return;
-    }
-    if (!activeId || !mine.some((m) => m.id === activeId)) {
-      setActiveId(mine[0]!.id);
-    }
-  }, [mine, activeId]);
-
   const startMeeting = (rhythm: MeetingRhythm, name?: string) => {
-    const id =
-      mine.length === 0
-        ? trackMeeting(subjectKind, subjectId, rhythm, { name })
-        : createMeeting(subjectKind, subjectId, { rhythm, name });
-    setActiveId(id);
+    if (mine.length === 0) {
+      trackMeeting(subjectKind, subjectId, rhythm, { name });
+    } else {
+      createMeeting(subjectKind, subjectId, { rhythm, name });
+    }
     setAdding(false);
   };
-
-  const active = mine.find((m) => m.id === activeId) ?? mine[0] ?? null;
 
   if (!mine.length) {
     return (
       <div className="space-y-3">
         <div className="rounded-xl border border-dashed border-primary px-4 py-8 text-center">
-          <p className="text-sm text-quaternary">No meetings tracked yet.</p>
+          <p className="text-sm text-quaternary">
+            No meetings tracked yet.
+          </p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-quaternary">
             Same as a staff meeting: name it, plan topics, write it up. Add as
             many as you actually run with {firstName}.
@@ -109,179 +99,82 @@ export function SubjectMeetings({
   }
 
   return (
-    <div className="space-y-4">
-      <MeetingSwitcher
-        meetings={mine}
-        subjectName={subjectName}
-        activeId={active?.id ?? null}
-        onSelect={setActiveId}
-        onAdd={() => setAdding(true)}
-      />
-
-      {active && (
-        <FocusedMeeting
-          meeting={active}
+    <div className="space-y-6">
+      {mine.map((meeting) => (
+        <MeetingBlock
+          key={meeting.id}
+          meeting={meeting}
           subjectName={subjectName}
           direction={direction}
-          siblingMeetings={mine}
           onOpenSession={openSession}
         />
-      )}
+      ))}
 
-      <div className="border-t border-stone-100 pt-3 dark:border-stone-800">
-        <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
-      </div>
-
-      {adding && (
-        <Modal
-          title="Another meeting"
-          subtitle="A separate gathering — its own name, topics and history."
-          onClose={() => setAdding(false)}
-        >
+      {adding ? (
+        <div className="rounded-xl border border-secondary bg-stone-50/60 p-4 dark:bg-stone-950/40">
+          <p className="mb-3 text-sm font-medium text-stone-700 dark:text-stone-200">
+            Another meeting
+          </p>
+          <p className="mb-3 text-xs text-quaternary">
+            A separate gathering — its own name, topics and history.
+          </p>
           <StartMeetingForm
             subjectKind={subjectKind}
             subjectName={subjectName}
             onStart={startMeeting}
             submitLabel="Add meeting"
           />
-        </Modal>
+          <Button
+            size="sm"
+            color="link-gray"
+            className="mt-2"
+            onClick={() => setAdding(false)}
+          >
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
+          <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
+          <Button
+            size="sm"
+            color="link-gray"
+            className="shrink-0"
+            onClick={() => setAdding(true)}
+          >
+            + Add meeting
+          </Button>
+        </div>
       )}
     </div>
   );
 }
 
-function MeetingSwitcher({
-  meetings,
-  subjectName,
-  activeId,
-  onSelect,
-  onAdd,
-}: {
-  meetings: TrackedMeeting[];
-  subjectName: string;
-  activeId: string | null;
-  onSelect: (id: string) => void;
-  onAdd: () => void;
-}) {
-  const sessions = useStore((s) => s.sessions);
-  const topics = useStore((s) => s.topics);
-  const allMeetings = useStore((s) => s.meetings);
-  const roving = useRovingFocus();
-  const listId = useId();
-
-  if (meetings.length === 1) {
-    return (
-      <div className="flex items-center justify-end">
-        <Button
-          size="sm"
-          color="link-gray"
-          iconLeading={Plus}
-          className="shrink-0"
-          onClick={onAdd}
-        >
-          Add meeting
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
-          Meetings
-        </span>
-        <Button
-          size="sm"
-          color="link-gray"
-          iconLeading={Plus}
-          className="shrink-0"
-          onClick={onAdd}
-        >
-          Add
-        </Button>
-      </div>
-      <div
-        {...roving.groupProps}
-        role="tablist"
-        aria-label={`Meetings with ${subjectName}`}
-        className="scroll-contain -mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-      >
-        {meetings.map((meeting) => {
-          const readiness = readinessOf(meeting, {
-            meetings: allMeetings,
-            sessions,
-            topics,
-          });
-          const color = STATE_COLOR[readiness.state];
-          const openCount = topicsFor(topics, meeting.id).filter(
-            (t) => t.status === "open"
-          ).length;
-          const selected = meeting.id === activeId;
-          const title = meetingTitle(meeting, subjectName);
-
-          return (
-            <button
-              key={meeting.id}
-              type="button"
-              role="tab"
-              id={`${listId}-tab-${meeting.id}`}
-              aria-selected={selected}
-              {...roving.itemProps(selected)}
-              onClick={() => onSelect(meeting.id)}
-              className={cx(
-                "flex min-w-[10.5rem] max-w-[14rem] shrink-0 flex-col gap-1 rounded-xl border px-3 py-2.5 text-left transition",
-                "touch:min-h-11",
-                selected
-                  ? "border-teal-500 bg-teal-50/80 shadow-sm ring-1 ring-teal-500/30 dark:border-teal-600 dark:bg-teal-950/40 dark:ring-teal-600/40"
-                  : "border-secondary bg-primary hover:border-teal-400/60 hover:bg-stone-50 dark:hover:bg-stone-900/40"
-              )}
-            >
-              <span className="truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
-                {title}
-              </span>
-              <span className="flex flex-wrap items-center gap-1.5">
-                <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
-                <span className="text-caption tabular-nums text-quaternary">
-                  {openCount} open
-                </span>
-              </span>
-              <span className="truncate text-caption text-quaternary">
-                {RHYTHM_LABEL[meeting.rhythm]}
-                {` · ${formatCountdown(readiness)}`}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function FocusedMeeting({
+/**
+ * One meeting: what it is and when it's next, what to raise, what was said.
+ */
+function MeetingBlock({
   meeting,
   subjectName,
   direction,
-  siblingMeetings,
   onOpenSession,
 }: {
   meeting: TrackedMeeting;
   subjectName: string;
   direction: BoardDirection;
-  siblingMeetings: TrackedMeeting[];
   onOpenSession: (id: string) => void;
 }) {
-  const { sessions, topics, meetings, selectMeeting } = useStore();
+  const { sessions, topics, meetings, updateMeeting, selectMeeting } =
+    useStore();
+
   const readiness = readinessOf(meeting, { meetings, sessions, topics });
   const color = STATE_COLOR[readiness.state];
   const openCount = topicsFor(topics, meeting.id).filter(
     (t) => t.status === "open"
   ).length;
-  const [view, setView] = useState<WorkspaceView>("plan");
   const [planSlotKey, setPlanSlotKey] = useState<string | null>(null);
   const [historySlotKey, setHistorySlotKey] = useState<string | null>(null);
-  const viewRoving = useRovingFocus();
-  const panelId = useId();
+  const [name, setName] = useState(meeting.name ?? "");
 
   const closePlanNotes = useCallback(() => setPlanSlotKey(null), []);
   const closeHistoryNotes = useCallback(() => setHistorySlotKey(null), []);
@@ -292,12 +185,6 @@ function FocusedMeeting({
     setPlanSlotKey(slotKey);
   }, []);
 
-  useEffect(() => {
-    setPlanSlotKey(null);
-    setHistorySlotKey(null);
-    setView("plan");
-  }, [meeting.id]);
-
   const weekday =
     meeting.anchorWeekday !== undefined
       ? ANCHOR_WEEKDAY_OPTIONS.find(
@@ -305,115 +192,97 @@ function FocusedMeeting({
         )?.label
       : undefined;
 
-  const title = meetingTitle(meeting, subjectName);
-
   return (
-    <section className="space-y-4">
-      <header className="space-y-2">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0 space-y-1">
-            <h3 className="truncate text-base font-semibold text-stone-800 dark:text-stone-100">
-              {title}
-            </h3>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
-              <span
-                className="font-mono text-caption tabular-nums"
-                style={{ color }}
-              >
-                {formatCountdown(readiness)}
-              </span>
-              <span className="text-caption text-quaternary">
-                {RHYTHM_LABEL[meeting.rhythm]}
-                {weekday ? ` · Usually ${weekday}` : ""}
-                {readiness.nextDate
-                  ? ` · next ${readiness.projected ? "~" : ""}${readiness.nextDate.slice(5).replace("-", "/")}`
-                  : ""}
-              </span>
-              {view === "plan" && (
-                <span className="text-caption tabular-nums text-quaternary">
-                  · {openCount} open
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Button
-              size="sm"
-              color="link-gray"
-              onClick={() => selectMeeting(meeting.id, "profile")}
-            >
-              Settings
-            </Button>
-            <Button
-              size="sm"
-              color="link-gray"
-              iconLeading={Expand01}
-              onClick={() => selectMeeting(meeting.id)}
-              aria-label="Open this meeting's own page"
-            >
-              <span className="sr-only">Open meeting page</span>
-            </Button>
-          </div>
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <Input
+            size="sm"
+            label="Name"
+            placeholder={meetingTitle({ ...meeting, name: undefined }, subjectName)}
+            hint="Name it like a gathering — Staff meeting, weekly sync — not the relationship."
+            value={name}
+            onChange={setName}
+            onBlur={() =>
+              updateMeeting(meeting.id, { name: name.trim() || undefined })
+            }
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                updateMeeting(meeting.id, { name: name.trim() || undefined });
+              }
+            }}
+          />
         </div>
-
-        <div
-          {...viewRoving.groupProps}
-          className="inline-flex shrink-0 gap-0.5 rounded-lg bg-tertiary p-0.5 touch:gap-2"
-          role="tablist"
-          aria-label={`${title} workspace`}
+        <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
+        <span
+          className="shrink-0 font-mono text-caption tabular-nums"
+          style={{ color }}
         >
-          {(
-            [
-              { id: "plan", label: "Plan" },
-              { id: "history", label: "History" },
-            ] as const
-          ).map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              id={`${panelId}-tab-${v.id}`}
-              aria-selected={view === v.id}
-              aria-controls={panelId}
-              {...viewRoving.itemProps(view === v.id)}
-              className={cx(
-                "rounded-md px-3 py-1 text-xs font-semibold transition",
-                "touch:min-h-11 touch:min-w-11",
-                view === v.id
-                  ? "bg-primary text-stone-800 shadow-sm dark:text-stone-100"
-                  : "text-quaternary hover:text-stone-700 dark:hover:text-stone-200"
-              )}
-              onClick={() => setView(v.id)}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-      </header>
+          {formatCountdown(readiness)}
+        </span>
+        <NativeSelect
+          size="sm"
+          className="w-auto shrink-0"
+          aria-label="How often this meeting happens"
+          value={meeting.rhythm}
+          onChange={(e) => {
+            const rhythm = e.target.value as MeetingRhythm;
+            updateMeeting(meeting.id, {
+              rhythm,
+              floorDays:
+                rhythm === "as_needed"
+                  ? (meeting.floorDays ?? DEFAULT_FLOOR_DAYS)
+                  : undefined,
+            });
+          }}
+          options={RHYTHM_OPTIONS.map((r) => ({
+            label: RHYTHM_LABEL[r],
+            value: r,
+          }))}
+        />
+        <span className="text-caption text-quaternary">
+          {weekday ? `Usually ${weekday}` : "Day not set"}
+          {readiness.nextDate
+            ? ` · next ${readiness.projected ? "~" : ""}${readiness.nextDate.slice(5).replace("-", "/")}`
+            : ""}
+        </span>
+        <Button
+          size="sm"
+          color="link-gray"
+          className="shrink-0"
+          iconLeading={Expand01}
+          onClick={() => selectMeeting(meeting.id)}
+          aria-label="Open this meeting's own page"
+        >
+          <span className="sr-only">Open meeting page</span>
+        </Button>
+      </div>
 
-      <div
-        id={panelId}
-        role="tabpanel"
-        aria-labelledby={`${panelId}-tab-${view}`}
-      >
-        {view === "plan" ? (
-          <MeetingPlanner
-            meeting={meeting}
-            direction={direction}
-            selectedSlotKey={planSlotKey}
-            onSelectWeek={onSelectWeek}
-            onCloseNotes={closePlanNotes}
-            onOpenSession={onOpenSession}
-            siblingMeetings={siblingMeetings}
-            subjectName={subjectName}
-          />
-        ) : (
-          <SessionHistoryTable
-            meetingId={meeting.id}
-            onOpen={openSessionNotes}
-          />
-        )}
+      <div className="space-y-1.5">
+        <div className="flex items-baseline justify-between">
+          <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+            Plan
+          </span>
+          <span className="text-caption tabular-nums text-stone-400 dark:text-stone-500">
+            {openCount} open
+          </span>
+        </div>
+        <MeetingPlanner
+          meeting={meeting}
+          direction={direction}
+          selectedSlotKey={planSlotKey}
+          onSelectWeek={onSelectWeek}
+          onCloseNotes={closePlanNotes}
+          onOpenSession={onOpenSession}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
+          History
+        </span>
+        <SessionHistoryTable meetingId={meeting.id} onOpen={openSessionNotes} />
       </div>
 
       {historySlotKey && (
