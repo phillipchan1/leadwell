@@ -13,6 +13,7 @@ import {
   readinessOf,
 } from "../lib/readiness";
 import { topicsFor } from "../lib/topics";
+import { cx } from "@/utils/cx";
 import { MeetingPlanner } from "./MeetingPlanner";
 import type { BoardDirection } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
@@ -24,7 +25,7 @@ import { TintBadge } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
-import { Expand01 } from "@untitledui/icons";
+import { Expand01, Settings01 } from "@untitledui/icons";
 
 /** Default tolerance offered when a meeting is switched to as-needed. */
 const DEFAULT_FLOOR_DAYS = 45;
@@ -53,10 +54,12 @@ export function SubjectMeetings({
   focusSessionId?: string;
 }) {
   const meetings = useStore((s) => s.meetings);
+  const topics = useStore((s) => s.topics);
   const trackMeeting = useStore((s) => s.trackMeeting);
   const createMeeting = useStore((s) => s.createMeeting);
   const openSession = useStore((s) => s.openSession);
   const [adding, setAdding] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {
     if (focusSessionId) openSession(focusSessionId);
@@ -98,17 +101,53 @@ export function SubjectMeetings({
     );
   }
 
+  /*
+   * One meeting at a time.
+   *
+   * Stacking every meeting fully expanded meant two meetings were two of
+   * everything — two name fields, two boards, two histories — inside a
+   * half-width peek. Nobody plans two gatherings at once; they plan one and
+   * want the other within reach.
+   */
+  const active = mine.find((m) => m.id === activeId) ?? mine[0];
+
   return (
-    <div className="space-y-6">
-      {mine.map((meeting) => (
-        <MeetingBlock
-          key={meeting.id}
-          meeting={meeting}
-          subjectName={subjectName}
-          direction={direction}
-          onOpenSession={openSession}
-        />
-      ))}
+    <div className="space-y-4">
+      {mine.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1">
+          {mine.map((m) => {
+            const open = topicsFor(topics, m.id).filter(
+              (t) => t.status === "open"
+            ).length;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setActiveId(m.id)}
+                className={cx(
+                  "rounded-lg px-2.5 py-1 text-xs font-medium transition",
+                  m.id === active.id
+                    ? "bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900"
+                    : "text-quaternary hover:bg-tertiary hover:text-stone-700 dark:hover:text-stone-200"
+                )}
+              >
+                {meetingTitle(m, subjectName)}
+                {open > 0 && (
+                  <span className="ml-1.5 tabular-nums opacity-70">{open}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <MeetingBlock
+        key={active.id}
+        meeting={active}
+        subjectName={subjectName}
+        direction={direction}
+        onOpenSession={openSession}
+      />
 
       {adding ? (
         <div className="rounded-xl border border-secondary bg-stone-50/60 p-4 dark:bg-stone-950/40">
@@ -175,6 +214,7 @@ function MeetingBlock({
   const [planSlotKey, setPlanSlotKey] = useState<string | null>(null);
   const [historySlotKey, setHistorySlotKey] = useState<string | null>(null);
   const [name, setName] = useState(meeting.name ?? "");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const closePlanNotes = useCallback(() => setPlanSlotKey(null), []);
   const closeHistoryNotes = useCallback(() => setHistorySlotKey(null), []);
@@ -194,26 +234,15 @@ function MeetingBlock({
 
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="min-w-0 flex-1">
-          <Input
-            size="sm"
-            label="Name"
-            placeholder={meetingTitle({ ...meeting, name: undefined }, subjectName)}
-            hint="Name it like a gathering — Staff meeting, weekly sync — not the relationship."
-            value={name}
-            onChange={setName}
-            onBlur={() =>
-              updateMeeting(meeting.id, { name: name.trim() || undefined })
-            }
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                updateMeeting(meeting.id, { name: name.trim() || undefined });
-              }
-            }}
-          />
-        </div>
+      {/*
+        The name and the rhythm are settings — decided once, then rarely touched
+        — and they were the first things on a planning surface every single
+        time. They sit behind the gear now; the heading carries the identity.
+      */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
+          {meetingTitle(meeting, subjectName)}
+        </h3>
         <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
         <span
           className="shrink-0 font-mono text-caption tabular-nums"
@@ -221,32 +250,23 @@ function MeetingBlock({
         >
           {formatCountdown(readiness)}
         </span>
-        <NativeSelect
-          size="sm"
-          className="w-auto shrink-0"
-          aria-label="How often this meeting happens"
-          value={meeting.rhythm}
-          onChange={(e) => {
-            const rhythm = e.target.value as MeetingRhythm;
-            updateMeeting(meeting.id, {
-              rhythm,
-              floorDays:
-                rhythm === "as_needed"
-                  ? (meeting.floorDays ?? DEFAULT_FLOOR_DAYS)
-                  : undefined,
-            });
-          }}
-          options={RHYTHM_OPTIONS.map((r) => ({
-            label: RHYTHM_LABEL[r],
-            value: r,
-          }))}
-        />
-        <span className="text-caption text-quaternary">
-          {weekday ? `Usually ${weekday}` : "Day not set"}
+        <span className="shrink-0 text-caption text-quaternary">
+          {RHYTHM_LABEL[meeting.rhythm]}
+          {weekday ? ` · ${weekday}` : ""}
           {readiness.nextDate
             ? ` · next ${readiness.projected ? "~" : ""}${readiness.nextDate.slice(5).replace("-", "/")}`
             : ""}
         </span>
+        <Button
+          size="sm"
+          color={settingsOpen ? "secondary" : "link-gray"}
+          className="shrink-0"
+          iconLeading={Settings01}
+          onClick={() => setSettingsOpen((v) => !v)}
+          aria-label="Meeting settings"
+        >
+          <span className="sr-only">Settings</span>
+        </Button>
         <Button
           size="sm"
           color="link-gray"
@@ -258,6 +278,53 @@ function MeetingBlock({
           <span className="sr-only">Open meeting page</span>
         </Button>
       </div>
+
+      {settingsOpen && (
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40">
+          <div className="min-w-[12rem] flex-1">
+            <Input
+              size="sm"
+              label="Name"
+              placeholder={meetingTitle(
+                { ...meeting, name: undefined },
+                subjectName
+              )}
+              hint="Name it like a gathering — Staff meeting, weekly sync — not the relationship."
+              value={name}
+              onChange={setName}
+              onBlur={() =>
+                updateMeeting(meeting.id, { name: name.trim() || undefined })
+              }
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  updateMeeting(meeting.id, { name: name.trim() || undefined });
+                }
+              }}
+            />
+          </div>
+          <NativeSelect
+            size="sm"
+            className="w-auto shrink-0"
+            aria-label="How often this meeting happens"
+            value={meeting.rhythm}
+            onChange={(e) => {
+              const rhythm = e.target.value as MeetingRhythm;
+              updateMeeting(meeting.id, {
+                rhythm,
+                floorDays:
+                  rhythm === "as_needed"
+                    ? (meeting.floorDays ?? DEFAULT_FLOOR_DAYS)
+                    : undefined,
+              });
+            }}
+            options={RHYTHM_OPTIONS.map((r) => ({
+              label: RHYTHM_LABEL[r],
+              value: r,
+            }))}
+          />
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <div className="flex items-baseline justify-between">

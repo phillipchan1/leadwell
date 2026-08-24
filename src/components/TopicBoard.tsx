@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import type { CurriculumSlot, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
@@ -309,44 +309,45 @@ function BalanceStrip({
   balance: ReturnType<typeof curriculumBalance>;
   curriculum: CurriculumSlot[];
 }) {
+  /*
+   * One line, not a row of tiles.
+   *
+   * Coverage is a background check — "am I training this team often enough" —
+   * and as four bordered cards it took as much vertical space and colour as the
+   * plan it was commenting on. It should be glanceable and then ignorable.
+   */
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5">
+      <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
+        Coverage
+      </span>
       {balance.map((b) => {
-        const thin = b.filled === 0;
-        const low = b.total > 0 && b.filled <= Math.floor(b.total / 3);
+        const low = b.filled === 0 || (b.total > 0 && b.filled <= Math.floor(b.total / 3));
         return (
-          <div
+          <span
             key={b.slot.id}
-            className={cx(
-              "flex min-w-[7rem] flex-1 items-center gap-2 rounded-lg border px-2.5 py-1.5",
-              thin
-                ? "border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/30"
-                : "border-secondary bg-stone-50/60 dark:bg-stone-950/40"
-            )}
+            className="inline-flex items-center gap-1.5 text-caption"
+            title={`${b.slot.label}: ${b.filled} of the next ${b.total} weeks`}
           >
             <span
               className={cx(
-                "size-2 shrink-0 rounded-full",
+                "size-1.5 shrink-0 rounded-full",
                 slotDotClass(curriculum, b.slot.id)
               )}
               aria-hidden
             />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-medium text-stone-700 dark:text-stone-200">
-                {b.slot.label}
-              </div>
-              <div
-                className={cx(
-                  "text-caption tabular-nums",
-                  low
-                    ? "text-amber-700 dark:text-amber-500"
-                    : "text-quaternary"
-                )}
-              >
-                {b.filled} of {b.total} weeks
-              </div>
-            </div>
-          </div>
+            <span className="text-quaternary">{b.slot.label}</span>
+            <span
+              className={cx(
+                "tabular-nums",
+                low
+                  ? "font-medium text-amber-700 dark:text-amber-500"
+                  : "text-quaternary opacity-70"
+              )}
+            >
+              {b.filled}/{b.total}
+            </span>
+          </span>
         );
       })}
     </div>
@@ -1010,6 +1011,7 @@ function TopicCard({
 } & CardHandlers) {
   const ref = useRef<HTMLLIElement>(null);
   const name = topic.text || "topic";
+  const down = useRef<{ x: number; y: number } | null>(null);
   const [newTagOpen, setNewTagOpen] = useState(false);
   const [newTagLabel, setNewTagLabel] = useState("");
   const { rowProps, handleProps: keyHandleProps } = useReorderableRow({
@@ -1017,6 +1019,29 @@ function TopicCard({
     onMove: (dir) => onReorder(topic.id, dir),
     onDelete: () => onDelete(topic),
   });
+
+  const grab = handleProps(topic.id, columnKey, ref);
+  /*
+   * Drag from anywhere on the card. A 24px dot is a target you have to aim for,
+   * and this board asks you to move things constantly. Controls opt out by tag
+   * so a checkbox tick stays a tick; a drag only begins past the slop threshold
+   * anyway, so the two never compete.
+   */
+  const cardGrab = {
+    ...grab,
+    onPointerDown: (e: ReactPointerEvent) => {
+      down.current = { x: e.clientX, y: e.clientY };
+      const el = e.target as HTMLElement | null;
+      if (
+        el?.closest(
+          'input, select, textarea, a, label, [role="checkbox"], button'
+        )
+      ) {
+        return;
+      }
+      grab.onPointerDown(e);
+    },
+  };
 
   return (
     <li
@@ -1033,8 +1058,9 @@ function TopicCard({
       )}
     >
       <div
+        {...cardGrab}
         className={cx(
-          "flex items-start gap-1 touch:gap-2",
+          "flex cursor-grab items-start gap-1 touch:gap-2 active:cursor-grabbing",
           compact ? "px-1.5 py-1" : "px-2 py-1.5"
         )}
       >
@@ -1136,7 +1162,7 @@ function TopicCard({
                 </label>
               )}
               {topic.carried > 1 && !covered && (
-                <span className="inline-block rounded bg-amber-100 px-1 py-px text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500">
+                <span className="text-caption text-amber-700 dark:text-amber-500">
                   pushed {topic.carried}×
                 </span>
               )}
@@ -1159,7 +1185,7 @@ function TopicCard({
           color="tertiary"
           icon={X}
           tooltip="Delete topic"
-          className="shrink-0 opacity-0 touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
+          className="absolute top-0.5 right-0.5 z-10 rounded-md bg-primary opacity-0 shadow-xs touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
           onClick={() => onDelete(topic)}
         />
       </div>
@@ -1175,8 +1201,14 @@ function TopicCard({
         </div>
       )}
 
+      {/*
+        "Move to…" is the keyboard and screen-reader path, so it cannot simply
+        be hidden — a display:none control leaves the tab order. It collapses
+        to nothing instead, and opens on hover, on focus, or on touch, where
+        there is no hover to rely on.
+      */}
       {showMove && (
-        <label className="flex items-center gap-1 border-t border-stone-100 px-2 py-1 dark:border-stone-800">
+        <label className="flex max-h-0 items-center gap-1 overflow-hidden border-stone-100 px-2 opacity-0 transition-all duration-150 touch:max-h-12 touch:border-t touch:py-1 touch:opacity-100 group-focus-within:max-h-12 group-focus-within:border-t group-focus-within:py-1 group-focus-within:opacity-100 group-hover:max-h-12 group-hover:border-t group-hover:py-1 group-hover:opacity-100 dark:border-stone-800">
           <span className="sr-only">Move "{topic.text || "topic"}" to</span>
           <select
             value={columnKey}
