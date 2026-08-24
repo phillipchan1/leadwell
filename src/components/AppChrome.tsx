@@ -1,11 +1,11 @@
 import { useState } from "react";
 import {
   AlertCircle,
-  BarChartSquare02,
   CalendarCheck01,
   Dataflow03,
   DotsVertical,
   Keyboard01,
+  Lightbulb02,
   Moon01,
   Rows03,
   Settings01,
@@ -21,24 +21,19 @@ import { cx } from "@/utils/cx";
 export const TABS: {
   id: Tab;
   label: string;
-  /** Shorter form for the bottom bar, where four labels share the width. */
+  /** Shorter form for the bottom bar, where three labels share the width. */
   short: string;
   icon: typeof Rows03;
 }[] = [
-  /* "Today" rather than "Overview": this is the screen the app opens on, and
-     what it actually answers is "what needs me now" — who's drifting, who I
-     haven't prayed for, what came and went unlogged. Naming it for the job
-     rather than the format is the whole of the Today/Now framing; the surface
-     itself already did the work. */
-  { id: "overview", label: "Today", short: "Today", icon: BarChartSquare02 },
   { id: "tree", label: "Org tree", short: "Tree", icon: Dataflow03 },
+  { id: "ideas", label: "Ideas", short: "Ideas", icon: Lightbulb02 },
   { id: "meetings", label: "Meetings", short: "Meetings", icon: CalendarCheck01 },
   { id: "table", label: "Table", short: "Table", icon: Table },
 ];
 
 /**
  * Primary navigation for phones. A top tab bar is the least thumb-reachable
- * zone on a handset, so below `lg` the same four destinations live here.
+ * zone on a handset, so below `lg` the same three destinations live here.
  */
 export function BottomNav() {
   const tab = useStore((s) => s.tab);

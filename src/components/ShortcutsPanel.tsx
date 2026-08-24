@@ -37,7 +37,7 @@ const GROUP_ORDER: ShortcutGroup[] = [
  */
 const STATIC: Record<string, Row[]> = {
   Navigation: [
-    { keys: "G then O / T / M / B / P", label: "Go to Overview, Tree, Meetings, Table or People" },
+    { keys: "G then T / M / B", label: "Go to Tree, Meetings or Table" },
     { keys: "Tab / ⇧Tab", label: "Move between controls" },
     { keys: "↵ or Space", label: "Open the focused row, card or button" },
     { keys: "Esc", label: "Close the open entity, dialog or menu" },

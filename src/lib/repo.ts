@@ -37,7 +37,11 @@ import type {
   Team,
   Topic,
   TrackedMeeting,
+  CoverageTarget,
   CurriculumSlot,
+  FollowUp,
+  Tag,
+  TopicPoint,
   TeamAction,
   TeamGoal,
   TeamNote,
@@ -57,8 +61,12 @@ export type PersistedData = {
   /** @deprecated Superseded by `topics`. Round-tripped, never read. */
   actions: Action[];
   meetings: TrackedMeeting[];
-  /** What there is to talk about, keyed by meeting. */
+  /** The workspace vocabulary topics are labelled with. */
+  tags: Tag[];
+  /** What there is to talk about. Unassigned topics are legal. */
   topics: Topic[];
+  /** Commitments that outlive a single occurrence. */
+  followUps: FollowUp[];
   sessions: Session[];
   goals: Goal[];
   notes: Note[];
@@ -76,6 +84,30 @@ export type PersistedData = {
 const nn = <T>(v: T | undefined | null): T | null => (v === undefined ? null : v);
 const opt = <T>(v: T | null | undefined): T | undefined =>
   v === null || v === undefined ? undefined : v;
+
+function parseCoverage(v: unknown): CoverageTarget[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v.filter(
+    (t): t is CoverageTarget =>
+      Boolean(t) &&
+      typeof (t as CoverageTarget).tagId === "string" &&
+      typeof (t as CoverageTarget).everyNOccurrences === "number"
+  );
+  return out.length ? out : undefined;
+}
+
+function parsePoints(v: unknown): TopicPoint[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out = v
+    .filter((p): p is TopicPoint => Boolean(p) && typeof (p as TopicPoint).text === "string")
+    .map((p) => ({ id: String(p.id), text: p.text, done: Boolean(p.done) }));
+  return out.length ? out : undefined;
+}
+
+/** Postgres text[] arrives as an array; anything else is a row we can't trust. */
+function strArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
 
 function parseCurriculum(v: unknown): CurriculumSlot[] | undefined {
   if (!Array.isArray(v) || v.length === 0) return undefined;
@@ -377,6 +409,7 @@ const map = {
       tracker_url: nn(m.trackerUrl),
       tracker_name: nn(m.trackerName),
       curriculum: m.curriculum?.length ? m.curriculum : null,
+      coverage_targets: m.coverageTargets?.length ? m.coverageTargets : null,
     }),
     fromRow: (r: Row): TrackedMeeting => ({
       id: r.id as string,
@@ -391,6 +424,7 @@ const map = {
       trackerUrl: opt(r.tracker_url as string | null),
       trackerName: opt(r.tracker_name as string | null),
       curriculum: parseCurriculum(r.curriculum),
+      coverageTargets: parseCoverage(r.coverage_targets),
     }),
   },
   topics: {
@@ -398,9 +432,15 @@ const map = {
     toRow: (u: string, t: Topic): Row => ({
       user_id: u,
       id: t.id,
-      meeting_id: t.meetingId,
+      meeting_id: nn(t.meetingId),
       text: t.text,
       detail: nn(t.detail),
+      tag_ids: t.tagIds,
+      urgent: Boolean(t.urgent),
+      points: t.points?.length ? t.points : null,
+      returned_on: nn(t.returnedOn),
+      returned_from_date: nn(t.returnedFromDate),
+      carried_from: t.carriedFrom,
       status: t.status,
       lane: t.lane,
       session_id: nn(t.sessionId),
@@ -413,9 +453,15 @@ const map = {
     }),
     fromRow: (r: Row): Topic => ({
       id: r.id as string,
-      meetingId: r.meeting_id as string,
+      meetingId: opt(r.meeting_id as string | null),
       text: r.text as string,
       detail: opt(r.detail as string | null),
+      tagIds: strArray(r.tag_ids),
+      urgent: r.urgent ? true : undefined,
+      points: parsePoints(r.points),
+      returnedOn: opt(r.returned_on as string | null),
+      returnedFromDate: opt(r.returned_from_date as string | null),
+      carriedFrom: strArray(r.carried_from),
       status: (r.status as Topic["status"]) ?? "open",
       lane: (r.lane as Topic["lane"]) ?? "backlog",
       sessionId: opt(r.session_id as string | null),
@@ -428,6 +474,50 @@ const map = {
       order: (r.sort_order as number) ?? 0,
     }),
   },
+  tags: {
+    table: "tags",
+    toRow: (u: string, t: Tag): Row => ({
+      user_id: u,
+      id: t.id,
+      label: t.label,
+      color: t.color,
+      sort_order: t.order,
+    }),
+    fromRow: (r: Row): Tag => ({
+      id: r.id as string,
+      label: (r.label as string) ?? "",
+      color: (r.color as number) ?? 0,
+      order: (r.sort_order as number) ?? 0,
+    }),
+  },
+  followUps: {
+    table: "follow_ups",
+    toRow: (u: string, f: FollowUp): Row => ({
+      user_id: u,
+      id: f.id,
+      subject_kind: f.subjectKind,
+      subject_id: f.subjectId,
+      meeting_id: nn(f.meetingId),
+      text: f.text,
+      status: f.status,
+      opened_on: f.openedOn,
+      closed_on: nn(f.closedOn),
+      source_session_id: nn(f.sourceSessionId),
+      sort_order: f.order,
+    }),
+    fromRow: (r: Row): FollowUp => ({
+      id: r.id as string,
+      subjectKind: r.subject_kind as FollowUp["subjectKind"],
+      subjectId: r.subject_id as string,
+      meetingId: opt(r.meeting_id as string | null),
+      text: (r.text as string) ?? "",
+      status: (r.status as FollowUp["status"]) ?? "open",
+      openedOn: (r.opened_on as string | null) ?? "",
+      closedOn: opt(r.closed_on as string | null),
+      sourceSessionId: opt(r.source_session_id as string | null),
+      order: (r.sort_order as number) ?? 0,
+    }),
+  },
   sessions: {
     // Still the one_on_ones table — it was always a meeting occurrence, it just
     // used to hardcode its subject. Migration 0007 backfills meeting_id.
@@ -437,6 +527,7 @@ const map = {
       id: o.id,
       meeting_id: o.meetingId,
       date: o.date,
+      uncovered: o.uncovered?.length ? o.uncovered : null,
       point: nn(o.point),
       notes: nn(o.notes),
       next_date: nn(o.nextDate),
@@ -450,6 +541,7 @@ const map = {
       notes: opt(r.notes as string | null),
       nextDate: opt(r.next_date as string | null),
       transcript: opt(r.transcript as string | null),
+      uncovered: strArray(r.uncovered).length ? strArray(r.uncovered) : undefined,
     }),
   },
   goals: {
@@ -653,7 +745,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     people,
     actions,
     meetings,
+    tags,
     topics,
+    followUps,
     sessions,
     goals,
     notes,
@@ -672,7 +766,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     grab("people"),
     grab("actions"),
     grab("meetings"),
+    grab("tags"),
     grab("topics"),
+    grab("follow_ups"),
     grab("one_on_ones"),
     grab("goals"),
     grab("notes"),
@@ -694,7 +790,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     people: people.map(map.people.fromRow),
     actions: actions.map(map.actions.fromRow),
     meetings: meetings.map(map.meetings.fromRow),
+    tags: tags.map(map.tags.fromRow).sort((a, b) => a.order - b.order),
     topics: topics.map(map.topics.fromRow).sort((a, b) => a.order - b.order),
+    followUps: followUps.map(map.followUps.fromRow).sort((a, b) => a.order - b.order),
     sessions: sessions.map(map.sessions.fromRow),
     goals: goals.map(map.goals.fromRow),
     notes: notes.map(map.notes.fromRow),

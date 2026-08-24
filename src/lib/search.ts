@@ -73,7 +73,12 @@ export type SearchKind =
 
 /** Where opening a hit goes. Mirrors `Selection` — the URL is still the truth. */
 export type SearchTarget = {
-  kind: EntityKind;
+  /**
+   * "ideas" is not an entity — it's the unscheduled backlog. A topic with no
+   * meeting has nothing to open *into*, and dropping it from search would hide
+   * exactly the items most likely to be searched for.
+   */
+  kind: EntityKind | "ideas";
   id: string;
   section?: string;
   /** Set for a write-up: opens the full-screen editor for that occurrence. */
@@ -326,12 +331,17 @@ export function buildDocs(src: SearchSource): SearchDoc[] {
       kind: "topic",
       group: GROUPS.topic,
       title: t.text,
-      context: [meetingLabel.get(t.meetingId), "Topic"]
+      context: [
+        t.meetingId ? meetingLabel.get(t.meetingId) : "Ideas",
+        "Topic",
+      ]
         .filter(Boolean)
         .join(" · "),
       body: t.detail,
       date: t.closedOn ?? t.createdOn,
-      target: { kind: "meeting", id: t.meetingId, section: "meetings" },
+      target: t.meetingId
+        ? { kind: "meeting", id: t.meetingId, section: "meetings" }
+        : { kind: "ideas", id: t.id },
     });
   }
 

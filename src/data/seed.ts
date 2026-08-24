@@ -5,8 +5,11 @@ import type {
   Team,
   Person,
   Action,
+  FollowUp,
+  Tag,
   Topic,
   TrackedMeeting,
+  CurriculumSlot,
   Session,
   Goal,
   Note,
@@ -405,17 +408,45 @@ export const seedActions: Action[] = [
  * absent: most of the men's team has no meeting and no decision, which is what
  * the undecided count is for.
  */
-const ONE_ON_ONE_SLOTS = [
-  { id: "cs-checkin", label: "Check-in" },
-  { id: "cs-work", label: "Work" },
-  { id: "cs-develop", label: "Develop" },
+/**
+ * A curriculum slot is structure; a tag is vocabulary. The slot points at the
+ * tag so anything placed there is labelled on arrival — the same wiring
+ * migration 0015 performs on real data.
+ */
+const tagIdFor = (label: string) =>
+  `tag-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+
+const ONE_ON_ONE_SLOTS: CurriculumSlot[] = [
+  { id: "cs-checkin", label: "Check-in", tagId: tagIdFor("Check-in"), minutes: 5 },
+  { id: "cs-work", label: "Work", tagId: tagIdFor("Work"), minutes: 15 },
+  { id: "cs-develop", label: "Develop", tagId: tagIdFor("Develop"), minutes: 10 },
 ];
 
-const STAFF_SLOTS = [
-  { id: "cs-prayer", label: "Prayer" },
-  { id: "cs-training", label: "Training" },
-  { id: "cs-discussion", label: "Discussion" },
+const STAFF_SLOTS: CurriculumSlot[] = [
+  { id: "cs-prayer", label: "Prayer", tagId: tagIdFor("Prayer"), minutes: 15 },
+  { id: "cs-training", label: "Training", tagId: tagIdFor("Training"), minutes: 20 },
+  {
+    id: "cs-discussion",
+    label: "Discussion",
+    tagId: tagIdFor("Discussion"),
+    minutes: 20,
+  },
 ];
+
+/** One tag per distinct slot label, workspace-wide. */
+export const seedTags: Tag[] = [...ONE_ON_ONE_SLOTS, ...STAFF_SLOTS].map(
+  (slot, i) => ({
+    id: slot.tagId as string,
+    label: slot.label,
+    color: i % 6,
+    order: i,
+  })
+);
+
+/** slotId → tagId, for labelling the seed topics the way the migration does. */
+const TAG_BY_SLOT = new Map(
+  [...ONE_ON_ONE_SLOTS, ...STAFF_SLOTS].map((s) => [s.id, s.tagId as string])
+);
 
 export const seedMeetings: TrackedMeeting[] = [
   {
@@ -500,7 +531,11 @@ export const seedMeetings: TrackedMeeting[] = [
  * `t-carried` has been pushed twice — between them a fresh account can see the
  * failure this feature exists to catch without having to reproduce it first.
  */
-export const seedTopics: Topic[] = [
+/** The literals below predate tags; the normaliser fills in what they lack. */
+type SeedTopic = Omit<Topic, "tagIds" | "carriedFrom"> &
+  Partial<Pick<Topic, "tagIds" | "carriedFrom">>;
+
+const rawTopics: SeedTopic[] = [
   // Sarah — a weekly 1:1 with a real backlog.
   {
     id: "t-1",
@@ -704,6 +739,23 @@ export const seedTopics: Topic[] = [
     order: 8,
   },
 ];
+
+/**
+ * Fill in what the literals above don't carry: a topic filling the Training
+ * slot was already saying "this is a training topic", so it gets that tag.
+ */
+export const seedTopics: Topic[] = rawTopics.map((t) => ({
+  ...t,
+  tagIds:
+    t.tagIds ??
+    (t.slotId && TAG_BY_SLOT.has(t.slotId)
+      ? [TAG_BY_SLOT.get(t.slotId) as string]
+      : []),
+  carriedFrom: t.carriedFrom ?? [],
+}));
+
+/** No seeded commitments — these are earned in a conversation, not shipped. */
+export const seedFollowUps: FollowUp[] = [];
 
 export const seedSessions: Session[] = [
   {

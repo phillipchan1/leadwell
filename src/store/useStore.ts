@@ -17,6 +17,7 @@ import type {
   Person,
   Team,
   TeamAction,
+  Tag,
   Topic,
   TopicLane,
   TrackedMeeting,
@@ -28,6 +29,15 @@ import type {
 } from "../types";
 import { storage } from "../lib/storage";
 import { todayISO, type HealthFilterValue } from "../lib/health";
+import type { ColumnTarget } from "../lib/topics";
+import {
+  applyReturns,
+  findMeeting,
+  findTag,
+  parseCapture,
+  reorderInto,
+  splitCaptureLines,
+} from "../lib/ideas";
 import type { PrayerFilterValue } from "../lib/prayer";
 import type { TreeMode } from "../lib/treeMode";
 import { isDescendant, personDomainId } from "../lib/teams";
@@ -44,6 +54,7 @@ import {
   capUp,
   seedActions,
   seedCapacities,
+  seedFollowUps,
   seedMeetings,
   seedDomains,
   seedGoals,
@@ -53,6 +64,7 @@ import {
   seedPrayers,
   seedSessions,
   seedPeople,
+  seedTags,
   seedTopics,
   seedTeamActions,
   seedTeamGoals,
@@ -338,12 +350,73 @@ type Store = PersistedData &
         sessionId?: string;
         dueDate?: string;
         slotId?: string;
+        tagIds?: string[];
       }
     ) => string;
     updateTopic: (
       id: string,
-      patch: Partial<Pick<Topic, "text" | "detail" | "dueDate" | "slotId">>
+      patch: Partial<
+        Pick<
+          Topic,
+          | "text"
+          | "detail"
+          | "dueDate"
+          | "slotId"
+          | "points"
+          | "urgent"
+          | "tagIds"
+          | "meetingId"
+        >
+      >
     ) => void;
+    /**
+     * Place a topic at a position inside a drop target, renumbering that
+     * bucket. `placeTopic` answers "which column"; this answers "and where in
+     * it", which is what a running order needs.
+     */
+    placeTopicAt: (
+      id: string,
+      target: ColumnTarget & { meetingId?: string },
+      index?: number
+    ) => void;
+    /**
+     * Capture with the `#tag @meeting !` grammar. Unknown `#tags` are created
+     * on the spot — being sent to a settings screen mid-thought is how a
+     * capture box stops getting used. Returns the ids created.
+     */
+    captureTopics: (
+      raw: string,
+      target?: (ColumnTarget & { meetingId?: string }) | null,
+      index?: number
+    ) => string[];
+    /** Hand one topic back to the backlog, noted against its occurrence. */
+    returnTopic: (id: string) => void;
+    /**
+     * Sweep every occurrence whose date has passed. Returns how many came back
+     * so the caller can say so. Idempotent — a topic only returns once.
+     */
+    sweepReturns: () => number;
+    // the workspace vocabulary
+    addTag: (label: string) => string;
+    updateTag: (id: string, patch: Partial<Pick<Tag, "label" | "color">>) => void;
+    /** Topics keep their text; slots and coverage targets are unwired. */
+    deleteTag: (id: string) => void;
+    // bulk operations — the reason a board beats a list
+    tagTopics: (ids: string[], tagId: string, on: boolean) => void;
+    assignTopics: (ids: string[], meetingId: string | null) => void;
+    parkTopics: (ids: string[], parked: boolean) => void;
+    deleteTopics: (ids: string[]) => void;
+    // follow-ups — commitments that outlive one occurrence
+    addFollowUp: (
+      subjectKind: MeetingSubjectKind,
+      subjectId: string,
+      text: string,
+      opts?: { meetingId?: string; sourceSessionId?: string }
+    ) => string;
+    toggleFollowUp: (id: string) => void;
+    deleteFollowUp: (id: string) => void;
+    /** A topic pushed three times is usually a commitment in disguise. */
+    promoteToFollowUp: (topicId: string) => void;
     /** Move a topic into a lane or onto one occurrence. Reopens it if closed. */
     placeTopic: (
       id: string,
@@ -514,7 +587,9 @@ function withoutMeetingsFor(
   return {
     meetings: s.meetings.filter((m) => !doomed.has(m.id)),
     sessions: s.sessions.filter((o) => !doomed.has(o.meetingId)),
-    topics: s.topics.filter((t) => !doomed.has(t.meetingId)),
+    // An unassigned topic has no meeting to be doomed with — deleting a meeting
+    // must not silently take the backlog with it.
+    topics: s.topics.filter((t) => !(t.meetingId && doomed.has(t.meetingId))),
   };
 }
 
@@ -544,7 +619,9 @@ function seedData(): PersistedData {
     people: seedPeople,
     actions: seedActions,
     meetings: seedMeetings,
+    tags: seedTags,
     topics: seedTopics,
+    followUps: seedFollowUps,
     sessions: seedSessions,
     goals: seedGoals,
     notes: seedNotes,
@@ -569,7 +646,9 @@ function blankData(): PersistedData {
     people: [],
     actions: [],
     meetings: [],
+    tags: [],
     topics: [],
+    followUps: [],
     sessions: [],
     goals: [],
     notes: [],
@@ -1434,7 +1513,9 @@ export const useStore = create<Store>((set, get) => ({
             lane: opts.lane ?? "backlog",
             sessionId: opts.sessionId,
             slotId: opts.slotId,
+            tagIds: opts.tagIds ?? [],
             carried: 0,
+            carriedFrom: [],
             dueDate: opts.dueDate,
             createdOn: todayISO(),
             order: last + 1,
@@ -1475,6 +1556,315 @@ export const useStore = create<Store>((set, get) => ({
         };
       }),
     })),
+  placeTopicAt: (id, target, index) =>
+    set((s) => {
+      const topic = s.topics.find((t) => t.id === id);
+      if (!topic) return {};
+
+      let sessions = s.sessions;
+      let sessionId: string | undefined;
+      let slotId = target.slotId;
+      let lane = topic.lane;
+      let meetingId = target.meetingId ?? topic.meetingId;
+
+      if (target.kind === "session") {
+        sessionId = target.sessionId;
+      } else if (target.kind === "projected") {
+        // Dropping on a projected week books it on the way in — the plan is the
+        // commitment, so it shouldn't need a separate "schedule this" step.
+        const existing = sessions.find(
+          (o) => o.meetingId === meetingId && o.date === target.date
+        );
+        if (existing) {
+          sessionId = existing.id;
+        } else if (meetingId) {
+          sessionId = uid();
+          sessions = [...sessions, { id: sessionId, meetingId, date: target.date }];
+        }
+      } else {
+        lane = target.lane;
+      }
+
+      if (sessionId) {
+        const owner = sessions.find((o) => o.id === sessionId);
+        if (owner) meetingId = owner.meetingId;
+        lane = "backlog";
+      }
+
+      // A slot with a tag stamps it on arrival. This is what makes coverage
+      // trustworthy without asking anyone to tag by hand.
+      const slot = s.meetings
+        .find((m) => m.id === meetingId)
+        ?.curriculum?.find((c) => c.id === slotId);
+      const tagIds =
+        slot?.tagId && !topic.tagIds.includes(slot.tagId)
+          ? [...topic.tagIds, slot.tagId]
+          : topic.tagIds;
+
+      const moved: Topic = {
+        ...topic,
+        status: "open",
+        closedOn: undefined,
+        meetingId,
+        sessionId,
+        slotId,
+        lane,
+        tagIds,
+        // Placing it by hand is a decision — it stops reading as "came back".
+        returnedOn: undefined,
+        returnedFromDate: undefined,
+      };
+
+      return { sessions, topics: reorderInto(s.topics, moved, index) };
+    }),
+
+  captureTopics: (raw, target, index) => {
+    const created: string[] = [];
+    set((s) => {
+      const lines = splitCaptureLines(raw);
+      if (!lines.length) return {};
+
+      let tags = s.tags;
+      let topics = s.topics;
+      // `@frontier` should match what the user sees, which is the meeting's
+      // own name when it has one and the subject's otherwise.
+      const labelOf = (m: TrackedMeeting) =>
+        m.name ??
+        (m.subjectKind === "person"
+          ? s.people.find((x) => x.id === m.subjectId)?.name
+          : m.subjectKind === "team"
+            ? s.teams.find((x) => x.id === m.subjectId)?.name
+            : s.managers.find((x) => x.id === m.subjectId)?.name) ??
+        "";
+
+      for (const line of lines) {
+        const parsed = parseCapture(line);
+        if (!parsed.text) continue;
+
+        const tagIds: string[] = [];
+        for (const label of parsed.tagLabels) {
+          const found = findTag(label, tags);
+          if (found) {
+            tagIds.push(found.id);
+            continue;
+          }
+          const tag: Tag = {
+            id: uid(),
+            label: label.charAt(0).toUpperCase() + label.slice(1),
+            color: tags.length % 6,
+            order: tags.length,
+          };
+          tags = [...tags, tag];
+          tagIds.push(tag.id);
+        }
+
+        let meetingId = target?.meetingId;
+        if (parsed.meetingQuery) {
+          const m = findMeeting(parsed.meetingQuery, s.meetings, labelOf);
+          if (m) meetingId = m.id;
+        }
+
+        const id = uid();
+        created.push(id);
+        const topic: Topic = {
+          id,
+          meetingId,
+          text: parsed.text,
+          status: "open",
+          lane: target?.kind === "lane" ? target.lane : "backlog",
+          sessionId: target?.kind === "session" ? target.sessionId : undefined,
+          slotId: target?.slotId,
+          tagIds,
+          urgent: parsed.urgent || undefined,
+          carried: 0,
+          carriedFrom: [],
+          createdOn: todayISO(),
+          order: 0,
+        };
+        topics = reorderInto([...topics, topic], topic, index);
+      }
+      return created.length ? { tags, topics } : {};
+    });
+    return created;
+  },
+
+  returnTopic: (id) =>
+    set((s) => {
+      const topic = s.topics.find((t) => t.id === id);
+      if (!topic?.sessionId) return {};
+      const session = s.sessions.find((o) => o.id === topic.sessionId);
+      const moved: Topic = {
+        ...topic,
+        sessionId: undefined,
+        lane: "backlog",
+        carried: topic.carried + 1,
+        carriedFrom: [...topic.carriedFrom, topic.sessionId],
+        returnedOn: todayISO(),
+        returnedFromDate: session?.date,
+      };
+      return {
+        sessions: s.sessions.map((o) =>
+          o.id === session?.id
+            ? {
+                ...o,
+                uncovered: [...new Set([...(o.uncovered ?? []), topic.text])],
+              }
+            : o
+        ),
+        topics: reorderInto(s.topics, moved, 0),
+      };
+    }),
+
+  sweepReturns: () => {
+    const result = applyReturns(get().sessions, get().topics, todayISO());
+    if (!result) return 0;
+    set({ sessions: result.sessions, topics: result.topics });
+    return result.returned.length;
+  },
+
+  addTag: (label) => {
+    const trimmed = label.trim();
+    if (!trimmed) return "";
+    const id = uid();
+    set((s) => ({
+      tags: [
+        ...s.tags,
+        { id, label: trimmed, color: s.tags.length % 6, order: s.tags.length },
+      ],
+    }));
+    return id;
+  },
+  updateTag: (id, patch) =>
+    set((s) => ({
+      tags: s.tags.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    })),
+  deleteTag: (id) =>
+    set((s) => ({
+      tags: s.tags.filter((t) => t.id !== id),
+      topics: s.topics.map((t) =>
+        t.tagIds.includes(id)
+          ? { ...t, tagIds: t.tagIds.filter((x) => x !== id) }
+          : t
+      ),
+      // A slot or a target pointing at a dead tag would silently stop working.
+      meetings: s.meetings.map((m) => ({
+        ...m,
+        curriculum: m.curriculum?.map((c) =>
+          c.tagId === id ? { ...c, tagId: undefined } : c
+        ),
+        coverageTargets: m.coverageTargets?.filter((c) => c.tagId !== id),
+      })),
+    })),
+
+  tagTopics: (ids, tagId, on) =>
+    set((s) => {
+      const set_ = new Set(ids);
+      return {
+        topics: s.topics.map((t) => {
+          if (!set_.has(t.id)) return t;
+          const has = t.tagIds.includes(tagId);
+          if (has === on) return t;
+          return {
+            ...t,
+            tagIds: on
+              ? [...t.tagIds, tagId]
+              : t.tagIds.filter((x) => x !== tagId),
+          };
+        }),
+      };
+    }),
+  assignTopics: (ids, meetingId) =>
+    set((s) => {
+      const set_ = new Set(ids);
+      return {
+        topics: s.topics.map((t) =>
+          set_.has(t.id)
+            ? { ...t, meetingId: meetingId ?? undefined, slotId: undefined }
+            : t
+        ),
+      };
+    }),
+  parkTopics: (ids, parked) =>
+    set((s) => {
+      const set_ = new Set(ids);
+      return {
+        topics: s.topics.map((t) =>
+          set_.has(t.id) ? { ...t, lane: parked ? "parked" : "backlog" } : t
+        ),
+      };
+    }),
+  deleteTopics: (ids) =>
+    set((s) => {
+      const set_ = new Set(ids);
+      return { topics: s.topics.filter((t) => !set_.has(t.id)) };
+    }),
+
+  addFollowUp: (subjectKind, subjectId, text, opts = {}) => {
+    const trimmed = text.trim();
+    if (!trimmed) return "";
+    const id = uid();
+    set((s) => ({
+      followUps: [
+        ...s.followUps,
+        {
+          id,
+          subjectKind,
+          subjectId,
+          meetingId: opts.meetingId,
+          text: trimmed,
+          status: "open",
+          openedOn: todayISO(),
+          sourceSessionId: opts.sourceSessionId,
+          order: s.followUps.length,
+        },
+      ],
+    }));
+    return id;
+  },
+  toggleFollowUp: (id) =>
+    set((s) => ({
+      followUps: s.followUps.map((f) => {
+        if (f.id !== id) return f;
+        const done = f.status === "open";
+        return {
+          ...f,
+          status: done ? "done" : "open",
+          closedOn: done ? todayISO() : undefined,
+        };
+      }),
+    })),
+  deleteFollowUp: (id) =>
+    set((s) => ({ followUps: s.followUps.filter((f) => f.id !== id) })),
+  promoteToFollowUp: (topicId) =>
+    set((s) => {
+      const topic = s.topics.find((t) => t.id === topicId);
+      const meeting = topic?.meetingId
+        ? s.meetings.find((m) => m.id === topic.meetingId)
+        : undefined;
+      if (!topic || !meeting) return {};
+      return {
+        followUps: [
+          ...s.followUps,
+          {
+            id: uid(),
+            subjectKind: meeting.subjectKind,
+            subjectId: meeting.subjectId,
+            meetingId: meeting.id,
+            text: topic.text,
+            status: "open" as const,
+            openedOn: todayISO(),
+            sourceSessionId: topic.sessionId,
+            order: s.followUps.length,
+          },
+        ],
+        topics: s.topics.map((t) =>
+          t.id === topicId
+            ? { ...t, status: "dropped" as const, closedOn: todayISO() }
+            : t
+        ),
+      };
+    }),
+
   coverTopic: (id, covered = true) =>
     set((s) => ({
       topics: s.topics.map((t) =>
@@ -1786,6 +2176,17 @@ export const useStore = create<Store>((set, get) => ({
       // Selection is not cleared: the URL survives sign-in, so a deep link
       // opens the entity it named. App drops the selection if the id is stale.
     });
+
+    /*
+     * Hand back anything an occurrence passed without covering.
+     *
+     * Done on load rather than on a schedule because there is no server-side
+     * job to run it, and "when you next open the app" is exactly when the
+     * answer matters. It is idempotent — a topic leaves its session the first
+     * time and has nothing to return from afterwards — so a second hydrate
+     * from the cache-then-network path is a no-op.
+     */
+    get().sweepReturns();
   },
 
   signOut: async () => {

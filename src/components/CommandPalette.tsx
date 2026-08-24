@@ -170,9 +170,20 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
         case "me":
           selectMe(true);
           break;
+        case "ideas":
+          setTab("ideas");
+          break;
       }
     },
-    [openSession, selectPerson, selectTeam, selectManager, selectMeeting, selectMe]
+    [
+      openSession,
+      selectPerson,
+      selectTeam,
+      selectManager,
+      selectMeeting,
+      selectMe,
+      setTab,
+    ]
   );
 
   /** Close, remember, then go. In that order — navigation unmounts this. */
@@ -202,8 +213,8 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const go = (id: string, fn: () => void) => () => runRow(id, fn);
 
     const nav: Row[] = [
-      { id: "go:overview", label: "Go to Overview", group: "Go to", hint: "G then O", run: go("go:overview", () => setTab("overview")) },
       { id: "go:tree", label: "Go to Org tree", group: "Go to", hint: "G then T", run: go("go:tree", () => setTab("tree")) },
+      { id: "go:ideas", label: "Go to Ideas", group: "Go to", hint: "G then I", run: go("go:ideas", () => setTab("ideas")) },
       { id: "go:meetings", label: "Go to Meetings", group: "Go to", hint: "G then M", run: go("go:meetings", () => setTab("meetings")) },
       { id: "go:table", label: "Go to Table", group: "Go to", hint: "G then B", run: go("go:table", () => setTab("table")) },
       { id: "go:me", label: "Open my profile", group: "Go to", run: go("go:me", () => selectMe(true)) },

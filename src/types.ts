@@ -250,12 +250,79 @@ export type TrackedMeeting = {
    * means the board is an ungrouped list.
    */
   curriculum?: CurriculumSlot[];
+  /**
+   * What I want to come back to, and how often. Separate from `curriculum`
+   * because coverage is an intention about the future while the curriculum is
+   * the shape of the room.
+   */
+  coverageTargets?: CoverageTarget[];
 };
 
-/** One named slot in a meeting's standing agenda. */
+/**
+ * One named band in a meeting's standing agenda — the running order.
+ *
+ * `tagId` is what keeps coverage honest without anyone tagging by hand: a topic
+ * dropped into the Training band picks up the Training tag on arrival. The slot
+ * is *structure* (where this sits in the room); the tag is *vocabulary* (what
+ * this is about, anywhere in the workspace). They used to be the same thing,
+ * which is why a tag could not exist outside the meeting that invented it.
+ */
 export type CurriculumSlot = {
   id: string;
   label: string;
+  /** Stamped onto topics placed here. */
+  tagId?: string;
+  /** Rough minutes. Advisory — nothing enforces it. */
+  minutes?: number;
+};
+
+/**
+ * A label on a topic, shared across every meeting.
+ *
+ * Workspace-wide on purpose: "Training" has to mean the same thing on the staff
+ * meeting and in a 1:1, or the backlog cannot be grouped by what things are
+ * about.
+ */
+export type Tag = {
+  id: string;
+  label: string;
+  /** Index into the client palette, not a hex value. */
+  color: number;
+  order: number;
+};
+
+/** "I want Training at least once every 4 occurrences." */
+export type CoverageTarget = {
+  tagId: string;
+  everyNOccurrences: number;
+};
+
+/** One sub-point under a topic — the scaffolding an idea breaks into. */
+export type TopicPoint = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
+/**
+ * A commitment that outlives the conversation.
+ *
+ * Not a topic. Topics are things to talk about; a follow-up is something you
+ * said you would do, so it belongs to the subject rather than to any single
+ * occurrence and opens the next one as "Since last time". A topic pushed three
+ * times is usually one of these in disguise.
+ */
+export type FollowUp = {
+  id: string;
+  subjectKind: MeetingSubjectKind;
+  subjectId: string;
+  meetingId?: string;
+  text: string;
+  status: "open" | "done";
+  openedOn: string;
+  closedOn?: string;
+  sourceSessionId?: string;
+  order: number;
 };
 
 export type Person = {
@@ -340,10 +407,22 @@ export type TopicLane = "backlog" | "parked";
 
 export type Topic = {
   id: string;
-  /** The board this belongs to — a meeting, never a person. */
-  meetingId: string;
+  /**
+   * The board this belongs to — a meeting, never a person.
+   *
+   * Optional since the Ideas board: something worth raising before you have
+   * decided where to raise it is a real state, and making it unrepresentable
+   * forced every capture to begin with a filing decision.
+   */
+  meetingId?: string;
   text: string;
+  /** The longer thinking behind the one-liner. Shown as Notes. */
   detail?: string;
+  /** Workspace tags. A topic can carry several. */
+  tagIds: string[];
+  /** What this breaks down into — a card is too small to hold it. */
+  points?: TopicPoint[];
+  urgent?: boolean;
   status: TopicStatus;
   lane: TopicLane;
   /** Slotted into this occurrence. Overrides `lane` while it's set. */
@@ -355,6 +434,14 @@ export type Topic = {
   slotId?: string;
   /** Times it's been pushed to a later meeting. The honest nag. */
   carried: number;
+  /** The occurrences it has been pushed out of, in order. */
+  carriedFrom: string[];
+  /**
+   * Set when an occurrence passed with this still unchecked and it came back to
+   * the backlog. What the card explains itself with.
+   */
+  returnedOn?: string;
+  returnedFromDate?: string;
   dueDate?: string;
   createdOn: string;
   closedOn?: string;
@@ -372,6 +459,12 @@ export type Session = {
   nextDate?: string;
   /** Raw mic / pasted transcript for this write-up. */
   transcript?: string;
+  /**
+   * What was still open when the day passed. Stored as text, not ids: the
+   * topics move on, and the point of the ledger is that this week's write-up
+   * still reads truthfully a year later.
+   */
+  uncovered?: string[];
 };
 
 export type Goal = {

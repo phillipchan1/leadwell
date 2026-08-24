@@ -1,7 +1,9 @@
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { CurriculumSlot, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
-import { useCardDrag } from "@/hooks/use-card-drag";
+import { useBoardDnD } from "@/hooks/use-board-dnd";
+import { InlineComposer } from "./InlineComposer";
 import {
   boardLayout,
   curriculumBalance,
@@ -57,7 +59,7 @@ type MoveGroup = { label: string; options: { key: string; label: string }[] };
 type CardHandlers = {
   curriculum: CurriculumSlot[];
   moveGroups: MoveGroup[];
-  handleProps: ReturnType<typeof useCardDrag>["handleProps"];
+  handleProps: ReturnType<typeof useBoardDnD>["handleProps"];
   onText: (id: string, text: string) => void;
   onMove: (id: string, key: string) => void;
   onReorder: (id: string, direction: -1 | 1) => MoveResult;
@@ -67,6 +69,8 @@ type CardHandlers = {
   onRoll: (topic: Topic) => void;
   onBacklog: (id: string) => void;
   onDelete: (topic: Topic) => void;
+  /** Capture straight into a cell, with the `#tag !` grammar. */
+  onAddHere?: (raw: string, key: string) => void;
 };
 
 export function TopicBoard({
@@ -87,6 +91,8 @@ export function TopicBoard({
   const addTopic = useStore((s) => s.addTopic);
   const updateTopic = useStore((s) => s.updateTopic);
   const placeTopic = useStore((s) => s.placeTopic);
+  const placeTopicAt = useStore((s) => s.placeTopicAt);
+  const captureTopics = useStore((s) => s.captureTopics);
   const coverTopic = useStore((s) => s.coverTopic);
   const rollTopic = useStore((s) => s.rollTopic);
   const deleteTopic = useStore((s) => s.deleteTopic);
@@ -152,7 +158,19 @@ export function TopicBoard({
     [addSession, meeting.id, placeTopic]
   );
 
-  const { drag, columnRef, handleProps } = useCardDrag(place);
+  /*
+   * A drop resolves to a cell *and a position in it*. `place` still answers the
+   * first half for the keyboard "Move to…" path, where there is no pointer to
+   * read an index from and appending is the honest default.
+   */
+  const placeAt = useCallback(
+    (topicId: string, key: string, index: number) => {
+      placeTopicAt(topicId, { ...parseColumnKey(key), meetingId: meeting.id }, index);
+    },
+    [placeTopicAt, meeting.id]
+  );
+
+  const { drag, zoneRef: columnRef, handleProps } = useBoardDnD(placeAt);
   const dragged = drag ? topics.find((t) => t.id === drag.id) : null;
 
   const roll = useCallback(
@@ -190,6 +208,8 @@ export function TopicBoard({
     moveGroups,
     handleProps,
     onText: (id, text) => updateTopic(id, { text }),
+    onAddHere: (raw, key) =>
+      captureTopics(raw, { ...parseColumnKey(key), meetingId: meeting.id }),
     onMove: place,
     onReorder: (id, dir) => moveTopic(id, dir),
     onCover: (id, covered) => coverTopic(id, covered),
@@ -345,8 +365,8 @@ function ScheduleGrid({
   weeks: WeekColumn[];
   curriculum: CurriculumSlot[];
   selectedSlotKey?: string | null;
-  drag: ReturnType<typeof useCardDrag>["drag"];
-  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
+  drag: ReturnType<typeof useBoardDnD>["drag"];
+  columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
 }) {
@@ -586,41 +606,67 @@ function GridCell({
   cell: WeekCell;
   past: boolean;
   inSlot: boolean;
-  drag: ReturnType<typeof useCardDrag>["drag"];
-  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
+  drag: ReturnType<typeof useBoardDnD>["drag"];
+  columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   compact?: boolean;
 }) {
   const empty = cell.topics.length === 0;
   const active = drag?.over === cell.key;
+  // Where it would land, not just where it would go. In a cell that is a
+  // running order, the position *is* the decision.
+  const at = active ? drag!.index : -1;
+  const line = (
+    <li
+      key="drop-line"
+      aria-hidden
+      className="h-0.5 list-none rounded-full bg-teal-500"
+    />
+  );
+
+  const rows: ReactNode[] = [];
+  cell.topics.forEach((t, i) => {
+    if (active && at === i) rows.push(line);
+    rows.push(
+      <TopicCard
+        key={t.id}
+        topic={t}
+        columnKey={cell.key}
+        past={past}
+        inSlot={inSlot}
+        covered={t.status !== "open"}
+        isDragging={drag?.id === t.id}
+        compact={compact}
+        showTag={false}
+        showMove
+        {...cardProps}
+      />
+    );
+  });
+  if (active && at >= cell.topics.length) rows.push(line);
 
   return (
     <div
       ref={columnRef(cell.key)}
       className={cx(
-        "min-h-[2.75rem] border-l border-stone-200/80 bg-primary px-1 py-1 dark:border-stone-800/80",
+        "group/cell min-h-[2.75rem] border-l border-stone-200/80 bg-primary px-1 py-1 dark:border-stone-800/80",
         empty && !active && "bg-stone-50/50 dark:bg-stone-950/20",
         active &&
           "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
       )}
     >
-      <ul className="flex flex-col gap-1">
-        {cell.topics.map((t) => (
-          <TopicCard
-            key={t.id}
-            topic={t}
-            columnKey={cell.key}
-            past={past}
-            inSlot={inSlot}
-            covered={t.status !== "open"}
-            isDragging={drag?.id === t.id}
-            compact={compact}
-            showTag={false}
-            showMove
-            {...cardProps}
+      <ul className="flex flex-col gap-1">{rows}</ul>
+      {/* Capture where it belongs. Hidden until the column is hovered, or the
+          board becomes thirty identical Add buttons. */}
+      {cardProps.onAddHere && (
+        <div className="opacity-0 transition focus-within:opacity-100 group-hover/cell:opacity-100">
+          <InlineComposer
+            compact
+            placeholder="Add a topic…  #tag !"
+            onAdd={(raw) => cardProps.onAddHere?.(raw, cell.key)}
           />
-        ))}
-      </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -642,8 +688,8 @@ function IdeasPanel({
   groups: BucketGroup[];
   parked?: BucketGroup;
   ideaCount: number;
-  drag: ReturnType<typeof useCardDrag>["drag"];
-  columnRef: ReturnType<typeof useCardDrag>["columnRef"];
+  drag: ReturnType<typeof useBoardDnD>["drag"];
+  columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   onCapture: (text: string, slotId?: string) => void;
   onAddTag: (label: string) => string | undefined;
@@ -975,6 +1021,7 @@ function TopicCard({
   return (
     <li
       ref={ref}
+      data-drag-item={topic.id}
       {...rowProps}
       className={cx(
         "group relative rounded-lg border bg-primary",

@@ -20,7 +20,7 @@
  * second implementation of any of them.
  */
 
-export type Tab = "overview" | "tree" | "table" | "meetings";
+export type Tab = "tree" | "table" | "ideas" | "meetings";
 export type EntityKind = "team" | "person" | "manager" | "meeting" | "me";
 
 export type Selection = {
@@ -37,7 +37,7 @@ export type Route =
   | { view: "tab"; tab: Tab; peek: Selection | null }
   | { view: "focus"; target: Selection };
 
-const TABS: Tab[] = ["overview", "tree", "table", "meetings"];
+const TABS: Tab[] = ["tree", "table", "ideas", "meetings"];
 
 /**
  * `/people` was a fifth destination rendering a strict subset of `/table` —
@@ -49,19 +49,12 @@ const TABS: Tab[] = ["overview", "tree", "table", "meetings"];
  */
 export const LEGACY_PEOPLE_PATH = "/people";
 export const PEOPLE_FILTER_PATH = "/table?type=person";
+export const LEGACY_OVERVIEW_PATH = "/overview";
 /** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
 const ID_KINDS: EntityKind[] = ["team", "person", "manager", "meeting"];
 
-/**
- * Overview, not the tree.
- *
- * "Who sits under what" is a structural question, and it isn't the one anyone
- * opens this app to ask — a pastor between hospital visits wants to know who's
- * struggling, an exec before a board meeting wants the brief. Overview already
- * answers both, it's the lightest screen in the app, and landing here keeps the
- * React Flow chunk off the critical path for every cold open.
- */
-export const DEFAULT_TAB: Tab = "overview";
+/** Org tree — the structural home screen. `/` and unknown tab paths land here. */
+export const DEFAULT_TAB: Tab = "tree";
 
 function isTab(value: string | undefined): value is Tab {
   return TABS.includes(value as Tab);

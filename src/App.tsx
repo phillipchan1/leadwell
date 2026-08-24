@@ -2,13 +2,13 @@ import { Suspense, lazy, useCallback, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate, type Tab } from "./store/useStore";
 import {
+  LEGACY_OVERVIEW_PATH,
   LEGACY_PEOPLE_PATH,
   PEOPLE_FILTER_PATH,
   parseRoute,
   routePath,
 } from "./lib/routes";
 import { hasLeadershipRead } from "./lib/derive";
-import { Overview } from "./components/Overview";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -44,14 +44,16 @@ import { cx } from "@/utils/cx";
 
 /**
  * The canvas (React Flow), the org table and the session editor are the three
- * heaviest imports in the bundle and none of them is needed to paint Overview.
- * Splitting them keeps the first load on mobile data to the shell.
+ * heaviest imports in the bundle. Splitting them keeps the first load lean.
  */
 const OrgTree = lazy(() =>
   import("./components/OrgTree").then((m) => ({ default: m.OrgTree }))
 );
 const TableView = lazy(() =>
   import("./components/TableView").then((m) => ({ default: m.TableView }))
+);
+const IdeasBoard = lazy(() =>
+  import("./components/IdeasBoard").then((m) => ({ default: m.IdeasBoard }))
 );
 const MeetingsTable = lazy(() =>
   import("./components/MeetingsTable").then((m) => ({ default: m.MeetingsTable }))
@@ -60,6 +62,10 @@ const SessionEditorView = lazy(() =>
   import("./components/SessionEditorView").then((m) => ({
     default: m.SessionEditorView,
   }))
+);
+
+const MeetingsLab = lazy(() =>
+  import("./lab/MeetingsLab").then((m) => ({ default: m.MeetingsLab }))
 );
 
 function PaneFallback() {
@@ -90,10 +96,15 @@ function useRouteSync() {
   }, [navigate]);
 
   useEffect(() => {
+    const path = location.pathname.replace(/\/$/, "");
     // `/people` is now a saved filter on the table. Old links, bookmarks and
     // anything already in someone's history keep working.
-    if (location.pathname.replace(/\/$/, "") === LEGACY_PEOPLE_PATH) {
+    if (path === LEGACY_PEOPLE_PATH) {
       navigate(PEOPLE_FILTER_PATH + location.hash, { replace: true });
+      return;
+    }
+    if (path === LEGACY_OVERVIEW_PATH) {
+      navigate("/tree" + location.search + location.hash, { replace: true });
       return;
     }
     const route = parseRoute(location.pathname, location.search);
@@ -190,7 +201,7 @@ function useGlobalShortcuts() {
   // for the single most frequent action, and it stands down inside any field.
   useShortcut(
     () => {
-      if (tab === "meetings" || tab === "table")
+      if (tab === "meetings" || tab === "table" || tab === "ideas")
         openModal({ kind: "person", teamId: null });
       else openModal({ kind: "team" });
     },
@@ -220,6 +231,7 @@ export default function App() {
     group: "Global",
   });
 
+  const location = useLocation();
   const phase = useStore((s) => s.phase);
   const tab = useStore((s) => s.tab);
   const setTab = useStore((s) => s.setTab);
@@ -261,6 +273,24 @@ export default function App() {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
+
+  /*
+   * Meetings redesign prototype — above the auth gate on purpose.
+   *
+   * The lab runs on fixture data in its own reducer and never reads or writes
+   * the live store, so signing in proves nothing about it. Keeping it behind
+   * Google OAuth just made the prototype unreachable for anyone reviewing the
+   * design, which is the only thing it exists for.
+   */
+  if (location.pathname.replace(/\/$/, "") === "/lab/meetings") {
+    return (
+      <div className="flex h-full flex-col">
+        <Suspense fallback={<LoadingSplash />}>
+          <MeetingsLab />
+        </Suspense>
+      </div>
+    );
+  }
 
   // Auth/loading gate: only the "ready" phase renders the full app.
   if (phase === "loading") return <LoadingSplash />;
@@ -367,8 +397,8 @@ export default function App() {
               )}
             >
               <Suspense fallback={<PaneFallback />}>
-                {tab === "overview" && <Overview />}
                 {tab === "tree" && <OrgTree />}
+                {tab === "ideas" && <IdeasBoard />}
                 {tab === "meetings" && <MeetingsTable />}
                 {tab === "table" && <TableView />}
               </Suspense>
