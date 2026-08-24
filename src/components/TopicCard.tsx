@@ -116,7 +116,7 @@ export function TopicCard({
   const covered = topic.status !== "open";
   const aging = topic.carried >= 3;
   const hidden = new Set(hideTagIds ?? []);
-  const shownTags = topic.tagIds
+  const shownTags = (topic.tagIds ?? [])
     .filter((id) => !hidden.has(id))
     .map((id) => tagById.get(id))
     .filter((t): t is Tag => Boolean(t));

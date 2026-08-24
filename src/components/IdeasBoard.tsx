@@ -109,7 +109,7 @@ export function IdeasBoard() {
             t.detail?.toLowerCase().includes(q) ||
             tags.some(
               (tag) =>
-                t.tagIds.includes(tag.id) &&
+                (t.tagIds ?? []).includes(tag.id) &&
                 tag.label.toLowerCase().includes(q)
             ))
       )
@@ -130,14 +130,14 @@ export function IdeasBoard() {
           id: UNTAGGED,
           label: "Untagged",
           tagId: undefined as string | undefined,
-          topics: pool.filter((t) => t.tagIds.length === 0),
+          topics: pool.filter((t) => (t.tagIds ?? []).length === 0),
         },
         ...tags.map((tag) => ({
           key: `tag:${tag.id}`,
           id: tag.id,
           label: tag.label,
           tagId: tag.id as string | undefined,
-          topics: pool.filter((t) => t.tagIds.includes(tag.id)),
+          topics: pool.filter((t) => (t.tagIds ?? []).includes(tag.id)),
         })),
       ];
     }
@@ -406,7 +406,7 @@ export function IdeasBoard() {
           </span>
           {tags.map((tag) => {
             const all = ids.every((id) =>
-              topics.find((t) => t.id === id)?.tagIds.includes(tag.id)
+              topics.find((t) => t.id === id)?.tagIds?.includes(tag.id)
             );
             return (
               <button

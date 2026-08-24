@@ -600,6 +600,50 @@ function migrateActions(actions: Action[]): Action[] {
   }));
 }
 
+/**
+ * A document from the local cache was written by whatever version of the app
+ * last ran in this browser, which may predate fields the current one assumes.
+ *
+ * Filling the gaps beats the alternatives: throwing the cache away makes every
+ * upgrade a cold blank open, and trusting it crashes on the first `[...t.
+ * carriedFrom]`. The server copy that arrives moments later has the real
+ * values — this only has to survive the paint in between.
+ */
+function migrateDoc(doc: PersistedData): PersistedData {
+  const topics = doc.topics ?? [];
+  const needsFill = topics.some((t) => !t.tagIds || !t.carriedFrom);
+  return {
+    ...doc,
+    // Collections added after this cache may have been written.
+    tags: doc.tags ?? [],
+    followUps: doc.followUps ?? [],
+    meetings: doc.meetings ?? [],
+    sessions: doc.sessions ?? [],
+    topics: needsFill
+      ? topics.map((t) => ({
+          ...t,
+          tagIds: t.tagIds ?? [],
+          carriedFrom: t.carriedFrom ?? [],
+        }))
+      : topics,
+    people: doc.people ?? [],
+    teams: doc.teams ?? [],
+    managers: doc.managers ?? [],
+    domains: doc.domains ?? [],
+    capacities: doc.capacities ?? [],
+    actions: doc.actions ?? [],
+    goals: doc.goals ?? [],
+    notes: doc.notes ?? [],
+    wins: doc.wins ?? [],
+    prayers: doc.prayers ?? [],
+    teamActions: doc.teamActions ?? [],
+    teamGoals: doc.teamGoals ?? [],
+    teamNotes: doc.teamNotes ?? [],
+    chats: doc.chats ?? {},
+    nodePositions: doc.nodePositions ?? {},
+  };
+}
+
 function migrateSessions(sessions: Session[]): Session[] {
   return sessions.map((o) => ({
     ...o,
@@ -1698,7 +1742,7 @@ export const useStore = create<Store>((set, get) => ({
         sessionId: undefined,
         lane: "backlog",
         carried: topic.carried + 1,
-        carriedFrom: [...topic.carriedFrom, topic.sessionId],
+        carriedFrom: [...(topic.carriedFrom ?? []), topic.sessionId],
         returnedOn: todayISO(),
         returnedFromDate: session?.date,
       };
@@ -1762,7 +1806,7 @@ export const useStore = create<Store>((set, get) => ({
       return {
         topics: s.topics.map((t) => {
           if (!set_.has(t.id)) return t;
-          const has = t.tagIds.includes(tagId);
+          const has = (t.tagIds ?? []).includes(tagId);
           if (has === on) return t;
           return {
             ...t,
@@ -2157,9 +2201,12 @@ export const useStore = create<Store>((set, get) => ({
     await get().bootstrap();
   },
 
-  hydrate: (doc, userId, email, opts) => {
+  hydrate: (rawDoc, userId, email, opts) => {
     clearBootstrapRetry();
     bootstrapAttempts = 0;
+    // Every load path lands here — cache, network, import, refresh — so this is
+    // the one place a stale shape has to be made safe.
+    const doc = migrateDoc(rawDoc);
     // Record the loaded doc as the persistence baseline BEFORE it lands in the
     // store, so the resulting change event is a no-op (same array references).
     repo.setBaseline(doc);

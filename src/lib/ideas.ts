@@ -143,7 +143,9 @@ export function applyReturns(
       sessionId: undefined,
       lane: "backlog",
       carried: t.carried + 1,
-      carriedFrom: [...t.carriedFrom, session.id],
+      // `?? []` because a document restored from an older local cache predates
+      // this field, and a sweep on load must never be the thing that crashes.
+      carriedFrom: [...(t.carriedFrom ?? []), session.id],
       returnedOn: today,
       returnedFromDate: session.date,
     };
