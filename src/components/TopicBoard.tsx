@@ -1,9 +1,14 @@
 import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
 import type { CurriculumSlot, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
 import { InlineComposer } from "./InlineComposer";
+import { TopicDetail } from "./TopicDetail";
 import {
   boardLayout,
   curriculumBalance,
@@ -71,6 +76,8 @@ type CardHandlers = {
   onDelete: (topic: Topic) => void;
   /** Capture straight into a cell, with the `#tag !` grammar. */
   onAddHere?: (raw: string, key: string) => void;
+  /** Open the full idea — sub-points, notes, placement. */
+  onOpen?: (id: string) => void;
 };
 
 export function TopicBoard({
@@ -93,6 +100,7 @@ export function TopicBoard({
   const placeTopic = useStore((s) => s.placeTopic);
   const placeTopicAt = useStore((s) => s.placeTopicAt);
   const captureTopics = useStore((s) => s.captureTopics);
+  const [openTopicId, setOpenTopicId] = useState<string | null>(null);
   const coverTopic = useStore((s) => s.coverTopic);
   const rollTopic = useStore((s) => s.rollTopic);
   const deleteTopic = useStore((s) => s.deleteTopic);
@@ -210,6 +218,7 @@ export function TopicBoard({
     onText: (id, text) => updateTopic(id, { text }),
     onAddHere: (raw, key) =>
       captureTopics(raw, { ...parseColumnKey(key), meetingId: meeting.id }),
+    onOpen: setOpenTopicId,
     onMove: place,
     onReorder: (id, dir) => moveTopic(id, dir),
     onCover: (id, covered) => coverTopic(id, covered),
@@ -297,6 +306,17 @@ export function TopicBoard({
         >
           {dragged.text}
         </li>
+      )}
+      {/*
+        The full idea, opened from any card on the board. A card stays a
+        one-liner because it has to survive being one of forty; the thinking
+        behind it needs somewhere to live that isn't a separate doc.
+      */}
+      {openTopicId && (
+        <TopicDetail
+          topicId={openTopicId}
+          onClose={() => setOpenTopicId(null)}
+        />
       )}
     </div>
   );
@@ -998,6 +1018,7 @@ function TopicCard({
   onRoll,
   onBacklog,
   onDelete,
+  onOpen,
 }: {
   topic: Topic;
   columnKey: string;
@@ -1040,6 +1061,27 @@ function TopicCard({
         return;
       }
       grab.onPointerDown(e);
+    },
+    /*
+     * A press that never travelled is a click, and a click opens the idea —
+     * except on the textarea, which owns the title and edits in place. The
+     * distance check keeps "drag it to next week" from also opening a panel
+     * every time you let go.
+     */
+    onClick: (e: ReactMouseEvent) => {
+      if (!onOpen) return;
+      const el = e.target as HTMLElement | null;
+      if (
+        el?.closest(
+          'textarea, input, select, a, label, [role="checkbox"], button'
+        )
+      ) {
+        return;
+      }
+      const start = down.current;
+      down.current = null;
+      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
+      onOpen(topic.id);
     },
   };
 
@@ -1100,6 +1142,39 @@ function TopicCard({
               onText(topic.id, e.target.value);
             }}
           />
+          {/*
+            One muted line, in priority order. A card that came back has to say
+            why without becoming the loudest thing in the column.
+          */}
+          {(topic.returnedOn || topic.points?.length || topic.detail?.trim()) &&
+            !covered && (
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-quaternary">
+                {topic.returnedOn && (
+                  <span className="text-amber-700 dark:text-amber-500">
+                    not covered{" "}
+                    {topic.returnedFromDate
+                      ? new Date(
+                          `${topic.returnedFromDate}T00:00:00Z`
+                        ).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          timeZone: "UTC",
+                        })
+                      : "last time"}
+                  </span>
+                )}
+                {topic.points?.length ? (
+                  <span className="tabular-nums">
+                    {topic.points.filter((pt) => pt.done).length}/
+                    {topic.points.length} points
+                  </span>
+                ) : null}
+                {topic.detail?.trim() ? (
+                  <span className="opacity-70">notes</span>
+                ) : null}
+              </div>
+            )}
+
           {!compact && showTag && curriculum.length > 0 && (
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
               {newTagOpen ? (
