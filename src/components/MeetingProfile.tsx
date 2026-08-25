@@ -13,6 +13,7 @@ import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { MeetingScheduleFields } from "./MeetingScheduleFields";
 import { CurriculumEditor } from "./CurriculumEditor";
+import { TagManager } from "./TagManager";
 import { confirmAction } from "./ConfirmDialog";
 import {
   RHYTHM_LABEL,
@@ -279,13 +280,22 @@ function MeetingSettings({
       <section className="space-y-2.5">
         <SectionTitle>Standing agenda</SectionTitle>
         <p className="text-caption text-quaternary">
-          Every occurrence inherits these slots. Empty ones stay visible on the
-          plan so you can see when a meeting is unbalanced.
+          Every occurrence inherits these slots, in this order. Give one a tag
+          and anything dropped there is labelled automatically — that's what
+          keeps coverage honest without tagging by hand.
         </p>
         <CurriculumEditor
           slots={meeting.curriculum ?? []}
           onChange={(next) => setCurriculum(meeting.id, next)}
         />
+      </section>
+
+      <section className="space-y-2.5">
+        <SectionTitle>Tags</SectionTitle>
+        <p className="text-caption text-quaternary">
+          Shared across every meeting — renaming one here renames it everywhere.
+        </p>
+        <TagManager />
       </section>
 
       <section className="space-y-2">

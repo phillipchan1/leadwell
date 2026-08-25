@@ -10,6 +10,7 @@ import {
 } from "../lib/topics";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { TopicBoard, type BoardDirection } from "./TopicBoard";
+import { IdeasBoard } from "./IdeasBoard";
 import { MeetingCalendar } from "./MeetingCalendar";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
@@ -17,10 +18,11 @@ import { useRovingFocus } from "@/hooks/use-roving-focus";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { cx } from "@/utils/cx";
 
-export type PlanView = "board" | "calendar";
+export type PlanView = "board" | "ideas" | "calendar";
 
 const VIEWS: { id: PlanView; label: string }[] = [
   { id: "board", label: "Board" },
+  { id: "ideas", label: "Ideas" },
   { id: "calendar", label: "Calendar" },
 ];
 
@@ -79,6 +81,12 @@ export function MeetingPlanner({
     [addSession, meeting.id, onCloseNotes, onSelectWeek, selectedSlotKey, sessions]
   );
 
+  /*
+   * The board plans the next eight weeks; Ideas is the whole backlog for this
+   * meeting, organised. The strip beside the board only ever has room for the
+   * next few, which is fine while planning and useless while deciding what is
+   * even worth raising.
+   */
   const boardOrCalendar =
     view === "board" ? (
       <TopicBoard
@@ -88,6 +96,8 @@ export function MeetingPlanner({
         onSelectWeek={openWeek}
         ahead={aheadForHorizon(horizon)}
       />
+    ) : view === "ideas" ? (
+      <IdeasBoard meetingId={meeting.id} />
     ) : (
       <MeetingCalendar
         meeting={meeting}

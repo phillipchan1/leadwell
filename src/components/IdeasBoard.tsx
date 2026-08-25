@@ -39,8 +39,13 @@ function daysBetween(from: string, to: string): number {
  * Scoped to unscheduled topics on purpose. Anything already in a week belongs
  * to the planner; showing it in both would make two surfaces argue about one
  * card.
+ *
+ * Pass `meetingId` to scope it to one meeting — the same board, embedded in
+ * that meeting's plan, showing its backlog plus anything still unfiled. A
+ * meeting's ideas are the ones you want in front of you while planning it, and
+ * the unfiled pile is where the next one usually comes from.
  */
-export function IdeasBoard() {
+export function IdeasBoard({ meetingId }: { meetingId?: string } = {}) {
   const topics = useStore((s) => s.topics);
   const tags = useStore((s) => s.tags);
   const meetings = useStore((s) => s.meetings);
@@ -62,7 +67,9 @@ export function IdeasBoard() {
   const deleteTag = useStore((s) => s.deleteTag);
   const selectMeeting = useStore((s) => s.selectMeeting);
 
-  const [groupBy, setGroupBy] = useState<GroupBy>("meeting");
+  const [groupBy, setGroupBy] = useState<GroupBy>(
+    meetingId ? "tag" : "meeting"
+  );
   const [refine, setRefine] = useState<Refine>("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -84,6 +91,8 @@ export function IdeasBoard() {
   const matches = useCallback(
     (t: Topic, r: Refine): boolean => {
       if (t.status !== "open" || t.sessionId) return false;
+      // Scoped: this meeting's backlog, plus what has not been filed anywhere.
+      if (meetingId && t.meetingId && t.meetingId !== meetingId) return false;
       switch (r) {
         case "all":
           return true;
@@ -95,7 +104,7 @@ export function IdeasBoard() {
           return t.carried >= 3 || daysBetween(t.createdOn, today) >= 30;
       }
     },
-    [today]
+    [today, meetingId]
   );
 
   const pool = useMemo(() => {
@@ -123,7 +132,7 @@ export function IdeasBoard() {
   }, [topics, tags, query, refine, matches]);
 
   const columns = useMemo(() => {
-    if (groupBy === "tag") {
+    if (groupBy === "tag" || meetingId) {
       return [
         {
           key: `tag:${UNTAGGED}`,
@@ -157,7 +166,7 @@ export function IdeasBoard() {
         topics: pool.filter((t) => t.meetingId === m.id),
       })),
     ];
-  }, [groupBy, tags, meetings, pool, labelOf]);
+  }, [groupBy, tags, meetings, pool, labelOf, meetingId]);
 
   /** Nearest upcoming occurrence per meeting, for the rail. */
   const upNext = useMemo(
@@ -243,8 +252,12 @@ export function IdeasBoard() {
   const clear = () => setSelected(new Set());
 
   const addTo = (col: (typeof columns)[number], raw: string) => {
-    if (groupBy === "tag") {
-      captureTopics(col.tagId ? `${raw} #${col.label}` : raw);
+    if (groupBy === "tag" || meetingId) {
+      captureTopics(col.tagId ? `${raw} #${col.label}` : raw, {
+        kind: "lane",
+        lane: "backlog",
+        meetingId,
+      });
       return;
     }
     captureTopics(raw, {
@@ -270,7 +283,10 @@ export function IdeasBoard() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!draft.trim()) return;
-          captureTopics(draft);
+          captureTopics(
+            draft,
+            meetingId ? { kind: "lane", lane: "backlog", meetingId } : undefined
+          );
           setDraft("");
         }}
       >
@@ -296,7 +312,12 @@ export function IdeasBoard() {
 
       {/* Lenses */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="flex items-center rounded-lg border border-secondary p-0.5">
+        <div
+          className={cx(
+            "items-center rounded-lg border border-secondary p-0.5",
+            meetingId ? "hidden" : "flex"
+          )}
+        >
           {(["meeting", "tag"] as const).map((g) => (
             <button
               key={g}
@@ -473,7 +494,7 @@ export function IdeasBoard() {
                 <div
                   key={col.key}
                   className={cx(
-                    "group/col flex min-h-[58vh] w-[17rem] shrink-0 flex-col rounded-xl border",
+                    cx("group/col flex w-[17rem] shrink-0 flex-col rounded-xl border", meetingId ? "min-h-[22rem]" : "min-h-[58vh]"),
                     isQueue
                       ? "border-stone-300 bg-stone-100/60 dark:border-stone-700 dark:bg-stone-900/50"
                       : "border-secondary bg-stone-50/40 dark:bg-stone-950/30"
@@ -569,7 +590,7 @@ export function IdeasBoard() {
         </div>
 
         {/* Up next — schedule without going via the planner */}
-        <aside className="hidden w-56 shrink-0 xl:block">
+        <aside className={cx("w-56 shrink-0", meetingId ? "hidden" : "hidden xl:block")}>
           <div className="sticky top-0 space-y-2 rounded-xl border border-secondary bg-stone-50/50 p-3 dark:bg-stone-950/30">
             <h2 className="text-xs font-semibold text-stone-700 dark:text-stone-200">
               Up next
