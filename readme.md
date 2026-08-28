@@ -456,3 +456,4 @@ The map lives in [src/data/frameworks.ts](src/data/frameworks.ts) and drives str
 
 - **Reset to seed data**: run `useStore.getState().resetToSeed()` in the browser console (the store is exposed on `window` in dev). This wipes your cloud rows and re-seeds them.
 - **Persistence seam**: all cloud reads/writes go through [`src/lib/repo.ts`](src/lib/repo.ts) (normalized Supabase tables). The store hydrates on login and syncs changed collections back, debounced. `dark` mode still lives in localStorage as a device-local UI preference.
+- **Agent MCP**: a remote, token-authenticated server at `/api/mcp` so Cursor and Claude can read the leadership purview and capture topics, sessions, follow-ups, and notes. See [docs/mcp.md](docs/mcp.md).

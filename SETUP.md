@@ -144,6 +144,7 @@ Build with `npm run build` and host the `dist/` folder anywhere static (Vercel,
 Netlify, Cloudflare Pages, Supabase Hosting…). Then:
 
 - Set `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` as build env vars there.
+- To expose the LeadWell MCP to Cursor/Claude, also set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `LEADWELL_USER_ID`, and `LEADWELL_MCP_TOKEN`. See [docs/mcp.md](docs/mcp.md).
 - Add your production URL to **Google** authorized redirect URIs is *not*
   needed (Google only points at Supabase), but **do** add it to Supabase
   **Authentication → URL Configuration** (Site URL + Redirect URLs).

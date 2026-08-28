@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"]
+  },
+  "include": [
+    "./**/*.ts",
+    "../api/mcp.ts",
+    "../src/types.ts",
+    "../src/lib/persist.ts",
+    "../src/lib/ideas.ts",
+    "../src/lib/readiness.ts",
+    "../src/lib/health.ts",
+    "../src/lib/prayer.ts",
+    "../src/lib/search.ts",
+    "../src/lib/tracker.ts",
+    "../src/lib/routes.ts"
+  ]
+}
