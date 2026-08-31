@@ -521,6 +521,8 @@ const map = {
   sessions: {
     // Still the one_on_ones table — it was always a meeting occurrence, it just
     // used to hardcode its subject. Migration 0007 backfills meeting_id.
+    // Rows go through sessionRows(), which also fills the legacy person_id
+    // column prod still requires (see migration 0016).
     table: "one_on_ones",
     toRow: (u: string, o: Session): Row => ({
       user_id: u,
@@ -678,6 +680,48 @@ const map = {
 type CollKey = keyof typeof map;
 const COLLECTIONS = Object.keys(map) as CollKey[];
 
+/**
+ * Build one_on_ones rows for sync/write.
+ *
+ * The app keys sessions by `meeting_id` only. Prod still has
+ * `one_on_ones.person_id NOT NULL` from before 0007 — migration 0016 drops that
+ * constraint, but until it is applied every upsert must send a non-null value
+ * or the whole cloud sync fails. Denormalize the meeting's subject id into the
+ * legacy column (person, team, or manager — the old name lied for managers
+ * already). Prefer that over writing null and taking down every save.
+ */
+function sessionRows(
+  userId: string,
+  sessions: Session[],
+  meetings: TrackedMeeting[]
+): Row[] {
+  const subjectByMeeting = new Map(
+    meetings.map((m) => [m.id, m.subjectId] as const)
+  );
+  return sessions.map((o) => ({
+    ...map.sessions.toRow(userId, o),
+    // Fallback to meetingId so a dangling session still satisfies NOT NULL
+    // rather than aborting the entire document write.
+    person_id: subjectByMeeting.get(o.meetingId) ?? o.meetingId,
+  }));
+}
+
+/** Map one collection to rows, with the sessions special-case above. */
+function collectionRows(
+  userId: string,
+  k: CollKey,
+  d: PersistedData,
+  items: unknown[]
+): Row[] {
+  if (k === "sessions") {
+    return sessionRows(userId, items as Session[], d.meetings ?? []);
+  }
+  const m = map[k];
+  return items.map((item) =>
+    (m.toRow as (u: string, item: unknown) => Row)(userId, item)
+  );
+}
+
 // --- chats & node positions (key-value shaped) ------------------------------
 function chatRows(userId: string, chats: PersistedData["chats"]): Row[] {
   return Object.entries(chats).map(([chat_key, messages]) => ({
@@ -821,17 +865,13 @@ export async function writeAll(userId: string, d: PersistedData): Promise<void> 
 
   await Promise.all([
     ...COLLECTIONS.map((k) => {
-      const m = map[k];
       const items = d[k] as unknown[] | undefined;
       if (!Array.isArray(items)) {
         throw new Error(
           `writeAll: missing collection "${k}" — refusing to wipe the table`
         );
       }
-      const rows = items.map((item) =>
-        (m.toRow as (u: string, item: unknown) => Row)(userId, item)
-      );
-      return pushRows(m.table, "id", userId, rows);
+      return pushRows(map[k].table, "id", userId, collectionRows(userId, k, d, items));
     }),
     pushRows("chats", "chat_key", userId, chatRows(userId, d.chats)),
     pushRows("node_positions", "node_id", userId, posRows(userId, d.nodePositions)),
@@ -862,7 +902,6 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
 
   for (const k of COLLECTIONS) {
     if (base && base[k] === d[k]) continue;
-    const m = map[k];
     const items = d[k] as unknown[] | undefined;
     // Skip a missing slice rather than mapping undefined (which threw in prod
     // and blocked every save) or writing [] (which would delete the table).
@@ -872,10 +911,9 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
       console.error(`LeadWell: sync skipped missing collection "${k}"`);
       continue;
     }
-    const rows = items.map((item) =>
-      (m.toRow as (u: string, item: unknown) => Row)(userId, item)
+    jobs.push(
+      pushRows(map[k].table, "id", userId, collectionRows(userId, k, d, items))
     );
-    jobs.push(pushRows(m.table, "id", userId, rows));
   }
 
   if (!base || base.chats !== d.chats) {
