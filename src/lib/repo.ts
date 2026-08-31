@@ -822,7 +822,13 @@ export async function writeAll(userId: string, d: PersistedData): Promise<void> 
   await Promise.all([
     ...COLLECTIONS.map((k) => {
       const m = map[k];
-      const rows = (d[k] as unknown[]).map((item) =>
+      const items = d[k] as unknown[] | undefined;
+      if (!Array.isArray(items)) {
+        throw new Error(
+          `writeAll: missing collection "${k}" — refusing to wipe the table`
+        );
+      }
+      const rows = items.map((item) =>
         (m.toRow as (u: string, item: unknown) => Row)(userId, item)
       );
       return pushRows(m.table, "id", userId, rows);
@@ -857,19 +863,41 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
   for (const k of COLLECTIONS) {
     if (base && base[k] === d[k]) continue;
     const m = map[k];
-    const rows = (d[k] as unknown[]).map((item) =>
+    const items = d[k] as unknown[] | undefined;
+    // Skip a missing slice rather than mapping undefined (which threw in prod
+    // and blocked every save) or writing [] (which would delete the table).
+    // The store's extract list must stay in sync with COLLECTIONS; this only
+    // keeps one forgotten key from taking down the whole write path.
+    if (!Array.isArray(items)) {
+      console.error(`LeadWell: sync skipped missing collection "${k}"`);
+      continue;
+    }
+    const rows = items.map((item) =>
       (m.toRow as (u: string, item: unknown) => Row)(userId, item)
     );
     jobs.push(pushRows(m.table, "id", userId, rows));
   }
 
   if (!base || base.chats !== d.chats) {
-    jobs.push(pushRows("chats", "chat_key", userId, chatRows(userId, d.chats)));
+    if (d.chats && typeof d.chats === "object") {
+      jobs.push(pushRows("chats", "chat_key", userId, chatRows(userId, d.chats)));
+    } else {
+      console.error('LeadWell: sync skipped missing collection "chats"');
+    }
   }
   if (!base || base.nodePositions !== d.nodePositions) {
-    jobs.push(
-      pushRows("node_positions", "node_id", userId, posRows(userId, d.nodePositions))
-    );
+    if (d.nodePositions && typeof d.nodePositions === "object") {
+      jobs.push(
+        pushRows(
+          "node_positions",
+          "node_id",
+          userId,
+          posRows(userId, d.nodePositions)
+        )
+      );
+    } else {
+      console.error('LeadWell: sync skipped missing collection "nodePositions"');
+    }
   }
 
   await Promise.all(jobs);

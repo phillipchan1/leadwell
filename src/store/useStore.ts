@@ -707,6 +707,79 @@ function blankData(): PersistedData {
 }
 
 /**
+ * Every field the cloud write path must extract from the store. Kept next to
+ * the document shape helpers so bootstrap can tell a complete cache from one
+ * written by a buggy extract that omitted newer collections.
+ */
+const PERSISTED_KEYS: (keyof PersistedData)[] = [
+  "me",
+  "capacities",
+  "domains",
+  "managers",
+  "teams",
+  "people",
+  "actions",
+  "meetings",
+  "tags",
+  "topics",
+  "followUps",
+  "sessions",
+  "goals",
+  "notes",
+  "wins",
+  "prayers",
+  "teamActions",
+  "teamGoals",
+  "teamNotes",
+  "chats",
+  "nodePositions",
+];
+
+/** True when a cached doc was serialized without one of the persisted slices. */
+function isIncompletePersistedDoc(doc: Partial<PersistedData>): boolean {
+  return PERSISTED_KEYS.some((k) => doc[k] === undefined);
+}
+
+/**
+ * A failed sync used to cache `extractData` without `tags` / `followUps`.
+ * Reloading that snapshot as a pending full push would migrate the holes to
+ * `[]` and delete the server's rows. Overlay the cache's present keys onto
+ * the server copy so edits survive and missing tables stay intact.
+ */
+async function recoverIncompletePendingWrite(
+  userId: string,
+  email: string | null,
+  cachedRaw: PersistedData,
+  hydrate: Store["hydrate"]
+): Promise<void> {
+  try {
+    const server = await repo.loadAll(userId);
+    if (!server) {
+      // Nothing on the server to protect — push what we have.
+      repo.clearBaseline();
+      fullSyncPending = true;
+      void runSync(userId);
+      return;
+    }
+    const merged: PersistedData = { ...server };
+    for (const k of PERSISTED_KEYS) {
+      if (cachedRaw[k] !== undefined) {
+        (merged as Record<string, unknown>)[k] = cachedRaw[k];
+      }
+    }
+    hydrate(merged, userId, email);
+    repo.clearBaseline();
+    fullSyncPending = true;
+    void runSync(userId);
+  } catch (e) {
+    console.error("LeadWell: could not repair incomplete pending cache", e);
+    // Do not full-push the incomplete doc — that is how the wipe happens.
+    // Keep the local paint and retry when connectivity returns via revalidate.
+    void revalidate(userId, email);
+  }
+}
+
+/**
  * One-time migration: if this browser still holds data from the old
  * localStorage-only version, adopt it as the new user's starting document so
  * nothing is lost. Returns null when there's nothing to import.
@@ -2160,9 +2233,23 @@ export const useStore = create<Store>((set, get) => ({
         // These edits were made without a connection. The server has never
         // seen this document, so there is nothing to refresh *from* — drop the
         // baseline and push the whole thing up instead.
-        repo.clearBaseline();
-        fullSyncPending = true;
-        void runSync(userId);
+        //
+        // Exception: a buggy extract once cached docs that omitted newer
+        // collections (`tags`, `followUps`). Migrating those holes to `[]` and
+        // full-pushing would wipe the server tables. Repair against the
+        // server first.
+        if (isIncompletePersistedDoc(cached.doc)) {
+          void recoverIncompletePendingWrite(
+            userId,
+            email,
+            cached.doc,
+            get().hydrate
+          );
+        } else {
+          repo.clearBaseline();
+          fullSyncPending = true;
+          void runSync(userId);
+        }
       } else {
         void revalidate(userId, email);
       }
@@ -2270,28 +2357,8 @@ export const useStore = create<Store>((set, get) => ({
 // Persist data changes to Supabase, debounced. UI state stays session-only
 // (dark mode persists to localStorage in toggleDark). repo.syncData compares
 // each collection by reference against the last baseline and writes only the
-// tables that actually changed.
-const PERSISTED_KEYS: (keyof PersistedData)[] = [
-  "me",
-  "capacities",
-  "domains",
-  "managers",
-  "teams",
-  "people",
-  "actions",
-  "meetings",
-  "topics",
-  "sessions",
-  "goals",
-  "notes",
-  "wins",
-  "prayers",
-  "teamActions",
-  "teamGoals",
-  "teamNotes",
-  "chats",
-  "nodePositions",
-];
+// tables that actually changed. PERSISTED_KEYS is declared with the document
+// helpers above so bootstrap and extractData share one list.
 
 /**
  * Bumped on every change to the document. A background refresh captures it
