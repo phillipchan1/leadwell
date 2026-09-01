@@ -382,7 +382,11 @@ type Store = PersistedData &
     /**
      * Capture with the `#tag @meeting !` grammar. Unknown `#tags` are created
      * on the spot — being sent to a settings screen mid-thought is how a
-     * capture box stops getting used. Returns the ids created.
+     * capture box stops getting used.
+     *
+     * When `target` names a week cell (booked or ~projected), the topic is born
+     * in that cell — projected weeks are booked on the way in, same as a drop.
+     * Returns the ids created.
      */
     captureTopics: (
       raw: string,
@@ -1743,6 +1747,7 @@ export const useStore = create<Store>((set, get) => ({
 
       let tags = s.tags;
       let topics = s.topics;
+      let sessions = s.sessions;
       // `@frontier` should match what the user sees, which is the meeting's
       // own name when it has one and the subject's otherwise.
       const labelOf = (m: TrackedMeeting) =>
@@ -1781,6 +1786,51 @@ export const useStore = create<Store>((set, get) => ({
           if (m) meetingId = m.id;
         }
 
+        /*
+         * Born in place: typing Enter in a grid cell must land the topic in
+         * that cell. Dragging onto a ~projected week already books the
+         * occurrence on the way in; capture used to skip that step and drop
+         * the topic in Ideas with only a slotId, which is the exact surprise
+         * "I pressed Enter here and it went to the backlog."
+         */
+        let sessionId: string | undefined;
+        let lane: TopicLane =
+          target?.kind === "lane" ? target.lane : "backlog";
+        const slotId = target?.slotId;
+        const staysOnTarget =
+          !target?.meetingId || !meetingId || meetingId === target.meetingId;
+
+        if (staysOnTarget && target) {
+          if (target.kind === "session") {
+            sessionId = target.sessionId;
+          } else if (target.kind === "projected") {
+            const existing = sessions.find(
+              (o) => o.meetingId === meetingId && o.date === target.date
+            );
+            if (existing) {
+              sessionId = existing.id;
+            } else if (meetingId) {
+              sessionId = uid();
+              sessions = [
+                ...sessions,
+                { id: sessionId, meetingId, date: target.date },
+              ];
+            }
+          }
+        }
+
+        // A slot with a tag stamps it on arrival — same as placeTopicAt.
+        const slot =
+          staysOnTarget && meetingId && slotId
+            ? s.meetings
+                .find((m) => m.id === meetingId)
+                ?.curriculum?.find((c) => c.id === slotId)
+            : undefined;
+        const stamped =
+          slot?.tagId && !tagIds.includes(slot.tagId)
+            ? [...tagIds, slot.tagId]
+            : tagIds;
+
         const id = uid();
         created.push(id);
         const topic: Topic = {
@@ -1788,10 +1838,10 @@ export const useStore = create<Store>((set, get) => ({
           meetingId,
           text: parsed.text,
           status: "open",
-          lane: target?.kind === "lane" ? target.lane : "backlog",
-          sessionId: target?.kind === "session" ? target.sessionId : undefined,
-          slotId: target?.slotId,
-          tagIds,
+          lane,
+          sessionId,
+          slotId: staysOnTarget ? slotId : undefined,
+          tagIds: stamped,
           urgent: parsed.urgent || undefined,
           carried: 0,
           carriedFrom: [],
@@ -1800,7 +1850,7 @@ export const useStore = create<Store>((set, get) => ({
         };
         topics = reorderInto([...topics, topic], topic, index);
       }
-      return created.length ? { tags, topics } : {};
+      return created.length ? { tags, topics, sessions } : {};
     });
     return created;
   },
