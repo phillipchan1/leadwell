@@ -32,6 +32,16 @@ export function MeetingScheduleFields({
 
   const projected = useMemo(() => {
     const slots = plannedSlots(meeting, sessions, topics, undefined, 4);
+    if (meeting.nextDate) {
+      return (
+        slots.find((s) => s.date === meeting.nextDate) ?? {
+          sessionId: null,
+          date: meeting.nextDate,
+          projected: false,
+          past: false,
+        }
+      );
+    }
     return nextSlotAfter(slots);
   }, [meeting, sessions, topics]);
 

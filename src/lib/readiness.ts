@@ -178,7 +178,11 @@ function toUTC(iso: string): number {
 }
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function addDays(iso: string, days: number): string {
@@ -214,6 +218,11 @@ export const ANCHOR_WEEKDAY_OPTIONS = WEEKDAY_LABELS.map((label, value) => ({
 /**
  * Next occurrence after `lastMet`, honoring rhythm and optional anchor weekday.
  * Used by readiness and the topic-board slot projector — one source of truth.
+ *
+ * Weekly-on-Friday means the next Friday after the last meeting — even when
+ * that Friday is tomorrow. A minimum-gap skip used to push it another week
+ * whenever lastMet wasn't itself a Friday (including "no history, seed from
+ * today"), which hid this week's occurrence.
  */
 export function projectFromLast(
   meeting: TrackedMeeting,
@@ -229,9 +238,7 @@ export function projectFromLast(
   if (anchor === undefined) return addDays(lastMet, step);
 
   if (rhythm === "weekly") {
-    let d = onOrAfterWeekday(addDays(lastMet, 1), anchor);
-    if (daysBetween(lastMet, d) < 7) d = addDays(d, 7);
-    return d;
+    return onOrAfterWeekday(addDays(lastMet, 1), anchor);
   }
   if (rhythm === "biweekly") {
     let d = onOrAfterWeekday(addDays(lastMet, 1), anchor);
@@ -239,6 +246,26 @@ export function projectFromLast(
     return d;
   }
   return onOrAfterWeekday(addDays(lastMet, step), anchor);
+}
+
+/**
+ * Next occurrence on or after `today`. Walks the rhythm forward from the last
+ * meeting so a missed week doesn't leave "next" in the past; with no history,
+ * snaps to the anchor weekday (this Friday, not next-next Friday).
+ */
+export function upcomingRhythmDate(
+  meeting: TrackedMeeting,
+  lastMet: string | null,
+  today: string = todayISO()
+): string | null {
+  if (meeting.rhythm === "as_needed") return null;
+  if (lastMet) {
+    let d = projectFromLast(meeting, lastMet);
+    while (d < today) d = projectFromLast(meeting, d);
+    return d;
+  }
+  if (meeting.anchorWeekday === undefined) return null;
+  return onOrAfterWeekday(today, meeting.anchorWeekday);
 }
 
 /**
@@ -322,6 +349,10 @@ export function sessionsFor(meetingId: string, sessions: Session[]): Session[] {
  * The next explicitly booked occurrence. `meeting.nextDate` wins when set —
  * that's the user's current plan in Settings. Per-session `nextDate` fields are
  * only fallbacks from individual write-ups.
+ *
+ * A session that exists on a future date is not a booking. Opening a projected
+ * week materializes an empty row; treating that as "next" used to skip the
+ * Friday that's actually coming up.
  */
 export function explicitNextDate(
   meeting: TrackedMeeting,
@@ -333,17 +364,12 @@ export function explicitNextDate(
   }
 
   const mine = sessionsFor(meeting.id, sessions);
-  const scheduled = mine.find((s) => s.date > today)?.date ?? null;
   const fromSessions = mine
     .map((s) => s.nextDate)
     .filter((d): d is string => typeof d === "string" && d >= today)
-    .sort()
-    .pop();
+    .sort()[0];
 
-  if (scheduled && fromSessions) {
-    return scheduled < fromSessions ? scheduled : fromSessions;
-  }
-  return scheduled ?? fromSessions ?? null;
+  return fromSessions ?? null;
 }
 
 /** Latest booking hint on record — for missed-date detection. */
@@ -384,10 +410,12 @@ export function meetingReadiness(
   const booked = latestBookingHint(meeting, sessions);
 
   // As-needed makes no promise about a next date, so it projects nothing.
-  const projectedDate =
-    !asNeeded && lastMet ? projectFromLast(meeting, lastMet) : null;
+  const projectedDate = upcomingRhythmDate(meeting, lastMet, today);
   const nextDate = explicit ?? projectedDate;
-  const projected = !explicit && Boolean(projectedDate);
+  const onTheBooks = Boolean(
+    nextDate && mine.some((s) => s.date === nextDate)
+  );
+  const projected = !explicit && Boolean(projectedDate) && !onTheBooks;
   const daysUntil = nextDate ? daysBetween(today, nextDate) : null;
 
   const windowOpen =

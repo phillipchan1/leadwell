@@ -33,7 +33,7 @@ import type {
   TopicLane,
   TrackedMeeting,
 } from "../types";
-import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, weekdayUTC } from "./readiness";
+import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, upcomingRhythmDate, weekdayUTC, CADENCE_DAYS } from "./readiness";
 
 /** How far the planner looks by default — a quarter of weekly meetings, not three weeks. */
 export const SLOTS_AHEAD = 8;
@@ -244,12 +244,12 @@ export function allLooseTopics(
 }
 
 /**
- * The occurrences this board plans into: any past one still holding something
- * unfinished, every future one on the books, then projections to fill out the
- * runway.
+ * The occurrences this board plans into: the most recent past meeting (so last
+ * week stays reachable), any older one still holding something unfinished,
+ * every future one on the books, then projections to fill out the runway.
  *
- * A past occurrence with nothing open in it is deliberately absent — the board
- * is for what's ahead, and history lives in the write-ups.
+ * Full history lives in Write-ups; the board keeps one look back so a finished
+ * week doesn't vanish the morning after.
  */
 export function plannedSlots(
   meeting: TrackedMeeting,
@@ -266,8 +266,10 @@ export function plannedSlots(
   );
 
   const byDate = new Map<string, Slot>();
+  const pastSessions = mine.filter((s) => s.date < today);
+  const lastPastSession = pastSessions[pastSessions.length - 1];
 
-  for (const s of mine.filter((s) => s.date < today && openSlotted.has(s.id))) {
+  for (const s of pastSessions.filter((s) => openSlotted.has(s.id))) {
     byDate.set(s.date, {
       sessionId: s.id,
       date: s.date,
@@ -276,18 +278,37 @@ export function plannedSlots(
     });
   }
 
+  if (lastPastSession && !byDate.has(lastPastSession.date)) {
+    byDate.set(lastPastSession.date, {
+      sessionId: lastPastSession.id,
+      date: lastPastSession.date,
+      projected: false,
+      past: true,
+    });
+  }
+
   const booking = explicitNextDate(meeting, sessions, today);
   const lastPast = mine.filter((s) => s.date <= today).pop()?.date;
-  const anchor = booking ?? lastPast ?? today;
   const target = meeting.rhythm === "as_needed" ? 1 : ahead;
 
-  // Always scaffold the next N occurrences from the nearest anchor — never
-  // from the furthest materialized session, or planning ahead would swallow
-  // the near-term columns.
-  let cursor = anchor;
-  if (cursor < today) {
-    cursor = projectFromLast(meeting, cursor);
-    while (cursor <= today) cursor = projectFromLast(meeting, cursor);
+  // Scaffold from the next rhythm date on or after today — never from a
+  // session weeks out, or clicking that week would hide this Friday.
+  let cursor =
+    meeting.rhythm === "as_needed"
+      ? (booking && booking >= today ? booking : lastPast && lastPast >= today ? lastPast : today)
+      : (upcomingRhythmDate(meeting, lastPast ?? null, today) ?? today);
+
+  if (meeting.rhythm !== "as_needed") {
+    const prev = addDays(cursor, -CADENCE_DAYS[meeting.rhythm]);
+    if (prev < today && !byDate.has(prev)) {
+      const existing = mine.find((s) => s.date === prev);
+      byDate.set(prev, {
+        sessionId: existing?.id ?? null,
+        date: prev,
+        projected: !existing,
+        past: true,
+      });
+    }
   }
 
   for (let i = 0; i < target; i++) {

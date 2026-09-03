@@ -6,7 +6,6 @@ import {
   curriculumOf,
   slotDotClass,
   slotKey,
-  slotLabel,
   slotLabelOf,
   topicsFor,
   type CalendarDay,
@@ -15,8 +14,7 @@ import {
 import { todayISO } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { Input } from "@/components/base/input/input";
-import { ChevronLeft, ChevronRight } from "@untitledui/icons";
+import { ChevronLeft, ChevronRight, Plus } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -46,9 +44,29 @@ function dayNumber(iso: string): number {
   return Number(iso.slice(8, 10));
 }
 
+function dateLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Any day can be an occurrence — click materializes it, the way Notion creates a page. */
+function slotForDay(day: CalendarDay, today: string): Slot {
+  if (day.slot) return day.slot;
+  return {
+    sessionId: null,
+    date: day.date,
+    projected: true,
+    past: day.date < today,
+  };
+}
+
 /**
  * Month grid for one meeting — same slots and topics as the board, laid out
- * on a calendar. Projected occurrences show dashed; booked ones are solid.
+ * on a calendar. Every day is a click target; hover reveals a plus.
  */
 export function MeetingCalendar({
   meeting,
@@ -61,15 +79,13 @@ export function MeetingCalendar({
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
-  const addTopic = useStore((s) => s.addTopic);
   const addSession = useStore((s) => s.addSession);
   const placeTopic = useStore((s) => s.placeTopic);
   const today = todayISO();
   const [month, setMonth] = useState(() => currentMonth(today));
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
 
   const curriculum = curriculumOf(meeting);
+  const occurrenceLabel = meeting.name?.trim() || "Meeting";
 
   const grid = useMemo(
     () => calendarGrid(month, meeting, sessions, topics, today),
@@ -84,27 +100,14 @@ export function MeetingCalendar({
     };
   }, [topics, meeting.id]);
 
-  const selectedDay = selectedDate
-    ? grid.find((d) => d.date === selectedDate)
-    : null;
-
-  const addToDay = (day: CalendarDay) => {
-    const text = draft.trim();
-    if (!text) return;
-
-    if (day.slot?.sessionId) {
-      addTopic(meeting.id, text, { sessionId: day.slot.sessionId });
-    } else if (day.slot) {
-      const sessionId = addSession({ meetingId: meeting.id, date: day.slot.date });
-      addTopic(meeting.id, text, { sessionId });
-    } else {
-      addTopic(meeting.id, text, { lane: "backlog" });
-    }
-    setDraft("");
+  const openDay = (day: CalendarDay) => {
+    if (!onSelectWeek) return;
+    const slot = slotForDay(day, today);
+    onSelectWeek(slotKey(slot), slot);
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <ButtonUtility
           size="sm"
@@ -135,20 +138,23 @@ export function MeetingCalendar({
         )}
       </div>
 
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800">
+      <div className="grid min-h-[32rem] flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(0,1fr))] gap-px overflow-hidden rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800">
         {WEEKDAYS.map((d) => (
           <div
             key={d}
-            className="bg-secondary px-1 py-1.5 text-center text-caption font-semibold tracking-wide text-quaternary uppercase"
+            className="bg-secondary px-2 py-1.5 text-[11px] font-medium text-quaternary"
           >
             {d}
           </div>
         ))}
 
         {grid.map((day) => {
-          const key = day.slot ? slotKey(day.slot) : null;
-          const notesSelected = Boolean(
-            key && selectedSlotKey && key === selectedSlotKey
+          const key = day.slot ? slotKey(day.slot) : `p:${day.date}`;
+          const selected = Boolean(
+            selectedSlotKey &&
+              (selectedSlotKey === key ||
+                (day.slot?.sessionId &&
+                  selectedSlotKey === `s:${day.slot.sessionId}`))
           );
           return (
             <CalendarCell
@@ -156,67 +162,13 @@ export function MeetingCalendar({
               day={day}
               today={today}
               curriculum={curriculum}
-              selected={selectedDate === day.date || notesSelected}
-              onSelect={() => {
-                if (day.slot && onSelectWeek) {
-                  onSelectWeek(key!, day.slot);
-                  setSelectedDate(day.date);
-                  return;
-                }
-                setSelectedDate(selectedDate === day.date ? null : day.date);
-              }}
+              occurrenceLabel={occurrenceLabel}
+              selected={selected}
+              onSelect={() => openDay(day)}
             />
           );
         })}
       </div>
-
-      {selectedDay && !selectedDay.slot && (
-        <form
-          className="space-y-2 rounded-xl border border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40"
-          onSubmit={(e) => {
-            e.preventDefault();
-            addToDay(selectedDay);
-          }}
-        >
-          <p className="text-xs font-medium text-stone-600 dark:text-stone-300">
-            {new Date(`${selectedDay.date}T00:00:00Z`).toLocaleDateString(
-              undefined,
-              {
-                weekday: "long",
-                month: "short",
-                day: "numeric",
-                timeZone: "UTC",
-              }
-            )}
-          </p>
-          <Input
-            size="sm"
-            placeholder="Talk about…"
-            aria-label="Add topic to this date"
-            value={draft}
-            onChange={setDraft}
-          />
-        </form>
-      )}
-
-      {selectedDay?.slot && (
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            addToDay(selectedDay);
-          }}
-        >
-          <Input
-            size="sm"
-            placeholder="Add a topic…"
-            aria-label="Add topic to this date"
-            value={draft}
-            onChange={setDraft}
-            className="flex-1"
-          />
-        </form>
-      )}
 
       {(unscheduled.backlog.length > 0 || unscheduled.parked.length > 0) && (
         <div className="space-y-2">
@@ -231,13 +183,13 @@ export function MeetingCalendar({
                 tag={slotLabelOf(curriculum, t.slotId)}
                 onPlace={(date) => {
                   const day = grid.find((d) => d.date === date);
-                  if (!day?.slot) return;
+                  if (!day) return;
                   const sessionId =
-                    day.slot.sessionId ??
-                    addSession({ meetingId: meeting.id, date: day.slot.date });
+                    day.slot?.sessionId ??
+                    addSession({ meetingId: meeting.id, date: day.date });
                   placeTopic(t.id, { sessionId, slotId: t.slotId });
                 }}
-                dates={grid.filter((d) => d.inMonth && d.slot).map((d) => d.date)}
+                dates={grid.filter((d) => d.inMonth).map((d) => d.date)}
               />
             ))}
             {unscheduled.parked.map((t) => (
@@ -262,55 +214,68 @@ function CalendarCell({
   selected,
   onSelect,
   curriculum,
+  occurrenceLabel,
 }: {
   day: CalendarDay;
   today: string;
   selected: boolean;
   onSelect: () => void;
   curriculum: ReturnType<typeof curriculumOf>;
+  occurrenceLabel: string;
 }) {
   const isToday = day.date === today;
   const hasOccurrence = Boolean(day.slot);
   const past = day.slot?.past;
+  const empty = day.topics.length === 0;
+  const shown = day.topics.slice(0, 3);
+  const extra = day.topics.length - shown.length;
 
   return (
     <button
       type="button"
       onClick={onSelect}
+      aria-label={`Open ${dateLabel(day.date)}`}
+      aria-pressed={selected}
       className={cx(
-        "flex min-h-[4.5rem] flex-col bg-primary p-1 text-left transition",
-        !day.inMonth && "opacity-40",
-        selected && "ring-2 ring-teal-500 ring-inset dark:ring-teal-600",
-        !selected && "hover:bg-stone-50 dark:hover:bg-stone-800/60"
+        "group relative flex min-h-[4.75rem] flex-col gap-0.5 bg-primary p-1.5 text-left transition",
+        "hover:bg-stone-50 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-stone-800/70",
+        !day.inMonth && "bg-stone-50/80 opacity-50 dark:bg-stone-950/40",
+        selected && "z-[1] bg-teal-50/40 ring-2 ring-inset ring-teal-500 dark:bg-teal-950/20 dark:ring-teal-600"
       )}
     >
-      <span
-        className={cx(
-          "mb-0.5 inline-flex size-5 items-center justify-center rounded-full text-caption tabular-nums",
-          isToday && "bg-teal-600 font-semibold text-white",
-          !isToday && "text-stone-600 dark:text-stone-300"
-        )}
-      >
-        {dayNumber(day.date)}
-      </span>
-
-      {hasOccurrence && (
+      <span className="flex items-start justify-between gap-1">
         <span
           className={cx(
-            "mb-0.5 h-1 w-full rounded-full",
-            past && "bg-amber-400 dark:bg-amber-600",
-            !past && day.slot!.projected && "border border-dashed border-teal-400 bg-teal-50 dark:border-teal-600 dark:bg-teal-950/40",
-            !past && !day.slot!.projected && "bg-teal-500 dark:bg-teal-600"
+            "inline-flex size-6 items-center justify-center rounded-full text-[13px] tabular-nums",
+            isToday && "bg-teal-600 font-semibold text-white",
+            !isToday && "text-stone-600 dark:text-stone-300"
           )}
-          title={day.slot ? slotLabel(day.slot) : undefined}
-        />
-      )}
+        >
+          {dayNumber(day.date)}
+        </span>
+        <span
+          className={cx(
+            "grid size-5 shrink-0 place-items-center rounded text-stone-400 transition-opacity",
+            empty
+              ? "opacity-70 group-hover:opacity-100 group-focus-visible:opacity-100"
+              : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+          )}
+          aria-hidden
+        >
+          <Plus className="size-3.5" />
+        </span>
+      </span>
 
-      <ul className="min-h-0 flex-1 space-y-0.5 overflow-hidden">
-        {day.topics.slice(0, 2).map((t) => (
+      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+        {shown.map((t) => (
           <li
             key={t.id}
-            className="flex items-center gap-1 truncate text-caption leading-tight text-stone-600 dark:text-stone-300"
+            className={cx(
+              "flex items-center gap-1 truncate rounded-sm px-1 py-0.5 text-[11px] leading-snug",
+              past
+                ? "bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"
+                : "bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-200"
+            )}
           >
             {t.slotId && (
               <span
@@ -324,8 +289,20 @@ function CalendarCell({
             <span className="truncate">{t.text}</span>
           </li>
         ))}
-        {day.topics.length > 2 && (
-          <li className="text-caption text-stone-400">+{day.topics.length - 2}</li>
+        {hasOccurrence && empty && (
+          <li
+            className={cx(
+              "truncate rounded-sm px-1 py-0.5 text-[11px] leading-snug",
+              day.slot?.projected
+                ? "border border-dashed border-teal-300 text-teal-700/80 dark:border-teal-700 dark:text-teal-400/80"
+                : "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
+            )}
+          >
+            {occurrenceLabel}
+          </li>
+        )}
+        {extra > 0 && (
+          <li className="px-1 text-[11px] text-quaternary">+{extra} more</li>
         )}
       </ul>
     </button>

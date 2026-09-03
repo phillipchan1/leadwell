@@ -167,10 +167,8 @@ export function MeetingPlanner({
           role="tabpanel"
           aria-labelledby={`${panelId}-tab-${view}`}
           className={cx(
-            "min-h-0 min-w-0",
-            selectedSlotKey && !isMobile
-              ? "flex-1 overflow-y-auto"
-              : "flex-1"
+            "flex min-h-0 min-w-0 flex-1 flex-col",
+            selectedSlotKey && !isMobile ? "overflow-hidden" : "overflow-y-auto"
           )}
         >
           {boardOrCalendar}

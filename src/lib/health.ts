@@ -77,7 +77,11 @@ export const STALE_DAYS = 90;
 const DAY = 86_400_000;
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /** Days since the call was last made, or null when it was never dated. */

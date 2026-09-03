@@ -27,13 +27,35 @@ function weekdayUTC(iso: string): number {
   return new Date(`${iso}T00:00:00Z`).getUTCDay();
 }
 
+function onOrAfterWeekday(from: string, day: number): string {
+  let cursor = from;
+  for (let i = 0; i < 7; i++) {
+    if (weekdayUTC(cursor) === day) return cursor;
+    cursor = addDays(cursor, 1);
+  }
+  return cursor;
+}
+
 function projectFromLast(meeting: LabMeeting, last: string): string {
-  let next = addDays(last, STEP_DAYS[meeting.rhythm]);
+  const step = STEP_DAYS[meeting.rhythm];
   const target = meeting.anchorWeekday;
+  if (meeting.rhythm === "weekly") {
+    return onOrAfterWeekday(addDays(last, 1), target);
+  }
+  let next = addDays(last, step);
   const cur = weekdayUTC(next);
   const delta = (target - cur + 7) % 7;
   if (delta) next = addDays(next, delta);
   return next;
+}
+
+function upcomingFrom(meeting: LabMeeting, lastPast: string | undefined, today: string): string {
+  if (lastPast) {
+    let d = projectFromLast(meeting, lastPast);
+    while (d < today) d = projectFromLast(meeting, d);
+    return d;
+  }
+  return onOrAfterWeekday(today, meeting.anchorWeekday);
 }
 
 export function slotKey(slot: LabSlot): string {
@@ -95,14 +117,7 @@ export function plannedSlots(
   }
 
   const lastPast = mine.filter((s) => s.date <= today).pop()?.date;
-  let cursor = lastPast && lastPast >= today ? lastPast : today;
-  if (cursor < today || (lastPast && lastPast < today)) {
-    cursor = projectFromLast(meeting, lastPast ?? today);
-    while (cursor <= today) cursor = projectFromLast(meeting, cursor);
-  }
-  // Prefer an existing session on/after today as the first column.
-  const nextBooked = mine.find((s) => s.date >= today);
-  if (nextBooked) cursor = nextBooked.date;
+  let cursor = upcomingFrom(meeting, lastPast, today);
 
   for (let i = 0; i < ahead; i++) {
     if (i > 0) cursor = projectFromLast(meeting, cursor);

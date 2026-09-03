@@ -6,7 +6,7 @@ import {
   sessionSummary,
 } from "../lib/session";
 import { topicsFor } from "../lib/topics";
-import { todayISO } from "../lib/readiness";
+import { daysBetween, todayISO } from "../lib/readiness";
 import { Badge } from "@/components/base/badges/badges";
 import { tableRowActivationProps } from "@/lib/rowActivation";
 
@@ -17,9 +17,18 @@ const STATUS_COLOR: Record<string, "sky" | "warning" | "success" | "gray"> = {
   elsewhere: "gray",
 };
 
+function whenHint(date: string, today: string): string {
+  const days = daysBetween(today, date);
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  if (days === -1) return "yesterday";
+  if (days > 1) return `in ${days}d`;
+  return `${Math.abs(days)}d ago`;
+}
+
 /**
- * Past occurrences only — a read-first table. Click a row to open the
- * full write-up; planning and logging live on the week columns in Plan.
+ * Every logged occurrence — past, today, and upcoming. Click a row to open
+ * the write-up; planning still lives on the week columns in Plan.
  */
 export function SessionHistoryTable({
   meetingId,
@@ -38,9 +47,9 @@ export function SessionHistoryTable({
   const rows = useMemo(
     () =>
       sessions
-        .filter((s) => s.meetingId === meetingId && s.date < today)
+        .filter((s) => s.meetingId === meetingId)
         .sort((a, b) => b.date.localeCompare(a.date)),
-    [sessions, meetingId, today]
+    [sessions, meetingId]
   );
 
   const topicCounts = useMemo(() => {
@@ -89,6 +98,9 @@ export function SessionHistoryTable({
               >
                 <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-stone-600 dark:text-stone-300">
                   {row.date}
+                  <span className="ml-1.5 font-sans text-quaternary">
+                    {whenHint(row.date, today)}
+                  </span>
                 </td>
                 <td className="px-3 py-2.5">
                   <Badge size="sm" color={STATUS_COLOR[status]}>
