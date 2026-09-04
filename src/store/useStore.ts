@@ -644,6 +644,42 @@ function migrateDoc(doc: PersistedData): PersistedData {
   };
 }
 
+/**
+ * Un-strand topics that point at an occurrence which isn't there.
+ *
+ * Every surface splits topics in two: `!sessionId` is the idea bucket, and a
+ * `sessionId` matching a real session is a week column or a calendar day. A
+ * topic naming a session that doesn't exist falls through both — it is in the
+ * database, it syncs, it comes back on every load, and no screen in the app
+ * will draw it. From the desk it is simply gone.
+ *
+ * That state is reachable whenever the session write and the topic write don't
+ * land together: sessions and topics are separate upserts inside one
+ * `Promise.all`, so one table can commit while the other 400s. Rather than
+ * trusting those to never diverge, heal it on the way in — the topic goes back
+ * to the backlog it came from, where it is visible and can be re-planned. Being
+ * asked to schedule something twice is a nuisance; losing it is not.
+ */
+function rescueOrphanTopics(doc: PersistedData): PersistedData {
+  const sessions = doc.sessions ?? [];
+  const topics = doc.topics ?? [];
+  const known = new Set(sessions.map((o) => o.id));
+  const stranded = topics.filter((t) => t.sessionId && !known.has(t.sessionId));
+  if (!stranded.length) return doc;
+
+  console.warn(
+    `LeadWell: ${stranded.length} topic(s) pointed at a missing occurrence — returned to the backlog`,
+    stranded.map((t) => t.text)
+  );
+  const lost = new Set(stranded.map((t) => t.id));
+  return {
+    ...doc,
+    topics: topics.map((t) =>
+      lost.has(t.id) ? { ...t, sessionId: undefined, lane: "backlog" as const } : t
+    ),
+  };
+}
+
 function migrateSessions(sessions: Session[]): Session[] {
   return sessions.map((o) => ({
     ...o,
@@ -738,6 +774,57 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
 /** True when a cached doc was serialized without one of the persisted slices. */
 function isIncompletePersistedDoc(doc: Partial<PersistedData>): boolean {
   return PERSISTED_KEYS.some((k) => doc[k] === undefined);
+}
+
+/** The persisted slices that are arrays of `{ id }` — everything but these three. */
+const ID_COLLECTIONS = PERSISTED_KEYS.filter(
+  (k) => k !== "me" && k !== "chats" && k !== "nodePositions"
+);
+
+/**
+ * Fold a server document into the one on screen, additively.
+ *
+ * Used when a background refresh comes back and the user has been typing in the
+ * meantime. The old behaviour was to drop the response on the floor — in-memory
+ * wins — which is right about the rows both copies have and wrong about the
+ * ones only the server has. Those are usually the whole reason to refresh:
+ * something captured on the phone, in another tab, on the laptop this morning.
+ * Discarding them left this device convinced they never existed, and the next
+ * pruning sync then deleted them for everyone.
+ *
+ * So: local wins every conflict, and rows local has never heard of come along.
+ * Nothing in memory is overwritten and nothing is removed, which is what makes
+ * it safe to run underneath an open editor.
+ */
+function unionMissing(local: PersistedData, server: PersistedData): PersistedData {
+  const merged: PersistedData = { ...local };
+  let changed = false;
+
+  for (const k of ID_COLLECTIONS) {
+    const mine = local[k] as { id: string }[] | undefined;
+    const theirs = server[k] as { id: string }[] | undefined;
+    if (!Array.isArray(mine) || !Array.isArray(theirs)) continue;
+    const known = new Set(mine.map((x) => x.id));
+    const extra = theirs.filter((x) => x && !known.has(x.id));
+    if (!extra.length) continue;
+    (merged as Record<string, unknown>)[k] = [...mine, ...extra];
+    changed = true;
+  }
+
+  for (const k of ["chats", "nodePositions"] as const) {
+    const mine = local[k];
+    const theirs = server[k];
+    if (!mine || !theirs) continue;
+    const extra = Object.keys(theirs).filter((key) => !(key in mine));
+    if (!extra.length) continue;
+    (merged as Record<string, unknown>)[k] = {
+      ...theirs,
+      ...(mine as Record<string, unknown>),
+    };
+    changed = true;
+  }
+
+  return changed ? merged : local;
 }
 
 /**
@@ -1743,6 +1830,38 @@ export const useStore = create<Store>((set, get) => ({
 
       let tags = s.tags;
       let topics = s.topics;
+      let sessions = s.sessions;
+
+      /*
+       * Where the capture box was: a real occurrence, or a projected one the
+       * board is only drawing from the rhythm.
+       *
+       * Projected columns used to fall through to `undefined` here, so typing
+       * into next Friday quietly filed the topic in the idea bucket instead —
+       * the card simply wasn't where it had just been typed. Book the
+       * occurrence on the way in, exactly as dropping a card there does.
+       */
+      let targetSession: string | undefined;
+      if (target?.kind === "session") {
+        targetSession = target.sessionId;
+      } else if (target?.kind === "projected" && target.meetingId) {
+        const existing = sessions.find(
+          (o) => o.meetingId === target.meetingId && o.date === target.date
+        );
+        if (existing) {
+          targetSession = existing.id;
+        } else {
+          targetSession = uid();
+          sessions = [
+            ...sessions,
+            { id: targetSession, meetingId: target.meetingId, date: target.date },
+          ];
+        }
+      }
+      const sessionMeeting = targetSession
+        ? sessions.find((o) => o.id === targetSession)?.meetingId
+        : undefined;
+
       // `@frontier` should match what the user sees, which is the meeting's
       // own name when it has one and the subject's otherwise.
       const labelOf = (m: TrackedMeeting) =>
@@ -1783,13 +1902,17 @@ export const useStore = create<Store>((set, get) => ({
 
         const id = uid();
         created.push(id);
+        // An explicit `@other-meeting` overrules the column it was typed into,
+        // so it must not keep this meeting's occurrence.
+        const sessionId =
+          sessionMeeting && sessionMeeting === meetingId ? targetSession : undefined;
         const topic: Topic = {
           id,
           meetingId,
           text: parsed.text,
           status: "open",
           lane: target?.kind === "lane" ? target.lane : "backlog",
-          sessionId: target?.kind === "session" ? target.sessionId : undefined,
+          sessionId,
           slotId: target?.slotId,
           tagIds,
           urgent: parsed.urgent || undefined,
@@ -1800,7 +1923,9 @@ export const useStore = create<Store>((set, get) => ({
         };
         topics = reorderInto([...topics, topic], topic, index);
       }
-      return created.length ? { tags, topics } : {};
+      // Nothing captured ⇒ nothing booked. Returning `{}` drops the projected
+      // occurrence we speculatively created above.
+      return created.length ? { tags, topics, sessions } : {};
     });
     return created;
   },
@@ -2223,6 +2348,10 @@ export const useStore = create<Store>((set, get) => ({
     // Avoid redundant reloads if we're already ready for this user.
     if (get().phase === "ready" && get().userId === userId) return;
 
+    // A boot has read nothing yet, whoever ran last. Until this one does, its
+    // writes stay upsert-only.
+    serverReconciled = false;
+
     // Paint the local copy first when there is one. The full-screen skeleton
     // is then reserved for the case where there is genuinely nothing to show,
     // instead of being the cost of every return visit.
@@ -2248,7 +2377,11 @@ export const useStore = create<Store>((set, get) => ({
         } else {
           repo.clearBaseline();
           fullSyncPending = true;
-          void runSync(userId);
+          // Push first so the offline edits are safe, then read the server so
+          // this device stops being the only one that knows what it holds.
+          // Without the refresh it would never reconcile, and so would spend
+          // the whole session unable to propagate a deletion.
+          void runSync(userId).then(() => revalidate(userId, email));
         }
       } else {
         void revalidate(userId, email);
@@ -2293,7 +2426,11 @@ export const useStore = create<Store>((set, get) => ({
     bootstrapAttempts = 0;
     // Every load path lands here — cache, network, import, refresh — so this is
     // the one place a stale shape has to be made safe.
-    const doc = migrateDoc(rawDoc);
+    const doc = rescueOrphanTopics(migrateDoc(rawDoc));
+    // This document came off the network (load, refresh, seed, import), so it
+    // is the server's own account of itself and the client may prune against
+    // it from here on. A cache paint deliberately does not earn that.
+    if (!opts?.fromCache) serverReconciled = true;
     // Record the loaded doc as the persistence baseline BEFORE it lands in the
     // store, so the resulting change event is a no-op (same array references).
     repo.setBaseline(doc);
@@ -2341,6 +2478,7 @@ export const useStore = create<Store>((set, get) => ({
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
+    serverReconciled = false;
     set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
   },
 
@@ -2369,6 +2507,21 @@ export const useStore = create<Store>((set, get) => ({
 let docRevision = 0;
 
 /**
+ * Has this session read the server at least once and folded the answer into the
+ * document on screen?
+ *
+ * Until it has, the in-memory copy is a *guess* — the local cache, which may
+ * have been written days ago by this browser while the real work happened on a
+ * phone. It is fine to paint from and fine to push, but it must not be allowed
+ * to speak for rows it has never seen, and `repo.pushRows` deletes exactly
+ * those. So every write before reconciliation is upsert-only.
+ *
+ * Set by `hydrate` whenever the document came from the network rather than the
+ * cache; cleared on sign-out and whenever a fresh boot starts.
+ */
+let serverReconciled = false;
+
+/**
  * Refresh a cache-hydrated document from the server. Deliberately quiet: the
  * app is already usable, so nothing here is allowed to take it away.
  */
@@ -2382,9 +2535,15 @@ async function revalidate(userId: string, email: string | null): Promise<void> {
     if (!doc) return;
     const state = useStore.getState();
     if (state.userId !== userId || state.phase !== "ready") return;
-    // Edits landed while we were loading. In-memory wins — it is newer than
-    // this response, and it is already queued to sync.
-    if (docRevision !== startedAt) return;
+    // Edits landed while we were loading, so the server copy is no longer a
+    // straight replacement. Keep every local value and bring across only what
+    // this device has never seen — that is still a reconciliation, and the
+    // alternative (drop the response) is what let the next sync prune the rows
+    // it just threw away.
+    if (docRevision !== startedAt) {
+      state.hydrate(unionMissing(extractData(state), doc), userId, email);
+      return;
+    }
     state.hydrate(doc, userId, email);
   } catch (e) {
     // There is a document on screen and the app works. A failed refresh is
@@ -2486,7 +2645,10 @@ function runSync(userId: string): Promise<void> {
       try {
         useStore.setState({ syncStatus: "saving" });
         const written = extractData(latest);
-        await repo.syncData(userId, written);
+        // Upsert-only until this session has actually read the server. See
+        // `serverReconciled` — a cache-painted document is not entitled to
+        // delete rows it has never seen.
+        await repo.syncData(userId, written, { prune: serverReconciled });
         syncFailures = 0;
         fullSyncPending = false;
         clearSyncRetry();
@@ -2609,6 +2771,7 @@ supabase.auth.onAuthStateChange((event) => {
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
+    serverReconciled = false;
     useStore.setState({
       phase: "anon",
       userId: null,

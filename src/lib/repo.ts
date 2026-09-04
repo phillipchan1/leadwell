@@ -192,17 +192,27 @@ export function emptyMe(partial: Partial<Me> & { name: string }): Me {
 /**
  * Persist an id-keyed collection: upsert every current row, then delete rows
  * for this user whose key is no longer present. Empty collection ⇒ delete all.
+ *
+ * `prune` is what makes that second half safe. Delete-missing is only correct
+ * when the client's array is the whole truth — and a document painted from the
+ * local cache is *not*, until a server load has been folded into it. Pushing a
+ * stale snapshot with pruning on is how work done on another device gets
+ * deleted by the device that never saw it. Callers pass prune: false until
+ * they've reconciled; a resurrected row is recoverable, a deleted one isn't.
  */
 async function pushRows(
   table: string,
   keyField: string,
   userId: string,
-  rows: Row[]
+  rows: Row[],
+  prune: boolean
 ): Promise<void> {
   if (rows.length) {
     const { error } = await supabase.from(table).upsert(rows);
     if (error) throw new Error(`${table} upsert: ${error.message}`);
   }
+
+  if (!prune) return;
 
   // Delete rows that are no longer in the client collection. Prefer an
   // explicit id list over `.not(...).in(...)` string filters (those have been
@@ -871,10 +881,22 @@ export async function writeAll(userId: string, d: PersistedData): Promise<void> 
           `writeAll: missing collection "${k}" — refusing to wipe the table`
         );
       }
-      return pushRows(map[k].table, "id", userId, collectionRows(userId, k, d, items));
+      return pushRows(
+        map[k].table,
+        "id",
+        userId,
+        collectionRows(userId, k, d, items),
+        true
+      );
     }),
-    pushRows("chats", "chat_key", userId, chatRows(userId, d.chats)),
-    pushRows("node_positions", "node_id", userId, posRows(userId, d.nodePositions)),
+    pushRows("chats", "chat_key", userId, chatRows(userId, d.chats), true),
+    pushRows(
+      "node_positions",
+      "node_id",
+      userId,
+      posRows(userId, d.nodePositions),
+      true
+    ),
   ]);
 
   setBaseline(d);
@@ -884,8 +906,17 @@ export async function writeAll(userId: string, d: PersistedData): Promise<void> 
  * Persist only what changed since the last baseline. Compares each collection
  * by reference (zustand hands us fresh arrays only for the slices that changed)
  * and re-syncs just those tables.
+ *
+ * `prune` says whether this document is allowed to speak for rows it has never
+ * seen. It is false for every write made before the session has read the
+ * server once — see `pushRows`.
  */
-export async function syncData(userId: string, d: PersistedData): Promise<void> {
+export async function syncData(
+  userId: string,
+  d: PersistedData,
+  opts: { prune?: boolean } = {}
+): Promise<void> {
+  const prune = opts.prune !== false;
   const base = baseline;
   const jobs: Promise<void>[] = [];
 
@@ -912,13 +943,21 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
       continue;
     }
     jobs.push(
-      pushRows(map[k].table, "id", userId, collectionRows(userId, k, d, items))
+      pushRows(
+        map[k].table,
+        "id",
+        userId,
+        collectionRows(userId, k, d, items),
+        prune
+      )
     );
   }
 
   if (!base || base.chats !== d.chats) {
     if (d.chats && typeof d.chats === "object") {
-      jobs.push(pushRows("chats", "chat_key", userId, chatRows(userId, d.chats)));
+      jobs.push(
+        pushRows("chats", "chat_key", userId, chatRows(userId, d.chats), prune)
+      );
     } else {
       console.error('LeadWell: sync skipped missing collection "chats"');
     }
@@ -930,7 +969,8 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
           "node_positions",
           "node_id",
           userId,
-          posRows(userId, d.nodePositions)
+          posRows(userId, d.nodePositions),
+          prune
         )
       );
     } else {
