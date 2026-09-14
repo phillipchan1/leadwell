@@ -15,11 +15,13 @@ export type SessionStatus =
  */
 export function sessionStatus(
   o: Session,
-  notesElsewhere = false
+  notesElsewhere = false,
+  /** Pass it and an occurrence that hasn't happened yet stops asking for notes. */
+  today?: string
 ): SessionStatus {
   const hasNotes = Boolean(o.notes?.trim());
   if (hasNotes) return "done";
-  if (o.nextDate) return "scheduled";
+  if (o.nextDate || (today && o.date > today)) return "scheduled";
   return notesElsewhere ? "elsewhere" : "needs_notes";
 }
 

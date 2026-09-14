@@ -120,8 +120,8 @@ export function PrepPanel({
                 subjectKind={subjectKind}
                 subjectName={subjectName}
                 submitLabel="Start tracking"
-                onStart={(rhythm, name) => {
-                  trackMeeting(subjectKind, subjectId, rhythm, { name });
+                onStart={(rhythm, name, anchorWeekday) => {
+                  trackMeeting(subjectKind, subjectId, rhythm, { name, anchorWeekday });
                   setStarting(false);
                 }}
               />

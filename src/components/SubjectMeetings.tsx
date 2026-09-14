@@ -2,12 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
-  ANCHOR_WEEKDAY_OPTIONS,
   RHYTHM_LABEL,
   RHYTHM_OPTIONS,
   STATE_COLOR,
   STATE_LABEL,
-  formatCountdown,
   meetingTitle,
   meetingsFor,
   readinessOf,
@@ -23,9 +21,22 @@ import { StartMeetingForm } from "./StartMeetingForm";
 import { TrackerLink } from "./TrackerLink";
 import { TintBadge } from "./ui";
 import { Button } from "@/components/base/buttons/button";
+import { ButtonUtility } from "@/components/base/buttons/button-utility";
+import { MeetingRows } from "./MeetingRows";
+import { WeekdayPicker } from "./MeetingScheduleFields";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { Expand01, Settings01 } from "@untitledui/icons";
+
+const WEEKDAY_PLURAL = [
+  "Sundays",
+  "Mondays",
+  "Tuesdays",
+  "Wednesdays",
+  "Thursdays",
+  "Fridays",
+  "Saturdays",
+];
 
 /** Default tolerance offered when a meeting is switched to as-needed. */
 const DEFAULT_FLOOR_DAYS = 45;
@@ -68,11 +79,15 @@ export function SubjectMeetings({
   const mine = meetingsFor(meetings, subjectKind, subjectId);
   const firstName = subjectName.split(" ")[0] ?? subjectName;
 
-  const startMeeting = (rhythm: MeetingRhythm, name?: string) => {
+  const startMeeting = (
+    rhythm: MeetingRhythm,
+    name?: string,
+    anchorWeekday?: number
+  ) => {
     if (mine.length === 0) {
-      trackMeeting(subjectKind, subjectId, rhythm, { name });
+      trackMeeting(subjectKind, subjectId, rhythm, { name, anchorWeekday });
     } else {
-      createMeeting(subjectKind, subjectId, { rhythm, name });
+      createMeeting(subjectKind, subjectId, { rhythm, name, anchorWeekday });
     }
     setAdding(false);
   };
@@ -203,7 +218,7 @@ function MeetingBlock({
   direction: BoardDirection;
   onOpenSession: (id: string) => void;
 }) {
-  const { sessions, topics, meetings, updateMeeting, selectMeeting } =
+  const { sessions, topics, meetings, updateMeeting, selectMeeting, setMeetingWeekday } =
     useStore();
 
   const readiness = readinessOf(meeting, { meetings, sessions, topics });
@@ -225,130 +240,171 @@ function MeetingBlock({
     setPlanSlotKey(slotKey);
   }, []);
 
-  const weekday =
+  const recurring = meeting.rhythm !== "as_needed";
+  const needsDay =
+    recurring && meeting.rhythm !== "monthly" && meeting.rhythm !== "quarterly" &&
+    meeting.anchorWeekday === undefined;
+  const nextLabel = readiness.nextDate
+    ? new Date(`${readiness.nextDate}T00:00:00Z`).toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      })
+    : null;
+  const rhythmText = [
+    RHYTHM_LABEL[meeting.rhythm],
     meeting.anchorWeekday !== undefined
-      ? ANCHOR_WEEKDAY_OPTIONS.find(
-          (o) => o.value === String(meeting.anchorWeekday)
-        )?.label
-      : undefined;
+      ? `${WEEKDAY_PLURAL[meeting.anchorWeekday]}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const saveName = () =>
+    updateMeeting(meeting.id, { name: name.trim() || undefined });
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-4">
       {/*
-        The name and the rhythm are settings — decided once, then rarely touched
-        — and they were the first things on a planning surface every single
-        time. They sit behind the gear now; the heading carries the identity.
+        Identity on the left, one line of when underneath it; state and the
+        two icon actions on the right at the same size. The countdown, rhythm
+        and "next" used to be three separately coloured fragments saying the
+        same date twice.
       */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-stone-800 dark:text-stone-100">
-          {meetingTitle(meeting, subjectName)}
-        </h3>
-        <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
-        <span
-          className="shrink-0 font-mono text-caption tabular-nums"
-          style={{ color }}
-        >
-          {formatCountdown(readiness)}
-        </span>
-        <span className="shrink-0 text-caption text-quaternary">
-          {RHYTHM_LABEL[meeting.rhythm]}
-          {weekday ? ` · ${weekday}` : ""}
-          {readiness.nextDate
-            ? ` · next ${readiness.projected ? "~" : ""}${readiness.nextDate.slice(5).replace("-", "/")}`
-            : ""}
-        </span>
-        <Button
-          size="sm"
-          color={settingsOpen ? "secondary" : "link-gray"}
-          className="shrink-0"
-          iconLeading={Settings01}
-          onClick={() => setSettingsOpen((v) => !v)}
-          aria-label="Meeting settings"
-        >
-          <span className="sr-only">Settings</span>
-        </Button>
-        <Button
-          size="sm"
-          color="link-gray"
-          className="shrink-0"
-          iconLeading={Expand01}
-          onClick={() => selectMeeting(meeting.id)}
-          aria-label="Open this meeting's own page"
-        >
-          <span className="sr-only">Open meeting page</span>
-        </Button>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-md font-semibold text-primary">
+            {meetingTitle(meeting, subjectName)}
+          </h3>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-sm text-tertiary">
+            <span>{rhythmText}</span>
+            {nextLabel && (
+              <>
+                <span aria-hidden className="text-quaternary">·</span>
+                <span className="tabular-nums">
+                  Next {readiness.projected ? "~" : ""}
+                  {nextLabel}
+                  {readiness.daysUntil !== null && readiness.daysUntil >= 0 && (
+                    <span className="text-quaternary">
+                      {" "}
+                      ({readiness.daysUntil === 0
+                        ? "today"
+                        : readiness.daysUntil === 1
+                          ? "tomorrow"
+                          : `in ${readiness.daysUntil} days`})
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
+            {needsDay && !settingsOpen && (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="font-medium text-brand-secondary underline-offset-2 hover:underline"
+              >
+                Pick a day
+              </button>
+            )}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
+          <ButtonUtility
+            size="sm"
+            color="tertiary"
+            icon={Settings01}
+            tooltip="Meeting settings"
+            aria-expanded={settingsOpen}
+            className={settingsOpen ? "bg-tertiary" : undefined}
+            onClick={() => setSettingsOpen((v) => !v)}
+          />
+          <ButtonUtility
+            size="sm"
+            color="tertiary"
+            icon={Expand01}
+            tooltip="Open this meeting's page"
+            onClick={() => selectMeeting(meeting.id)}
+          />
+        </div>
       </div>
 
       {settingsOpen && (
-        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-secondary bg-stone-50/60 p-3 dark:bg-stone-950/40">
-          <div className="min-w-[12rem] flex-1">
+        <div className="grid gap-5 rounded-xl border border-secondary bg-secondary p-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <Input
               size="sm"
               label="Name"
-              placeholder={meetingTitle(
-                { ...meeting, name: undefined },
-                subjectName
-              )}
-              hint="Name it like a gathering — Staff meeting, weekly sync — not the relationship."
+              placeholder={meetingTitle({ ...meeting, name: undefined }, subjectName)}
               value={name}
               onChange={setName}
-              onBlur={() =>
-                updateMeeting(meeting.id, { name: name.trim() || undefined })
-              }
+              onBlur={saveName}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  updateMeeting(meeting.id, { name: name.trim() || undefined });
+                  saveName();
                 }
               }}
             />
+            <NativeSelect
+              size="sm"
+              label="How often"
+              value={meeting.rhythm}
+              onChange={(e) => {
+                const rhythm = e.target.value as MeetingRhythm;
+                updateMeeting(meeting.id, {
+                  rhythm,
+                  floorDays:
+                    rhythm === "as_needed"
+                      ? (meeting.floorDays ?? DEFAULT_FLOOR_DAYS)
+                      : undefined,
+                });
+              }}
+              options={RHYTHM_OPTIONS.map((r) => ({
+                label: RHYTHM_LABEL[r],
+                value: r,
+              }))}
+            />
+            {recurring && (
+              <div className="space-y-1.5">
+                <span className="block text-sm font-medium text-secondary">
+                  On
+                </span>
+                <WeekdayPicker
+                  value={meeting.anchorWeekday}
+                  onChange={(day) => setMeetingWeekday(meeting.id, day)}
+                />
+                <p className="text-caption text-quaternary">
+                  Booked weeks without notes move to this day.
+                </p>
+              </div>
+            )}
           </div>
-          <NativeSelect
-            size="sm"
-            className="w-auto shrink-0"
-            aria-label="How often this meeting happens"
-            value={meeting.rhythm}
-            onChange={(e) => {
-              const rhythm = e.target.value as MeetingRhythm;
-              updateMeeting(meeting.id, {
-                rhythm,
-                floorDays:
-                  rhythm === "as_needed"
-                    ? (meeting.floorDays ?? DEFAULT_FLOOR_DAYS)
-                    : undefined,
-              });
-            }}
-            options={RHYTHM_OPTIONS.map((r) => ({
-              label: RHYTHM_LABEL[r],
-              value: r,
-            }))}
-          />
+          <div className="space-y-1.5">
+            <span className="block text-sm font-medium text-secondary">
+              Board rows
+            </span>
+            <p className="text-caption text-quaternary">
+              Split each week by tag — drop a topic into the row it belongs to.
+            </p>
+            <MeetingRows meeting={meeting} />
+          </div>
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <div className="flex items-baseline justify-between">
-          <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
-            Plan
-          </span>
-          <span className="text-caption tabular-nums text-stone-400 dark:text-stone-500">
-            {openCount} open
-          </span>
-        </div>
-        <MeetingPlanner
-          meeting={meeting}
-          direction={direction}
-          selectedSlotKey={planSlotKey}
-          onSelectWeek={onSelectWeek}
-          onCloseNotes={closePlanNotes}
-          onOpenSession={onOpenSession}
-        />
-      </div>
+      <MeetingPlanner
+        meeting={meeting}
+        direction={direction}
+        selectedSlotKey={planSlotKey}
+        onSelectWeek={onSelectWeek}
+        onCloseNotes={closePlanNotes}
+        onOpenSession={onOpenSession}
+        openCount={openCount}
+      />
 
-      <div className="space-y-1.5">
-        <span className="text-caption font-semibold tracking-widest text-stone-400 uppercase dark:text-stone-500">
-          History
-        </span>
+      <div className="space-y-2">
+        <h4 className="text-sm font-semibold text-primary">History</h4>
         <SessionHistoryTable meetingId={meeting.id} onOpen={openSessionNotes} />
       </div>
 

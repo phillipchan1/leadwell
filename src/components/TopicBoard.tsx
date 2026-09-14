@@ -30,6 +30,7 @@ import { sessionSummary } from "../lib/session";
 import { deleteWithUndo } from "../lib/undo";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
+import { NativeSelect } from "@/components/base/select/select-native";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { DotsGrid, X } from "@untitledui/icons";
@@ -56,8 +57,6 @@ const CAPTURE_PLACEHOLDER: Record<BoardDirection, string> = {
   down: "Something to raise…",
   up: "Ask, escalate, flag…",
 };
-
-const newSlotId = () => Math.random().toString(36).slice(2, 10);
 
 type MoveGroup = { label: string; options: { key: string; label: string }[] };
 
@@ -95,7 +94,6 @@ export function TopicBoard({
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
-  const addTopic = useStore((s) => s.addTopic);
   const updateTopic = useStore((s) => s.updateTopic);
   const placeTopic = useStore((s) => s.placeTopic);
   const placeTopicAt = useStore((s) => s.placeTopicAt);
@@ -107,7 +105,7 @@ export function TopicBoard({
   const restoreTopic = useStore((s) => s.restoreTopic);
   const moveTopic = useStore((s) => s.moveTopic);
   const addSession = useStore((s) => s.addSession);
-  const setCurriculum = useStore((s) => s.setCurriculum);
+  const addMeetingRow = useStore((s) => s.addMeetingRow);
 
   const removeTopic = useCallback(
     (topic: Topic) => {
@@ -223,13 +221,7 @@ export function TopicBoard({
     onReorder: (id, dir) => moveTopic(id, dir),
     onCover: (id, covered) => coverTopic(id, covered),
     onTag: (id, slotId) => updateTopic(id, { slotId }),
-    onAddTag: (label) => {
-      const text = label.trim();
-      if (!text) return undefined;
-      const id = newSlotId();
-      setCurriculum(meeting.id, [...curriculum, { id, label: text }]);
-      return id;
-    },
+    onAddTag: (label) => addMeetingRow(meeting.id, label),
     onRoll: roll,
     onBacklog: (id) => placeTopic(id, { lane: "backlog" }),
     onDelete: removeTopic,
@@ -268,16 +260,14 @@ export function TopicBoard({
         drag={drag}
         columnRef={columnRef}
         cardProps={cardProps}
-        onCapture={(text, slotId) =>
-          addTopic(meeting.id, text, { lane: "backlog", slotId })
+        onCapture={(raw, slotId) =>
+          captureTopics(raw, {
+            kind: "lane",
+            lane: "backlog",
+            slotId,
+            meetingId: meeting.id,
+          })
         }
-        onAddTag={(label) => {
-          const text = label.trim();
-          if (!text) return undefined;
-          const id = newSlotId();
-          setCurriculum(meeting.id, [...curriculum, { id, label: text }]);
-          return id;
-        }}
       />
 
       {balance.length > 0 && (
@@ -292,6 +282,7 @@ export function TopicBoard({
         columnRef={columnRef}
         cardProps={cardProps}
         onSelectWeek={onSelectWeek}
+        onAddRow={(label) => addMeetingRow(meeting.id, label)}
       />
 
       {drag && dragged && (
@@ -382,6 +373,7 @@ function ScheduleGrid({
   columnRef,
   cardProps,
   onSelectWeek,
+  onAddRow,
 }: {
   weeks: WeekColumn[];
   curriculum: CurriculumSlot[];
@@ -390,15 +382,16 @@ function ScheduleGrid({
   columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
+  onAddRow: (label: string) => void;
 }) {
   const sessions = useStore((s) => s.sessions);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollLeftRef = useRef(0);
 
   const weekCount = Math.max(weeks.length, 1);
-  const colWidth = "9.25rem";
+  const colWidth = "10rem";
   const gridCols = curriculum.length
-    ? `6.5rem repeat(${weekCount}, ${colWidth})`
+    ? `7rem repeat(${weekCount}, ${colWidth})`
     : `repeat(${weekCount}, ${colWidth})`;
 
   useLayoutEffect(() => {
@@ -436,7 +429,7 @@ function ScheduleGrid({
         className="scroll-contain overflow-x-auto pb-1"
       >
         <div
-          className="inline-grid gap-px rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800"
+          className="inline-grid gap-px overflow-hidden rounded-xl border border-secondary bg-(--color-border-secondary)"
           style={{ gridTemplateColumns: gridCols }}
         >
           {weeks.map((week) => {
@@ -470,17 +463,15 @@ function ScheduleGrid({
             );
           })}
         </div>
+        <AddRow onAdd={onAddRow} first />
       </div>
     );
   }
 
   const rows: { id: string; label: string; slotId?: string }[] = [
     ...curriculum.map((s) => ({ id: s.id, label: s.label, slotId: s.id })),
+    { id: "untagged", label: "Untagged" },
   ];
-  const hasOther = weeks.some((w) =>
-    w.cells.some((c) => !c.slotId && c.topics.length > 0)
-  );
-  if (hasOther) rows.push({ id: "other", label: "Other" });
 
   return (
     <div
@@ -489,10 +480,10 @@ function ScheduleGrid({
       className="scroll-contain overflow-x-auto pb-1"
     >
       <div
-        className="inline-grid gap-px rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800"
+        className="inline-grid gap-px overflow-hidden rounded-xl border border-secondary bg-(--color-border-secondary)"
         style={{ gridTemplateColumns: gridCols }}
       >
-        <div className="sticky left-0 z-20 bg-stone-100/95 px-2 py-2 dark:bg-stone-900/95" />
+        <div className="sticky left-0 z-20 bg-secondary" />
 
         {weeks.map((week) => {
           const isActive = weekIsActive(week);
@@ -514,14 +505,18 @@ function ScheduleGrid({
 
         {rows.map((row) => (
           <Fragment key={row.id}>
-            <div className="sticky left-0 z-10 flex items-start bg-stone-100/95 px-2 py-2 dark:bg-stone-900/95">
+            <div className="sticky left-0 z-10 flex items-start gap-1.5 bg-secondary px-3 py-2.5">
+              <span
+                aria-hidden
+                className={cx(
+                  "mt-1.5 size-1.5 shrink-0 rounded-full",
+                  row.slotId ? slotDotClass(curriculum, row.slotId) : "bg-stone-300 dark:bg-stone-600"
+                )}
+              />
               <span
                 className={cx(
-                  "text-caption font-semibold leading-snug",
-                  row.slotId
-                    ? slotChipClass(curriculum, row.slotId)
-                    : "text-quaternary",
-                  "rounded px-1.5 py-0.5"
+                  "min-w-0 text-xs leading-snug font-semibold break-words",
+                  row.slotId ? "text-secondary" : "text-quaternary"
                 )}
               >
                 {row.label}
@@ -530,12 +525,12 @@ function ScheduleGrid({
             {weeks.map((week) => {
               const cell = row.slotId
                 ? cellFor(week, row.slotId)
-                : week.cells.find((c) => c.label === "Other");
+                : week.cells.find((c) => !c.slotId);
               if (!cell) {
                 return (
                   <div
                     key={`${row.id}-${week.slot.date}`}
-                    className="min-h-[2.75rem] border-l border-stone-200/80 bg-primary dark:border-stone-800/80"
+                    className="min-h-12 bg-primary"
                   />
                 );
               }
@@ -555,7 +550,56 @@ function ScheduleGrid({
           </Fragment>
         ))}
       </div>
+      <AddRow onAdd={onAddRow} />
     </div>
+  );
+}
+
+/** "+ Add row", on the board itself — where the need for one is noticed. */
+function AddRow({ onAdd, first }: { onAdd: (label: string) => void; first?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  if (!open) {
+    return (
+      <Button
+        size="sm"
+        color="link-gray"
+        className="mt-2"
+        onClick={() => setOpen(true)}
+      >
+        {first ? "+ Split weeks into rows by tag" : "+ Add row"}
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="mt-2 flex max-w-sm items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!draft.trim()) return;
+        onAdd(draft);
+        setDraft("");
+      }}
+    >
+      <Input
+        size="sm"
+        autoFocus
+        placeholder="Prayer, Training…"
+        aria-label="New row"
+        value={draft}
+        onChange={setDraft}
+        className="min-w-0 flex-1"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setOpen(false);
+        }}
+      />
+      <Button size="sm" color="secondary" type="submit" isDisabled={!draft.trim()}>
+        Add
+      </Button>
+      <Button size="sm" color="tertiary" onClick={() => setOpen(false)}>
+        Done
+      </Button>
+    </form>
   );
 }
 
@@ -632,7 +676,6 @@ function GridCell({
   cardProps: CardHandlers;
   compact?: boolean;
 }) {
-  const empty = cell.topics.length === 0;
   const active = drag?.over === cell.key;
   // Where it would land, not just where it would go. In a cell that is a
   // running order, the position *is* the decision.
@@ -670,8 +713,7 @@ function GridCell({
     <div
       ref={columnRef(cell.key)}
       className={cx(
-        "group/cell min-h-[2.75rem] border-l border-stone-200/80 bg-primary px-1 py-1 dark:border-stone-800/80",
-        empty && !active && "bg-stone-50/50 dark:bg-stone-950/20",
+        "group/cell min-h-12 bg-primary p-1.5",
         active &&
           "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
       )}
@@ -702,7 +744,6 @@ function IdeasPanel({
   columnRef,
   cardProps,
   onCapture,
-  onAddTag,
 }: {
   direction: BoardDirection;
   curriculum: CurriculumSlot[];
@@ -713,30 +754,17 @@ function IdeasPanel({
   columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   onCapture: (text: string, slotId?: string) => void;
-  onAddTag: (label: string) => string | undefined;
 }) {
   const [draft, setDraft] = useState("");
   const [tag, setTag] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [parkedOpen, setParkedOpen] = useState(false);
-  const [addingTag, setAddingTag] = useState(false);
-  const [tagDraft, setTagDraft] = useState("");
 
   const capture = () => {
     const text = draft.trim();
     if (!text) return;
     onCapture(text, tag || undefined);
     setDraft("");
-  };
-
-  const submitTag = () => {
-    const label = tagDraft.trim();
-    const id = onAddTag(label);
-    if (!id) return;
-    setTag(id);
-    setTagDraft("");
-    setAddingTag(false);
-    announce(`Added tag “${label}”.`);
   };
 
   const dropActive = (key: string) =>
@@ -771,19 +799,40 @@ function IdeasPanel({
   }
 
   return (
-    <div className="rounded-xl border border-secondary bg-stone-50/40 dark:bg-stone-950/30">
-      <div className="flex items-baseline justify-between gap-2 border-b border-secondary px-3 py-2">
-        <span className="text-xs font-semibold text-stone-700 dark:text-stone-200">
+    <div className="rounded-xl border border-secondary bg-primary">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-secondary px-4 py-2.5">
+        <h4 className="text-sm font-semibold text-primary">
           Ideas
-        </span>
-        <span className="text-caption tabular-nums text-quaternary">
-          {ideaCount} unscheduled
-        </span>
+          <span className="ml-1.5 font-normal text-quaternary tabular-nums">
+            {ideaCount}
+          </span>
+        </h4>
+        {filters.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter ideas">
+            {filters.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={filter === f.id}
+                onClick={() => setFilter(f.id)}
+                className={cx(
+                  "h-6 rounded-md px-2 text-xs font-medium transition",
+                  filter === f.id
+                    ? "bg-tertiary text-primary"
+                    : "text-quaternary hover:text-secondary"
+                )}
+              >
+                {f.label}
+                <span className="ml-1 tabular-nums opacity-60">{f.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2 p-3">
+      <div className="space-y-3 p-3">
         <form
-          className="flex flex-wrap items-end gap-2"
+          className="flex items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             capture();
@@ -791,104 +840,30 @@ function IdeasPanel({
         >
           <Input
             size="sm"
-            placeholder={CAPTURE_PLACEHOLDER[direction]}
+            placeholder={`${CAPTURE_PLACEHOLDER[direction]}  #tag`}
             aria-label="Add an idea"
             value={draft}
             onChange={setDraft}
-            className="min-w-[10rem] flex-1"
+            className="min-w-0 flex-1"
             enterKeyHint="done"
           />
           {curriculum.length > 0 && (
-            <label className="shrink-0">
-              <span className="sr-only">Tag</span>
-              <select
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                className="min-h-9 rounded-lg border-0 bg-primary px-2 text-sm shadow-xs ring-1 ring-primary ring-inset"
-              >
-                <option value="">Untagged</option>
-                {curriculum.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <NativeSelect
+              size="sm"
+              className="w-auto shrink-0"
+              aria-label="Row"
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              options={[
+                { label: "Untagged", value: "" },
+                ...curriculum.map((s) => ({ label: s.label, value: s.id })),
+              ]}
+            />
           )}
           <Button size="sm" color="secondary" type="submit" isDisabled={!draft.trim()}>
             Add
           </Button>
         </form>
-
-        {filters.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {filters.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilter(f.id)}
-                className={cx(
-                  "rounded-full px-2.5 py-0.5 text-caption font-medium transition",
-                  filter === f.id
-                    ? "bg-teal-600 text-white dark:bg-teal-700"
-                    : "bg-tertiary text-quaternary hover:text-stone-700 dark:hover:text-stone-200"
-                )}
-              >
-                {f.label}
-                <span className="ml-1 tabular-nums opacity-80">{f.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {addingTag ? (
-            <form
-              className="flex min-w-0 flex-1 items-center gap-1.5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                submitTag();
-              }}
-            >
-              <Input
-                size="sm"
-                placeholder="Tag name…"
-                aria-label="New tag name"
-                value={tagDraft}
-                onChange={setTagDraft}
-                className="min-w-[6rem] flex-1"
-                autoFocus
-              />
-              <Button
-                size="sm"
-                color="secondary"
-                type="submit"
-                isDisabled={!tagDraft.trim()}
-              >
-                Add
-              </Button>
-              <Button
-                size="sm"
-                color="tertiary"
-                type="button"
-                onClick={() => {
-                  setAddingTag(false);
-                  setTagDraft("");
-                }}
-              >
-                Cancel
-              </Button>
-            </form>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAddingTag(true)}
-              className="rounded-full bg-tertiary px-2.5 py-0.5 text-caption font-medium text-quaternary transition hover:text-stone-700 dark:hover:text-stone-200"
-            >
-              + Tag
-            </button>
-          )}
-        </div>
 
         <div
           ref={columnRef("backlog")}
@@ -934,7 +909,7 @@ function IdeasPanel({
                   inSlot={false}
                   covered={false}
                   isDragging={drag?.id === t.id}
-                  showTag
+                  showTag={false}
                   showMove
                   {...cardProps}
                 />
@@ -982,7 +957,7 @@ function IdeasPanel({
                   inSlot={false}
                   covered={false}
                   isDragging={drag?.id === t.id}
-                  showTag
+                  showTag={false}
                   showMove
                   {...cardProps}
                 />
@@ -1283,7 +1258,7 @@ function TopicCard({
         there is no hover to rely on.
       */}
       {showMove && (
-        <label className="flex max-h-0 items-center gap-1 overflow-hidden border-stone-100 px-2 opacity-0 transition-all duration-150 touch:max-h-12 touch:border-t touch:py-1 touch:opacity-100 group-focus-within:max-h-12 group-focus-within:border-t group-focus-within:py-1 group-focus-within:opacity-100 group-hover:max-h-12 group-hover:border-t group-hover:py-1 group-hover:opacity-100 dark:border-stone-800">
+        <label className="flex max-h-0 items-center gap-1 overflow-hidden border-secondary px-2 opacity-0 transition-all duration-150 touch:max-h-12 touch:border-t touch:py-1 touch:opacity-100 has-focus-visible:max-h-12 has-focus-visible:border-t has-focus-visible:py-1 has-focus-visible:opacity-100">
           <span className="sr-only">Move "{topic.text || "topic"}" to</span>
           <select
             value={columnKey}

@@ -59,6 +59,21 @@ export function curriculumOf(meeting: TrackedMeeting): CurriculumSlot[] {
   return meeting.curriculum ?? [];
 }
 
+/**
+ * The planner row a topic sits in: its own slot when that slot still exists,
+ * otherwise the first row whose tag it carries — so `#prayer` typed anywhere
+ * lands in the Prayer row without being dragged there.
+ */
+export function effectiveSlotId(
+  topic: Topic,
+  curriculum: CurriculumSlot[]
+): string | undefined {
+  if (topic.slotId && curriculum.some((c) => c.id === topic.slotId)) {
+    return topic.slotId;
+  }
+  return curriculum.find((c) => c.tagId && topic.tagIds?.includes(c.tagId))?.id;
+}
+
 export function slotLabelOf(
   curriculum: CurriculumSlot[],
   slotId?: string
@@ -401,14 +416,13 @@ export function boardLayout(
   const slots = plannedSlots(meeting, sessions, topics, today, opts.ahead);
   const open = mine.filter((t) => t.status === "open");
   const curriculum = curriculumOf(meeting);
-  const known = new Set(curriculum.map((s) => s.id));
+  const rowOf = (t: Topic) => effectiveSlotId(t, curriculum);
 
   const unslotted = (lane: TopicLane) =>
     open.filter((t) => !t.sessionId && t.lane === lane);
 
   const backlog = unslotted("backlog");
   const parked = unslotted("parked");
-  const knownId = (t: Topic) => t.slotId && known.has(t.slotId);
 
   const bucket: BucketGroup[] = [];
   if (curriculum.length) {
@@ -416,7 +430,7 @@ export function boardLayout(
       key: "backlog",
       label: "Untagged",
       lane: "backlog",
-      topics: backlog.filter((t) => !knownId(t)),
+      topics: backlog.filter((t) => !rowOf(t)),
     });
     for (const slot of curriculum) {
       bucket.push({
@@ -424,7 +438,7 @@ export function boardLayout(
         label: slot.label,
         lane: "backlog",
         slotId: slot.id,
-        topics: backlog.filter((t) => t.slotId === slot.id),
+        topics: backlog.filter((t) => rowOf(t) === slot.id),
       });
     }
   } else {
@@ -449,18 +463,20 @@ export function boardLayout(
     const occ = slotKey(slot);
     const cells: WeekCell[] = [];
     if (curriculum.length) {
-      const untagged = inWeek.filter((t) => !knownId(t));
-      if (untagged.length) {
-        cells.push({ key: occ, label: "Other", topics: untagged });
-      }
       for (const cs of curriculum) {
         cells.push({
           key: cellKey(occ, cs.id),
           slotId: cs.id,
           label: cs.label,
-          topics: inWeek.filter((t) => t.slotId === cs.id),
+          topics: inWeek.filter((t) => rowOf(t) === cs.id),
         });
       }
+      // Always a drop target: not everything belongs to a row.
+      cells.push({
+        key: occ,
+        label: "Untagged",
+        topics: inWeek.filter((t) => !rowOf(t)),
+      });
     } else {
       cells.push({ key: occ, label: "", topics: inWeek });
     }

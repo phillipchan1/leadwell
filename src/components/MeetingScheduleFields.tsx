@@ -1,11 +1,54 @@
 import { useMemo, useState } from "react";
 import type { TrackedMeeting } from "../types";
-import { ANCHOR_WEEKDAY_OPTIONS } from "../lib/readiness";
 import { nextSlotAfter, plannedSlots, slotLabel } from "../lib/topics";
 import { useStore } from "../store/useStore";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
-import { NativeSelect } from "@/components/base/select/select-native";
+import { cx } from "@/utils/cx";
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * "Every Monday", as seven buttons. A select hid the one decision that makes
+ * a weekly meeting land on the right day; without it the rhythm just echoed
+ * whatever day something was last logged.
+ */
+export function WeekdayPicker({
+  value,
+  onChange,
+}: {
+  value: number | undefined;
+  onChange: (day: number) => void;
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Day of the week"
+      className="inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-tertiary p-0.5"
+    >
+      {WEEKDAYS.map((label, day) => {
+        const on = value === day;
+        return (
+          <button
+            key={label}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(day)}
+            className={cx(
+              "h-7 min-w-10 rounded-md px-2 text-xs font-medium transition touch:min-h-11",
+              on
+                ? "bg-primary text-primary shadow-xs"
+                : "text-quaternary hover:text-secondary"
+            )}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
  * When the meeting lands on the calendar.
@@ -28,6 +71,7 @@ export function MeetingScheduleFields({
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
+  const setWeekday = useStore((s) => s.setMeetingWeekday);
   const [booking, setBooking] = useState(false);
 
   const projected = useMemo(() => {
@@ -51,36 +95,19 @@ export function MeetingScheduleFields({
   return (
     <div className="space-y-2.5">
       {recurring && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <NativeSelect
-            size={size}
-            label="Usually on"
-            hint="The rhythm projects from here — no need to set a date."
-            value={
-              meeting.anchorWeekday !== undefined
-                ? String(meeting.anchorWeekday)
-                : ""
-            }
-            onChange={(e) =>
-              onChange({
-                anchorWeekday: e.target.value
-                  ? Number(e.target.value)
-                  : undefined,
-              })
-            }
-            options={[{ label: "Not set", value: "" }, ...ANCHOR_WEEKDAY_OPTIONS]}
+        <div className="space-y-1.5">
+          <span className="block text-sm font-medium text-secondary">Repeats on</span>
+          <WeekdayPicker
+            value={meeting.anchorWeekday}
+            onChange={(day) => setWeekday(meeting.id, day)}
           />
-          <div className="flex flex-col justify-end">
-            <p className="text-caption text-quaternary">Next one</p>
-            <p className="text-sm font-medium text-stone-700 tabular-nums dark:text-stone-200">
-              {projected ? slotLabel(projected) : "—"}
-              {meeting.nextDate ? (
-                <span className="ml-1.5 rounded bg-tertiary px-1 py-px text-caption font-normal text-quaternary">
-                  booked
-                </span>
-              ) : null}
-            </p>
-          </div>
+          <p className="text-caption text-quaternary">
+            Next one:{" "}
+            <span className="font-medium text-secondary tabular-nums">
+              {projected ? slotLabel(projected).replace(/^~/, "") : "—"}
+            </span>
+            {meeting.nextDate ? " (booked)" : ""}
+          </p>
         </div>
       )}
 

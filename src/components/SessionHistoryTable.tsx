@@ -74,7 +74,7 @@ export function SessionHistoryTable({
     <div className="overflow-x-auto rounded-xl border border-secondary">
       <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
         <thead>
-          <tr className="border-b border-secondary bg-secondary text-caption font-semibold tracking-wide text-quaternary uppercase">
+          <tr className="border-b border-secondary bg-secondary text-xs font-medium text-quaternary">
             <th className="px-3 py-2 font-semibold">Date</th>
             <th className="px-3 py-2 font-semibold">Status</th>
             <th className="hidden px-3 py-2 font-semibold sm:table-cell">
@@ -83,9 +83,9 @@ export function SessionHistoryTable({
             <th className="px-3 py-2 text-right font-semibold">Topics</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
+        <tbody className="divide-y divide-secondary">
           {rows.map((row) => {
-            const status = sessionStatus(row, notesElsewhere);
+            const status = sessionStatus(row, notesElsewhere, today);
             const summary = sessionSummary(row);
             const count = topicCounts.get(row.id) ?? 0;
             return (
@@ -94,11 +94,17 @@ export function SessionHistoryTable({
                 {...tableRowActivationProps(() => onOpen(row.id), {
                   label: `Open the write-up for ${row.date}`,
                 })}
-                className="cursor-pointer transition-colors hover:bg-stone-50 focus-visible:bg-stone-50 dark:hover:bg-stone-950/50 dark:focus-visible:bg-stone-950/50"
+                className="cursor-pointer transition-colors hover:bg-secondary focus-visible:bg-secondary"
               >
-                <td className="px-3 py-2.5 font-mono text-xs tabular-nums text-stone-600 dark:text-stone-300">
-                  {row.date}
-                  <span className="ml-1.5 font-sans text-quaternary">
+                <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-secondary">
+                  {new Date(`${row.date}T00:00:00Z`).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                    year: row.date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
+                    timeZone: "UTC",
+                  })}
+                  <span className="ml-1.5 text-quaternary">
                     {whenHint(row.date, today)}
                   </span>
                 </td>
@@ -109,9 +115,7 @@ export function SessionHistoryTable({
                 </td>
                 <td className="hidden max-w-[14rem] truncate px-3 py-2.5 text-tertiary sm:table-cell">
                   {summary || (
-                    <span className="italic text-stone-400 dark:text-stone-500">
-                      No notes
-                    </span>
+                    <span className="text-quaternary">—</span>
                   )}
                 </td>
                 <td className="px-3 py-2.5 text-right tabular-nums text-quaternary">

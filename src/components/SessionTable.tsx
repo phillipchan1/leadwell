@@ -6,6 +6,7 @@ import { Badge } from "@/components/base/badges/badges";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { X } from "@untitledui/icons";
 import { confirmAction } from "./ConfirmDialog";
+import { todayISO } from "../lib/readiness";
 import { InlineSessionEditor } from "./InlineSessionEditor";
 import {
   sessionStatus,
@@ -153,7 +154,7 @@ function SessionRow({
   onPatch: (patch: Partial<Session>) => void;
   onDelete: () => void;
 }) {
-  const status = sessionStatus(row, notesElsewhere);
+  const status = sessionStatus(row, notesElsewhere, todayISO());
   const summary = sessionSummary(row);
 
   return (

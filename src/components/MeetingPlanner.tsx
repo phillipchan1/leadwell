@@ -43,8 +43,11 @@ export function MeetingPlanner({
   onSelectWeek,
   onCloseNotes,
   onOpenSession,
+  openCount,
 }: {
   meeting: TrackedMeeting;
+  /** Shown at the end of the toolbar when the host has it to hand. */
+  openCount?: number;
   direction?: BoardDirection;
   selectedSlotKey: string | null;
   onSelectWeek: (slotKey: string, slot: Slot) => void;
@@ -111,7 +114,7 @@ export function MeetingPlanner({
       <div className="flex flex-wrap items-center gap-2">
         <div
           {...viewRoving.groupProps}
-          className="inline-flex shrink-0 gap-0.5 rounded-lg bg-tertiary p-0.5 touch:gap-2"
+          className="inline-flex h-9 shrink-0 items-stretch gap-0.5 rounded-lg bg-tertiary p-0.5 touch:h-auto touch:gap-2"
           role="tablist"
           aria-label="Plan view"
         >
@@ -125,11 +128,11 @@ export function MeetingPlanner({
               aria-controls={panelId}
               {...viewRoving.itemProps(view === v.id)}
               className={cx(
-                "rounded-md px-3 py-1 text-xs font-semibold transition",
+                "rounded-md px-3 text-sm font-medium transition",
                 "touch:min-h-11 touch:min-w-11",
                 view === v.id
-                  ? "bg-primary text-stone-800 shadow-sm dark:text-stone-100"
-                  : "text-quaternary hover:text-stone-700 dark:hover:text-stone-200"
+                  ? "bg-primary text-primary shadow-xs"
+                  : "text-quaternary hover:text-secondary"
               )}
               onClick={() => setView(v.id)}
             >
@@ -153,6 +156,11 @@ export function MeetingPlanner({
               value: String(o.value),
             }))}
           />
+        )}
+        {openCount !== undefined && (
+          <span className="ml-auto text-sm text-quaternary tabular-nums">
+            {openCount} open
+          </span>
         )}
       </div>
 

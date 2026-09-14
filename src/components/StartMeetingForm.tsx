@@ -3,6 +3,7 @@ import type { MeetingRhythm, MeetingSubjectKind } from "../types";
 import { RHYTHM_LABEL, RHYTHM_OPTIONS } from "../lib/readiness";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
+import { WeekdayPicker } from "./MeetingScheduleFields";
 
 /**
  * Start tracking a recurring meeting — name and rhythm up front, not buried
@@ -16,11 +17,13 @@ export function StartMeetingForm({
 }: {
   subjectKind: MeetingSubjectKind;
   subjectName: string;
-  onStart: (rhythm: MeetingRhythm, name?: string) => void;
+  onStart: (rhythm: MeetingRhythm, name?: string, anchorWeekday?: number) => void;
   submitLabel?: string;
 }) {
   const [name, setName] = useState("");
   const [rhythm, setRhythm] = useState<MeetingRhythm>("weekly");
+  const [weekday, setWeekday] = useState<number | undefined>(undefined);
+  const needsDay = rhythm === "weekly" || rhythm === "biweekly";
   const firstName = subjectName.split(" ")[0] ?? subjectName;
 
   return (
@@ -54,10 +57,22 @@ export function StartMeetingForm({
           ))}
         </div>
       </div>
+      {needsDay && (
+        <div className="space-y-1.5">
+          <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
+            On
+          </span>
+          <div>
+            <WeekdayPicker value={weekday} onChange={setWeekday} />
+          </div>
+        </div>
+      )}
       <Button
         size="md"
         className="w-full"
-        onClick={() => onStart(rhythm, name.trim() || undefined)}
+        onClick={() =>
+          onStart(rhythm, name.trim() || undefined, needsDay ? weekday : undefined)
+        }
       >
         {submitLabel}
       </Button>

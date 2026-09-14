@@ -50,7 +50,7 @@ import { clearRecents } from "../lib/recents";
 import { clearUndo } from "../lib/undo";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
-import { defaultCurriculum } from "../lib/topics";
+import { defaultCurriculum, effectiveSlotId } from "../lib/topics";
 import {
   capUp,
   seedActions,
@@ -474,6 +474,16 @@ type Store = PersistedData &
       meetingId: string,
       curriculum: TrackedMeeting["curriculum"]
     ) => void;
+    /**
+     * "Every Monday." Sets the day and moves this meeting's future, unwritten
+     * occurrences onto it, so a board already booked on the wrong day follows.
+     */
+    setMeetingWeekday: (meetingId: string, weekday: number | undefined) => void;
+    /**
+     * Add a row to the planner, backed by a workspace tag (found by name or
+     * created). Topics already carrying that tag move into the row.
+     */
+    addMeetingRow: (meetingId: string, label: string) => string | undefined;
     /** Only offered when the meeting has no sessions — history is never dropped. */
     untrackMeeting: (id: string) => void;
     /** Record (or clear) the explicit "I don't sit down with them" decision. */
@@ -530,6 +540,42 @@ type Store = PersistedData &
 
 const DATA_KEY = "data";
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+/**
+ * A topic's tags after it lands in `slotId` of `meetingId`, having left
+ * `fromSlotId`. The row a card sits in *is* its tag on the planner, so moving
+ * from Prayer to Training swaps one for the other rather than accumulating.
+ */
+function weekdayOf(iso: string): number {
+  return new Date(`${iso}T00:00:00Z`).getUTCDay();
+}
+
+function addDaysISO(iso: string, days: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function slotTagIds(
+  meetings: TrackedMeeting[],
+  meetingId: string | undefined,
+  tagIds: string[],
+  slotId: string | undefined,
+  fromSlotId?: string
+): string[] {
+  const curriculum = meetings.find((m) => m.id === meetingId)?.curriculum ?? [];
+  // The row it is leaving may be implied by a tag rather than stored.
+  const fromRow =
+    fromSlotId === undefined
+      ? undefined
+      : effectiveSlotId({ slotId: fromSlotId || undefined, tagIds } as Topic, curriculum);
+  const from = curriculum.find((c) => c.id === fromRow)?.tagId;
+  const to = curriculum.find((c) => c.id === slotId)?.tagId;
+  let next = tagIds;
+  if (from && from !== to) next = next.filter((x) => x !== from);
+  if (to && !next.includes(to)) next = [...next, to];
+  return next;
+}
 
 /**
  * The last topic removed, held outside state so it survives the re-render that
@@ -1859,7 +1905,7 @@ export const useStore = create<Store>((set, get) => ({
             lane: opts.lane ?? "backlog",
             sessionId: opts.sessionId,
             slotId: opts.slotId,
-            tagIds: opts.tagIds ?? [],
+            tagIds: slotTagIds(s.meetings, meetingId, opts.tagIds ?? [], opts.slotId),
             carried: 0,
             carriedFrom: [],
             dueDate: opts.dueDate,
@@ -1882,11 +1928,19 @@ export const useStore = create<Store>((set, get) => ({
         // Dragging a covered card back onto the board reopens it — the board
         // only ever shows what's still live, so being there means it is.
         const reopened = { ...t, status: "open" as const, closedOn: undefined };
+        const tagIds = slotTagIds(
+          s.meetings,
+          t.meetingId,
+          t.tagIds,
+          target.slotId,
+          t.slotId ?? ""
+        );
         if ("sessionId" in target) {
           return {
             ...reopened,
             sessionId: target.sessionId,
             slotId: target.slotId,
+            tagIds,
           };
         }
         // Parked is defer-not-now; the tag stays so it returns to the same
@@ -1899,6 +1953,7 @@ export const useStore = create<Store>((set, get) => ({
           lane: target.lane,
           sessionId: undefined,
           slotId: target.slotId,
+          tagIds,
         };
       }),
     })),
@@ -1939,13 +1994,13 @@ export const useStore = create<Store>((set, get) => ({
 
       // A slot with a tag stamps it on arrival. This is what makes coverage
       // trustworthy without asking anyone to tag by hand.
-      const slot = s.meetings
-        .find((m) => m.id === meetingId)
-        ?.curriculum?.find((c) => c.id === slotId);
-      const tagIds =
-        slot?.tagId && !topic.tagIds.includes(slot.tagId)
-          ? [...topic.tagIds, slot.tagId]
-          : topic.tagIds;
+      const tagIds = slotTagIds(
+        s.meetings,
+        meetingId,
+        topic.tagIds,
+        slotId,
+        topic.meetingId === meetingId ? (topic.slotId ?? "") : undefined
+      );
 
       const moved: Topic = {
         ...topic,
@@ -2056,7 +2111,7 @@ export const useStore = create<Store>((set, get) => ({
           lane: target?.kind === "lane" ? target.lane : "backlog",
           sessionId,
           slotId: target?.slotId,
-          tagIds,
+          tagIds: slotTagIds(s.meetings, meetingId, tagIds, target?.slotId),
           urgent: parsed.urgent || undefined,
           carried: 0,
           carriedFrom: [],
@@ -2366,6 +2421,96 @@ export const useStore = create<Store>((set, get) => ({
           : t
       ),
     }));
+  },
+  setMeetingWeekday: (meetingId, weekday) =>
+    set((s) => {
+      const meeting = s.meetings.find((m) => m.id === meetingId);
+      if (!meeting) return {};
+      const today = todayISO();
+      // A one-off booking on the old day would keep overriding the new one.
+      const nextDate =
+        weekday !== undefined &&
+        meeting.nextDate &&
+        meeting.nextDate >= today &&
+        weekdayOf(meeting.nextDate) !== weekday
+          ? undefined
+          : meeting.nextDate;
+      const meetings = s.meetings.map((m) =>
+        m.id === meetingId ? { ...m, anchorWeekday: weekday, nextDate } : m
+      );
+      if (weekday === undefined) return { meetings };
+
+      // Only occurrences nobody has written up. A past or noted meeting
+      // happened on the day it happened.
+      const movable = s.sessions.filter(
+        (o) =>
+          o.meetingId === meetingId &&
+          o.date >= today &&
+          !o.notes?.trim() &&
+          !o.transcript?.trim() &&
+          weekdayOf(o.date) !== weekday
+      );
+      if (!movable.length) return { meetings };
+
+      let sessions = s.sessions;
+      let topics = s.topics;
+      for (const o of movable) {
+        // Same week, new day; never into the past.
+        let date = addDaysISO(o.date, weekday - weekdayOf(o.date));
+        if (date < today) date = addDaysISO(date, 7);
+        const clash = sessions.find(
+          (x) => x.meetingId === meetingId && x.id !== o.id && x.date === date
+        );
+        if (clash) {
+          // The target day is already booked: fold this one's topics into it.
+          topics = topics.map((t) =>
+            t.sessionId === o.id ? { ...t, sessionId: clash.id } : t
+          );
+          sessions = sessions.filter((x) => x.id !== o.id);
+        } else {
+          sessions = sessions.map((x) => (x.id === o.id ? { ...x, date } : x));
+        }
+      }
+      return { meetings, sessions, topics };
+    }),
+  addMeetingRow: (meetingId, label) => {
+    const text = label.trim();
+    if (!text) return undefined;
+    const meeting = get().meetings.find((m) => m.id === meetingId);
+    if (!meeting) return undefined;
+    const curriculum = meeting.curriculum ?? [];
+    const lower = text.toLowerCase();
+    const existing = curriculum.find((c) => c.label.trim().toLowerCase() === lower);
+    if (existing) return existing.id;
+
+    const slotId = uid();
+    set((s) => {
+      let tags = s.tags;
+      let tag = tags.find((t) => t.label.trim().toLowerCase() === lower);
+      if (!tag) {
+        tag = { id: uid(), label: text, color: tags.length % 6, order: tags.length };
+        tags = [...tags, tag];
+      }
+      const tagId = tag.id;
+      return {
+        tags,
+        meetings: s.meetings.map((m) =>
+          m.id === meetingId
+            ? {
+                ...m,
+                curriculum: [...(m.curriculum ?? []), { id: slotId, label: tag.label, tagId }],
+              }
+            : m
+        ),
+        // Already tagged this? Then it already belongs in the row.
+        topics: s.topics.map((t) =>
+          t.meetingId === meetingId && !t.slotId && t.tagIds.includes(tagId)
+            ? { ...t, slotId }
+            : t
+        ),
+      };
+    });
+    return slotId;
   },
   untrackMeeting: (id) =>
     set((s) => ({
