@@ -14,9 +14,6 @@ import { topicsFor } from "../lib/topics";
 import { cx } from "@/utils/cx";
 import { MeetingPlanner } from "./MeetingPlanner";
 import type { BoardDirection } from "./TopicBoard";
-import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
-import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
-import { SessionHistoryTable } from "./SessionHistoryTable";
 import { StartMeetingForm } from "./StartMeetingForm";
 import { TrackerLink } from "./TrackerLink";
 import { TintBadge } from "./ui";
@@ -218,15 +215,10 @@ function MeetingBlock({
   const readiness = readinessOf(meeting, { meetings, sessions, topics });
   const color = STATE_COLOR[readiness.state];
   const [planSlotKey, setPlanSlotKey] = useState<string | null>(null);
-  const [historySlotKey, setHistorySlotKey] = useState<string | null>(null);
   const [name, setName] = useState(meeting.name ?? "");
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const closePlanNotes = useCallback(() => setPlanSlotKey(null), []);
-  const closeHistoryNotes = useCallback(() => setHistorySlotKey(null), []);
-  const openSessionNotes = useCallback((sessionId: string) => {
-    setHistorySlotKey(`s:${sessionId}`);
-  }, []);
   const onSelectWeek = useCallback((slotKey: string) => {
     setPlanSlotKey(slotKey);
   }, []);
@@ -399,25 +391,6 @@ function MeetingBlock({
         onOpenSession={onOpenSession}
       />
 
-      <div className="space-y-2">
-        <h4 className="text-sm font-semibold text-primary">History</h4>
-        <SessionHistoryTable meetingId={meeting.id} onOpen={openSessionNotes} />
-      </div>
-
-      {historySlotKey && (
-        <OccurrenceNotesSheet
-          open
-          onClose={closeHistoryNotes}
-          label="Meeting notes"
-        >
-          <OccurrenceNotesPanel
-            meeting={meeting}
-            slotKey={historySlotKey}
-            onClose={closeHistoryNotes}
-            onOpenFullEditor={onOpenSession}
-          />
-        </OccurrenceNotesSheet>
-      )}
     </section>
   );
 }

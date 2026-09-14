@@ -11,6 +11,7 @@ import {
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { TopicBoard, type BoardDirection } from "./TopicBoard";
 import { MeetingCalendar } from "./MeetingCalendar";
+import { SessionHistoryTable } from "./SessionHistoryTable";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
@@ -21,7 +22,7 @@ import { Plus } from "@untitledui/icons";
 import { todayISO } from "../lib/readiness";
 import { cx } from "@/utils/cx";
 
-export type PlanView = "board" | "calendar";
+export type PlanView = "board" | "calendar" | "history";
 
 /*
  * Two shapes of the same plan. There was a third, Ideas, which drew the backlog
@@ -30,6 +31,7 @@ export type PlanView = "board" | "calendar";
 const VIEWS: { id: PlanView; label: string }[] = [
   { id: "board", label: "Board" },
   { id: "calendar", label: "Calendar" },
+  { id: "history", label: "History" },
 ];
 
 const HORIZON_OPTIONS: { label: string; value: Horizon }[] = [
@@ -49,8 +51,15 @@ export function MeetingPlanner({
   onSelectWeek,
   onCloseNotes,
   onOpenSession,
+  historyView = true,
 }: {
   meeting: TrackedMeeting;
+  /**
+   * Offer History beside Board and Calendar. Planning is the default job;
+   * looking back is somewhere you go. Off where the host already has its own
+   * write-ups mode (the meeting page).
+   */
+  historyView?: boolean;
   direction?: BoardDirection;
   selectedSlotKey: string | null;
   onSelectWeek: (slotKey: string, slot: Slot) => void;
@@ -103,6 +112,24 @@ export function MeetingPlanner({
         onSelectWeek={openWeek}
         ahead={aheadForHorizon(horizon)}
       />
+    ) : view === "history" ? (
+      <SessionHistoryTable
+        meetingId={meeting.id}
+        onOpen={(sessionId) => {
+          const key = `s:${sessionId}`;
+          if (selectedSlotKey === key) {
+            onCloseNotes();
+            return;
+          }
+          const session = sessions.find((o) => o.id === sessionId);
+          onSelectWeek(key, {
+            sessionId,
+            date: session?.date ?? "",
+            projected: false,
+            past: Boolean(session && session.date < todayISO()),
+          });
+        }}
+      />
     ) : (
       <MeetingCalendar
         meeting={meeting}
@@ -120,7 +147,7 @@ export function MeetingPlanner({
           role="tablist"
           aria-label="Plan view"
         >
-          {VIEWS.map((v) => (
+          {VIEWS.filter((v) => historyView || v.id !== "history").map((v) => (
             <button
               key={v.id}
               type="button"
@@ -159,6 +186,7 @@ export function MeetingPlanner({
             }))}
           />
         )}
+        {view !== "history" && (
         <div className="ml-auto">
           <AddOneOff
             onAdd={(date) => {
@@ -172,6 +200,7 @@ export function MeetingPlanner({
             }}
           />
         </div>
+        )}
       </div>
 
       <div

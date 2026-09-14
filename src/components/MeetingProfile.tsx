@@ -136,6 +136,7 @@ export function MeetingProfile({
               onSelectWeek={onSelectWeek}
               onCloseNotes={closeNotes}
               onOpenSession={openSession}
+              historyView={false}
             />
           </div>
         )}

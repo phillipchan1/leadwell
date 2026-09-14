@@ -63,29 +63,12 @@ export function SessionHistoryTable({
     return map;
   }, [topics, meetingId]);
 
-  if (!rows.length) {
-    return (
-      <p className="rounded-xl border border-dashed border-primary px-4 py-8 text-center text-sm text-quaternary">
-        Nothing logged yet. Open a week on the Plan board to write up a meeting.
-      </p>
-    );
-  }
+  // Looking back first, newest on top. Upcoming weeks belong to planning, but
+  // stay reachable here (a skipped week is only restorable from its row).
+  const past = rows.filter((r) => r.date <= today);
+  const upcoming = rows.filter((r) => r.date > today).reverse();
 
-  return (
-    <div className="overflow-x-auto rounded-xl border border-secondary">
-      <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-secondary bg-secondary text-xs font-medium text-quaternary">
-            <th className="px-3 py-2 font-semibold">Date</th>
-            <th className="px-3 py-2 font-semibold">Status</th>
-            <th className="hidden px-3 py-2 font-semibold sm:table-cell">
-              Summary
-            </th>
-            <th className="px-3 py-2 text-right font-semibold">Topics</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-secondary">
-          {rows.map((row) => {
+  const renderRow = (row: (typeof rows)[number]) => {
             const status = sessionStatus(row, notesElsewhere, today);
             const summary = sessionSummary(row);
             const count = topicCounts.get(row.id) ?? 0;
@@ -136,7 +119,39 @@ export function SessionHistoryTable({
                 </td>
               </tr>
             );
-          })}
+  };
+
+  if (!rows.length) {
+    return (
+      <p className="rounded-xl border border-dashed border-primary px-4 py-8 text-center text-sm text-quaternary">
+        Nothing logged yet. Open a week on the Plan board to write up a meeting.
+      </p>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-secondary">
+      <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
+        <thead>
+          <tr className="border-b border-secondary bg-secondary text-xs font-medium text-quaternary">
+            <th className="px-3 py-2 font-semibold">Date</th>
+            <th className="px-3 py-2 font-semibold">Status</th>
+            <th className="hidden px-3 py-2 font-semibold sm:table-cell">
+              Summary
+            </th>
+            <th className="px-3 py-2 text-right font-semibold">Topics</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-secondary">
+          {past.map(renderRow)}
+          {upcoming.length > 0 && (
+            <tr className="bg-secondary">
+              <td colSpan={4} className="px-3 py-1.5 text-xs font-medium text-quaternary">
+                Coming up
+              </td>
+            </tr>
+          )}
+          {upcoming.map(renderRow)}
         </tbody>
       </table>
     </div>
