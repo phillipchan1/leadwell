@@ -540,6 +540,8 @@ const map = {
       notes: nn(o.notes),
       next_date: nn(o.nextDate),
       transcript: nn(o.transcript),
+      series_date: nn(o.seriesDate),
+      occurrence_kind: nn(o.kind),
     }),
     fromRow: (r: Row): Session => ({
       id: r.id as string,
@@ -550,6 +552,8 @@ const map = {
       nextDate: opt(r.next_date as string | null),
       transcript: opt(r.transcript as string | null),
       uncovered: strArray(r.uncovered).length ? strArray(r.uncovered) : undefined,
+      seriesDate: opt(r.series_date as string | null),
+      kind: opt(r.occurrence_kind as Session["kind"] | null),
     }),
   },
   goals: {

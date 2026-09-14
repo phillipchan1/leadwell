@@ -106,6 +106,7 @@ export function TopicBoard({
   const moveTopic = useStore((s) => s.moveTopic);
   const addSession = useStore((s) => s.addSession);
   const addMeetingRow = useStore((s) => s.addMeetingRow);
+  const setCurriculum = useStore((s) => s.setCurriculum);
 
   const removeTopic = useCallback(
     (topic: Topic) => {
@@ -232,7 +233,7 @@ export function TopicBoard({
   const ideaCount = ideaGroups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
-    <div className="space-y-3">
+    <div className="@container space-y-3">
       {loose.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-900 dark:bg-amber-950/40">
           <p className="min-w-0 flex-1 text-xs text-amber-900 dark:text-amber-400">
@@ -251,6 +252,8 @@ export function TopicBoard({
         </div>
       )}
 
+      <div className="grid items-start gap-4 @4xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="@4xl:sticky @4xl:top-2">
       <IdeasPanel
         direction={direction}
         curriculum={curriculum}
@@ -270,12 +273,18 @@ export function TopicBoard({
         }
       />
 
-      {balance.length > 0 && (
-        <BalanceStrip balance={balance} curriculum={curriculum} />
-      )}
+      </div>
 
       <ScheduleGrid
         weeks={layout.weeks}
+        balance={balance}
+        onReorderRows={(ids) => {
+          const byId = new Map(curriculum.map((c) => [c.id, c]));
+          setCurriculum(
+            meeting.id,
+            ids.map((id) => byId.get(id)!).filter(Boolean)
+          );
+        }}
         curriculum={curriculum}
         selectedSlotKey={selectedSlotKey}
         drag={drag}
@@ -284,6 +293,7 @@ export function TopicBoard({
         onSelectWeek={onSelectWeek}
         onAddRow={(label) => addMeetingRow(meeting.id, label)}
       />
+      </div>
 
       {drag && dragged && (
         <li
@@ -313,56 +323,6 @@ export function TopicBoard({
   );
 }
 
-function BalanceStrip({
-  balance,
-  curriculum,
-}: {
-  balance: ReturnType<typeof curriculumBalance>;
-  curriculum: CurriculumSlot[];
-}) {
-  /*
-   * One line, not a row of tiles.
-   *
-   * Coverage is a background check — "am I training this team often enough" —
-   * and as four bordered cards it took as much vertical space and colour as the
-   * plan it was commenting on. It should be glanceable and then ignorable.
-   */
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5">
-      <span className="text-xs font-medium text-quaternary">Coverage</span>
-      {balance.map((b) => {
-        const low = b.filled === 0 || (b.total > 0 && b.filled <= Math.floor(b.total / 3));
-        return (
-          <span
-            key={b.slot.id}
-            className="inline-flex items-center gap-1.5 text-caption"
-            title={`${b.slot.label}: ${b.filled} of the next ${b.total} weeks`}
-          >
-            <span
-              className={cx(
-                "size-1.5 shrink-0 rounded-full",
-                slotDotClass(curriculum, b.slot.id)
-              )}
-              aria-hidden
-            />
-            <span className="text-quaternary">{b.slot.label}</span>
-            <span
-              className={cx(
-                "tabular-nums",
-                low
-                  ? "font-medium text-amber-700 dark:text-amber-500"
-                  : "text-quaternary opacity-70"
-              )}
-            >
-              {b.filled}/{b.total}
-            </span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 function ScheduleGrid({
   weeks,
   curriculum,
@@ -372,7 +332,11 @@ function ScheduleGrid({
   cardProps,
   onSelectWeek,
   onAddRow,
+  balance,
+  onReorderRows,
 }: {
+  balance: ReturnType<typeof curriculumBalance>;
+  onReorderRows: (ids: string[]) => void;
   weeks: WeekColumn[];
   curriculum: CurriculumSlot[];
   selectedSlotKey?: string | null;
@@ -384,6 +348,18 @@ function ScheduleGrid({
 }) {
   const sessions = useStore((s) => s.sessions);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [draggingRow, setDraggingRow] = useState<string | null>(null);
+  const [overRow, setOverRow] = useState<string | null>(null);
+  const dropRow = (targetId: string) => {
+    if (!draggingRow || draggingRow === targetId) return;
+    const ids = curriculum.map((c) => c.id).filter((id) => id !== draggingRow);
+    const at = ids.indexOf(targetId);
+    const from = curriculum.findIndex((c) => c.id === draggingRow);
+    const to = curriculum.findIndex((c) => c.id === targetId);
+    ids.splice(from < to ? at + 1 : at, 0, draggingRow);
+    onReorderRows(ids);
+    announce("Row moved.");
+  };
   const scrollLeftRef = useRef(0);
 
   const weekCount = Math.max(weeks.length, 1);
@@ -503,21 +479,69 @@ function ScheduleGrid({
 
         {rows.map((row) => (
           <Fragment key={row.id}>
-            <div className="sticky left-0 z-10 flex items-start gap-1.5 bg-secondary px-3 py-2.5">
-              <span
-                aria-hidden
-                className={cx(
-                  "mt-1.5 size-1.5 shrink-0 rounded-full",
-                  row.slotId ? slotDotClass(curriculum, row.slotId) : "bg-stone-300 dark:bg-stone-600"
-                )}
-              />
-              <span
-                className={cx(
-                  "min-w-0 text-xs leading-snug font-semibold break-words",
-                  row.slotId ? "text-secondary" : "text-quaternary"
-                )}
-              >
-                {row.label}
+            <div
+              draggable={Boolean(row.slotId)}
+              onDragStart={(e) => {
+                if (!row.slotId) return;
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", row.slotId);
+                setDraggingRow(row.slotId);
+              }}
+              onDragEnd={() => {
+                setDraggingRow(null);
+                setOverRow(null);
+              }}
+              onDragOver={(e) => {
+                if (!draggingRow || !row.slotId) return;
+                e.preventDefault();
+                setOverRow(row.slotId);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (row.slotId) dropRow(row.slotId);
+                setDraggingRow(null);
+                setOverRow(null);
+              }}
+              title={row.slotId ? "Drag to reorder rows" : undefined}
+              className={cx(
+                "group/row sticky left-0 z-10 flex items-start gap-1.5 bg-secondary px-2 py-2.5",
+                row.slotId && "cursor-grab active:cursor-grabbing",
+                draggingRow === row.slotId && "opacity-50",
+                overRow === row.slotId && draggingRow !== row.slotId && "shadow-[inset_0_2px_0_0_var(--color-teal-500)]"
+              )}
+            >
+              {row.slotId ? (
+                <DotsGrid aria-hidden className="mt-0.5 size-3 shrink-0 text-quaternary" />
+              ) : (
+                <span aria-hidden className="size-3 shrink-0" />
+              )}
+              <span className="min-w-0">
+                <span
+                  className={cx(
+                    "flex items-center gap-1.5 text-xs leading-snug font-semibold break-words",
+                    row.slotId ? "text-secondary" : "text-quaternary"
+                  )}
+                >
+                  {row.slotId && (
+                    <span
+                      aria-hidden
+                      className={cx("size-1.5 shrink-0 rounded-full", slotDotClass(curriculum, row.slotId))}
+                    />
+                  )}
+                  {row.label}
+                </span>
+                {row.slotId && (() => {
+                  const b = balance.find((x) => x.slot.id === row.slotId);
+                  if (!b) return null;
+                  return (
+                    <span
+                      className="mt-0.5 block text-caption text-quaternary tabular-nums"
+                      title={`Planned in ${b.filled} of the next ${b.total} weeks`}
+                    >
+                      {b.filled}/{b.total} weeks
+                    </span>
+                  );
+                })()}
               </span>
             </div>
             {weeks.map((week) => {
@@ -635,6 +659,11 @@ function WeekHeader({
       >
         {week.label}
       </div>
+      {week.exception && (
+        <div className="truncate text-xs font-medium text-brand-secondary">
+          {week.exception}
+        </div>
+      )}
       {week.hint && (
         <div
           className={cx(
@@ -838,7 +867,7 @@ function IdeasPanel({
 
       <div className="space-y-3 p-3">
         <form
-          className="flex items-center gap-2"
+          className="flex flex-wrap items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             capture();
@@ -850,13 +879,13 @@ function IdeasPanel({
             aria-label="Add an idea"
             value={draft}
             onChange={setDraft}
-            className="min-w-0 flex-1"
+            className="min-w-0 flex-1 @4xl:basis-full"
             enterKeyHint="done"
           />
           {curriculum.length > 0 && (
             <NativeSelect
               size="sm"
-              className="w-auto shrink-0"
+              className="w-auto shrink-0 @4xl:flex-1"
               aria-label="Row"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
@@ -874,7 +903,7 @@ function IdeasPanel({
         <div
           ref={columnRef("backlog")}
           className={cx(
-            "max-h-[min(22rem,45vh)] space-y-3 overflow-y-auto rounded-lg",
+            "max-h-[min(22rem,45vh)] space-y-3 overflow-y-auto rounded-lg @4xl:max-h-[60vh]",
             drag && "min-h-[4rem]",
             dropActive("backlog") &&
               "ring-2 ring-teal-400 dark:ring-teal-600"

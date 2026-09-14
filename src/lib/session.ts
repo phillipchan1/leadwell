@@ -4,7 +4,8 @@ export type SessionStatus =
   | "scheduled"
   | "needs_notes"
   | "done"
-  | "elsewhere";
+  | "elsewhere"
+  | "skipped";
 
 /**
  * Derive a simple status for table display.
@@ -19,6 +20,7 @@ export function sessionStatus(
   /** Pass it and an occurrence that hasn't happened yet stops asking for notes. */
   today?: string
 ): SessionStatus {
+  if (o.kind === "skipped") return "skipped";
   const hasNotes = Boolean(o.notes?.trim());
   if (hasNotes) return "done";
   if (o.nextDate || (today && o.date > today)) return "scheduled";
@@ -35,6 +37,8 @@ export function sessionStatusLabel(status: SessionStatus): string {
       return "Done";
     case "elsewhere":
       return "Notes elsewhere";
+    case "skipped":
+      return "Skipped";
   }
 }
 
@@ -42,9 +46,12 @@ export function sessionStatusLabel(status: SessionStatus): string {
 export function sessionSummary(o: Session, maxLen = 72): string {
   const raw = o.notes?.trim();
   if (!raw) return "";
+  // Skip the seeded agenda scaffold — headings and empty checkboxes — so an
+  // untouched week doesn't preview as "Agenda".
   const first = raw
     .split("\n")
-    .map((l) => l.replace(/^#+\s*/, "").replace(/^[-*]\s*/, "").trim())
+    .filter((l) => !/^\s*#/.test(l))
+    .map((l) => l.replace(/^[-*]\s*/, "").replace(/^\\?\[\s*[xX]?\s*\\?\]\s*/, "").trim())
     .find(Boolean);
   if (!first) return "";
   return first.length > maxLen ? first.slice(0, maxLen - 1) + "…" : first;

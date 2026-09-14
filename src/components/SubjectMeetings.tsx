@@ -188,15 +188,9 @@ export function SubjectMeetings({
           </Button>
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-2 border-t border-stone-100 pt-3 dark:border-stone-800">
-          <TrackerLink subjectKind={subjectKind} subjectId={subjectId} />
-          <Button
-            size="sm"
-            color="link-gray"
-            className="shrink-0"
-            onClick={() => setAdding(true)}
-          >
-            + Add meeting
+        <div className="border-t border-secondary pt-3">
+          <Button size="sm" color="link-gray" onClick={() => setAdding(true)}>
+            + Another recurring meeting with {firstName}
           </Button>
         </div>
       )}
@@ -223,9 +217,6 @@ function MeetingBlock({
 
   const readiness = readinessOf(meeting, { meetings, sessions, topics });
   const color = STATE_COLOR[readiness.state];
-  const openCount = topicsFor(topics, meeting.id).filter(
-    (t) => t.status === "open"
-  ).length;
   const [planSlotKey, setPlanSlotKey] = useState<string | null>(null);
   const [historySlotKey, setHistorySlotKey] = useState<string | null>(null);
   const [name, setName] = useState(meeting.name ?? "");
@@ -389,6 +380,12 @@ function MeetingBlock({
               Split each week by tag — drop a topic into the row it belongs to.
             </p>
             <MeetingRows meeting={meeting} />
+            <div className="pt-3">
+              <span className="block text-sm font-medium text-secondary">
+                Notes kept elsewhere
+              </span>
+              <TrackerLink meetingId={meeting.id} />
+            </div>
           </div>
         </div>
       )}
@@ -400,7 +397,6 @@ function MeetingBlock({
         onSelectWeek={onSelectWeek}
         onCloseNotes={closePlanNotes}
         onOpenSession={onOpenSession}
-        openCount={openCount}
       />
 
       <div className="space-y-2">

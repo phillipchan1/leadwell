@@ -484,6 +484,26 @@ type Store = PersistedData &
      * created). Topics already carrying that tag move into the row.
      */
     addMeetingRow: (meetingId: string, label: string) => string | undefined;
+    /**
+     * Move one occurrence, calendar-style. `from` is where it sits now (a
+     * session, or a projected date). Returns the session id it ends up as.
+     * "series" re-anchors the rhythm on the new weekday from now on.
+     */
+    moveOccurrence: (
+      meetingId: string,
+      from: { sessionId: string | null; date: string },
+      to: string,
+      scope: "one" | "series"
+    ) => string;
+    /** This week isn't happening. Its topics go back to Ideas. */
+    skipOccurrence: (
+      meetingId: string,
+      from: { sessionId: string | null; date: string }
+    ) => void;
+    /** Undo a skip, or move a moved occurrence back onto its series date. */
+    restoreOccurrence: (sessionId: string) => void;
+    /** A one-off meeting outside the rhythm. Reuses a session already on that date. */
+    addExtraOccurrence: (meetingId: string, date: string) => string;
     /** Only offered when the meeting has no sessions — history is never dropped. */
     untrackMeeting: (id: string) => void;
     /** Record (or clear) the explicit "I don't sit down with them" decision. */
@@ -2422,6 +2442,139 @@ export const useStore = create<Store>((set, get) => ({
       ),
     }));
   },
+  moveOccurrence: (meetingId, from, to, scope) => {
+    if (scope === "series") {
+      const weekday = weekdayOf(to);
+      get().setMeetingWeekday(meetingId, weekday);
+      // Re-anchoring carries booked weeks along within their week. When that
+      // already put this occurrence on the requested day, we're done.
+      const landed = get().sessions.find(
+        (o) => o.meetingId === meetingId && o.date === to && o.kind !== "skipped"
+      );
+      if (landed) return landed.id;
+      let sameWeek = addDaysISO(from.date, weekday - weekdayOf(from.date));
+      if (sameWeek < todayISO()) sameWeek = addDaysISO(sameWeek, 7);
+      if (!from.sessionId && sameWeek === to) {
+        // The new rhythm draws this date itself; just make it real.
+        return get().addSession({ meetingId, date: to });
+      }
+      // Otherwise it was asked to go to a different week as well: fall through
+      // and move this one on top of the new rhythm.
+      if (from.sessionId) {
+        const moved = get().sessions.find((o) => o.id === from.sessionId);
+        if (moved) from = { sessionId: moved.id, date: moved.date };
+      } else {
+        from = { sessionId: null, date: sameWeek };
+      }
+    }
+    let result = "";
+    set((s) => {
+      let sessions = s.sessions;
+      let topics = s.topics;
+      const current = from.sessionId
+        ? sessions.find((o) => o.id === from.sessionId)
+        : sessions.find(
+            (o) => o.meetingId === meetingId && o.date === from.date && o.kind !== "skipped"
+          );
+      const seriesDate =
+        current?.kind === "extra"
+          ? undefined
+          : (current?.seriesDate ?? current?.date ?? from.date);
+      const clash = sessions.find(
+        (o) =>
+          o.meetingId === meetingId &&
+          o.date === to &&
+          o.kind !== "skipped" &&
+          o.id !== current?.id
+      );
+      if (clash) {
+        // Something is already on that day: the two become one meeting.
+        if (current) {
+          topics = topics.map((t) =>
+            t.sessionId === current.id ? { ...t, sessionId: clash.id } : t
+          );
+          // Keep any prep written on the one being folded in.
+          const extraNotes = current.notes?.trim();
+          sessions = sessions
+            .filter((o) => o.id !== current.id)
+            .map((o) =>
+              o.id === clash.id && extraNotes && extraNotes !== o.notes?.trim()
+                ? { ...o, notes: [o.notes?.trim(), extraNotes].filter(Boolean).join("\n\n") }
+                : o
+            );
+        }
+        result = clash.id;
+        return { sessions, topics };
+      }
+      const fields = {
+        date: to,
+        seriesDate: seriesDate && seriesDate !== to ? seriesDate : undefined,
+      };
+      if (current) {
+        sessions = sessions.map((o) => (o.id === current.id ? { ...o, ...fields } : o));
+        result = current.id;
+      } else {
+        result = uid();
+        sessions = [...sessions, { id: result, meetingId, ...fields }];
+      }
+      return { sessions, topics };
+    });
+    return result;
+  },
+  skipOccurrence: (meetingId, from) =>
+    set((s) => {
+      const current = from.sessionId
+        ? s.sessions.find((o) => o.id === from.sessionId)
+        : s.sessions.find((o) => o.meetingId === meetingId && o.date === from.date);
+      // A past meeting that was written up happened. Nothing to skip.
+      if (current?.notes?.trim() && current.date < todayISO()) return {};
+      const topics = current
+        ? s.topics.map((t) =>
+            t.sessionId === current.id
+              ? { ...t, sessionId: undefined, lane: "backlog" as const }
+              : t
+          )
+        : s.topics;
+      if (current?.kind === "extra") {
+        // A one-off that isn't happening simply isn't there.
+        return { topics, sessions: s.sessions.filter((o) => o.id !== current.id) };
+      }
+      const seriesDate = current?.seriesDate ?? current?.date ?? from.date;
+      const skipped = { date: seriesDate, seriesDate, kind: "skipped" as const };
+      return {
+        topics,
+        sessions: current
+          ? s.sessions.map((o) => (o.id === current.id ? { ...o, ...skipped } : o))
+          : [...s.sessions, { id: uid(), meetingId, ...skipped }],
+      };
+    }),
+  restoreOccurrence: (sessionId) =>
+    set((s) => {
+      const o = s.sessions.find((x) => x.id === sessionId);
+      if (!o) return {};
+      if (o.kind === "skipped") {
+        return { sessions: s.sessions.filter((x) => x.id !== sessionId) };
+      }
+      if (!o.seriesDate) return {};
+      const clash = s.sessions.find(
+        (x) => x.meetingId === o.meetingId && x.date === o.seriesDate && x.id !== o.id
+      );
+      if (clash) return {};
+      return {
+        sessions: s.sessions.map((x) =>
+          x.id === sessionId ? { ...x, date: o.seriesDate!, seriesDate: undefined } : x
+        ),
+      };
+    }),
+  addExtraOccurrence: (meetingId, date) => {
+    const existing = get().sessions.find(
+      (o) => o.meetingId === meetingId && o.date === date && o.kind !== "skipped"
+    );
+    if (existing) return existing.id;
+    const id = uid();
+    set((s) => ({ sessions: [...s.sessions, { id, meetingId, date, kind: "extra" }] }));
+    return id;
+  },
   setMeetingWeekday: (meetingId, weekday) =>
     set((s) => {
       const meeting = s.meetings.find((m) => m.id === meetingId);
@@ -2440,19 +2593,36 @@ export const useStore = create<Store>((set, get) => ({
       );
       if (weekday === undefined) return { meetings };
 
-      // Only occurrences nobody has written up. A past or noted meeting
-      // happened on the day it happened.
+      // Only upcoming occurrences; a past meeting happened on the day it did.
+      // Notes on a future one are prep (opening a week seeds an agenda), so
+      // they travel with it.
+      // Moved one-offs and extras are deliberate exceptions and stay put.
       const movable = s.sessions.filter(
         (o) =>
           o.meetingId === meetingId &&
           o.date >= today &&
-          !o.notes?.trim() &&
-          !o.transcript?.trim() &&
+          !o.kind &&
+          !o.seriesDate &&
           weekdayOf(o.date) !== weekday
       );
-      if (!movable.length) return { meetings };
 
-      let sessions = s.sessions;
+      const shift = (d: string) => {
+        let next = addDaysISO(d, weekday - weekdayOf(d));
+        if (next < today) next = addDaysISO(next, 7);
+        return next;
+      };
+      // Exceptions name a series date; the series just moved, so follow it —
+      // a skipped Monday becomes a skipped Tuesday, not a stray Tuesday meeting.
+      let sessions = s.sessions.map((o) => {
+        if (o.meetingId !== meetingId || !o.seriesDate || o.seriesDate < today) return o;
+        const seriesDate = shift(o.seriesDate);
+        if (seriesDate === o.seriesDate) return o;
+        return o.kind === "skipped"
+          ? { ...o, date: seriesDate, seriesDate }
+          : { ...o, seriesDate: seriesDate === o.date ? undefined : seriesDate };
+      });
+      if (!movable.length) return { meetings, sessions };
+
       let topics = s.topics;
       for (const o of movable) {
         // Same week, new day; never into the past.
@@ -2466,7 +2636,14 @@ export const useStore = create<Store>((set, get) => ({
           topics = topics.map((t) =>
             t.sessionId === o.id ? { ...t, sessionId: clash.id } : t
           );
-          sessions = sessions.filter((x) => x.id !== o.id);
+          const extraNotes = o.notes?.trim();
+          sessions = sessions
+            .filter((x) => x.id !== o.id)
+            .map((x) =>
+              x.id === clash.id && extraNotes && extraNotes !== x.notes?.trim()
+                ? { ...x, notes: [x.notes?.trim(), extraNotes].filter(Boolean).join("\n\n") }
+                : x
+            );
         } else {
           sessions = sessions.map((x) => (x.id === o.id ? { ...x, date } : x));
         }

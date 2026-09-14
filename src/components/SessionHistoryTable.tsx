@@ -15,6 +15,7 @@ const STATUS_COLOR: Record<string, "sky" | "warning" | "success" | "gray"> = {
   needs_notes: "warning",
   done: "success",
   elsewhere: "gray",
+  skipped: "gray",
 };
 
 function whenHint(date: string, today: string): string {
@@ -107,6 +108,18 @@ export function SessionHistoryTable({
                   <span className="ml-1.5 text-quaternary">
                     {whenHint(row.date, today)}
                   </span>
+                  {row.kind === "extra" && (
+                    <span className="ml-1.5 text-brand-secondary">· One-off</span>
+                  )}
+                  {row.kind !== "skipped" && row.seriesDate && row.seriesDate !== row.date && (
+                    <span className="ml-1.5 text-brand-secondary">
+                      · moved from{" "}
+                      {new Date(`${row.seriesDate}T00:00:00Z`).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        timeZone: "UTC",
+                      })}
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5">
                   <Badge size="sm" color={STATUS_COLOR[status]}>

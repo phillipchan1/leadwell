@@ -19,6 +19,7 @@ const STATUS_COLOR: Record<string, "sky" | "warning" | "success" | "gray"> = {
   needs_notes: "warning",
   done: "success",
   elsewhere: "gray",
+  skipped: "gray",
 };
 
 /**

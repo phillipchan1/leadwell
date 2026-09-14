@@ -465,7 +465,18 @@ export type Session = {
    * still reads truthfully a year later.
    */
   uncovered?: string[];
+  /**
+   * The rhythm date this occurrence stands in for, when it isn't on it —
+   * "just this one moved to Tuesday", or a skipped week. The projection
+   * treats that date as taken, so the series doesn't also draw Monday.
+   */
+  seriesDate?: string;
+  /** Unset for a normal occurrence. */
+  kind?: OccurrenceKind;
 };
+
+/** `extra`: a one-off outside the rhythm. `skipped`: this week isn't happening. */
+export type OccurrenceKind = "extra" | "skipped";
 
 export type Goal = {
   id: string;

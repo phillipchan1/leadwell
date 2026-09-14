@@ -10,19 +10,25 @@ import {
 } from "../lib/topics";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { TopicBoard, type BoardDirection } from "./TopicBoard";
-import { IdeasBoard } from "./IdeasBoard";
 import { MeetingCalendar } from "./MeetingCalendar";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
 import { NativeSelect } from "@/components/base/select/select-native";
+import { Button } from "@/components/base/buttons/button";
+import { Input } from "@/components/base/input/input";
+import { Plus } from "@untitledui/icons";
+import { todayISO } from "../lib/readiness";
 import { cx } from "@/utils/cx";
 
-export type PlanView = "board" | "ideas" | "calendar";
+export type PlanView = "board" | "calendar";
 
+/*
+ * Two shapes of the same plan. There was a third, Ideas, which drew the backlog
+ * a second time — the board already keeps it beside the weeks.
+ */
 const VIEWS: { id: PlanView; label: string }[] = [
   { id: "board", label: "Board" },
-  { id: "ideas", label: "Ideas" },
   { id: "calendar", label: "Calendar" },
 ];
 
@@ -43,11 +49,8 @@ export function MeetingPlanner({
   onSelectWeek,
   onCloseNotes,
   onOpenSession,
-  openCount,
 }: {
   meeting: TrackedMeeting;
-  /** Shown at the end of the toolbar when the host has it to hand. */
-  openCount?: number;
   direction?: BoardDirection;
   selectedSlotKey: string | null;
   onSelectWeek: (slotKey: string, slot: Slot) => void;
@@ -56,6 +59,7 @@ export function MeetingPlanner({
 }) {
   const sessions = useStore((s) => s.sessions);
   const addSession = useStore((s) => s.addSession);
+  const addExtraOccurrence = useStore((s) => s.addExtraOccurrence);
   const [view, setView] = useState<PlanView>("board");
   const [horizon, setHorizon] = useState<Horizon>(HORIZON_DEFAULT);
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -99,8 +103,6 @@ export function MeetingPlanner({
         onSelectWeek={openWeek}
         ahead={aheadForHorizon(horizon)}
       />
-    ) : view === "ideas" ? (
-      <IdeasBoard meetingId={meeting.id} />
     ) : (
       <MeetingCalendar
         meeting={meeting}
@@ -157,11 +159,19 @@ export function MeetingPlanner({
             }))}
           />
         )}
-        {openCount !== undefined && (
-          <span className="ml-auto text-sm text-quaternary tabular-nums">
-            {openCount} open
-          </span>
-        )}
+        <div className="ml-auto">
+          <AddOneOff
+            onAdd={(date) => {
+              const id = addExtraOccurrence(meeting.id, date);
+              onSelectWeek(`s:${id}`, {
+                sessionId: id,
+                date,
+                projected: false,
+                past: false,
+              });
+            }}
+          />
+        </div>
       </div>
 
       <div
@@ -209,5 +219,45 @@ export function MeetingPlanner({
         </OccurrenceNotesSheet>
       )}
     </div>
+  );
+}
+
+/** "+ One-off" — a meeting outside the rhythm, with this board's ideas and rows. */
+function AddOneOff({ onAdd }: { onAdd: (date: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState(todayISO());
+  if (!open) {
+    return (
+      <Button size="sm" color="secondary" iconLeading={Plus} onClick={() => setOpen(true)}>
+        One-off meeting
+      </Button>
+    );
+  }
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!date) return;
+        onAdd(date);
+        setOpen(false);
+      }}
+    >
+      <Input
+        size="sm"
+        type="date"
+        aria-label="One-off meeting date"
+        inputClassName="tabular-nums"
+        value={date}
+        onChange={setDate}
+        autoFocus
+      />
+      <Button size="sm" type="submit" isDisabled={!date}>
+        Add
+      </Button>
+      <Button size="sm" color="tertiary" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </form>
   );
 }

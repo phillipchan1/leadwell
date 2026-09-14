@@ -33,7 +33,7 @@ import type {
   TopicLane,
   TrackedMeeting,
 } from "../types";
-import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, upcomingRhythmDate, weekdayUTC, CADENCE_DAYS } from "./readiness";
+import { addDays, daysBetween, sessionsFor, todayISO, projectFromLast, explicitNextDate, weekdayUTC, CADENCE_DAYS, heldSessions, lastRhythmDate, nextOpenRhythmDate, takenSeriesDates } from "./readiness";
 
 /** How far the planner looks by default — a quarter of weekly meetings, not three weeks. */
 export const SLOTS_AHEAD = 8;
@@ -152,6 +152,8 @@ export type WeekCell = {
 export type WeekColumn = {
   key: string;
   label: string;
+  /** "One-off", "Moved from Mon" — this column isn't the plain rhythm. */
+  exception?: string;
   hint?: string;
   slot: Slot;
   cells: WeekCell[];
@@ -273,7 +275,9 @@ export function plannedSlots(
   today: string = todayISO(),
   ahead: number = SLOTS_AHEAD
 ): Slot[] {
-  const mine = sessionsFor(meeting.id, sessions);
+  const all = sessionsFor(meeting.id, sessions);
+  const mine = heldSessions(all);
+  const taken = takenSeriesDates(all);
   const openSlotted = new Set(
     topicsFor(topics, meeting.id)
       .filter((t) => t.status === "open" && t.sessionId)
@@ -303,7 +307,7 @@ export function plannedSlots(
   }
 
   const booking = explicitNextDate(meeting, sessions, today);
-  const lastPast = mine.filter((s) => s.date <= today).pop()?.date;
+  const lastPast = lastRhythmDate(all, today) ?? undefined;
   const target = meeting.rhythm === "as_needed" ? 1 : ahead;
 
   // Scaffold from the next rhythm date on or after today — never from a
@@ -311,11 +315,16 @@ export function plannedSlots(
   let cursor =
     meeting.rhythm === "as_needed"
       ? (booking && booking >= today ? booking : lastPast && lastPast >= today ? lastPast : today)
-      : (upcomingRhythmDate(meeting, lastPast ?? null, today) ?? today);
+      : (nextOpenRhythmDate(meeting, all, today) ?? today);
 
   if (meeting.rhythm !== "as_needed") {
-    const prev = addDays(cursor, -CADENCE_DAYS[meeting.rhythm]);
-    if (prev < today && !byDate.has(prev)) {
+    const step = CADENCE_DAYS[meeting.rhythm];
+    const prev = addDays(cursor, -step);
+    // Already showing a real meeting from that stretch — don't draw a second,
+    // imaginary one next to it (e.g. after the weekday changed).
+    const coveredByPast =
+      lastPastSession && lastPastSession.date > addDays(prev, -step);
+    if (prev < today && !byDate.has(prev) && !taken.has(prev) && !coveredByPast) {
       const existing = mine.find((s) => s.date === prev);
       byDate.set(prev, {
         sessionId: existing?.id ?? null,
@@ -327,7 +336,12 @@ export function plannedSlots(
   }
 
   for (let i = 0; i < target; i++) {
-    if (i > 0) cursor = projectFromLast(meeting, cursor);
+    if (i > 0) {
+      cursor = projectFromLast(meeting, cursor);
+      for (let j = 0; taken.has(cursor) && j < 60; j++) {
+        cursor = projectFromLast(meeting, cursor);
+      }
+    }
     const existing = mine.find((s) => s.date === cursor);
     byDate.set(cursor, {
       sessionId: existing?.id ?? byDate.get(cursor)?.sessionId ?? null,
@@ -480,10 +494,21 @@ export function boardLayout(
     } else {
       cells.push({ key: occ, label: "", topics: inWeek });
     }
+    const session = slot.sessionId
+      ? sessions.find((o) => o.id === slot.sessionId)
+      : undefined;
+    const exception =
+      session?.kind === "extra"
+        ? "One-off"
+        : session?.seriesDate && session.seriesDate !== session.date
+          ? `Moved from ${new Date(`${session.seriesDate}T00:00:00Z`).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" })}`
+          : null;
+    const when = slotHint(slot, inWeek, today);
     return {
       key: occ,
       label: slotLabel(slot),
-      hint: slotHint(slot, inWeek, today) || undefined,
+      exception: exception ?? undefined,
+      hint: when || undefined,
       slot,
       cells,
       topics: inWeek,
@@ -535,11 +560,13 @@ export function slotsThrough(
 ): Slot[] {
   const slots = [...plannedSlots(meeting, sessions, topics, today, SLOTS_AHEAD)];
   const seen = new Set(slots.map((s) => s.date));
+  const taken = takenSeriesDates(sessionsFor(meeting.id, sessions));
 
   while (true) {
     const last = slots[slots.length - 1]?.date;
     if (!last || last >= through) break;
-    const next = projectFromLast(meeting, last);
+    let next = projectFromLast(meeting, last);
+    for (let j = 0; taken.has(next) && j < 60; j++) next = projectFromLast(meeting, next);
     if (seen.has(next)) break;
     seen.add(next);
     slots.push({
@@ -564,7 +591,7 @@ export function occurrencesInMonth(
   const start = `${month}-01`;
   const end = monthEnd(month);
   const slots = slotsThrough(meeting, sessions, topics, end, today);
-  const mine = sessionsFor(meeting.id, sessions);
+  const mine = heldSessions(sessionsFor(meeting.id, sessions));
   const all = topicsFor(topics, meeting.id);
   const map = new Map<string, { slot: Slot; topics: Topic[] }>();
 

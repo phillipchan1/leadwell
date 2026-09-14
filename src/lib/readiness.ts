@@ -268,6 +268,57 @@ export function upcomingRhythmDate(
   return onOrAfterWeekday(today, meeting.anchorWeekday);
 }
 
+// ── Exceptions to the series ─────────────────────────────────────────────
+// A calendar lets you move one event of a series without moving the series.
+// Here an occurrence records the rhythm date it stands in for (`seriesDate`),
+// and the projection treats that date as taken. Extras sit outside the rhythm
+// entirely; skipped weeks hold their date without being a meeting.
+
+/** The date an occurrence occupies in the series, or null for an extra. */
+export function rhythmDateOf(s: Session): string | null {
+  if (s.kind === "extra") return null;
+  return s.seriesDate ?? s.date;
+}
+
+/** Series dates the projection must not draw: moved away from, or skipped. */
+export function takenSeriesDates(mine: Session[]): Set<string> {
+  const taken = new Set<string>();
+  for (const s of mine) {
+    if (s.kind === "skipped") taken.add(s.seriesDate ?? s.date);
+    else if (s.seriesDate && s.seriesDate !== s.date) taken.add(s.seriesDate);
+  }
+  return taken;
+}
+
+/** Sessions that are (or will be) actual meetings — not skipped weeks. */
+export function heldSessions(mine: Session[]): Session[] {
+  return mine.some((s) => s.kind === "skipped")
+    ? mine.filter((s) => s.kind !== "skipped")
+    : mine;
+}
+
+/** Latest series position on or before `today` — where the rhythm continues from. */
+export function lastRhythmDate(mine: Session[], today: string): string | null {
+  let last: string | null = null;
+  for (const s of mine) {
+    const d = rhythmDateOf(s);
+    if (d && d <= today && (!last || d > last)) last = d;
+  }
+  return last;
+}
+
+/** Next projected series date on or after `today`, stepping over taken ones. */
+export function nextOpenRhythmDate(
+  meeting: TrackedMeeting,
+  mine: Session[],
+  today: string
+): string | null {
+  const taken = takenSeriesDates(mine);
+  let d = upcomingRhythmDate(meeting, lastRhythmDate(mine, today), today);
+  for (let i = 0; d && taken.has(d) && i < 60; i++) d = projectFromLast(meeting, d);
+  return d;
+}
+
 /**
  * How far ahead prep starts mattering. Two days minimum, longer for slower
  * rhythms — a monthly meeting deserves more than 48 hours of runway.
@@ -398,7 +449,8 @@ export function meetingReadiness(
 ): Readiness {
   const { rhythm } = meeting;
   const asNeeded = rhythm === "as_needed";
-  const mine = sessionsFor(meeting.id, sessions);
+  const all = sessionsFor(meeting.id, sessions);
+  const mine = heldSessions(all);
 
   const past = mine.filter((s) => s.date <= today);
   const lastSession = past.length ? past[past.length - 1] : null;
@@ -410,12 +462,20 @@ export function meetingReadiness(
   const booked = latestBookingHint(meeting, sessions);
 
   // As-needed makes no promise about a next date, so it projects nothing.
-  const projectedDate = upcomingRhythmDate(meeting, lastMet, today);
-  const nextDate = explicit ?? projectedDate;
+  const projectedDate = nextOpenRhythmDate(meeting, all, today);
+  // A moved occurrence or a one-off is a real booking, and may come first.
+  const exception = mine.find(
+    (s) => s.date >= today && (s.kind === "extra" || (s.seriesDate && s.seriesDate !== s.date))
+  )?.date;
+  const nextDate =
+    [explicit, exception, explicit ? null : projectedDate]
+      .filter((d): d is string => Boolean(d))
+      .sort()[0] ?? null;
   const onTheBooks = Boolean(
     nextDate && mine.some((s) => s.date === nextDate)
   );
-  const projected = !explicit && Boolean(projectedDate) && !onTheBooks;
+  const projected =
+    nextDate === projectedDate && !explicit && Boolean(projectedDate) && !onTheBooks;
   const daysUntil = nextDate ? daysBetween(today, nextDate) : null;
 
   const windowOpen =
