@@ -4,7 +4,7 @@
  * Everything here is pure. The store owns the mutation and the repo owns the
  * round trip; this file owns the decisions those two shouldn't be making.
  */
-import type { Session, Tag, Topic, TrackedMeeting } from "../types";
+import type { Tag, Topic, TrackedMeeting } from "../types";
 
 // ── Capture grammar ───────────────────────────────────────────────────────
 // `Rewrite the covenant #training @frontier !`
@@ -109,65 +109,6 @@ export function reorderInto(
     const o = next.get(t.id);
     return o === undefined ? t : { ...t, order: o };
   });
-}
-
-// ── Carry-back ────────────────────────────────────────────────────────────
-
-/**
- * An occurrence whose date has passed hands its unchecked topics back to the
- * backlog, annotated — rather than silently pushing them a week forward.
- *
- * The forward push was tidy but dishonest: a topic could ride four occurrences
- * without anyone ever deciding it should. Coming back forces the same small
- * decision capture already asks for — this week, later, park it, or it was
- * never really a topic. The session keeps an `uncovered` ledger so the week it
- * missed still reads truthfully a year later.
- */
-export function applyReturns(
-  sessions: Session[],
-  topics: Topic[],
-  today: string
-): { sessions: Session[]; topics: Topic[]; returned: Topic[] } | null {
-  const past = new Map(
-    sessions.filter((s) => s.date < today).map((s) => [s.id, s])
-  );
-  if (!past.size) return null;
-
-  const returned: Topic[] = [];
-  const nextTopics = topics.map((t) => {
-    if (!t.sessionId || t.status !== "open") return t;
-    const session = past.get(t.sessionId);
-    if (!session) return t;
-    const moved: Topic = {
-      ...t,
-      sessionId: undefined,
-      lane: "backlog",
-      carried: t.carried + 1,
-      // `?? []` because a document restored from an older local cache predates
-      // this field, and a sweep on load must never be the thing that crashes.
-      carriedFrom: [...(t.carriedFrom ?? []), session.id],
-      returnedOn: today,
-      returnedFromDate: session.date,
-    };
-    returned.push(moved);
-    return moved;
-  });
-
-  if (!returned.length) return null;
-
-  const bySession = new Map<string, string[]>();
-  for (const t of returned) {
-    const from = t.carriedFrom[t.carriedFrom.length - 1];
-    bySession.set(from, [...(bySession.get(from) ?? []), t.text]);
-  }
-
-  const nextSessions = sessions.map((s) => {
-    const texts = bySession.get(s.id);
-    if (!texts) return s;
-    return { ...s, uncovered: [...new Set([...(s.uncovered ?? []), ...texts])] };
-  });
-
-  return { sessions: nextSessions, topics: nextTopics, returned };
 }
 
 // ── Coverage ──────────────────────────────────────────────────────────────

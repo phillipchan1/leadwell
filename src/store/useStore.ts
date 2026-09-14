@@ -31,7 +31,6 @@ import { storage } from "../lib/storage";
 import { todayISO, type HealthFilterValue } from "../lib/health";
 import type { ColumnTarget } from "../lib/topics";
 import {
-  applyReturns,
   findMeeting,
   findTag,
   parseCapture,
@@ -50,7 +49,12 @@ import { clearRecents } from "../lib/recents";
 import { clearUndo } from "../lib/undo";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
-import { defaultCurriculum, effectiveSlotId } from "../lib/topics";
+import {
+  defaultCurriculum,
+  effectiveSlotId,
+  nextSlotAfter,
+  plannedSlots,
+} from "../lib/topics";
 import {
   capUp,
   seedActions,
@@ -2174,11 +2178,40 @@ export const useStore = create<Store>((set, get) => ({
       };
     }),
 
+  /*
+   * Hand back anything an occurrence passed without covering — onto the next
+   * occurrence of the same meeting, not into the backlog. A topic that keeps
+   * sliding says so right on the card (`rollTopic` stamps the trail); landing
+   * back on the board is what makes that visible without forcing a re-triage
+   * decision every single week. Only a meeting with nowhere left to project
+   * (paused, or no rhythm at all) falls back to the backlog, same as the
+   * manual roll-forward already does.
+   */
   sweepReturns: () => {
-    const result = applyReturns(get().sessions, get().topics, todayISO());
-    if (!result) return 0;
-    set({ sessions: result.sessions, topics: result.topics });
-    return result.returned.length;
+    const today = todayISO();
+    const due = get().topics.filter((t) => {
+      if (t.status !== "open" || !t.sessionId) return false;
+      const session = get().sessions.find((o) => o.id === t.sessionId);
+      return Boolean(session && session.date < today);
+    });
+    for (const topic of due) {
+      const session = get().sessions.find((o) => o.id === topic.sessionId);
+      const meeting = session
+        ? get().meetings.find((m) => m.id === session.meetingId)
+        : undefined;
+      let nextSessionId: string | undefined;
+      if (meeting) {
+        const slots = plannedSlots(meeting, get().sessions, get().topics, today);
+        const next = nextSlotAfter(slots, topic.sessionId);
+        if (next) {
+          nextSessionId =
+            next.sessionId ??
+            get().addSession({ meetingId: meeting.id, date: next.date });
+        }
+      }
+      get().rollTopic(topic.id, nextSessionId);
+    }
+    return due.length;
   },
 
   addTag: (label) => {
@@ -2335,21 +2368,46 @@ export const useStore = create<Store>((set, get) => ({
       ),
     })),
   rollTopic: (id, sessionId) =>
-    set((s) => ({
-      topics: s.topics.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: "open",
-              closedOn: undefined,
-              sessionId,
-              // The count is the honest signal: a topic pushed three times is
-              // telling you something a due date never would.
-              carried: t.carried + 1,
-            }
-          : t
-      ),
-    })),
+    set((s) => {
+      const topic = s.topics.find((t) => t.id === id);
+      const from = topic?.sessionId
+        ? s.sessions.find((o) => o.id === topic.sessionId)
+        : undefined;
+      return {
+        // The session being left keeps an honest ledger of what it didn't
+        // cover, independent of wherever the topic lands next.
+        sessions: from
+          ? s.sessions.map((o) =>
+              o.id === from.id
+                ? {
+                    ...o,
+                    uncovered: [
+                      ...new Set([...(o.uncovered ?? []), topic!.text]),
+                    ],
+                  }
+                : o
+            )
+          : s.sessions,
+        topics: s.topics.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                status: "open",
+                closedOn: undefined,
+                sessionId,
+                // The count is the honest signal: a topic pushed three times is
+                // telling you something a due date never would.
+                carried: t.carried + 1,
+                carriedFrom: from
+                  ? [...(t.carriedFrom ?? []), from.id]
+                  : t.carriedFrom,
+                returnedOn: from ? todayISO() : t.returnedOn,
+                returnedFromDate: from ? from.date : t.returnedFromDate,
+              }
+            : t
+        ),
+      };
+    }),
   deleteTopic: (id) =>
     set((s) => ({ topics: s.topics.filter((t) => t.id !== id) })),
   // The board sorts by `order`, so the card comes back in its own place

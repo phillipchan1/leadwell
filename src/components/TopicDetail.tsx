@@ -436,7 +436,7 @@ export function TopicDetail({
               <dd className="text-right">{shortDate(topic.createdOn)}</dd>
               {topic.carried > 0 && (
                 <>
-                  <dt>Pushed</dt>
+                  <dt>Carried</dt>
                   <dd className="text-right text-amber-700 dark:text-amber-500">
                     {topic.carried}×
                   </dd>
@@ -454,7 +454,7 @@ export function TopicDetail({
             {topic.carried >= 3 && (
               <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-800 dark:bg-amber-950/40">
                 <p className="text-caption text-amber-900 dark:text-amber-300">
-                  Pushed {topic.carried} times. A topic that keeps sliding is
+                  Carried {topic.carried} times. A topic that keeps sliding is
                   usually a commitment in disguise.
                 </p>
                 <Button

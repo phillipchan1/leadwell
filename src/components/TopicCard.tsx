@@ -127,14 +127,14 @@ export function TopicCard({
   if (topic.returnedOn && !covered) {
     meta.push(
       <span key="ret" className="text-amber-700 dark:text-amber-500">
-        not covered {shortDate(topic.returnedFromDate)}
+        carried from {shortDate(topic.returnedFromDate)}
         {topic.carried > 1 ? ` · ${topic.carried}×` : ""}
       </span>
     );
   } else if (topic.carried > 0 && !covered) {
     meta.push(
       <span key="pushed" className="text-amber-700 dark:text-amber-500">
-        pushed {topic.carried}×
+        carried {topic.carried}×
       </span>
     );
   }

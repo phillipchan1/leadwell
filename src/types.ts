@@ -437,8 +437,10 @@ export type Topic = {
   /** The occurrences it has been pushed out of, in order. */
   carriedFrom: string[];
   /**
-   * Set when an occurrence passed with this still unchecked and it came back to
-   * the backlog. What the card explains itself with.
+   * Set when an occurrence passed with this still unchecked and it carried
+   * forward — onto the next occurrence, or the backlog if there wasn't one.
+   * `returnedFromDate` is the session it most recently slipped past. What the
+   * card explains itself with.
    */
   returnedOn?: string;
   returnedFromDate?: string;
