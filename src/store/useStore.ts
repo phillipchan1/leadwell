@@ -2729,12 +2729,13 @@ export const useStore = create<Store>((set, get) => ({
     bootstrapAttempts = 0;
     // Every load path lands here — cache, network, import, refresh — so this is
     // the one place a stale shape has to be made safe.
-    const doc = opts?.premigrated
-      ? rawDoc
-      : rescueOrphanTopics(migrateDoc(rawDoc));
+    const migrated = opts?.premigrated ? rawDoc : migrateDoc(rawDoc);
+    const doc = opts?.premigrated ? rawDoc : rescueOrphanTopics(migrated);
     // Record the baseline BEFORE the doc lands in the store, so the resulting
-    // change event syncs exactly the difference (nothing, for a plain load).
-    repo.setBaseline(opts?.baseline ?? doc);
+    // change event syncs exactly the difference. The baseline is the doc
+    // *before* orphan rescue, so rescued topics are written back — otherwise
+    // they stay stranded on the server and get rescued again on every load.
+    repo.setBaseline(opts?.baseline ?? migrated);
     // Keep the local copy level with whatever we just adopted, so the next
     // cold open has something to paint. Skipped when this *is* that copy —
     // re-serializing it would put the cost back on the boot path.
@@ -2828,7 +2829,8 @@ function revalidate(userId: string, email: string | null): Promise<void> {
       if (syncInFlight) await syncInFlight;
       const state = useStore.getState();
       if (state.userId !== userId || state.phase !== "ready") return;
-      const fresh = rescueOrphanTopics(migrateDoc(server));
+      const serverDoc = migrateDoc(server);
+      const fresh = rescueOrphanTopics(serverDoc);
       const { doc, missing, missingCount } = mergeServer(
         extractData(state),
         base,
@@ -2836,7 +2838,8 @@ function revalidate(userId: string, email: string | null): Promise<void> {
       );
       const offer = firstRefresh && missingCount > 0;
       firstRefresh = false;
-      state.hydrate(doc, userId, email, { baseline: fresh, premigrated: true });
+      // Baseline is the server as stored (pre-rescue), so repairs get written.
+      state.hydrate(doc, userId, email, { baseline: serverDoc, premigrated: true });
       if (offer) offerRecovery(userId, missing, missingCount);
     } catch (e) {
       // There is a document on screen and the app works. A failed refresh is

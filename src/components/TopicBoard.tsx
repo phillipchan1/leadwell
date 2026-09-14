@@ -760,8 +760,12 @@ function IdeasPanel({
   const capture = () => {
     const text = draft.trim();
     if (!text) return;
-    onCapture(text, tag || undefined);
+    const slotId = tag || undefined;
+    onCapture(text, slotId);
     setDraft("");
+    // Never let a capture vanish behind the active filter.
+    const landsIn = text.includes("#") ? "all" : (slotId ?? "untagged");
+    if (filter !== "all" && filter !== landsIn) setFilter(landsIn);
   };
 
   const dropActive = (key: string) =>
@@ -811,7 +815,12 @@ function IdeasPanel({
                 key={f.id}
                 type="button"
                 aria-pressed={filter === f.id}
-                onClick={() => setFilter(f.id)}
+                onClick={() => {
+                  setFilter(f.id);
+                  // Filtering to a row means adding into it, too.
+                  if (f.id === "untagged") setTag("");
+                  else if (f.id !== "all") setTag(f.id);
+                }}
                 className={cx(
                   "h-6 rounded-md px-2 text-xs font-medium transition",
                   filter === f.id
