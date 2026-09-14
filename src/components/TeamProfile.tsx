@@ -169,7 +169,7 @@ export function TeamProfile({
         <div>
           <div className="flex items-center gap-2">
             <input
-              className="min-w-0 flex-1 rounded-xl bg-stone-50 px-3 py-2 text-2xl font-semibold tracking-tight text-stone-900 outline-none transition-[background-color,box-shadow] duration-150 hover:bg-stone-100/90 focus:bg-stone-50 focus:shadow-[inset_0_0_0_1.5px_rgb(13_148_136/0.35)] dark:bg-stone-950/60 dark:text-stone-100 dark:hover:bg-stone-950 dark:focus:bg-stone-950/80"
+              className="-ml-2 min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1 text-2xl font-semibold tracking-tight text-primary outline-none transition-[background-color,box-shadow] duration-150 hover:bg-secondary focus:bg-secondary focus:shadow-[inset_0_0_0_1.5px_rgb(13_148_136/0.35)]"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onBlur={saveName}

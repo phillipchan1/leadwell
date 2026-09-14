@@ -329,9 +329,7 @@ function BalanceStrip({
    */
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-0.5">
-      <span className="text-caption font-medium tracking-wide text-quaternary uppercase">
-        Coverage
-      </span>
+      <span className="text-xs font-medium text-quaternary">Coverage</span>
       {balance.map((b) => {
         const low = b.filled === 0 || (b.total > 0 && b.filled <= Math.floor(b.total / 3));
         return (
@@ -623,17 +621,16 @@ function WeekHeader({
       onClick={onSelect}
       aria-expanded={isActive}
       className={cx(
-        "px-2 py-2 text-left transition-colors",
-        grid ? "bg-primary" : "border-b border-secondary",
+        "px-3 py-2 text-left transition-colors",
+        grid ? "bg-secondary" : "border-b border-secondary bg-secondary",
         isActive && "ring-2 ring-inset ring-teal-500 dark:ring-teal-600",
-        !isActive && "hover:bg-stone-50 dark:hover:bg-stone-900/40",
-        past && "bg-amber-50/80 dark:bg-amber-950/25"
+        !isActive && "hover:bg-tertiary"
       )}
     >
       <div
         className={cx(
-          "truncate text-caption font-semibold uppercase",
-          past ? "text-amber-700 dark:text-amber-500" : "text-quaternary"
+          "truncate text-xs font-semibold",
+          past ? "text-quaternary" : "text-primary"
         )}
       >
         {week.label}
@@ -641,10 +638,10 @@ function WeekHeader({
       {week.hint && (
         <div
           className={cx(
-            "truncate text-caption",
-            past
+            "truncate text-xs",
+            past && week.hint.includes("not covered")
               ? "text-amber-700 dark:text-amber-500"
-              : "text-stone-400 dark:text-stone-500"
+              : "text-quaternary"
           )}
         >
           {week.hint}
@@ -868,7 +865,7 @@ function IdeasPanel({
         <div
           ref={columnRef("backlog")}
           className={cx(
-            "max-h-[min(11rem,28vh)] space-y-2 overflow-y-auto rounded-lg",
+            "max-h-[min(22rem,45vh)] space-y-3 overflow-y-auto rounded-lg",
             drag && "min-h-[4rem]",
             dropActive("backlog") &&
               "ring-2 ring-teal-400 dark:ring-teal-600"
@@ -894,7 +891,7 @@ function IdeasPanel({
             )}
           >
             {filter === "all" && group.label !== "Ideas" && (
-              <p className="mb-1.5 text-caption font-semibold tracking-wide text-quaternary uppercase">
+              <p className="mb-1.5 px-1 text-xs font-medium text-quaternary">
                 {group.label}
               </p>
             )}
@@ -939,10 +936,10 @@ function IdeasPanel({
             onClick={() => setParkedOpen((v) => !v)}
             aria-expanded={parkedOpen}
           >
-            <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
+            <span className="text-xs font-medium text-quaternary">
               Parked
             </span>
-            <span className="text-caption tabular-nums text-quaternary">
+            <span className="text-xs tabular-nums text-quaternary">
               {parked.topics.length}
             </span>
           </button>
@@ -1069,7 +1066,7 @@ function TopicCard({
         "group relative rounded-lg border bg-primary",
         past
           ? "border-amber-300 dark:border-amber-800"
-          : "border-stone-200 dark:border-stone-700",
+          : "border-secondary shadow-xs",
         isDragging && "opacity-40",
         compact && "text-xs"
       )}
@@ -1078,7 +1075,7 @@ function TopicCard({
         {...cardGrab}
         className={cx(
           "flex cursor-grab items-start gap-1 touch:gap-2 active:cursor-grabbing",
-          compact ? "px-1.5 py-1" : "px-2 py-1.5"
+          compact ? "px-1.5 py-1.5" : "px-2 py-2"
         )}
       >
         <button
@@ -1087,7 +1084,7 @@ function TopicCard({
           title={HANDLE_TITLE}
           className={cx(
             "flex shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 select-none active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400",
-            compact ? "size-6 -ml-0.5" : "size-8 -ml-0.5 touch:size-11"
+            compact ? "size-5 -ml-0.5" : "size-6 -ml-0.5 touch:size-11"
           )}
           {...keyHandleProps}
           {...handleProps(topic.id, columnKey, ref)}
@@ -1099,10 +1096,8 @@ function TopicCard({
           <textarea
             className={cx(
               "w-full resize-none border-0 bg-transparent p-0 leading-snug outline-none",
-              compact ? "text-xs" : "text-xs touch:text-md",
-              covered
-                ? "text-quaternary line-through"
-                : "text-stone-700 dark:text-stone-200"
+              compact ? "text-xs" : "text-sm touch:text-md",
+              covered ? "text-quaternary line-through" : "text-primary"
             )}
             rows={1}
             ref={(el) => {

@@ -2635,12 +2635,13 @@ export const useStore = create<Store>((set, get) => ({
     // Avoid redundant reloads if we're already ready for this user.
     if (get().phase === "ready" && get().userId === userId) return;
 
-    firstRefresh = true;
-
     // Paint the local copy first when there is one. The full-screen skeleton
     // is then reserved for the case where there is genuinely nothing to show,
     // instead of being the cost of every return visit.
     const cached = loadDoc(userId);
+    // Only a document painted from this device's copy can hold rows the
+    // server has lost; a fresh network load has nothing to compare.
+    firstRefresh = Boolean(cached);
     if (cached) {
       const base =
         cached.pendingWrite &&
