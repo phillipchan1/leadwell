@@ -48,6 +48,7 @@ import { clearDoc, loadDoc, saveDoc } from "../lib/docCache";
 import { clearIndex } from "../lib/search";
 import { clearRecents } from "../lib/recents";
 import { clearUndo } from "../lib/undo";
+import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
 import { defaultCurriculum } from "../lib/topics";
 import {
@@ -508,8 +509,19 @@ type Store = PersistedData &
       data: PersistedData,
       userId: string,
       email: string | null,
-      /** Skips re-writing the local cache when the doc came out of it. */
-      opts?: { fromCache?: boolean }
+      opts?: {
+        /** Skips re-writing the local cache when the doc came out of it. */
+        fromCache?: boolean;
+        /**
+         * What the server is believed to hold, when that differs from `data` —
+         * a refresh merged with local edits that still have to be written.
+         * Must already be migrated, and share row objects with `data` for
+         * every row that is the same.
+         */
+        baseline?: PersistedData;
+        /** `data` has already been through migrateDoc/rescueOrphanTopics. */
+        premigrated?: boolean;
+      }
     ) => void;
     signOut: () => Promise<void>;
     // data management
@@ -781,50 +793,180 @@ const ID_COLLECTIONS = PERSISTED_KEYS.filter(
   (k) => k !== "me" && k !== "chats" && k !== "nodePositions"
 );
 
+type Row = { id: string };
+
+/** Rows the refresh found on this device, untouched here, that the server no longer has. */
+export type MissingRows = Partial<Record<keyof PersistedData, Row[]>>;
+
 /**
- * Fold a server document into the one on screen, additively.
+ * Three-way merge of a server read into the document on screen.
  *
- * Used when a background refresh comes back and the user has been typing in the
- * meantime. The old behaviour was to drop the response on the floor — in-memory
- * wins — which is right about the rows both copies have and wrong about the
- * ones only the server has. Those are usually the whole reason to refresh:
- * something captured on the phone, in another tab, on the laptop this morning.
- * Discarding them left this device convinced they never existed, and the next
- * pruning sync then deleted them for everyone.
+ * `base` is what this device last believed the server held. Per row:
+ *  - changed or created here (not identical to base) → keep the local version;
+ *  - untouched here → take the server's version, which carries edits made on
+ *    other devices; if the server no longer has it, it was deleted elsewhere;
+ *  - deleted here (in base, not local) → stays deleted;
+ *  - only on the server → comes across.
  *
- * So: local wins every conflict, and rows local has never heard of come along.
- * Nothing in memory is overwritten and nothing is removed, which is what makes
- * it safe to run underneath an open editor.
+ * The caller installs `server` as the new baseline, so the next sync writes
+ * exactly the local changes and nothing else. With no base every local row
+ * counts as changed: local wins, and nothing the server has is lost.
  */
-function unionMissing(local: PersistedData, server: PersistedData): PersistedData {
-  const merged: PersistedData = { ...local };
-  let changed = false;
+function mergeServer(
+  local: PersistedData,
+  base: PersistedData | null,
+  server: PersistedData
+): { doc: PersistedData; missing: MissingRows; missingCount: number } {
+  const doc: PersistedData = { ...server };
+  const missing: MissingRows = {};
+  let missingCount = 0;
+
+  doc.me = base && local.me === base.me ? server.me : local.me;
 
   for (const k of ID_COLLECTIONS) {
-    const mine = local[k] as { id: string }[] | undefined;
-    const theirs = server[k] as { id: string }[] | undefined;
-    if (!Array.isArray(mine) || !Array.isArray(theirs)) continue;
-    const known = new Set(mine.map((x) => x.id));
-    const extra = theirs.filter((x) => x && !known.has(x.id));
-    if (!extra.length) continue;
-    (merged as Record<string, unknown>)[k] = [...mine, ...extra];
-    changed = true;
+    const mine = local[k] as Row[] | undefined;
+    const theirs = server[k] as Row[] | undefined;
+    if (!Array.isArray(mine)) continue;
+    if (!Array.isArray(theirs)) {
+      (doc as Record<string, unknown>)[k] = mine;
+      continue;
+    }
+    const before = new Map(
+      ((base?.[k] as Row[] | undefined) ?? []).map((x) => [x.id, x] as const)
+    );
+    const onServer = new Map(theirs.map((x) => [x.id, x] as const));
+    const here = new Set(mine.map((x) => x.id));
+    const out: Row[] = [];
+    for (const row of mine) {
+      if (before.get(row.id) === row) {
+        const fresh = onServer.get(row.id);
+        if (fresh) out.push(fresh);
+        else {
+          (missing[k] ??= []).push(row);
+          missingCount += 1;
+        }
+      } else {
+        out.push(row);
+      }
+    }
+    for (const row of theirs) {
+      if (!here.has(row.id) && !before.has(row.id)) out.push(row);
+    }
+    (doc as Record<string, unknown>)[k] = out;
   }
 
   for (const k of ["chats", "nodePositions"] as const) {
-    const mine = local[k];
-    const theirs = server[k];
-    if (!mine || !theirs) continue;
-    const extra = Object.keys(theirs).filter((key) => !(key in mine));
-    if (!extra.length) continue;
-    (merged as Record<string, unknown>)[k] = {
-      ...theirs,
-      ...(mine as Record<string, unknown>),
-    };
-    changed = true;
+    const mine = (local[k] ?? {}) as Record<string, unknown>;
+    const theirs = (server[k] ?? {}) as Record<string, unknown>;
+    const before = (base?.[k] ?? {}) as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(mine)) {
+      if (key in before && before[key] === v) {
+        if (key in theirs) out[key] = theirs[key];
+      } else {
+        out[key] = v;
+      }
+    }
+    for (const [key, v] of Object.entries(theirs)) {
+      if (!(key in mine) && !(key in before)) out[key] = v;
+    }
+    (doc as Record<string, unknown>)[k] = out;
   }
 
-  return changed ? merged : local;
+  return { doc, missing, missingCount };
+}
+
+/**
+ * Give `doc` the same row objects as `base` wherever the two are equal.
+ *
+ * Sync diffs by object identity, and identity does not survive a round trip
+ * through the local cache — a document and its baseline read back from JSON
+ * share nothing. Without this every row would look edited.
+ */
+function relink(doc: PersistedData, base: PersistedData): PersistedData {
+  const out: PersistedData = { ...doc };
+  const same = (a: unknown, b: unknown) =>
+    a === b || JSON.stringify(a) === JSON.stringify(b);
+  if (same(doc.me, base.me)) out.me = base.me;
+  for (const k of ID_COLLECTIONS) {
+    const rows = doc[k] as Row[] | undefined;
+    const prev = base[k] as Row[] | undefined;
+    if (!Array.isArray(rows) || !Array.isArray(prev)) continue;
+    const byId = new Map(prev.map((x) => [x.id, x] as const));
+    (out as Record<string, unknown>)[k] = rows.map((r) => {
+      const b = byId.get(r.id);
+      return b && same(r, b) ? b : r;
+    });
+  }
+  for (const k of ["chats", "nodePositions"] as const) {
+    const rows = { ...(doc[k] ?? {}) } as Record<string, unknown>;
+    const prev = (base[k] ?? {}) as Record<string, unknown>;
+    for (const key of Object.keys(rows)) {
+      if (key in prev && same(rows[key], prev[key])) rows[key] = prev[key];
+    }
+    (out as Record<string, unknown>)[k] = rows;
+  }
+  return out;
+}
+
+const RECOVERY_KEY = (userId: string) => `recovery:${userId}`;
+
+type RecoveryStash = { savedAt: string; rows: MissingRows };
+
+/**
+ * Keep rows a refresh is about to drop, and offer them back.
+ *
+ * After the sync bugs of August/September the local copy on some device may be
+ * the only place a week of meeting prep still exists. A row that is on this
+ * device, untouched here, and gone from the server is *usually* a delete made
+ * elsewhere — but it is exactly what lost work looks like too, and asking once
+ * costs nothing next to guessing wrong.
+ */
+function offerRecovery(userId: string, missing: MissingRows, count: number) {
+  const prev = storage.load<RecoveryStash>(RECOVERY_KEY(userId));
+  const rows: MissingRows = { ...(prev?.rows ?? {}) };
+  for (const [k, list] of Object.entries(missing) as [keyof PersistedData, Row[]][]) {
+    const have = new Set((rows[k] ?? []).map((r) => r.id));
+    rows[k] = [...(rows[k] ?? []), ...list.filter((r) => !have.has(r.id))];
+  }
+  storage.save<RecoveryStash>(RECOVERY_KEY(userId), {
+    savedAt: new Date().toISOString(),
+    rows,
+  });
+  const topicCount = missing.topics?.length ?? 0;
+  const what =
+    topicCount === count
+      ? `${count} topic${count === 1 ? "" : "s"}`
+      : `${count} item${count === 1 ? "" : "s"}`;
+  toast({
+    tone: "error",
+    message: `This device had ${what} the cloud doesn't — deleted elsewhere, or lost in an old sync.`,
+    action: { label: "Restore", onAction: () => restoreRecovery(userId) },
+  });
+}
+
+/** Put stashed rows back. They sync as new rows on the next write. */
+export function restoreRecovery(userId: string): number {
+  const stash = storage.load<RecoveryStash>(RECOVERY_KEY(userId));
+  const state = useStore.getState();
+  if (!stash || state.userId !== userId) return 0;
+  const patch: Record<string, unknown> = {};
+  let restored = 0;
+  for (const [k, list] of Object.entries(stash.rows) as [keyof PersistedData, Row[]][]) {
+    const current = state[k] as unknown as Row[];
+    if (!Array.isArray(current) || !list?.length) continue;
+    const have = new Set(current.map((r) => r.id));
+    const back = list.filter((r) => !have.has(r.id));
+    if (!back.length) continue;
+    patch[k] = [...current, ...back];
+    restored += back.length;
+  }
+  if (restored) {
+    useStore.setState(patch as Partial<Store>);
+    toast({ message: `Restored ${restored} item${restored === 1 ? "" : "s"}.` });
+  }
+  storage.remove(RECOVERY_KEY(userId));
+  return restored;
 }
 
 /**
@@ -2348,17 +2490,32 @@ export const useStore = create<Store>((set, get) => ({
     // Avoid redundant reloads if we're already ready for this user.
     if (get().phase === "ready" && get().userId === userId) return;
 
-    // A boot has read nothing yet, whoever ran last. Until this one does, its
-    // writes stay upsert-only.
-    serverReconciled = false;
+    firstRefresh = true;
 
     // Paint the local copy first when there is one. The full-screen skeleton
     // is then reserved for the case where there is genuinely nothing to show,
     // instead of being the cost of every return visit.
     const cached = loadDoc(userId);
     if (cached) {
-      get().hydrate(cached.doc, userId, email, { fromCache: true });
-      if (cached.pendingWrite) {
+      const base =
+        cached.pendingWrite &&
+        cached.base &&
+        !isIncompletePersistedDoc(cached.doc) &&
+        !isIncompletePersistedDoc(cached.base)
+          ? rescueOrphanTopics(migrateDoc(cached.base))
+          : null;
+      let painted = rescueOrphanTopics(migrateDoc(cached.doc));
+      if (base) painted = relink(painted, base);
+      get().hydrate(painted, userId, email, {
+        fromCache: true,
+        premigrated: true,
+        baseline: base ?? undefined,
+      });
+      if (cached.pendingWrite && base) {
+        // Offline edits with a record of what the server had: push exactly
+        // those rows, then fold in whatever happened elsewhere meanwhile.
+        void runSync(userId).then(() => revalidate(userId, email));
+      } else if (cached.pendingWrite) {
         // These edits were made without a connection. The server has never
         // seen this document, so there is nothing to refresh *from* — drop the
         // baseline and push the whole thing up instead.
@@ -2426,14 +2583,12 @@ export const useStore = create<Store>((set, get) => ({
     bootstrapAttempts = 0;
     // Every load path lands here — cache, network, import, refresh — so this is
     // the one place a stale shape has to be made safe.
-    const doc = rescueOrphanTopics(migrateDoc(rawDoc));
-    // This document came off the network (load, refresh, seed, import), so it
-    // is the server's own account of itself and the client may prune against
-    // it from here on. A cache paint deliberately does not earn that.
-    if (!opts?.fromCache) serverReconciled = true;
-    // Record the loaded doc as the persistence baseline BEFORE it lands in the
-    // store, so the resulting change event is a no-op (same array references).
-    repo.setBaseline(doc);
+    const doc = opts?.premigrated
+      ? rawDoc
+      : rescueOrphanTopics(migrateDoc(rawDoc));
+    // Record the baseline BEFORE the doc lands in the store, so the resulting
+    // change event syncs exactly the difference (nothing, for a plain load).
+    repo.setBaseline(opts?.baseline ?? doc);
     // Keep the local copy level with whatever we just adopted, so the next
     // cold open has something to paint. Skipped when this *is* that copy —
     // re-serializing it would put the cost back on the boot path.
@@ -2478,7 +2633,6 @@ export const useStore = create<Store>((set, get) => ({
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
-    serverReconciled = false;
     set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
   },
 
@@ -2498,58 +2652,64 @@ export const useStore = create<Store>((set, get) => ({
 // tables that actually changed. PERSISTED_KEYS is declared with the document
 // helpers above so bootstrap and extractData share one list.
 
-/**
- * Bumped on every change to the document. A background refresh captures it
- * before loading and checks it after, which is how it can tell whether it is
- * about to overwrite something the user typed while the response was in
- * flight.
- */
-let docRevision = 0;
+
+/** The next refresh is the first since boot — the one that may find lost rows. */
+let firstRefresh = true;
+let refreshing: Promise<void> | null = null;
+let lastRefreshAt = 0;
 
 /**
- * Has this session read the server at least once and folded the answer into the
- * document on screen?
+ * Fold the server's current document into the one on screen.
  *
- * Until it has, the in-memory copy is a *guess* — the local cache, which may
- * have been written days ago by this browser while the real work happened on a
- * phone. It is fine to paint from and fine to push, but it must not be allowed
- * to speak for rows it has never seen, and `repo.pushRows` deletes exactly
- * those. So every write before reconciliation is upsert-only.
- *
- * Set by `hydrate` whenever the document came from the network rather than the
- * cache; cleared on sign-out and whenever a fresh boot starts.
+ * Runs after a cache paint, when the tab comes back into view, and on a slow
+ * timer while it stays open — a tab left open for a week must see what was
+ * captured on the phone before it is allowed to edit next to it. Quiet by
+ * design: the app is already usable, so nothing here may take it away.
  */
-let serverReconciled = false;
-
-/**
- * Refresh a cache-hydrated document from the server. Deliberately quiet: the
- * app is already usable, so nothing here is allowed to take it away.
- */
-async function revalidate(userId: string, email: string | null): Promise<void> {
-  const startedAt = docRevision;
-  try {
-    const doc = await repo.loadAll(userId);
-    // Nothing on the server for this user — an account wiped elsewhere, or a
-    // cache that outlived its data. Leave what's on screen alone rather than
-    // blanking it; the sync path owns reconciling the two.
-    if (!doc) return;
-    const state = useStore.getState();
-    if (state.userId !== userId || state.phase !== "ready") return;
-    // Edits landed while we were loading, so the server copy is no longer a
-    // straight replacement. Keep every local value and bring across only what
-    // this device has never seen — that is still a reconciliation, and the
-    // alternative (drop the response) is what let the next sync prune the rows
-    // it just threw away.
-    if (docRevision !== startedAt) {
-      state.hydrate(unionMissing(extractData(state), doc), userId, email);
-      return;
+function revalidate(userId: string, email: string | null): Promise<void> {
+  if (refreshing) return refreshing;
+  const job = (async () => {
+    lastRefreshAt = Date.now();
+    try {
+      // A write in flight when the read starts may or may not be in the
+      // response. Let it land, so `base` describes what the server holds.
+      if (syncInFlight) await syncInFlight;
+      const base = repo.getBaseline();
+      const server = await repo.loadAll(userId);
+      // Nothing on the server for this user — an account wiped elsewhere, or a
+      // cache that outlived its data. Leave what's on screen alone.
+      if (!server) return;
+      if (syncInFlight) await syncInFlight;
+      const state = useStore.getState();
+      if (state.userId !== userId || state.phase !== "ready") return;
+      const fresh = rescueOrphanTopics(migrateDoc(server));
+      const { doc, missing, missingCount } = mergeServer(
+        extractData(state),
+        base,
+        fresh
+      );
+      const offer = firstRefresh && missingCount > 0;
+      firstRefresh = false;
+      state.hydrate(doc, userId, email, { baseline: fresh, premigrated: true });
+      if (offer) offerRecovery(userId, missing, missingCount);
+    } catch (e) {
+      // There is a document on screen and the app works. A failed refresh is
+      // not an error screen — the write path surfaces connectivity on its own.
+      console.error("LeadWell: background refresh failed", e);
     }
-    state.hydrate(doc, userId, email);
-  } catch (e) {
-    // There is a document on screen and the app works. A failed refresh is
-    // not an error screen — the write path surfaces connectivity on its own.
-    console.error("LeadWell: background refresh failed", e);
-  }
+  })().finally(() => {
+    if (refreshing === job) refreshing = null;
+  });
+  refreshing = job;
+  return job;
+}
+
+/** Refresh if the last one is old enough to be worth a round trip. */
+function refreshIfStale(minAgeMs: number) {
+  const state = useStore.getState();
+  if (state.phase !== "ready" || !state.userId) return;
+  if (Date.now() - lastRefreshAt < minAgeMs) return;
+  void revalidate(state.userId, state.userEmail);
 }
 
 /** Exponential backoff for a failed initial load, capped so it keeps trying. */
@@ -2645,10 +2805,7 @@ function runSync(userId: string): Promise<void> {
       try {
         useStore.setState({ syncStatus: "saving" });
         const written = extractData(latest);
-        // Upsert-only until this session has actually read the server. See
-        // `serverReconciled` — a cache-painted document is not entitled to
-        // delete rows it has never seen.
-        await repo.syncData(userId, written, { prune: serverReconciled });
+        await repo.syncData(userId, written);
         syncFailures = 0;
         fullSyncPending = false;
         clearSyncRetry();
@@ -2664,6 +2821,7 @@ function runSync(userId: string): Promise<void> {
         // a hard quit can't take them, and mark them as still owed.
         saveDoc(userId, extractData(useStore.getState()), {
           pendingWrite: true,
+          base: repo.getBaseline(),
         });
         // Not "idle" — a retry is pending and the edit is not on the server
         // yet. Reporting that as saved is the one lie the UI cannot afford.
@@ -2706,10 +2864,6 @@ function scheduleSync(userId: string): void {
 useStore.subscribe((state, prev) => {
   if (state.phase !== "ready" || !state.userId) return;
   if (!PERSISTED_KEYS.some((k) => state[k] !== prev[k])) return;
-  // Every document change bumps this, whether or not it can be written yet,
-  // so a background refresh can tell it's about to land on top of something
-  // the user just typed.
-  docRevision += 1;
   if (!canSync()) return;
   scheduleSync(state.userId);
 });
@@ -2725,7 +2879,10 @@ if (typeof window !== "undefined") {
     // write then gets its chance, and the retry machinery covers the rest.
     const state = useStore.getState();
     if (state.phase === "ready" && state.userId && hasUnsyncedEdits()) {
-      saveDoc(state.userId, extractData(state), { pendingWrite: true });
+      saveDoc(state.userId, extractData(state), {
+        pendingWrite: true,
+        base: repo.getBaseline(),
+      });
     }
     void flushPendingSync();
   };
@@ -2747,13 +2904,20 @@ if (typeof window !== "undefined") {
       syncFailures = 0;
       void runSync(state.userId);
     }
+    // Whatever happened on other devices while this tab sat in the background.
+    refreshIfStale(15_000);
   };
 
   window.addEventListener("online", recover);
+  window.addEventListener("focus", () => refreshIfStale(15_000));
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flush();
     else recover();
   });
+  // An open, visible tab still drifts: poll gently.
+  setInterval(() => {
+    if (document.visibilityState === "visible") refreshIfStale(90_000);
+  }, 30_000);
 }
 
 // Re-run bootstrap on sign-in / sign-out / token refresh from Supabase.
@@ -2771,7 +2935,6 @@ supabase.auth.onAuthStateChange((event) => {
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
-    serverReconciled = false;
     useStore.setState({
       phase: "anon",
       userId: null,

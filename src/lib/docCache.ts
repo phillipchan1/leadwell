@@ -36,11 +36,21 @@ type CachedDoc = {
    */
   pendingWrite: boolean;
   doc: PersistedData;
+  /**
+   * With a pending write: what the server held when those edits were made.
+   * Lets the next boot push only the rows that were edited, instead of every
+   * row in a possibly days-old document over newer work from other devices.
+   */
+  base?: PersistedData;
 };
 
 const CACHE_VERSION = 1;
 
-export type CacheEntry = { doc: PersistedData; pendingWrite: boolean };
+export type CacheEntry = {
+  doc: PersistedData;
+  pendingWrite: boolean;
+  base?: PersistedData;
+};
 
 function keyFor(userId: string): string {
   return DOC_KEY_PREFIX + userId;
@@ -60,7 +70,11 @@ export function loadDoc(userId: string): CacheEntry | null {
   // Belt and braces: the key already scopes by user, so a mismatch here means
   // something rewrote the entry. Don't show one account another's data.
   if (cached.userId !== userId) return null;
-  return { doc: cached.doc, pendingWrite: cached.pendingWrite === true };
+  return {
+    doc: cached.doc,
+    pendingWrite: cached.pendingWrite === true,
+    base: cached.pendingWrite ? cached.base : undefined,
+  };
 }
 
 /**
@@ -74,15 +88,22 @@ export function loadDoc(userId: string): CacheEntry | null {
 export function saveDoc(
   userId: string,
   doc: PersistedData,
-  opts: { pendingWrite: boolean }
+  opts: { pendingWrite: boolean; base?: PersistedData | null }
 ): boolean {
-  const ok = storage.save<CachedDoc>(keyFor(userId), {
+  const entry: CachedDoc = {
     v: CACHE_VERSION,
     userId,
     savedAt: new Date().toISOString(),
     pendingWrite: opts.pendingWrite,
     doc,
-  });
+  };
+  if (opts.pendingWrite && opts.base && opts.base !== doc) {
+    // Twice the size; if it doesn't fit, the edits matter more than the base.
+    if (storage.save<CachedDoc>(keyFor(userId), { ...entry, base: opts.base })) {
+      return true;
+    }
+  }
+  const ok = storage.save<CachedDoc>(keyFor(userId), entry);
   if (ok) return true;
 
   // A half-written or stale entry is worse than none: it would hydrate the

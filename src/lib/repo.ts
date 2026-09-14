@@ -13,9 +13,9 @@
  *                          last baseline (called, debounced, on every store
  *                          change)
  *
- * Each collection has a small mapper pair (row ⇄ app type). Sync is
- * upsert-current + delete-missing per changed table, which is idempotent and
- * needs no server-side diffing.
+ * Each collection has a small mapper pair (row ⇄ app type). Sync writes only
+ * the rows this device changed and deletes only the rows it removed — see
+ * `diffRows`. Whole-table replacement is reserved for seeding (`writeAll`).
  */
 import { supabase } from "./supabase";
 import type {
@@ -190,15 +190,11 @@ export function emptyMe(partial: Partial<Me> & { name: string }): Me {
 }
 
 /**
- * Persist an id-keyed collection: upsert every current row, then delete rows
- * for this user whose key is no longer present. Empty collection ⇒ delete all.
+ * Replace a whole id-keyed collection: upsert every row, delete the rest.
  *
- * `prune` is what makes that second half safe. Delete-missing is only correct
- * when the client's array is the whole truth — and a document painted from the
- * local cache is *not*, until a server load has been folded into it. Pushing a
- * stale snapshot with pruning on is how work done on another device gets
- * deleted by the device that never saw it. Callers pass prune: false until
- * they've reconciled; a resurrected row is recoverable, a deleted one isn't.
+ * Only for `writeAll` — seeding a brand-new account or a deliberate reset,
+ * where the document really is the whole truth. Everyday sync must never do
+ * this; see `syncData`.
  */
 async function pushRows(
   table: string,
@@ -767,6 +763,11 @@ export function hasBaseline(): boolean {
   return baseline !== null;
 }
 
+/** The document the server is believed to hold, as of the last load or write. */
+export function getBaseline(): PersistedData | null {
+  return baseline;
+}
+
 // --- public API -------------------------------------------------------------
 
 /**
@@ -903,20 +904,74 @@ export async function writeAll(userId: string, d: PersistedData): Promise<void> 
 }
 
 /**
- * Persist only what changed since the last baseline. Compares each collection
- * by reference (zustand hands us fresh arrays only for the slices that changed)
- * and re-syncs just those tables.
+ * Row-level difference between two versions of an id-keyed collection.
  *
- * `prune` says whether this document is allowed to speak for rows it has never
- * seen. It is false for every write made before the session has read the
- * server once — see `pushRows`.
+ * Only rows whose object identity changed are written, and only rows that were
+ * in `before` and are gone from `after` are deleted. The store never mutates a
+ * row in place — every edit replaces the object — so identity is an exact and
+ * free change marker.
+ *
+ * This is what makes a stale device harmless. Sync used to be "upsert every
+ * row I hold, delete every server row I don't", which is only correct when one
+ * device is the whole truth. A laptop tab left open for a week is not: the
+ * first edit it made deleted everything captured on the phone since. Now a
+ * device can only ever delete a row it has seen and the user removed here.
  */
-export async function syncData(
+function diffRows<T>(
+  before: T[] | undefined,
+  after: T[],
+  idOf: (item: T) => string
+): { changed: T[]; removed: string[] } {
+  if (!before) return { changed: after, removed: [] };
+  const prev = new Map(before.map((x) => [idOf(x), x] as const));
+  const changed = after.filter((x) => prev.get(idOf(x)) !== x);
+  const keep = new Set(after.map(idOf));
+  const removed = before.map(idOf).filter((id) => !keep.has(id));
+  return { changed, removed };
+}
+
+function diffRecord<V>(
+  before: Record<string, V> | undefined,
+  after: Record<string, V>
+): { changed: Record<string, V>; removed: string[] } {
+  if (!before) return { changed: after, removed: [] };
+  const changed: Record<string, V> = {};
+  for (const [k, v] of Object.entries(after)) {
+    if (before[k] !== v) changed[k] = v;
+  }
+  const removed = Object.keys(before).filter((k) => !(k in after));
+  return { changed, removed };
+}
+
+async function upsertRows(table: string, rows: Row[]): Promise<void> {
+  if (!rows.length) return;
+  const { error } = await supabase.from(table).upsert(rows);
+  if (error) throw new Error(`${table} upsert: ${error.message}`);
+}
+
+async function deleteRows(
+  table: string,
+  keyField: string,
   userId: string,
-  d: PersistedData,
-  opts: { prune?: boolean } = {}
+  keys: string[]
 ): Promise<void> {
-  const prune = opts.prune !== false;
+  if (!keys.length) return;
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq("user_id", userId)
+    .in(keyField, keys);
+  if (error) throw new Error(`${table} delete: ${error.message}`);
+}
+
+/**
+ * Persist what this device changed since the last baseline — row by row.
+ *
+ * With no baseline (a cached document holding offline edits, whose server
+ * state is unknown) every row is upserted and nothing is deleted: resurrecting
+ * a row is recoverable, deleting one is not.
+ */
+export async function syncData(userId: string, d: PersistedData): Promise<void> {
   const base = baseline;
   const jobs: Promise<void>[] = [];
 
@@ -933,30 +988,38 @@ export async function syncData(
 
   for (const k of COLLECTIONS) {
     if (base && base[k] === d[k]) continue;
-    const items = d[k] as unknown[] | undefined;
+    const items = d[k] as { id: string }[] | undefined;
     // Skip a missing slice rather than mapping undefined (which threw in prod
-    // and blocked every save) or writing [] (which would delete the table).
-    // The store's extract list must stay in sync with COLLECTIONS; this only
-    // keeps one forgotten key from taking down the whole write path.
+    // and blocked every save). With row diffs it could no longer wipe a table,
+    // but it would still read as "every row was deleted".
     if (!Array.isArray(items)) {
       console.error(`LeadWell: sync skipped missing collection "${k}"`);
       continue;
     }
+    const { changed, removed } = diffRows(
+      base?.[k] as { id: string }[] | undefined,
+      items,
+      (x) => x.id
+    );
+    const table = map[k].table;
+    // Upserts before deletes: a topic moving to a new session must not be
+    // briefly pointed at nothing if one half fails.
     jobs.push(
-      pushRows(
-        map[k].table,
-        "id",
-        userId,
-        collectionRows(userId, k, d, items),
-        prune
-      )
+      (async () => {
+        await upsertRows(table, collectionRows(userId, k, d, changed));
+        await deleteRows(table, "id", userId, removed);
+      })()
     );
   }
 
   if (!base || base.chats !== d.chats) {
     if (d.chats && typeof d.chats === "object") {
+      const { changed, removed } = diffRecord(base?.chats, d.chats);
       jobs.push(
-        pushRows("chats", "chat_key", userId, chatRows(userId, d.chats), prune)
+        (async () => {
+          await upsertRows("chats", chatRows(userId, changed));
+          await deleteRows("chats", "chat_key", userId, removed);
+        })()
       );
     } else {
       console.error('LeadWell: sync skipped missing collection "chats"');
@@ -964,14 +1027,12 @@ export async function syncData(
   }
   if (!base || base.nodePositions !== d.nodePositions) {
     if (d.nodePositions && typeof d.nodePositions === "object") {
+      const { changed, removed } = diffRecord(base?.nodePositions, d.nodePositions);
       jobs.push(
-        pushRows(
-          "node_positions",
-          "node_id",
-          userId,
-          posRows(userId, d.nodePositions),
-          prune
-        )
+        (async () => {
+          await upsertRows("node_positions", posRows(userId, changed));
+          await deleteRows("node_positions", "node_id", userId, removed);
+        })()
       );
     } else {
       console.error('LeadWell: sync skipped missing collection "nodePositions"');
