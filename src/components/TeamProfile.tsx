@@ -41,7 +41,7 @@ function today() {
  */
 export function TeamProfile({
   team,
-  density: _density = "peek",
+  density = "peek",
 }: {
   team: Team;
   density?: Density;
@@ -422,6 +422,7 @@ export function TeamProfile({
               subjectId={team.id}
               subjectName={team.name}
               focusSessionId={focusSessionId}
+              density={density}
             />
           </div>
         )}

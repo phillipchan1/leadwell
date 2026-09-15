@@ -47,7 +47,7 @@ import { deleteWithUndo } from "../lib/undo";
  */
 export function PersonProfile({
   person,
-  density: _density = "peek",
+  density = "peek",
 }: {
   person: Person;
   density?: Density;
@@ -302,6 +302,7 @@ export function PersonProfile({
               subjectName={person.name}
               direction={isLeadUp ? "up" : "down"}
               focusSessionId={focusSessionId}
+              density={density}
             />
           </div>
         )}

@@ -31,7 +31,7 @@ import { confirmAction } from "./ConfirmDialog";
  */
 export function ManagerProfile({
   manager,
-  density: _density = "peek",
+  density = "peek",
 }: {
   manager: Manager;
   density?: Density;
@@ -142,6 +142,7 @@ export function ManagerProfile({
               subjectName={manager.name}
               direction="up"
               focusSessionId={focusSessionId}
+              density={density}
             />
           </div>
         )}

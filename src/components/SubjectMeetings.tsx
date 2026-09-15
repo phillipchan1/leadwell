@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStore } from "../store/useStore";
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
@@ -9,8 +9,15 @@ import {
   meetingTitle,
   meetingsFor,
   readinessOf,
+  todayISO,
 } from "../lib/readiness";
-import { topicsFor } from "../lib/topics";
+import {
+  boardLayout,
+  curriculumOf,
+  slotDotClass,
+  topicsFor,
+} from "../lib/topics";
+import type { Density } from "./EntitySurface";
 import { cx } from "@/utils/cx";
 import { MeetingPlanner } from "./MeetingPlanner";
 import type { BoardDirection } from "./TopicBoard";
@@ -53,6 +60,7 @@ export function SubjectMeetings({
   subjectName,
   direction = "down",
   focusSessionId,
+  density = "peek",
 }: {
   subjectKind: MeetingSubjectKind;
   subjectId: string;
@@ -60,6 +68,7 @@ export function SubjectMeetings({
   direction?: BoardDirection;
   /** Entry to open on arrival, when a readiness fix sent you here. */
   focusSessionId?: string;
+  density?: Density;
 }) {
   const meetings = useStore((s) => s.meetings);
   const topics = useStore((s) => s.topics);
@@ -158,6 +167,7 @@ export function SubjectMeetings({
         meeting={active}
         subjectName={subjectName}
         direction={direction}
+        density={density}
         onOpenSession={openSession}
       />
 
@@ -202,11 +212,13 @@ function MeetingBlock({
   meeting,
   subjectName,
   direction,
+  density,
   onOpenSession,
 }: {
   meeting: TrackedMeeting;
   subjectName: string;
   direction: BoardDirection;
+  density: Density;
   onOpenSession: (id: string) => void;
 }) {
   const { sessions, topics, meetings, updateMeeting, selectMeeting, setMeetingWeekday } =
@@ -303,13 +315,18 @@ function MeetingBlock({
             className={settingsOpen ? "bg-tertiary" : undefined}
             onClick={() => setSettingsOpen((v) => !v)}
           />
-          <ButtonUtility
-            size="sm"
-            color="tertiary"
-            icon={Expand01}
-            tooltip="Open this meeting's page"
-            onClick={() => selectMeeting(meeting.id)}
-          />
+          {/* In the peek the labelled "Plan this meeting" below already goes
+              here, and two controls to one place is the noise this pass is
+              removing. */}
+          {density === "focus" && (
+            <ButtonUtility
+              size="sm"
+              color="tertiary"
+              icon={Expand01}
+              tooltip="Open this meeting's page"
+              onClick={() => selectMeeting(meeting.id)}
+            />
+          )}
         </div>
       </div>
 
@@ -382,15 +399,107 @@ function MeetingBlock({
         </div>
       )}
 
-      <MeetingPlanner
-        meeting={meeting}
-        direction={direction}
-        selectedSlotKey={planSlotKey}
-        onSelectWeek={onSelectWeek}
-        onCloseNotes={closePlanNotes}
-        onOpenSession={onOpenSession}
-      />
-
+      {density === "focus" ? (
+        <MeetingPlanner
+          meeting={meeting}
+          direction={direction}
+          selectedSlotKey={planSlotKey}
+          onSelectWeek={onSelectWeek}
+          onCloseNotes={closePlanNotes}
+          onOpenSession={onOpenSession}
+        />
+      ) : (
+        <NextUp meeting={meeting} onPlan={() => selectMeeting(meeting.id)} />
+      )}
     </section>
+  );
+}
+
+/**
+ * A meeting inside a profile: where it stands, and one way through to the board.
+ *
+ * The board does not render here. Eight week columns and their own ideas rail
+ * inside a half-width panel was the whole problem — planning is a full-page
+ * job, so this answers "what's on the next one" and hands off rather than
+ * shipping a version of the board nobody can work in.
+ */
+function NextUp({
+  meeting,
+  onPlan,
+}: {
+  meeting: TrackedMeeting;
+  onPlan: () => void;
+}) {
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const curriculum = curriculumOf(meeting);
+
+  const { next, waiting } = useMemo(() => {
+    const { bucket, weeks } = boardLayout(meeting, sessions, topics, todayISO());
+    return {
+      // Not weeks[0]: an occurrence that has been and gone still leads the
+      // board while anything in it is open, and "next" has to mean next.
+      next: weeks.find((w) => !w.slot.past) ?? null,
+      waiting: bucket
+        .filter((b) => b.lane === "backlog")
+        .reduce((n, b) => n + b.topics.length, 0),
+    };
+  }, [meeting, sessions, topics]);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-secondary bg-secondary/40 p-4">
+        {next ? (
+          <>
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-sm font-semibold text-primary tabular-nums">
+                {next.label}
+              </span>
+              {next.hint && (
+                <span className="text-caption text-quaternary">{next.hint}</span>
+              )}
+            </p>
+
+            {next.topics.length ? (
+              <ul className="mt-3 space-y-2">
+                {next.topics.map((t) => (
+                  <li key={t.id} className="flex items-baseline gap-2">
+                    <span
+                      aria-hidden
+                      className={cx(
+                        "mt-1.5 size-1.5 shrink-0 rounded-full",
+                        slotDotClass(curriculum, t.slotId)
+                      )}
+                    />
+                    <span className="min-w-0 text-sm text-secondary">
+                      {t.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-quaternary">
+                Nothing planned for it yet.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-quaternary">
+            No next occurrence — give it a rhythm or book one.
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Button size="sm" color="secondary" onClick={onPlan}>
+          Plan this meeting
+        </Button>
+        {waiting > 0 && (
+          <span className="text-caption text-quaternary">
+            {waiting} idea{waiting === 1 ? "" : "s"} waiting
+          </span>
+        )}
+      </div>
+    </div>
   );
 }

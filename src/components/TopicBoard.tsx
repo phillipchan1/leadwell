@@ -252,7 +252,7 @@ export function TopicBoard({
         </div>
       )}
 
-      <div className="grid items-start gap-4 @4xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 @4xl:grid-cols-[20rem_minmax(0,1fr)]">
       <div className="@4xl:sticky @4xl:top-2">
       <IdeasPanel
         direction={direction}
@@ -363,9 +363,9 @@ function ScheduleGrid({
   const scrollLeftRef = useRef(0);
 
   const weekCount = Math.max(weeks.length, 1);
-  const colWidth = "10rem";
+  const colWidth = "13rem";
   const gridCols = curriculum.length
-    ? `7rem repeat(${weekCount}, ${colWidth})`
+    ? `8rem repeat(${weekCount}, ${colWidth})`
     : `repeat(${weekCount}, ${colWidth})`;
 
   useLayoutEffect(() => {
@@ -403,7 +403,7 @@ function ScheduleGrid({
         className="scroll-contain overflow-x-auto pb-1"
       >
         <div
-          className="inline-grid gap-px overflow-hidden rounded-xl border border-secondary bg-(--color-border-secondary)"
+          className="inline-grid gap-x-3"
           style={{ gridTemplateColumns: gridCols }}
         >
           {weeks.map((week) => {
@@ -411,7 +411,7 @@ function ScheduleGrid({
             const isActive = weekIsActive(week);
             const cell = week.cells[0];
             return (
-              <div key={week.slot.date} className="flex flex-col bg-primary">
+              <div key={week.slot.date} className="flex flex-col">
                 <WeekHeader
                   week={week}
                   isActive={isActive}
@@ -453,11 +453,18 @@ function ScheduleGrid({
       onScroll={onScroll}
       className="scroll-contain overflow-x-auto pb-1"
     >
+      {/*
+        No hairline grid. The skeleton is mostly empty by design — eight weeks
+        of four rows is thirty-two cells holding maybe six topics — and drawing
+        a box around every one of them made the emptiness the loudest thing on
+        the page. Rows are carried by the labels and one faint rule; columns by
+        their headers and the gap.
+      */}
       <div
-        className="inline-grid gap-px overflow-hidden rounded-xl border border-secondary bg-(--color-border-secondary)"
+        className="inline-grid gap-x-3"
         style={{ gridTemplateColumns: gridCols }}
       >
-        <div className="sticky left-0 z-20 bg-secondary" />
+        <div className="sticky left-0 z-20 bg-primary" />
 
         {weeks.map((week) => {
           const isActive = weekIsActive(week);
@@ -504,7 +511,7 @@ function ScheduleGrid({
               }}
               title={row.slotId ? "Drag to reorder rows" : undefined}
               className={cx(
-                "group/row sticky left-0 z-10 flex items-start gap-1.5 bg-secondary px-2 py-2.5",
+                "group/row sticky left-0 z-10 flex items-start gap-1.5 border-t border-stone-100 bg-primary py-3 pr-3 dark:border-stone-900",
                 row.slotId && "cursor-grab active:cursor-grabbing",
                 draggingRow === row.slotId && "opacity-50",
                 overRow === row.slotId && draggingRow !== row.slotId && "shadow-[inset_0_2px_0_0_var(--color-teal-500)]"
@@ -552,7 +559,7 @@ function ScheduleGrid({
                 return (
                   <div
                     key={`${row.id}-${week.slot.date}`}
-                    className="min-h-12 bg-primary"
+                    className="min-h-12 border-t border-stone-100 dark:border-stone-900"
                   />
                 );
               }
@@ -566,6 +573,7 @@ function ScheduleGrid({
                   columnRef={columnRef}
                   cardProps={cardProps}
                   compact
+                  ruled
                 />
               );
             })}
@@ -645,15 +653,16 @@ function WeekHeader({
       onClick={onSelect}
       aria-expanded={isActive}
       className={cx(
-        "px-3 py-2 text-left transition-colors",
-        grid ? "bg-secondary" : "border-b border-secondary bg-secondary",
-        isActive && "ring-2 ring-inset ring-teal-500 dark:ring-teal-600",
-        !isActive && "hover:bg-tertiary"
+        "rounded-lg border-b-2 px-2 py-2 text-left transition-colors",
+        isActive
+          ? "border-teal-500 dark:border-teal-600"
+          : "border-stone-200 hover:bg-tertiary dark:border-stone-800",
+        !grid && "rounded-b-none"
       )}
     >
       <div
         className={cx(
-          "truncate text-xs font-semibold",
+          "truncate text-sm font-semibold tracking-tight tabular-nums",
           past ? "text-quaternary" : "text-primary"
         )}
       >
@@ -693,6 +702,7 @@ function GridCell({
   columnRef,
   cardProps,
   compact,
+  ruled,
 }: {
   cell: WeekCell;
   past: boolean;
@@ -701,6 +711,8 @@ function GridCell({
   columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   compact?: boolean;
+  /** Carries the row divider in the skeleton grid. */
+  ruled?: boolean;
 }) {
   const active = drag?.over === cell.key;
   // Where it would land, not just where it would go. In a cell that is a
@@ -739,9 +751,10 @@ function GridCell({
     <div
       ref={columnRef(cell.key)}
       className={cx(
-        "group/cell min-h-12 bg-primary p-1.5",
+        "group/cell min-h-12 py-1.5",
+        ruled && "border-t border-stone-100 dark:border-stone-900",
         active &&
-          "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
+          "rounded-lg bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
       )}
     >
       <ul className="flex flex-col gap-1">{rows}</ul>

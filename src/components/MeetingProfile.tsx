@@ -101,7 +101,11 @@ export function MeetingProfile({
       <div
         className={`entity-header shrink-0 border-b border-secondary ${pad}`}
       >
-        <h2 className="truncate text-lg font-semibold text-stone-800 dark:text-stone-100">
+        <h2
+          className={`truncate font-semibold tracking-tight text-stone-800 dark:text-stone-100 ${
+            density === "focus" ? "text-2xl" : "text-lg"
+          }`}
+        >
           {title}
         </h2>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
