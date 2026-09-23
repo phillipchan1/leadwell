@@ -150,6 +150,14 @@ Netlify, Cloudflare Pages, Supabase Hosting…). Then:
 
 ---
 
+## Optional: let Claude and other agents in (MCP)
+
+The same deploy can serve an MCP endpoint at `/mcp` so Claude, Cursor or any
+MCP client can read and edit meetings, agendas, ideas and tags. It needs four
+server-side env vars and one redeploy — see **[docs/mcp.md](docs/mcp.md)**.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |

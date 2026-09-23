@@ -1,3 +1,10 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "functions": {
+    "api/mcp.ts": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/mcp", "destination": "/api/mcp" },
+    { "source": "/mcp/:token", "destination": "/api/mcp?key=:token" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

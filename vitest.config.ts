@@ -1,0 +1,9 @@
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts", "mcp/**/*.test.ts"],
+    env: { TZ: "America/Los_Angeles" },
+  },
+});

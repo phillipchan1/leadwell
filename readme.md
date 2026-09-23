@@ -32,6 +32,8 @@ imported automatically on first sign-in.
   signed-in user. The Zustand store still works optimistically in memory; a thin
   repository layer ([`src/lib/repo.ts`](src/lib/repo.ts)) syncs changed
   collections to Supabase (debounced) and hydrates on login.
+- **Agents**: an MCP server at `/mcp` gives Claude and other agents the same
+  meeting, agenda, ideas and tag surface — see [docs/mcp.md](docs/mcp.md).
 
 ## Navigation model
 
