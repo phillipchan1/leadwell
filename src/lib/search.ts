@@ -12,7 +12,7 @@ import type {
   TrackedMeeting,
   Win,
 } from "../types";
-import { meetingSubjectName, meetingTitle } from "./readiness";
+import { meetingSubjectName, meetingTitle } from "./readiness.js";
 
 /**
  * Quick search — the whole workspace, indexed locally, answered in a frame.
