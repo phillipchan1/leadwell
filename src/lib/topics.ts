@@ -406,9 +406,11 @@ function slotHint(slot: Slot, topics: Topic[], today: string): string {
     return openCount === 1 ? "1 not covered" : `${openCount} not covered`;
   }
   const days = daysBetween(today, slot.date);
-  if (days === 0) return "today";
-  if (days === 1) return "tomorrow";
-  return `in ${days} days`;
+  const when =
+    days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+  // Ticking topics off mid-meeting should show up somewhere above the cards.
+  const done = topics.length - openCount;
+  return done > 0 ? `${when} · ${done}/${topics.length} covered` : when;
 }
 
 /**

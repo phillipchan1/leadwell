@@ -31,9 +31,8 @@ import { deleteWithUndo } from "../lib/undo";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { NativeSelect } from "@/components/base/select/select-native";
-import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
-import { DotsGrid, X } from "@untitledui/icons";
+import { DotsGrid } from "@untitledui/icons";
 import {
   useReorderableRow,
   type MoveResult,
@@ -1115,9 +1114,12 @@ function TopicCard({
       {...rowProps}
       className={cx(
         "group relative rounded-lg border bg-primary",
-        past
-          ? "border-amber-300 dark:border-amber-800"
-          : "border-secondary shadow-xs",
+        // Amber means "this slipped". A topic you ticked off didn't.
+        covered
+          ? "border-secondary"
+          : past
+            ? "border-amber-300 dark:border-amber-800"
+            : "border-secondary shadow-xs",
         isDragging && "opacity-40",
         compact && "text-xs"
       )}
@@ -1142,6 +1144,22 @@ function TopicCard({
         >
           <DotsGrid className={compact ? "size-3" : "size-4"} />
         </button>
+
+        {/*
+          In a meeting week a topic is a to-do, so the tick leads, where every
+          checklist puts it. It used to trail the title, in the same corner the
+          hover-revealed Delete sat on top of — reaching to tick it off landed
+          on delete instead.
+        */}
+        {inSlot && (
+          <Checkbox
+            size="sm"
+            aria-label={`Covered "${name}"`}
+            isSelected={covered}
+            onChange={(selected) => onCover(topic.id, selected)}
+            className={cx("shrink-0", compact ? "mt-0.5" : "mt-1")}
+          />
+        )}
 
         <div className="min-w-0 flex-1">
           <textarea
@@ -1266,24 +1284,11 @@ function TopicCard({
           )}
         </div>
 
-        {inSlot ? (
-          <Checkbox
-            size="sm"
-            aria-label={`Covered "${name}"`}
-            isSelected={covered}
-            onChange={(selected) => onCover(topic.id, selected)}
-            className="mt-0.5 shrink-0"
-          />
-        ) : null}
-
-        <ButtonUtility
-          size="xs"
-          color="tertiary"
-          icon={X}
-          tooltip="Delete topic"
-          className="absolute top-0.5 right-0.5 z-10 rounded-md bg-primary opacity-0 shadow-xs touch:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
-          onClick={() => onDelete(topic)}
-        />
+        {/*
+          No Delete on the card. Removing a topic is rare and destructive; it
+          lives in the topic's own panel (click the card) and on the handle's
+          Delete key, not one hover away from the checkbox.
+        */}
       </div>
 
       {past && !covered && !compact && (
