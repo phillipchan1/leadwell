@@ -87,6 +87,16 @@ export function MeetingProfile({
     setSelectedSlotKey(null);
   }, [mode]);
 
+  // Arriving from the week view or the horizon with one occurrence in mind:
+  // open it beside the board, so the ideas rail and its agenda are side by side.
+  const pendingWeek = useStore((s) => s.pendingWeek);
+  const clearPendingWeek = useStore((s) => s.clearPendingWeek);
+  useEffect(() => {
+    if (pendingWeek?.meetingId !== meeting.id) return;
+    if (mode === "meetings") setSelectedSlotKey(`s:${pendingWeek.sessionId}`);
+    clearPendingWeek();
+  }, [pendingWeek, meeting.id, mode, clearPendingWeek]);
+
   const subjectName = meetingSubjectName(meeting, { people, teams, managers });
   const title = meetingTitle(meeting, subjectName);
   const readiness = readinessOf(meeting, { meetings: [meeting], sessions, topics });

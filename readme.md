@@ -163,6 +163,8 @@ src/
     storage.ts           # persistence seam (localStorage now, API later)
     derive.ts            # coverage, domain counts, blind spots, derived "read"
     readiness.ts         # meeting prep: states, checks, roll-up, triage
+    week.ts              # every meeting by date: the week view and the horizon grid
+    agendaText.ts        # an occurrence as plain text: agenda before, recap after
     health.ts            # my own read: levels, the scan filter, roll-ups
     prayer.ts            # who I'm carrying: states, silence, the scan filter
     orgTable.ts          # rows, outline, sorting + grouping for the table view
@@ -294,6 +296,57 @@ on the canvas shows the rail, countdown chip and distribution bar, and
 alike — links each failing check straight to where it gets fixed, including into
 the meeting that was never written up. Full design rationale, including what's
 deliberately *not* built, in [docs/readiness.md](docs/readiness.md).
+
+## Meetings home (This week · Horizon · All meetings)
+
+The meeting planner works one meeting at a time, which is the right shape for
+building an agenda and the wrong one for running a week. Nine standing
+meetings means nine boards to visit before Monday — so the Meetings tab now
+opens on the question you actually sit down with: **what's this week, and am I
+ready for all of it?**
+
+| Lens | Question | What's on it |
+|---|---|---|
+| **This week** (default) | Am I ready for every meeting this week? | Each day's meetings with what's planned, what's still owed from last time, a tick-off checklist, inline *Add topic*, **Plan it** and **Copy agenda**. `←` / `→` step weeks. |
+| **Horizon** `?view=horizon` | How far ahead is any of this planned? | Every meeting × the next 8/12/26 weeks. A filled cell is an occurrence with an agenda; a hollow one is still open. Click any cell to plan it. |
+| **All meetings** `?view=all` | What do I run? | The original table, for the administrative pass. |
+
+**Plan it** lands on the meeting's board with that occurrence open beside the
+ideas rail (`planOccurrence` materializes a projected week and hands the
+session to the meeting page). The week view adds nothing the board doesn't
+already have — it's the same slots, gathered by date instead of by meeting
+([`src/lib/week.ts`](src/lib/week.ts)). *Needs you* lists only what's drifting
+or left as a loose end, and only for the week you're living in.
+
+**The horizon is the roadmap lens.** An agenda built the morning of is a
+meeting that runs itself; one built six weeks ahead is one that's going
+somewhere. The headline — *3 of 58 upcoming meetings have an agenda · the plan
+reaches the week of Oct 5* — is the honest measure of how far forward the
+future has been pulled.
+
+### Commitments (follow-ups)
+
+A topic is something to talk about; a commitment is something someone said
+they'd do. Follow-ups were already stored (a topic could be promoted into one)
+but nothing showed them again. Now every occurrence has both halves:
+
+- **Since last time** opens the agenda with whatever is still owed from earlier
+  meetings *with the same person or team* — scoped to the subject, not the
+  meeting, so a promise made in a 1:1 still surfaces at the quarterly review.
+- **Commitments** closes it: capture who'll do what while it's being said.
+
+The week view shows the same *Since last time* list on every card, so you see
+what's owed before you walk in. ([`Commitments.tsx`](src/components/Commitments.tsx))
+
+### Copy agenda · Copy recap
+
+An agenda that lives only in the planner prepares one person; sent the day
+before, it prepares the room. Every occurrence (panel and week card) copies a
+plain-text agenda — running order under the meeting's rows, sub-points, and
+*Since last time* — ready for Slack, email or a group text. From the day of the
+meeting (once something's ticked off) the same button copies the **recap**:
+covered, carrying to next time, and commitments.
+([`src/lib/agendaText.ts`](src/lib/agendaText.ts))
 
 ## Health (my own read)
 

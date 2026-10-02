@@ -7,6 +7,7 @@ import { Button } from "@/components/base/buttons/button";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { Input } from "@/components/base/input/input";
 import { ArrowRight, DotsGrid } from "@untitledui/icons";
+import { CommitmentsCapture, SinceLastTime } from "./Commitments";
 import {
   useReorderableRow,
   type MoveResult,
@@ -89,103 +90,107 @@ export function SessionAgenda({
   const open = mine.filter((t) => t.status === "open").length;
 
   return (
-    <section className="meeting-editor-agenda mb-6 rounded-xl border border-secondary">
-      <div className="flex items-baseline justify-between gap-2 border-b border-stone-100 px-3 py-2 dark:border-stone-800/80">
-        <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
-          Agenda
-        </span>
-        <span className="text-caption tabular-nums text-quaternary">
-          {mine.length === 0
-            ? "nothing planned"
-            : `${mine.length - open} of ${mine.length} covered`}
-        </span>
-      </div>
+    <>
+      <SinceLastTime session={session} meeting={meeting} />
+      <section className="meeting-editor-agenda mb-4 rounded-xl border border-secondary">
+        <div className="flex items-baseline justify-between gap-2 border-b border-stone-100 px-3 py-2 dark:border-stone-800/80">
+          <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
+            Agenda
+          </span>
+          <span className="text-caption tabular-nums text-quaternary">
+            {mine.length === 0
+              ? "nothing planned"
+              : `${mine.length - open} of ${mine.length} covered`}
+          </span>
+        </div>
 
-      {(mine.length > 0 || curriculum.length > 0) && (
-        <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
-          {grouped.map((group) => (
-            <li key={group.id} className="list-none">
-              {group.label && (
-                <p className="px-3 pt-2 text-caption font-semibold tracking-wide text-quaternary uppercase">
-                  {group.label}
-                </p>
-              )}
-              {group.topics.length === 0 ? (
-                <p className="px-3 py-2 text-caption text-stone-400 dark:text-stone-500">
-                  Nothing planned
-                </p>
-              ) : (
-                <ul>
-                  {group.topics.map((t) => (
-                    <AgendaRow
-                      key={t.id}
-                      topic={t}
-                      onCover={(selected) => coverTopic(t.id, selected)}
-                      onReorder={(dir) => moveTopic(t.id, dir)}
-                      onRoll={() => roll(t.id)}
-                    />
+        {(mine.length > 0 || curriculum.length > 0) && (
+          <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
+            {grouped.map((group) => (
+              <li key={group.id} className="list-none">
+                {group.label && (
+                  <p className="px-3 pt-2 text-caption font-semibold tracking-wide text-quaternary uppercase">
+                    {group.label}
+                  </p>
+                )}
+                {group.topics.length === 0 ? (
+                  <p className="px-3 py-2 text-caption text-stone-400 dark:text-stone-500">
+                    Nothing planned
+                  </p>
+                ) : (
+                  <ul>
+                    {group.topics.map((t) => (
+                      <AgendaRow
+                        key={t.id}
+                        topic={t}
+                        onCover={(selected) => coverTopic(t.id, selected)}
+                        onReorder={(dir) => moveTopic(t.id, dir)}
+                        onRoll={() => roll(t.id)}
+                      />
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="space-y-2 px-3 py-2">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const text = draft.trim();
+              if (!text) return;
+              addTopic(meeting.id, text, { sessionId: session.id });
+              setDraft("");
+            }}
+          >
+            <Input
+              size="sm"
+              placeholder="Came up — add it…"
+              aria-label="Add a topic to this meeting"
+              value={draft}
+              onChange={setDraft}
+            />
+          </form>
+
+          {backlog.length > 0 && (
+            <div>
+              <Button
+                size="sm"
+                color="link-gray"
+                onClick={() => setPulling((v) => !v)}
+              >
+                {pulling
+                  ? "Hide the backlog"
+                  : `Pull from backlog (${backlog.length})`}
+              </Button>
+              {pulling && (
+                <ul className="mt-1 flex flex-wrap gap-1.5">
+                  {backlog.map((t) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          placeTopic(t.id, {
+                            sessionId: session.id,
+                            slotId: t.slotId,
+                          })
+                        }
+                        className="rounded-full border border-primary px-2.5 py-1 text-xs text-stone-600 touch:min-h-11 hover:border-teal-500 hover:text-teal-600 dark:text-stone-300"
+                      >
+                        + {t.text}
+                      </button>
+                    </li>
                   ))}
                 </ul>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="space-y-2 px-3 py-2">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const text = draft.trim();
-            if (!text) return;
-            addTopic(meeting.id, text, { sessionId: session.id });
-            setDraft("");
-          }}
-        >
-          <Input
-            size="sm"
-            placeholder="Came up — add it…"
-            aria-label="Add a topic to this meeting"
-            value={draft}
-            onChange={setDraft}
-          />
-        </form>
-
-        {backlog.length > 0 && (
-          <div>
-            <Button
-              size="sm"
-              color="link-gray"
-              onClick={() => setPulling((v) => !v)}
-            >
-              {pulling
-                ? "Hide the backlog"
-                : `Pull from backlog (${backlog.length})`}
-            </Button>
-            {pulling && (
-              <ul className="mt-1 flex flex-wrap gap-1.5">
-                {backlog.map((t) => (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        placeTopic(t.id, {
-                          sessionId: session.id,
-                          slotId: t.slotId,
-                        })
-                      }
-                      className="rounded-full border border-primary px-2.5 py-1 text-xs text-stone-600 touch:min-h-11 hover:border-teal-500 hover:text-teal-600 dark:text-stone-300"
-                    >
-                      + {t.text}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
+            </div>
+          )}
+        </div>
+      </section>
+      <CommitmentsCapture session={session} meeting={meeting} />
+    </>
   );
 }
 

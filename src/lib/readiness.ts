@@ -185,6 +185,15 @@ export function todayISO(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** "Jul 15" — for prose. An ISO date in a sentence reads like a log line. */
+export function shortDay(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export function addDays(iso: string, days: number): string {
   return new Date(toUTC(iso) + days * DAY).toISOString().slice(0, 10);
 }
@@ -525,7 +534,7 @@ export function meetingReadiness(
           : `${RHYTHM_LABEL[rhythm]} rhythm on track`,
       done: rhythmOnTrack,
       detail: missed
-        ? `${missed} came and went unlogged`
+        ? `${shortDay(missed)} came and went unlogged`
         : overdue
           ? `${daysSince} days since the last one`
           : undefined,
@@ -541,7 +550,7 @@ export function meetingReadiness(
         ? "Kept outside LeadWell — not checked here"
         : writtenUp
           ? undefined
-          : `${lastSession!.date} has no notes`,
+          : `${shortDay(lastSession!.date)} has no notes`,
       fix: "writeUp",
       sessionId: lastSession?.id,
     },

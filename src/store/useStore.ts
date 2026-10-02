@@ -185,6 +185,12 @@ type UIState = {
   paletteOpen: boolean;
   /** The ? shortcuts sheet. */
   helpOpen: boolean;
+  /**
+   * An occurrence to open beside the board when its meeting page next mounts.
+   * Set by `planOccurrence`, taken (and cleared) by the meeting page — the
+   * week panel is page-local state, so this is the hand-off into it.
+   */
+  pendingWeek: { meetingId: string; sessionId: string } | null;
 };
 
 type Store = PersistedData &
@@ -218,6 +224,14 @@ type Store = PersistedData &
     setSection: (section: string | null) => void;
     /** Open the full-screen session editor (promotes to focus). */
     openSession: (sessionId: string) => void;
+    /**
+     * Open a meeting's board with one occurrence's agenda beside it — from the
+     * week view, the horizon, anywhere that knows a date but not the board.
+     * Materializes a projected occurrence so there's something to plan into.
+     */
+    planOccurrence: (meetingId: string, date: string, sessionId?: string | null) => void;
+    /** The meeting page's side of `planOccurrence`, once it has opened the week. */
+    clearPendingWeek: () => void;
     /** Close the session editor, return to the entity's session list. */
     closeSession: () => void;
     /** Promote the current peek to its full-page focus route. */
@@ -1243,6 +1257,7 @@ export const useStore = create<Store>((set, get) => ({
   panelPct: initialPanelPct(),
   paletteOpen: false,
   helpOpen: false,
+  pendingWeek: null,
   modal: null,
   settingsOpen: false,
 
@@ -1356,6 +1371,20 @@ export const useStore = create<Store>((set, get) => ({
     goTo(s, { ...sel, section: section ?? undefined, sessionId: undefined }, {
       replace: true,
     });
+  },
+  planOccurrence: (meetingId, date, sessionId) => {
+    const s = get();
+    const id =
+      (sessionId && s.sessions.some((o) => o.id === sessionId) ? sessionId : null) ??
+      s.sessions.find(
+        (o) => o.meetingId === meetingId && o.date === date && o.kind !== "skipped"
+      )?.id ??
+      s.addSession({ meetingId, date });
+    set({ pendingWeek: { meetingId, sessionId: id } });
+    s.selectMeeting(meetingId, "plan");
+  },
+  clearPendingWeek: () => {
+    if (get().pendingWeek) set({ pendingWeek: null });
   },
   openSession: (sessionId) => {
     const s = get();

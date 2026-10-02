@@ -55,8 +55,8 @@ const TableView = lazy(() =>
 const IdeasBoard = lazy(() =>
   import("./components/IdeasBoard").then((m) => ({ default: m.IdeasBoard }))
 );
-const MeetingsTable = lazy(() =>
-  import("./components/MeetingsTable").then((m) => ({ default: m.MeetingsTable }))
+const MeetingsHome = lazy(() =>
+  import("./components/MeetingsHome").then((m) => ({ default: m.MeetingsHome }))
 );
 const SessionEditorView = lazy(() =>
   import("./components/SessionEditorView").then((m) => ({
@@ -399,7 +399,7 @@ export default function App() {
               <Suspense fallback={<PaneFallback />}>
                 {tab === "tree" && <OrgTree />}
                 {tab === "ideas" && <IdeasBoard />}
-                {tab === "meetings" && <MeetingsTable />}
+                {tab === "meetings" && <MeetingsHome />}
                 {tab === "table" && <TableView />}
               </Suspense>
             </main>

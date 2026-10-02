@@ -8,6 +8,7 @@ import { parseColumnKey, topicsFor, type Slot } from "../lib/topics";
 import { seedNotesFromTopics } from "../lib/sessionNotes";
 import { SessionAgenda } from "./SessionAgenda";
 import { SessionEditor } from "./SessionEditor";
+import { CopyAgendaButton } from "./CopyAgendaButton";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Expand01, X } from "@untitledui/icons";
@@ -311,6 +312,11 @@ function OccurrenceWhen({
                   Remove one-off
                 </Button>
               )}
+              <CopyAgendaButton
+                meeting={meeting}
+                sessionId={session.id}
+                date={session.date}
+              />
             </>
           )}
         </div>
