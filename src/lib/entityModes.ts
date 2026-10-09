@@ -32,9 +32,12 @@
  * They're on the contract now, but not by padding them out. A mode is omitted
  * only where it would be an empty room:
  *
- *   meeting  omits `now` and `prayer`. Readiness for a meeting is *the meeting*,
- *            so Plan already is its Now; and a meeting has no posture to hold
- *            toward it — the people in it do, on their own panels.
+ *   meeting  omits `prayer`: a meeting has no posture to hold toward it — the
+ *            people in it do, on their own panels. Its Now is the Agenda — the
+ *            next occurrence, ready or not — which is also why it's the page
+ *            `/m/<slug>` opens on. It used to omit Now and open on the
+ *            eight-week board, which answers "what's coming?" when the
+ *            question you arrive with is "what's on Monday?".
  *   me       is `profile` alone. There are no meetings with yourself, no record
  *            about yourself distinct from your own profile, and no sibling
  *            pager. A single-tab strip is a worse answer than no strip.
@@ -87,9 +90,24 @@ export function entityMode(section: string | null | undefined): EntityMode {
   return ALIASES[section] ?? "now";
 }
 
+/**
+ * A meeting's sections read as words in its address — `/m/staff-meeting/plan`
+ * rather than `/m/staff-meeting/meetings`. The aliases above already parse
+ * them back, so only the writing side needs to know.
+ */
+const MEETING_SECTION: Partial<Record<EntityMode, string>> = {
+  meetings: "plan",
+  profile: "settings",
+};
+
 /** The section value for a mode. Now is the default, so it clears the param. */
-export function modeSection(mode: EntityMode): string | null {
-  return mode === "now" ? null : mode;
+export function modeSection(
+  mode: EntityMode,
+  subject?: ModeSubject
+): string | null {
+  if (mode === "now") return null;
+  if (subject === "meeting") return MEETING_SECTION[mode] ?? mode;
+  return mode;
 }
 
 /**
@@ -97,7 +115,7 @@ export function modeSection(mode: EntityMode): string | null {
  * the top of this file before adding to it.
  */
 const OMITS: Partial<Record<ModeSubject, EntityMode[]>> = {
-  meeting: ["now", "prayer"],
+  meeting: ["prayer"],
   me: ["now", "meetings", "notes", "prayer"],
 };
 
@@ -131,9 +149,10 @@ const LABELS: Record<ModeSubject, Record<EntityMode, string>> = {
     prayer: "Prayer",
   },
   meeting: {
-    now: "Now",
+    // The next occurrence: its running order, and whether you're ready for it.
+    now: "Agenda",
     // The board of what to raise, in the occurrences ahead.
-    meetings: "Plan",
+    meetings: "Plan ahead",
     // Subject, rhythm, role — what this meeting *is*.
     profile: "Settings",
     /* "Write-ups", not "Notes". On a person, Notes is my running record about

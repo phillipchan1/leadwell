@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useStore, useActiveTeamId } from "../store/useStore";
 import { useShortcut } from "@/hooks/use-shortcut";
 import { meetingSubjectName, meetingTitle } from "../lib/readiness";
+import { findMeeting } from "../lib/slugs";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import {
@@ -40,7 +41,7 @@ export function useEntityTrail() {
   const person = people.find((p) => p.id === selectedPersonId);
   const team = teams.find((t) => t.id === activeTeamId);
   const manager = managers.find((m) => m.id === selectedManagerId);
-  const meeting = meetings.find((m) => m.id === selectedMeetingId);
+  const meeting = findMeeting({ meetings, people, teams, managers }, selectedMeetingId);
 
   /** The subject a meeting is about, whichever kind of thing it is. */
   const meetingSubject = useMemo(() => {

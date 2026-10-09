@@ -57,11 +57,36 @@ sibling pager (`←` / `→`), close, and that promotion for every entity kind �
 profile components own content only, and render at both densities from one tree.
 
 ```
+/                            Home: the teams I lead, each with its next meeting
+/m/staff-meeting             that meeting's agenda for its next occurrence
+/m/staff-meeting/plan        the same meeting, planned weeks ahead
 /tree                        canvas, nothing open
 /tree?team=t1                team peek beside the canvas
 /tree?person=p3&s=sessions   person peek, 1:1s section
 /person/p3/sessions          same person, same section, full page
 ```
+
+## Home and meeting agendas
+
+**Home** (`/`) is where the app opens. It answers the weekly question —
+*is each team I lead ready for its next meeting?* — with one card per team,
+sorted by how soon it meets. Each card leads with that meeting and the bands of
+its next occurrence (`Prayer 2 · Training 0 · Discussion 3`), then the team's
+next step and open follow-ups. 1:1s and meetings I only attend get compact rows
+of their own; a delegated team rides along on its leader's 1:1.
+
+Every card opens the meeting's **Agenda** — its default mode, and the page to
+bookmark. It shows one occurrence: the four readiness checks while it's the
+next one, follow-ups that outlive any single meeting, and the same cards and
+ideas rail as the board, drawn as one running order. `←` / `→` step to later
+occurrences, which is how you plan further out without leaving the agenda.
+**Plan ahead** is the eight-week board it used to open on.
+
+Meetings are addressed by a slug derived from their name (`/m/staff-meeting`,
+or `/m/sarah-kim` for an unnamed 1:1); ids still resolve and old
+`/meeting/<id>` links redirect to the slug. Each page sets its own tab title, so
+a bookmark reads "Staff meeting — LeadWell". Slugs aren't stored: renaming a
+meeting changes its address.
 
 Because a peek is not tied to the canvas, clicking a row in the People table
 opens it in place instead of throwing you back to the tree.

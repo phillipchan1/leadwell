@@ -9,6 +9,7 @@ import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { SectionTitle, TintBadge } from "./ui";
 import { MeetingPlanner } from "./MeetingPlanner";
+import { MeetingAgenda } from "./MeetingAgenda";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { MeetingScheduleFields } from "./MeetingScheduleFields";
@@ -41,8 +42,8 @@ const ROLE_OPTIONS: { label: string; value: MeetingRole }[] = [
  * This is the surface the whole feature turned on. Topics used to hang off a
  * person, which meant a staff meeting had nowhere to keep them and a team had
  * no board at all — so the meeting itself had to become somewhere you can
- * stand. Plan is the board, Notes is the history, Settings is what makes it
- * recurring.
+ * stand. Agenda is the next occurrence, Plan ahead is the board, Write-ups is
+ * the history, Settings is what makes it recurring.
  */
 export function MeetingProfile({
   meeting,
@@ -65,10 +66,10 @@ export function MeetingProfile({
   // Escape closed every other entity panel and not this one.
   useDismiss(() => clearSelection());
 
-  /* On the five-mode contract now (see lib/entityModes). A meeting carries
-     three of the five: Plan is its `meetings` mode, Write-ups its `notes`, and
-     Settings its `profile`. `now` and `prayer` are omitted deliberately — the
-     contract documents why. */
+  /* On the five-mode contract (see lib/entityModes). A meeting carries four of
+     the five: Agenda is its `now`, Plan ahead its `meetings`, Write-ups its
+     `notes`, and Settings its `profile`. `prayer` is omitted deliberately —
+     the contract documents why. */
   const mode = entityModeFor("meeting", section);
   const pad = density === "focus" ? "p-6" : "p-4";
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
@@ -127,11 +128,17 @@ export function MeetingProfile({
       <EntityModeTabs
         subject="meeting"
         mode={mode}
-        onMode={(next) => setSection(modeSection(next))}
+        onMode={(next) => setSection(modeSection(next, "meeting"))}
         counts={{ meetings: openCount, notes: sessionCount }}
       />
 
       <div className="scroll-contain relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {mode === "now" && (
+          <div className={`min-h-0 flex-1 overflow-y-auto ${pad}`}>
+            <MeetingAgenda meeting={meeting} onOpenSession={openSession} />
+          </div>
+        )}
+
         {mode === "meetings" && (
           <div className={`flex min-h-0 flex-1 flex-col ${pad}`}>
             <MeetingPlanner
