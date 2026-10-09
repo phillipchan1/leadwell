@@ -28,7 +28,7 @@ import {
 } from "../lib/topics";
 import { MEETING_LABEL, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
-import { deleteWithUndo } from "../lib/undo";
+import { deleteWithUndo, doWithUndo } from "../lib/undo";
 import { Input } from "@/components/base/input/input";
 import { Button } from "@/components/base/buttons/button";
 import { NativeSelect } from "@/components/base/select/select-native";
@@ -130,6 +130,25 @@ export function TopicBoard({
       );
     },
     [deleteTopic, restoreTopic]
+  );
+
+  /*
+   * An idea that isn't on a week has no meeting to be covered in, so ticking it
+   * is done and it leaves the inbox. A tick is an easy slip, so it gets the
+   * same Undo a delete does rather than vanishing silently.
+   */
+  const completeIdea = useCallback(
+    (topic: Topic) => {
+      doWithUndo(
+        "Idea marked done.",
+        () => coverTopic(topic.id, true),
+        () => coverTopic(topic.id, false)
+      );
+      announce(
+        `Marked “${topic.text || "topic"}” done. Press ${MOD_LABEL} Z to undo.`
+      );
+    },
+    [coverTopic]
   );
 
   const today = todayISO();
@@ -240,7 +259,12 @@ export function TopicBoard({
     onOpen: setOpenTopicId,
     onMove: place,
     onReorder: (id, dir) => moveTopic(id, dir),
-    onCover: (id, covered) => coverTopic(id, covered),
+    // An idea off the week completes. A topic on a week is covered and stays put.
+    onCover: (id, covered) => {
+      const topic = topics.find((t) => t.id === id);
+      if (covered && topic && !topic.sessionId) completeIdea(topic);
+      else coverTopic(id, covered);
+    },
     onTag: (id, slotId) => updateTopic(id, { slotId }),
     onAddTag: (label) => addMeetingRow(meeting.id, label),
     onRoll: roll,
@@ -775,7 +799,7 @@ function GridCell({
         topic={t}
         columnKey={cell.key}
         past={past}
-        inSlot={inSlot}
+        tickable={inSlot}
         covered={t.status !== "open"}
         isDragging={drag?.id === t.id}
         compact={compact}
@@ -999,7 +1023,7 @@ function IdeasPanel({
                   topic={t}
                   columnKey={group.key}
                   past={false}
-                  inSlot={false}
+                  tickable
                   covered={false}
                   isDragging={drag?.id === t.id}
                   showTag={false}
@@ -1047,7 +1071,7 @@ function IdeasPanel({
                   topic={t}
                   columnKey={parked.key}
                   past={false}
-                  inSlot={false}
+                  tickable
                   covered={false}
                   isDragging={drag?.id === t.id}
                   showTag={false}
@@ -1068,7 +1092,7 @@ function TopicCard({
   topic,
   columnKey,
   past,
-  inSlot,
+  tickable,
   covered,
   isDragging,
   compact,
@@ -1091,7 +1115,8 @@ function TopicCard({
   topic: Topic;
   columnKey: string;
   past: boolean;
-  inSlot: boolean;
+  /** Shows the done tick: a week that is a real meeting, or an idea. */
+  tickable: boolean;
   covered: boolean;
   isDragging: boolean;
   compact?: boolean;
@@ -1192,15 +1217,15 @@ function TopicCard({
         </button>
 
         {/*
-          In a meeting week a topic is a to-do, so the tick leads, where every
-          checklist puts it. It used to trail the title, in the same corner the
-          hover-revealed Delete sat on top of — reaching to tick it off landed
-          on delete instead.
+          In a meeting week or the inbox a topic is a to-do, so the tick leads,
+          where every checklist puts it. It used to trail the title, in the same
+          corner the hover-revealed Delete sat on top of — reaching to tick it
+          off landed on delete instead.
         */}
-        {inSlot && (
+        {tickable && (
           <Checkbox
             size="sm"
-            aria-label={`Covered "${name}"`}
+            aria-label={`${topic.sessionId ? "Covered" : "Complete"} "${name}"`}
             isSelected={covered}
             onChange={(selected) => onCover(topic.id, selected)}
             className={cx("shrink-0", compact ? "mt-0.5" : "mt-1")}

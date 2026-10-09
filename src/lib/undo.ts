@@ -102,11 +102,24 @@ export function deleteWithUndo(
   remove: () => void,
   restore: () => void
 ): void {
-  remove();
+  doWithUndo(message, remove, restore);
+}
+
+/**
+ * Do it now, and keep the way back within reach — for any cheap change that
+ * can be taken back, not only a delete. Completing an idea is the other case:
+ * it leaves its list, and Undo is how it comes back.
+ */
+export function doWithUndo(
+  message: string,
+  act: () => void,
+  undo: () => void
+): void {
+  act();
   /* The toast catches it while you're looking; the undo stack catches it after
-     the toast has gone. Both run the same `restore`, and taking the toast's
-     Undo drops the entry so ⌘Z doesn't restore the same record twice. */
-  const entry = { label: message, undo: restore };
+     the toast has gone. Both run the same `undo`, and taking the toast's Undo
+     drops the entry so ⌘Z doesn't undo the same change twice. */
+  const entry = { label: message, undo };
   pushUndo(entry);
   toast({
     message,
@@ -114,7 +127,7 @@ export function deleteWithUndo(
       label: "Undo",
       onAction: () => {
         dropUndo(entry);
-        restore();
+        undo();
       },
     },
   });
