@@ -5,6 +5,7 @@ import type { Manager } from "../types";
 import { Avatar } from "./Avatar";
 import { TintBadge, ProfileAdminLinks } from "./ui";
 import { ManagerModal } from "./forms";
+import { Button } from "@/components/base/buttons/button";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 
@@ -109,6 +110,14 @@ export function ManagerProfile({
               {lastSession && `Last ${lastSession.date}`}
             </div>
           </div>
+          <Button
+            size="sm"
+            color="secondary"
+            className="shrink-0"
+            onClick={() => setEditing(true)}
+          >
+            Edit
+          </Button>
         </div>
       </div>
 

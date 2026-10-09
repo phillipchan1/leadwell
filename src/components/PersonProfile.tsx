@@ -185,6 +185,14 @@ export function PersonProfile({
               {lastSession && `Last ${lastSession.date}`}
             </div>
           </div>
+          <Button
+            size="sm"
+            color="secondary"
+            className="shrink-0"
+            onClick={() => setEditingPerson(true)}
+          >
+            Edit
+          </Button>
         </div>
       </div>
 
