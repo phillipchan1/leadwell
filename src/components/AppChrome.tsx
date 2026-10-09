@@ -3,6 +3,7 @@ import {
   AlertCircle,
   CalendarCheck01,
   Dataflow03,
+  Home02,
   DotsVertical,
   Keyboard01,
   Lightbulb02,
@@ -21,10 +22,12 @@ import { cx } from "@/utils/cx";
 export const TABS: {
   id: Tab;
   label: string;
-  /** Shorter form for the bottom bar, where three labels share the width. */
+  /** Shorter form for the bottom bar, where five labels share the width. */
   short: string;
   icon: typeof Rows03;
 }[] = [
+  // First because it's where you land: the teams you lead and their next meetings.
+  { id: "home", label: "Home", short: "Home", icon: Home02 },
   { id: "tree", label: "Org tree", short: "Tree", icon: Dataflow03 },
   { id: "ideas", label: "Ideas", short: "Ideas", icon: Lightbulb02 },
   { id: "meetings", label: "Meetings", short: "Meetings", icon: CalendarCheck01 },
@@ -33,7 +36,7 @@ export const TABS: {
 
 /**
  * Primary navigation for phones. A top tab bar is the least thumb-reachable
- * zone on a handset, so below `lg` the same three destinations live here.
+ * zone on a handset, so below `lg` the same destinations live here.
  */
 export function BottomNav() {
   const tab = useStore((s) => s.tab);

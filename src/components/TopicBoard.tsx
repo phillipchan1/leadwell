@@ -17,6 +17,7 @@ import {
   nextSlotAfter,
   parseColumnKey,
   plannedSlots,
+  SLOTS_AHEAD,
   slotChipClass,
   slotDotClass,
   slotKey,
@@ -84,12 +85,22 @@ export function TopicBoard({
   selectedSlotKey,
   onSelectWeek,
   ahead,
+  occurrence,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
   ahead?: number;
+  /**
+   * Draw one occurrence (by date) as a full-width agenda instead of the strip
+   * of weeks. The Agenda mode uses it: same cards, same drops, same ideas
+   * rail — one running order with room to read it.
+   *
+   * By date rather than slot key because the key changes under you: a
+   * projected week becomes a real session the moment something lands on it.
+   */
+  occurrence?: string;
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
@@ -153,8 +164,18 @@ export function TopicBoard({
   );
   const balance = useMemo(
     () =>
-      curriculum.length ? curriculumBalance(layout.weeks, curriculum) : [],
-    [curriculum, layout.weeks]
+      curriculum.length
+        ? curriculumBalance(
+            // The agenda pages half a year ahead so it can step that far,
+            // but "planned in 0 of 26 weeks" is noise. Coverage is still
+            // measured over the board's usual runway.
+            occurrence
+              ? layout.weeks.filter((w) => !w.slot.past).slice(0, SLOTS_AHEAD)
+              : layout.weeks,
+            curriculum
+          )
+        : [],
+    [curriculum, layout.weeks, occurrence]
   );
 
   const place = useCallback(
@@ -299,7 +320,12 @@ export function TopicBoard({
       </div>
 
       <ScheduleGrid
-        weeks={layout.weeks}
+        weeks={
+          occurrence
+            ? layout.weeks.filter((w) => w.slot.date === occurrence)
+            : layout.weeks
+        }
+        agenda={Boolean(occurrence)}
         balance={balance}
         onReorderRows={(ids) => {
           const byId = new Map(curriculum.map((c) => [c.id, c]));
@@ -357,7 +383,10 @@ function ScheduleGrid({
   onAddRow,
   balance,
   onReorderRows,
+  agenda = false,
 }: {
+  /** One occurrence, full width, no week header — see `TopicBoard.occurrence`. */
+  agenda?: boolean;
   balance: ReturnType<typeof curriculumBalance>;
   onReorderRows: (ids: string[]) => void;
   weeks: WeekColumn[];
@@ -386,10 +415,13 @@ function ScheduleGrid({
   const scrollLeftRef = useRef(0);
 
   const weekCount = Math.max(weeks.length, 1);
-  const colWidth = "13rem";
+  const colWidth = agenda ? "minmax(0, 1fr)" : "13rem";
   const gridCols = curriculum.length
     ? `8rem repeat(${weekCount}, ${colWidth})`
     : `repeat(${weekCount}, ${colWidth})`;
+  // The strip scrolls sideways through weeks; an agenda is one column that
+  // should simply fill the page.
+  const gridCls = agenda ? "grid w-full gap-x-4" : "inline-grid gap-x-3";
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -426,7 +458,7 @@ function ScheduleGrid({
         className="scroll-contain overflow-x-auto pb-1"
       >
         <div
-          className="inline-grid gap-x-3"
+          className={gridCls}
           style={{ gridTemplateColumns: gridCols }}
         >
           {weeks.map((week) => {
@@ -435,7 +467,7 @@ function ScheduleGrid({
             const cell = week.cells[0];
             return (
               <div key={week.slot.date} className="flex flex-col">
-                <WeekHeader
+                {!agenda && <WeekHeader
                   week={week}
                   isActive={isActive}
                   notesPreview={
@@ -444,7 +476,7 @@ function ScheduleGrid({
                       : ""
                   }
                   onSelect={() => onSelectWeek?.(slotKey(week.slot), week.slot)}
-                />
+                />}
                 {cell && (
                   <GridCell
                     cell={cell}
@@ -453,7 +485,8 @@ function ScheduleGrid({
                     drag={drag}
                     columnRef={columnRef}
                     cardProps={cardProps}
-                    compact
+                    compact={!agenda}
+                    alwaysCompose={agenda}
                   />
                 )}
               </div>
@@ -484,12 +517,12 @@ function ScheduleGrid({
         their headers and the gap.
       */}
       <div
-        className="inline-grid gap-x-3"
+        className={gridCls}
         style={{ gridTemplateColumns: gridCols }}
       >
-        <div className="sticky left-0 z-20 bg-primary" />
+        {!agenda && <div className="sticky left-0 z-20 bg-primary" />}
 
-        {weeks.map((week) => {
+        {!agenda && weeks.map((week) => {
           const isActive = weekIsActive(week);
           return (
             <WeekHeader
@@ -595,7 +628,8 @@ function ScheduleGrid({
                   drag={drag}
                   columnRef={columnRef}
                   cardProps={cardProps}
-                  compact
+                  compact={!agenda}
+                  alwaysCompose={agenda}
                   ruled
                 />
               );
@@ -726,7 +760,14 @@ function GridCell({
   cardProps,
   compact,
   ruled,
+  alwaysCompose,
 }: {
+  /**
+   * Keep the composer on screen. The strip hides it until hover so eight
+   * weeks don't become thirty identical Add buttons; an agenda has one per
+   * band, and adding to it is the main thing you came to do.
+   */
+  alwaysCompose?: boolean;
   cell: WeekCell;
   past: boolean;
   inSlot: boolean;
@@ -784,7 +825,12 @@ function GridCell({
       {/* Capture where it belongs. Hidden until the column is hovered, or the
           board becomes thirty identical Add buttons. */}
       {cardProps.onAddHere && (
-        <div className="opacity-0 transition focus-within:opacity-100 group-hover/cell:opacity-100">
+        <div
+          className={cx(
+            !alwaysCompose &&
+              "opacity-0 transition focus-within:opacity-100 group-hover/cell:opacity-100"
+          )}
+        >
           <InlineComposer
             compact
             placeholder="Add a topic…  #tag !"

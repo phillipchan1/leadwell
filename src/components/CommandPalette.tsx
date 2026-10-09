@@ -213,6 +213,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const go = (id: string, fn: () => void) => () => runRow(id, fn);
 
     const nav: Row[] = [
+      { id: "go:home", label: "Go to Home", group: "Go to", hint: "G then H", run: go("go:home", () => setTab("home")) },
       { id: "go:tree", label: "Go to Org tree", group: "Go to", hint: "G then T", run: go("go:tree", () => setTab("tree")) },
       { id: "go:ideas", label: "Go to Ideas", group: "Go to", hint: "G then I", run: go("go:ideas", () => setTab("ideas")) },
       { id: "go:meetings", label: "Go to Meetings", group: "Go to", hint: "G then M", run: go("go:meetings", () => setTab("meetings")) },

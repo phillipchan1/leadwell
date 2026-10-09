@@ -340,7 +340,7 @@ export function buildDocs(src: SearchSource): SearchDoc[] {
       body: t.detail,
       date: t.closedOn ?? t.createdOn,
       target: t.meetingId
-        ? { kind: "meeting", id: t.meetingId, section: "meetings" }
+        ? { kind: "meeting", id: t.meetingId, section: "plan" }
         : { kind: "ideas", id: t.id },
     });
   }
