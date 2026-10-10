@@ -6,11 +6,23 @@ import { isTypingTarget } from "@/lib/keys";
 /** How long a `g` prefix waits for its second key before giving up. */
 const SEQUENCE_MS = 1200;
 
-export type GoTarget = "tree" | "meetings" | "table";
+/** The five places, plus the two views of People by name. */
+export type GoTarget =
+  | "today"
+  | "people"
+  | "meetings"
+  | "ideas"
+  | "prayer"
+  | "tree"
+  | "table";
 
 const GO_KEYS: Record<string, GoTarget> = {
-  t: "tree",
+  t: "today",
+  p: "people",
   m: "meetings",
+  i: "ideas",
+  r: "prayer",
+  c: "tree",
   b: "table",
 };
 
@@ -93,7 +105,7 @@ export function ShortcutHost({ onGo }: { onGo: (target: GoTarget) => void }) {
       {/* The pending `g`, shown rather than left as a guess. */}
       {pending && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white shadow-lg dark:bg-stone-700">
-          <kbd className="font-mono">G</kbd> — then T, M or B
+          <kbd className="font-mono">G</kbd> — then T, P, M, I or R
         </div>
       )}
     </>

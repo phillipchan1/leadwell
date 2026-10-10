@@ -127,6 +127,9 @@ export type ModalState =
   | { kind: "manager"; manager?: Manager }
   | { kind: "domains" }
   | { kind: "triage" }
+  /** Capture anywhere: a topic, or a person, team or leader. `draft` prefills
+      the field — "@sarah " when capture starts from Sarah's meeting. */
+  | { kind: "capture"; draft?: string }
   | null;
 
 type UIState = {
@@ -1229,7 +1232,7 @@ export const useStore = create<Store>((set, get) => ({
   syncStatus: "idle",
   userId: null,
   userEmail: null,
-  tab: "tree",
+  tab: "today",
   treeDomainId: null,
   healthScan: [],
   prayerScan: [],

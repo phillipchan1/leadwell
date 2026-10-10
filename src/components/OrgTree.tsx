@@ -7,7 +7,6 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
-  type ReactNode,
 } from "react";
 import {
   Background,
@@ -36,7 +35,7 @@ import { MODE_LAYERS, MODE_SCAN, TREE_MODES } from "../lib/treeMode";
 import { useShortcut } from "@/hooks/use-shortcut";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
 import { rowActivationProps } from "@/lib/rowActivation";
-import { DIGIT_CHORDS, SHIFT_DIGIT_CHORDS, keyboardOwner } from "@/lib/keys";
+import { DIGIT_CHORDS, keyboardOwner } from "@/lib/keys";
 import {
   HEALTH_COLOR,
   HEALTH_FILTER_VALUES,
@@ -265,21 +264,8 @@ export function OrgTree() {
       group: "Org tree",
     }
   );
-  useShortcut(
-    (e) => {
-      const digit = /^Digit([1-9])$/.exec(e.code);
-      if (!digit) return;
-      const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
-      const id = options[Number(digit[1]) - 1];
-      if (id !== undefined) setTreeDomainId(id);
-    },
-    {
-      chord: SHIFT_DIGIT_CHORDS,
-      keysLabel: "⇧1–⇧9",
-      label: "Filter the tree by domain — ⇧1 is All",
-      group: "Org tree",
-    }
-  );
+  // ⇧1–⇧9 (life-area scope) are registered once by the shell now, so the
+  // scope changes from every place rather than only while the canvas is up.
 
   const visibleTeams = useMemo(
     () =>
@@ -480,49 +466,17 @@ export function OrgTree() {
   /* What's actually narrowing the view right now. Shown on the collapsed
      control so a filter left on from yesterday isn't invisible today. */
   const activeFilterCount =
-    (treeDomainId ? 1 : 0) +
     (healthScan.length ? 1 : 0) +
     (prayerScan.length ? 1 : 0);
-  const domainRoving = useRovingFocus();
 
   /* Mode over domain: what I'm doing, then where. Both are shared by the two
      surfaces — the outline is the same view of the same org, so it answers the
      same mode's question rather than growing controls of its own. */
   const filters = (
     <>
-      <div
-        {...domainRoving.groupProps}
-        className="flex flex-wrap items-center gap-1.5 touch:gap-2"
-        role="radiogroup"
-        aria-label="Filter tree by domain"
-      >
-        <DomainTab
-          active={treeDomainId === null}
-          onClick={() => setTreeDomainId(null)}
-          shortcut="⇧1"
-          roving={domainRoving.itemProps(treeDomainId === null)}
-        >
-          All
-        </DomainTab>
-        {domains.map((d, i) => (
-          <DomainTab
-            key={d.id}
-            active={treeDomainId === d.id}
-            color={d.color}
-            onClick={() => setTreeDomainId(d.id)}
-            shortcut={i < 8 ? `⇧${i + 2}` : undefined}
-            roving={domainRoving.itemProps(treeDomainId === d.id)}
-          >
-            {d.name}
-          </DomainTab>
-        ))}
-        <Button
-          size="sm"
-          color="tertiary"
-          onClick={() => openModal({ kind: "domains" })}
-        >
-          Manage domains
-        </Button>
+      {/* Life-area scope moved to the shell (sidebar, phone header), where it
+          scopes every place and not just the canvas. */}
+      <div className="flex flex-wrap items-center gap-1.5 touch:gap-2">
         <ReadinessSummary teams={visibleTeams} reports={visibleReports} />
       </div>
 
@@ -715,61 +669,6 @@ export function OrgTree() {
           the app root now, so `openModal` works from every surface — including
           the phone, where this component's create buttons never render. */}
     </div>
-  );
-}
-
-function DomainTab({
-  active,
-  color,
-  onClick,
-  shortcut,
-  roving,
-  children,
-}: {
-  active: boolean;
-  color?: string;
-  onClick: () => void;
-  shortcut?: string;
-  /** Roving tabindex from the group — see `useRovingFocus`. */
-  roving: { "data-roving": string; tabIndex: number };
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={active}
-      {...roving}
-      onClick={onClick}
-      title={shortcut ? `Filter (${shortcut})` : undefined}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors touch:min-h-11 touch:min-w-11 ${
-        active
-          ? "border-transparent font-medium text-white"
-          : "border-primary text-tertiary hover:border-stone-400 dark:hover:border-stone-500"
-      }`}
-      style={
-        active
-          ? { backgroundColor: color ?? "#006967" }
-          : undefined
-      }
-    >
-      {color && !active && (
-        <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{ backgroundColor: color }}
-        />
-      )}
-      {children}
-      {shortcut && (
-        <kbd
-          className={`ml-0.5 hidden rounded px-1 font-mono text-caption sm:inline ${
-            active ? "bg-white/20 text-white/90" : "bg-tertiary text-quaternary"
-          }`}
-        >
-          {shortcut}
-        </kbd>
-      )}
-    </button>
   );
 }
 

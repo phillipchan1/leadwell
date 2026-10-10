@@ -6,6 +6,7 @@ import {
   TeamModal,
 } from "./forms";
 import { TriageModal } from "./TriageModal";
+import { CaptureDialog } from "./shell/CaptureDialog";
 
 /**
  * Renders whatever `modal` state names, from anywhere in the app.
@@ -49,5 +50,7 @@ export function ModalHost() {
       return <DomainsModal onClose={closeModal} />;
     case "triage":
       return <TriageModal onClose={closeModal} />;
+    case "capture":
+      return <CaptureDialog draft={modal.draft} onClose={closeModal} />;
   }
 }

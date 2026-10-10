@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useStore, setNavigate, type Tab } from "./store/useStore";
+import { useStore, setNavigate } from "./store/useStore";
 import {
   LEGACY_OVERVIEW_PATH,
   LEGACY_PEOPLE_PATH,
@@ -8,34 +8,23 @@ import {
   parseRoute,
   routePath,
 } from "./lib/routes";
-import { hasLeadershipRead } from "./lib/derive";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
 import { ToastHost } from "./components/Toast";
 import { ModalHost } from "./components/ModalHost";
-import { CreateMenu } from "./components/CreateMenu";
-import {
-  Tab as TabItem,
-  TabList,
-  Tabs,
-} from "@/components/application/tabs/tabs";
 import { FocusView } from "./components/FocusView";
 import { PeekPanel, useSelectedEntity } from "./components/EntitySurface";
-import {
-  BottomNav,
-  HeaderOverflow,
-  LoadErrorScreen,
-  LoadingSplash,
-  SyncIndicator,
-  TABS,
-} from "./components/AppChrome";
+import { LoadErrorScreen, LoadingSplash } from "./components/AppChrome";
+import { Sidebar } from "./components/shell/Sidebar";
+import { PhoneHeader, PhoneTabBar } from "./components/shell/PhoneChrome";
+import { useScopeShortcuts } from "./components/shell/ScopeMenu";
+import { usePlaceBadges } from "./components/shell/badges";
+import { lastPeopleTab, rememberPeopleTab } from "./components/shell/places";
 import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
 import { useSyncToasts } from "./hooks/use-sync-toasts";
 import { undoLast } from "./lib/undo";
-import { SearchLg } from "@untitledui/icons";
-import { MOD_LABEL } from "@/lib/keys";
 import { ShortcutHost, type GoTarget } from "./components/ShortcutHost";
 import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutsPanel } from "./components/ShortcutsPanel";
@@ -57,6 +46,12 @@ const IdeasBoard = lazy(() =>
 );
 const MeetingsTable = lazy(() =>
   import("./components/MeetingsTable").then((m) => ({ default: m.MeetingsTable }))
+);
+const TodayPage = lazy(() =>
+  import("./components/today/TodayPage").then((m) => ({ default: m.TodayPage }))
+);
+const PrayerPage = lazy(() =>
+  import("./components/prayer/PrayerPage").then((m) => ({ default: m.PrayerPage }))
 );
 const SessionEditorView = lazy(() =>
   import("./components/SessionEditorView").then((m) => ({
@@ -104,7 +99,7 @@ function useRouteSync() {
       return;
     }
     if (path === LEGACY_OVERVIEW_PATH) {
-      navigate("/tree" + location.search + location.hash, { replace: true });
+      navigate("/today" + location.search + location.hash, { replace: true });
       return;
     }
     const route = parseRoute(location.pathname, location.search);
@@ -175,7 +170,6 @@ function useGlobalShortcuts() {
   const setHelpOpen = useStore((s) => s.setHelpOpen);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const openModal = useStore((s) => s.openModal);
-  const tab = useStore((s) => s.tab);
 
   useShortcut(() => setPaletteOpen(!paletteOpen), {
     chord: "mod+k",
@@ -197,20 +191,17 @@ function useGlobalShortcuts() {
     group: "Global",
   });
 
-  // `c` means "make a new one of whatever this tab is about". A single letter
-  // for the single most frequent action, and it stands down inside any field.
-  useShortcut(
-    () => {
-      if (tab === "meetings" || tab === "table" || tab === "ideas")
-        openModal({ kind: "person", teamId: null });
-      else openModal({ kind: "team" });
-    },
-    {
-      chord: "c",
-      label: "Create — a team on the tree, a person on the people views",
-      group: "Global",
-    }
-  );
+  // `c` is Capture, from anywhere: a topic, or a person, team or leader. A
+  // single letter for the single most frequent action, and it stands down
+  // inside any field.
+  useShortcut(() => openModal({ kind: "capture" }), {
+    chord: "c",
+    label: "Capture — a topic, or a person, team or leader",
+    group: "Global",
+  });
+
+  // ⇧1–⇧9 scope every place to a life area.
+  useScopeShortcuts();
 }
 
 export default function App() {
@@ -235,8 +226,6 @@ export default function App() {
   const phase = useStore((s) => s.phase);
   const tab = useStore((s) => s.tab);
   const setTab = useStore((s) => s.setTab);
-  const people = useStore((s) => s.people);
-  const teams = useStore((s) => s.teams);
   const focused = useStore((s) => s.focused);
   const sessionId = useStore((s) => s.sessionId);
   const settingsOpen = useStore((s) => s.settingsOpen);
@@ -254,10 +243,17 @@ export default function App() {
   const onGo = useCallback(
     (target: GoTarget) => {
       clearSelection();
-      setTab(target);
+      setTab(target === "people" ? lastPeopleTab() : target);
     },
     [clearSelection, setTab]
   );
+
+  // People remembers which of its views you were last in.
+  useEffect(() => {
+    rememberPeopleTab(tab);
+  }, [tab]);
+
+  const badges = usePlaceBadges();
 
   /** Mounted in every phase, so no surface is a shortcut dead zone. */
   const overlays = (
@@ -298,7 +294,6 @@ export default function App() {
   if (phase === "error") return <LoadErrorScreen />;
   if (phase === "anon") return <Login />;
 
-  const assessed = people.filter(hasLeadershipRead).length;
   const inSessionEditor = Boolean(sessionId);
   const inFocus = focused && Boolean(selected) && !inSessionEditor;
 
@@ -318,73 +313,31 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header — pads past the status bar / Dynamic Island in standalone.
-          `pad-safe-x` owns the horizontal padding outright: it and `px-*` set
-          the same property with the same specificity, so pairing them means
-          whichever Tailwind emits last silently wins. */}
-      <header className="pad-safe-top pad-safe-x chrome-compact flex shrink-0 items-center justify-between gap-3 border-b border-secondary bg-primary py-3 [--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]">
-        <div className="flex min-w-0 items-baseline gap-4">
-          <h1 className="text-lg font-bold tracking-tight">
-            Lead<span className="text-teal-600">Well</span>
-          </h1>
-          <span className="hidden truncate text-xs text-quaternary lg:inline">
-            {assessed} of {people.length} with a read · {teams.length} teams
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <SyncIndicator />
-          {/* The palette needs a visible door. A ⌘K that only exists as a
-              keystroke is a feature for people who already know it's there —
-              this is how they find out, and it shows the chord while doing it. */}
-          <button
-            type="button"
-            onClick={() => setPaletteOpen(true)}
-            className="hidden items-center gap-2 rounded-lg border border-primary px-2.5 py-1.5 text-xs text-quaternary transition-colors hover:border-stone-400 hover:text-stone-600 sm:flex dark:hover:border-stone-500"
-          >
-            <SearchLg className="size-3.5" aria-hidden />
-            Search or jump to…
-            <kbd className="rounded bg-tertiary px-1 font-mono text-caption">
-              {MOD_LABEL}K
-            </kbd>
-          </button>
-          <CreateMenu />
-          <HeaderOverflow onShortcuts={() => setHelpOpen(true)} />
-        </div>
-      </header>
+    <div className="flex h-full">
+      {/* The leather frame: a sidebar on a desktop, a header and tab bar on a
+          phone. Navigation used to take two stacked rows of every screen. */}
+      <Sidebar badges={badges} />
 
-      {inFocus ? (
-        <FocusView />
-      ) : (
-        <>
-          {/* Tabs — navigation only; content is routed, so no panels.
-              Below lg the bottom bar owns navigation, and on an open entity
-              this strip would be a third stacked nav bar. */}
-          <Tabs
-            selectedKey={tab}
-            onSelectionChange={(key) => setTab(key as Tab)}
-            className={cx(
-              "chrome-compact-hide shrink-0 border-b border-secondary bg-primary px-6",
-              "max-lg:hidden"
-            )}
-          >
-            <TabList type="underline" size="sm" items={TABS}>
-              {(t) => <TabItem id={t.id} label={t.label} />}
-            </TabList>
-          </Tabs>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <PhoneHeader />
 
-          {/* Main + peek. Above lg they sit side by side; below lg exactly one
-              is on screen, because 16rem + 20rem cannot fit a 375px phone. */}
+        {inFocus ? (
+          <FocusView />
+        ) : (
+          /* Main + peek. Above lg they sit side by side; below lg exactly one
+             is on screen, because 16rem + 20rem cannot fit a 375px phone. */
           <div className="flex min-h-0 flex-1">
             <main
               className={cx(
                 // Horizontal padding is `pad-safe-x`'s alone — `p-4` sets the
                 // same property and lost to it, which flattened every tab
                 // against both screen edges below `sm`.
-                // The panel owns the width it was given (see PeekPanel); the
-                // canvas takes what's left, down to a floor that still reads.
-                "pad-safe-x min-w-0 flex-1 py-4 sm:py-6 lg:min-w-[18rem]",
-                "[--pad-safe-x:1rem] sm:[--pad-safe-x:1.5rem]",
+                "pad-safe-x min-w-0 flex-1 lg:min-w-[18rem]",
+                // Today and Prayer are reading pages and pad themselves; the
+                // working surfaces keep the old gutter.
+                tab === "today" || tab === "prayer"
+                  ? "[--pad-safe-x:0px]"
+                  : "py-4 [--pad-safe-x:1rem] sm:py-6 sm:[--pad-safe-x:1.5rem]",
                 // The tree pane clips only where it holds the canvas, which
                 // does its own pan/zoom. Below lg it renders an outline — an
                 // ordinary tall document that has to scroll like every other
@@ -397,19 +350,21 @@ export default function App() {
               )}
             >
               <Suspense fallback={<PaneFallback />}>
+                {tab === "today" && <TodayPage />}
                 {tab === "tree" && <OrgTree />}
                 {tab === "ideas" && <IdeasBoard />}
                 {tab === "meetings" && <MeetingsTable />}
                 {tab === "table" && <TableView />}
+                {tab === "prayer" && <PrayerPage />}
               </Suspense>
             </main>
 
             {selected && <PeekPanel />}
           </div>
-        </>
-      )}
+        )}
 
-      <BottomNav />
+        <PhoneTabBar />
+      </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <ConfirmHost />

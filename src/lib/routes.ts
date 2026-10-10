@@ -5,6 +5,7 @@
  * full-page **focus** route. Promotion between them is just a route change,
  * which is what makes every entity deep-linkable and back-button-safe.
  *
+ *   /today                       what needs me — the front door
  *   /tree                        canvas, nothing open
  *   /tree?team=t1                team peek beside the canvas
  *   /tree?person=p3&s=sessions   person peek, 1:1s section
@@ -12,6 +13,7 @@
  *   /person/p3/sessions          person in focus, 1:1s section
  *   /person/p3/sessions/s42      full-screen editor for session s42
  *   /meetings                    every recurring meeting
+ *   /prayer                      who I'm carrying
  *   /meeting/m4/plan             the planner for one recurring meeting
  *   /me                          my own profile in focus
  *
@@ -20,7 +22,12 @@
  * second implementation of any of them.
  */
 
-export type Tab = "tree" | "table" | "ideas" | "meetings";
+/**
+ * One id per surface. The five places in the sidebar map onto these; People
+ * owns two of them (`tree`, the canvas, and `table`, the list), because a view
+ * of the same place is still its own URL.
+ */
+export type Tab = "today" | "tree" | "table" | "ideas" | "meetings" | "prayer";
 export type EntityKind = "team" | "person" | "manager" | "meeting" | "me";
 
 export type Selection = {
@@ -37,7 +44,7 @@ export type Route =
   | { view: "tab"; tab: Tab; peek: Selection | null }
   | { view: "focus"; target: Selection };
 
-const TABS: Tab[] = ["tree", "table", "ideas", "meetings"];
+const TABS: Tab[] = ["today", "tree", "table", "ideas", "meetings", "prayer"];
 
 /**
  * `/people` was a fifth destination rendering a strict subset of `/table` —
@@ -53,8 +60,12 @@ export const LEGACY_OVERVIEW_PATH = "/overview";
 /** Entities addressed as /<kind>/<id>. "me" is a bare /me. */
 const ID_KINDS: EntityKind[] = ["team", "person", "manager", "meeting"];
 
-/** Org tree — the structural home screen. `/` and unknown tab paths land here. */
-export const DEFAULT_TAB: Tab = "tree";
+/**
+ * Today — what needs me. Nobody opens the app wanting the shape of the org;
+ * they open it asking who needs them this week. `/` and unknown tab paths
+ * land here.
+ */
+export const DEFAULT_TAB: Tab = "today";
 
 function isTab(value: string | undefined): value is Tab {
   return TABS.includes(value as Tab);

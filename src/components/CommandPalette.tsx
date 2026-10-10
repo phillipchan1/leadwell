@@ -213,10 +213,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const go = (id: string, fn: () => void) => () => runRow(id, fn);
 
     const nav: Row[] = [
-      { id: "go:tree", label: "Go to Org tree", group: "Go to", hint: "G then T", run: go("go:tree", () => setTab("tree")) },
-      { id: "go:ideas", label: "Go to Ideas", group: "Go to", hint: "G then I", run: go("go:ideas", () => setTab("ideas")) },
+      { id: "go:today", label: "Go to Today", group: "Go to", hint: "G then T", run: go("go:today", () => setTab("today")) },
+      { id: "go:tree", label: "Go to People · Tree", group: "Go to", hint: "G then C", run: go("go:tree", () => setTab("tree")) },
+      { id: "go:table", label: "Go to People · List", group: "Go to", hint: "G then B", run: go("go:table", () => setTab("table")) },
       { id: "go:meetings", label: "Go to Meetings", group: "Go to", hint: "G then M", run: go("go:meetings", () => setTab("meetings")) },
-      { id: "go:table", label: "Go to Table", group: "Go to", hint: "G then B", run: go("go:table", () => setTab("table")) },
+      { id: "go:ideas", label: "Go to Ideas", group: "Go to", hint: "G then I", run: go("go:ideas", () => setTab("ideas")) },
+      { id: "go:prayer", label: "Go to Prayer", group: "Go to", hint: "G then R", run: go("go:prayer", () => setTab("prayer")) },
+      { id: "new:capture", label: "Capture a topic", group: "Create", hint: "C", run: go("new:capture", () => openModal({ kind: "capture" })) },
       { id: "go:me", label: "Open my profile", group: "Go to", run: go("go:me", () => selectMe(true)) },
 
       { id: "new:team", label: "Add team", group: "Create", run: go("new:team", () => openModal({ kind: "team" })) },
