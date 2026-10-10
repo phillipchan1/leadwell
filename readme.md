@@ -72,6 +72,31 @@ or hands off to adding a person, team or leader. `G` then `T` / `P` / `M` / `I` 
 `R` jumps between places. Writing up a meeting opens **Run**: the agenda, the
 write-up in the serif and the person's context side by side.
 
+### A meeting: Ideas → Plan → Run
+
+Every recurring meeting is a page of its own (`/meeting/:id/plan`). Its header
+answers three things — is the rhythm holding, what's on the next one, and which
+sections of the standing agenda keep getting skipped (a coverage strip per
+section over the next eight weeks). Under it:
+
+- **Plan** — this meeting's ideas in a tray, its weeks as sheets beside it, one
+  row per section of the standing agenda. Drag an idea onto a week, or type into
+  a cell with the `#tag @meeting !` grammar. Booked weeks are solid, weeks the
+  rhythm only expects are dashed, skipped weeks stay as a narrow column you can
+  restore. Click a date to open that week beside the board: its agenda by
+  section (with ideas offered for empty sections), its notes, and Start,
+  Reschedule or Skip. **Opening a week never books it** — the first thing put
+  into it does. On a phone the weeks stack and an idea is placed with two taps:
+  pick it from the drawer, tap where it goes.
+- **Write-ups** — every occurrence, newest first, with its first line and status.
+- **Settings** — name, rhythm, the standing agenda (sections, tags, minutes).
+
+**Ideas** (`/ideas`) is everything not yet on a week, by meeting (an inbox
+first, then each meeting in the order it next happens) or by tag. Dragging
+between columns files or retags; dropping on **Up next** puts an idea straight
+onto that meeting's next occurrence. Parked ideas are set aside and only show
+when asked for.
+
 ## Navigation model
 
 **The URL is the source of truth for what's selected.** Selection setters
@@ -220,7 +245,10 @@ src/
     Profile: PersonProfile.tsx, AssessmentEditor.tsx
     Shared records: TopicKanban.tsx, NotesPanel.tsx    # keyed by subject id — people and managers alike
     Leading up: ManagerProfile.tsx, LeadUpManual.tsx, WinsLedger.tsx
-    Readiness: PrepPanel.tsx, SessionTable.tsx, MeetingEditor.tsx, TriageModal.tsx
+    Readiness: PrepPanel.tsx, MeetingEditor.tsx (Run), TriageModal.tsx
+    Meetings: MeetingProfile.tsx, MeetingPlanner.tsx, TopicBoard.tsx (desktop plan),
+              PhonePlan.tsx, OccurrenceNotesPanel.tsx (a week), SessionAgenda.tsx,
+              MeetingCalendar.tsx, SessionHistoryTable.tsx (write-ups), IdeasBoard.tsx
     Health: Health.tsx   # the property control, at every density
     Prayer: Prayer.tsx   # the mark, the log, the mode — people, teams and managers alike
     Table: TableView.tsx # the canvas's correlated view

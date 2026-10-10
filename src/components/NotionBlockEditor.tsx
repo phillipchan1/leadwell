@@ -86,15 +86,22 @@ export function NotionBlockEditor({
   });
 
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || editor.isDestroyed) return;
     if (value === lastExternal.current) return;
     lastExternal.current = value;
     editor.commands.setContent(value);
   }, [value, editor]);
 
+  // A frame later, and only on a live editor: the instance this effect closes
+  // over can already have been torn down (React mounts twice in development,
+  // and a route change can unmount it mid-commit), and focusing a destroyed
+  // editor throws.
   useEffect(() => {
     if (!editor || !autoFocus || readOnly) return;
-    editor.commands.focus("end");
+    const frame = requestAnimationFrame(() => {
+      if (!editor.isDestroyed) editor.commands.focus("end");
+    });
+    return () => cancelAnimationFrame(frame);
   }, [editor, autoFocus, readOnly]);
 
   useEffect(() => {

@@ -926,6 +926,15 @@ label:focus-within > .field-label,
   }
 }
 
+/* A card in the air: no text selection, and the hand stays closed wherever
+   the pointer goes. */
+.board-dragging,
+.board-dragging * {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grabbing !important;
+}
+
 /* Occurrence notes side panel */
 
 .occurrence-notes-panel .notion-block-editor {

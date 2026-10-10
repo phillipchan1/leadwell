@@ -145,6 +145,16 @@ export function useBoardDnD(
     return () => cancelAnimationFrame(frame);
   }, [drag]);
 
+  // While a card is in the air the page is not text: a mouse drag across the
+  // board used to paint a selection over every title it passed.
+  const dragging = Boolean(drag);
+  useEffect(() => {
+    if (!dragging) return;
+    window.getSelection()?.removeAllRanges();
+    document.documentElement.classList.add("board-dragging");
+    return () => document.documentElement.classList.remove("board-dragging");
+  }, [dragging]);
+
   useEffect(() => {
     if (!drag) return;
 

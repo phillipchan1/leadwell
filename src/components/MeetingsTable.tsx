@@ -19,6 +19,7 @@ import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { NewMeetingRow } from "./NewMeetingRow";
+import { MeetingsSwitch } from "./shell/MeetingsSwitch";
 import { SearchLg } from "@untitledui/icons";
 import { tableRowActivationProps } from "@/lib/rowActivation";
 import { useSearchShortcut } from "@/hooks/use-search-shortcut";
@@ -130,6 +131,7 @@ export function MeetingsTable() {
   return (
     <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
       <div className="flex flex-col gap-4 p-4 sm:p-6">
+        <MeetingsSwitch current="meetings" />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1">
             <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em]">Meetings</h1>

@@ -7,11 +7,13 @@ import { ArrowDown, ArrowUp, Trash01, X } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 import { tagChipClass, tagDotClass } from "./TagChip";
 import { plannedSlots, slotLabel } from "@/lib/topics";
+import { meetingSubjectName, meetingTitle, todayISO } from "@/lib/readiness";
+import { deleteWithUndo } from "@/lib/undo";
 import { useStore } from "@/store/useStore";
 import type { TopicPoint } from "@/types";
 
 const selectClass =
-  "rounded-md border border-secondary bg-primary px-2 py-1 text-xs text-stone-700 outline-none dark:text-stone-200";
+  "h-9 rounded-[9px] border border-primary bg-primary px-2.5 text-[13px] text-primary outline-none focus:border-teal-400";
 
 function shortDate(iso?: string): string {
   if (!iso) return "—";
@@ -48,8 +50,15 @@ export function TopicDetail({
   const assignTopics = useStore((s) => s.assignTopics);
   const placeTopicAt = useStore((s) => s.placeTopicAt);
   const deleteTopic = useStore((s) => s.deleteTopic);
+  const restoreTopic = useStore((s) => s.restoreTopic);
   const promoteToFollowUp = useStore((s) => s.promoteToFollowUp);
-  const today = new Date().toISOString().slice(0, 10);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+  const today = todayISO();
+  // A 1:1 has no name of its own; it's called by who it's with.
+  const meetingLabel = (m: (typeof meetings)[number]) =>
+    meetingTitle(m, meetingSubjectName(m, { people, teams, managers }));
 
   const topic = topics.find((t) => t.id === topicId);
   const [pointDraft, setPointDraft] = useState("");
@@ -115,28 +124,34 @@ export function TopicDetail({
         type="button"
         aria-label="Close"
         onClick={() => onClose()}
-        className="fixed inset-0 z-40 bg-stone-900/20 backdrop-blur-[1px] dark:bg-black/40"
+        className="fixed inset-0 z-40 bg-stone-950/25 backdrop-blur-[1px] dark:bg-black/50"
       />
       <aside
         role="dialog"
         aria-label={`Idea: ${topic.text}`}
         className="fixed top-0 right-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-secondary bg-primary shadow-2xl"
       >
-        <header className="flex shrink-0 items-start gap-2 border-b border-secondary px-4 py-3">
+        <header className="flex shrink-0 items-start gap-2 border-b border-secondary px-5 pt-5 pb-4">
           <div className="min-w-0 flex-1">
-            <p className="text-caption font-medium tracking-wide text-quaternary uppercase">
-              Idea
+            <p className="truncate font-mono text-[11px] text-quaternary uppercase">
+              Idea{meeting ? ` · ${meetingLabel(meeting)}` : " · not filed yet"}
+              {session ? ` · ${shortDate(session.date)}` : ""}
             </p>
             <textarea
               value={topic.text}
               aria-label="Idea title"
               rows={1}
+              ref={(el) => {
+                if (!el) return;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
               onChange={(e) => {
                 updateTopic(topic.id, { text: e.target.value });
                 e.target.style.height = "auto";
                 e.target.style.height = `${e.target.scrollHeight}px`;
               }}
-              className="mt-0.5 w-full resize-none rounded bg-transparent text-base font-semibold text-stone-800 outline-none focus:bg-tertiary dark:text-stone-100"
+              className="mt-1 w-full resize-none rounded-md bg-transparent font-serif text-[24px] leading-[30px] text-primary outline-none focus:bg-secondary"
             />
           </div>
           <ButtonUtility
@@ -148,13 +163,11 @@ export function TopicDetail({
           />
         </header>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-5">
           {/* Sub-points — the actual scaffolding */}
           <section>
             <div className="flex items-baseline justify-between">
-              <h3 className="text-xs font-semibold text-stone-700 dark:text-stone-200">
-                Break it down
-              </h3>
+              <h3 className="eyebrow">Break it down</h3>
               {points.length > 0 && (
                 <span className="text-caption tabular-nums text-quaternary">
                   {donePoints} of {points.length}
@@ -191,7 +204,7 @@ export function TopicDetail({
                       )
                     }
                     className={cx(
-                      "min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs outline-none focus:bg-tertiary",
+                      "min-w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-[13.5px] outline-none focus:bg-tertiary",
                       point.done
                         ? "text-quaternary line-through"
                         : "text-stone-700 dark:text-stone-200"
@@ -250,7 +263,7 @@ export function TopicDetail({
                     addPoint();
                   }
                 }}
-                className="min-w-0 flex-1 rounded-md border border-secondary bg-primary px-2 py-1.5 text-xs outline-none focus:border-teal-400"
+                className="h-9 min-w-0 flex-1 rounded-[9px] border border-secondary bg-primary px-2.5 text-[13.5px] outline-none focus:border-teal-400"
               />
               <Button
                 size="sm"
@@ -265,24 +278,20 @@ export function TopicDetail({
 
           {/* Notes */}
           <section>
-            <h3 className="text-xs font-semibold text-stone-700 dark:text-stone-200">
-              Notes
-            </h3>
+            <h3 className="eyebrow">Notes</h3>
             <textarea
               value={topic.detail ?? ""}
               aria-label="Notes"
               rows={5}
               placeholder="Why this matters, what you already know, what you want out of it…"
               onChange={(e) => updateTopic(topic.id, { detail: e.target.value })}
-              className="mt-2 w-full rounded-lg border border-secondary bg-primary px-2.5 py-2 text-xs leading-relaxed text-stone-700 outline-none placeholder:text-quaternary focus:border-teal-400 dark:text-stone-200"
+              className="mt-2 w-full rounded-[10px] border border-secondary bg-primary px-3 py-2.5 font-serif text-[16px] leading-6 text-primary outline-none placeholder:font-sans placeholder:text-[13.5px] placeholder:text-quaternary focus:border-teal-400"
             />
           </section>
 
           {/* Tags — here a tag IS the subject, so it gets the loud chip */}
           <section>
-            <h3 className="text-xs font-semibold text-stone-700 dark:text-stone-200">
-              Tags
-            </h3>
+            <h3 className="eyebrow">Tags</h3>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {tags.map((tag) => {
                 const on = topic.tagIds.includes(tag.id);
@@ -292,7 +301,7 @@ export function TopicDetail({
                     type="button"
                     onClick={() => tagTopics([topic.id], tag.id, !on)}
                     className={cx(
-                      "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-caption font-medium transition",
+                      "inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12.5px] font-medium transition",
                       on
                         ? tagChipClass(tag)
                         : "text-quaternary hover:bg-tertiary"
@@ -300,8 +309,8 @@ export function TopicDetail({
                   >
                     <span
                       className={cx(
-                        "size-1.5 rounded-full",
-                        on ? tagDotClass(tag) : "bg-stone-300 dark:bg-stone-600"
+                        "size-2 rounded-[2px]",
+                        on ? tagDotClass(tag) : "bg-quaternary"
                       )}
                       aria-hidden
                     />
@@ -314,22 +323,25 @@ export function TopicDetail({
 
           {/* Placement */}
           <section>
-            <h3 className="text-xs font-semibold text-stone-700 dark:text-stone-200">
-              Where it goes
-            </h3>
+            <h3 className="eyebrow">Where it goes</h3>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <select
                 className={selectClass}
                 aria-label="Meeting"
                 value={topic.meetingId ?? ""}
-                onChange={(e) =>
-                  assignTopics([topic.id], e.target.value || null)
-                }
+                onChange={(e) => {
+                  // Off its week first: a topic filed under one meeting must
+                  // not keep sitting in another meeting's occurrence.
+                  if (topic.sessionId) {
+                    placeTopicAt(topic.id, { kind: "lane", lane: "backlog" });
+                  }
+                  assignTopics([topic.id], e.target.value || null);
+                }}
               >
                 <option value="">No meeting yet</option>
                 {meetings.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {meetingLabel(m)}
                   </option>
                 ))}
               </select>
@@ -387,7 +399,7 @@ export function TopicDetail({
               {meeting && topic.sessionId && (meeting.curriculum?.length ?? 0) > 0 && (
                 <select
                   className={selectClass}
-                  aria-label="Band"
+                  aria-label="Section"
                   value={topic.slotId ?? ""}
                   onChange={(e) =>
                     topic.sessionId &&
@@ -399,7 +411,7 @@ export function TopicDetail({
                     })
                   }
                 >
-                  <option value="">Unsorted</option>
+                  <option value="">Untagged</option>
                   {(meeting.curriculum ?? []).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.label}
@@ -408,7 +420,7 @@ export function TopicDetail({
                 </select>
               )}
 
-              <label className="ml-1 inline-flex items-center gap-1.5 text-xs text-quaternary">
+              <label className="ml-1 inline-flex items-center gap-1.5 text-[13px] text-secondary">
                 <Checkbox
                   size="sm"
                   aria-label="Urgent"
@@ -421,7 +433,7 @@ export function TopicDetail({
               </label>
             </div>
             {session && (
-              <p className="mt-1.5 text-caption text-quaternary">
+              <p className="mt-2 text-[12.5px] text-tertiary">
                 Scheduled for {shortDate(session.date)}
                 {section ? ` · ${section.label}` : ""}
               </p>
@@ -430,13 +442,13 @@ export function TopicDetail({
 
           {/* Provenance */}
           <section className="border-t border-secondary pt-3">
-            <dl className="grid grid-cols-2 gap-y-1 text-caption text-quaternary">
+            <dl className="grid grid-cols-2 gap-y-1 font-mono text-[11px] text-quaternary uppercase">
               <dt>Captured</dt>
               <dd className="text-right">{shortDate(topic.createdOn)}</dd>
               {topic.carried > 0 && (
                 <>
                   <dt>Carried</dt>
-                  <dd className="text-right text-amber-700 dark:text-amber-500">
+                  <dd className="text-right text-cond-watch-ink">
                     {topic.carried}×
                   </dd>
                 </>
@@ -444,15 +456,15 @@ export function TopicDetail({
               {topic.returnedFromDate && (
                 <>
                   <dt>Last missed</dt>
-                  <dd className="text-right text-amber-700 dark:text-amber-500">
+                  <dd className="text-right text-cond-watch-ink">
                     {shortDate(topic.returnedFromDate)}
                   </dd>
                 </>
               )}
             </dl>
-            {topic.carried >= 3 && (
-              <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5 dark:border-amber-800 dark:bg-amber-950/40">
-                <p className="text-caption text-amber-900 dark:text-amber-300">
+            {topic.carried >= 3 && topic.meetingId && (
+              <div className="mt-3 rounded-[12px] bg-cond-watch-soft p-3">
+                <p className="text-[12.5px] leading-5 text-cond-watch-ink">
                   Carried {topic.carried} times. A topic that keeps sliding is
                   usually a commitment in disguise.
                 </p>
@@ -472,12 +484,17 @@ export function TopicDetail({
           </section>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-secondary px-4 py-3">
+        <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-secondary px-5 py-3">
           <Button
             size="sm"
             color="tertiary"
             onClick={() => {
-              deleteTopic(topic.id);
+              const snapshot = topic;
+              deleteWithUndo(
+                "Idea deleted.",
+                () => deleteTopic(snapshot.id),
+                () => restoreTopic(snapshot)
+              );
               onClose();
             }}
           >

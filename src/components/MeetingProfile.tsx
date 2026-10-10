@@ -230,6 +230,7 @@ export function MeetingProfile({
             onOpenSession={openSession}
             historyView={false}
             oneOff={false}
+            narrow={!focus}
           />
         </div>
       )}

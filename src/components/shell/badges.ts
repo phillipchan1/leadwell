@@ -17,8 +17,11 @@ export function usePlaceBadges(): Partial<Record<PlaceId, number>> {
   return useMemo(() => {
     const data = { meetings, sessions, topics };
     const behind = meetings.filter((m) => isBehind(readinessOf(m, data).state)).length;
-    // The same pool the Ideas board counts as "All".
-    const waiting = topics.filter((t) => !t.sessionId && t.status === "open").length;
+    // The same pool the Ideas board counts as "All" — parked is set aside on
+    // purpose, so it doesn't count as waiting.
+    const waiting = topics.filter(
+      (t) => !t.sessionId && t.status === "open" && t.lane !== "parked"
+    ).length;
     return {
       meetings: behind || undefined,
       ideas: waiting || undefined,

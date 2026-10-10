@@ -18,6 +18,7 @@ export function DropList({
   renderCard,
   onAdd,
   addPlaceholder,
+  addLabel,
   empty,
   className,
   compact = true,
@@ -28,6 +29,8 @@ export function DropList({
   renderCard: (topic: Topic) => ReactNode;
   onAdd?: (raw: string) => void;
   addPlaceholder?: string;
+  /** What the closed composer says: "Add for Sarah". */
+  addLabel?: string;
   empty?: ReactNode;
   className?: string;
   compact?: boolean;
@@ -42,7 +45,7 @@ export function DropList({
     <li
       key="drop-line"
       aria-hidden
-      className="h-0.5 list-none rounded-full bg-teal-500"
+      className="h-0.5 list-none rounded-full bg-teal-600"
     />
   );
 
@@ -57,23 +60,21 @@ export function DropList({
     <div
       ref={dnd.zoneRef(zone)}
       className={cx(
-        "rounded-lg transition",
-        dragging &&
-          !active &&
-          "border border-dashed border-stone-300 dark:border-stone-700",
+        "rounded-[12px] transition-colors",
+        dragging && !active && "outline-[1.5px] outline-[var(--color-border-primary)] outline-dashed -outline-offset-2",
         active &&
-          "border border-teal-400 bg-teal-50/60 dark:bg-teal-950/30 dark:border-teal-600",
-        !dragging && "border border-transparent",
+          "bg-teal-50/80 outline-[1.5px] outline-teal-600 outline-dashed -outline-offset-2 dark:bg-teal-950/40",
         className
       )}
     >
-      <ul className={cx(compact ? "space-y-1" : "space-y-1.5")}>{items}</ul>
+      <ul className={cx("flex flex-col", compact ? "gap-1" : "gap-1.5")}>{items}</ul>
       {topics.length === 0 && !active && empty}
-      {onAdd && (
-        <div className="opacity-0 transition focus-within:opacity-100 group-hover/col:opacity-100">
+      {onAdd && !dragging && (
+        <div className="mt-1 opacity-60 transition-opacity focus-within:opacity-100 group-hover/col:opacity-100 touch:opacity-100">
           <InlineComposer
             onAdd={onAdd}
             compact={compact}
+            label={addLabel}
             placeholder={addPlaceholder ?? "Add a topic…  #tag !"}
           />
         </div>

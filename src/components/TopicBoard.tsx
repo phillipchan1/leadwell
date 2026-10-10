@@ -4,7 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import type { CurriculumSlot, Tag, Topic, TrackedMeeting } from "../types";
+import type { CurriculumSlot, Session, Tag, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
 import { InlineComposer } from "./InlineComposer";
@@ -88,12 +88,15 @@ export function TopicBoard({
   selectedSlotKey,
   onSelectWeek,
   ahead,
+  narrow = false,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
   selectedSlotKey?: string | null;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
   ahead?: number;
+  /** A side panel, not a page: the tray starts folded so the weeks get the room. */
+  narrow?: boolean;
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
@@ -119,9 +122,9 @@ export function TopicBoard({
    */
   const [trayWhileOpen, setTrayWhileOpen] = useState(false);
   useEffect(() => {
-    if (!selectedSlotKey) setTrayWhileOpen(false);
-  }, [selectedSlotKey]);
-  const trayFolded = Boolean(selectedSlotKey) && !trayWhileOpen;
+    if (!selectedSlotKey && !narrow) setTrayWhileOpen(false);
+  }, [selectedSlotKey, narrow]);
+  const trayFolded = (narrow || Boolean(selectedSlotKey)) && !trayWhileOpen;
 
   const removeTopic = useCallback(
     (topic: Topic) => {
@@ -309,7 +312,7 @@ export function TopicBoard({
               drag={drag}
               columnRef={columnRef}
               cardProps={cardProps}
-              onFold={selectedSlotKey ? () => setTrayWhileOpen(false) : undefined}
+              onFold={selectedSlotKey || narrow ? () => setTrayWhileOpen(false) : undefined}
               onAllIdeas={() => setTab("ideas")}
               onCapture={(raw, slotId) =>
                 captureTopics(raw, {
@@ -324,6 +327,7 @@ export function TopicBoard({
         )}
 
         <ScheduleGrid
+          meetingId={meeting.id}
           weeks={layout.weeks}
           curriculum={curriculum}
           tags={tags}
@@ -378,6 +382,7 @@ export function TopicBoard({
 type GridRow = { id: string; label: string; slotId?: string; minutes?: number };
 
 function ScheduleGrid({
+  meetingId,
   weeks,
   curriculum,
   tags,
@@ -391,6 +396,7 @@ function ScheduleGrid({
   onAddRow,
   onReorderRows,
 }: {
+  meetingId: string;
   weeks: WeekColumn[];
   curriculum: CurriculumSlot[];
   tags: Tag[];
@@ -405,7 +411,9 @@ function ScheduleGrid({
   onReorderRows: (ids: string[]) => void;
 }) {
   const sessions = useStore((s) => s.sessions);
+  const restoreOccurrence = useStore((s) => s.restoreOccurrence);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrolled, setScrolled] = useState(false);
   const scrollLeftRef = useRef(0);
   const [hiddenRight, setHiddenRight] = useState(0);
   const [draggingRow, setDraggingRow] = useState<string | null>(null);
@@ -415,6 +423,7 @@ function ScheduleGrid({
     const el = scrollRef.current;
     if (!el) return;
     setHiddenRight(Math.max(0, el.scrollWidth - el.clientWidth - el.scrollLeft));
+    setScrolled(el.scrollLeft > 4);
   }, []);
 
   // The board re-renders on every store change; keep the strip where it was.
@@ -468,10 +477,35 @@ function ScheduleGrid({
       ]
     : [{ id: "all", label: "" }];
 
+  /*
+   * A skipped week isn't an occurrence, so the rhythm steps over it — but
+   * leaving a gap where it was makes it impossible to find again. It keeps a
+   * narrow column of its own, with the way back.
+   */
+  const lastDate = weeks[weeks.length - 1]?.slot.date;
+  const skipped = sessions
+    .filter(
+      (o) =>
+        o.meetingId === meetingId &&
+        o.kind === "skipped" &&
+        o.date >= today &&
+        Boolean(lastDate) &&
+        o.date <= lastDate!
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
+  type Lane = { kind: "week"; key: string; date: string; week: WeekColumn } | { kind: "skip"; key: string; date: string; session: Session };
+  const lanes: Lane[] = [
+    ...weeks.map((week) => ({ kind: "week" as const, key: week.key, date: week.slot.date, week })),
+    ...skipped.map((session) => ({ kind: "skip" as const, key: `skip:${session.id}`, date: session.date, session })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
   const colOffset = hasRows ? 2 : 1;
+  const colOf = new Map(lanes.map((l, i) => [l.key, i + colOffset]));
   const template = [
     hasRows ? "8.75rem" : null,
-    ...weeks.map((w) => (w.slot.past ? "7.75rem" : hasRows ? "11.5rem" : "13rem")),
+    ...lanes.map((l) =>
+      l.kind === "skip" ? "4.5rem" : l.week.slot.past ? "7.75rem" : hasRows ? "11.5rem" : "13rem"
+    ),
   ]
     .filter(Boolean)
     .join(" ");
@@ -527,7 +561,57 @@ function ScheduleGrid({
           }}
         >
           {/* The sheets: one per week, behind its header and cells. */}
-          {weeks.map((week, i) => {
+          {lanes.map((lane) => {
+            if (lane.kind === "skip") {
+              const active = selectedSlotKey === `s:${lane.session.id}`;
+              return (
+                <Fragment key={lane.key}>
+                  <div
+                    aria-hidden
+                    style={{ gridColumn: colOf.get(lane.key), gridRow: `1 / span ${rows.length + 1}` }}
+                    className={cx(
+                      "rounded-[14px] bg-[repeating-linear-gradient(135deg,transparent_0_7px,var(--color-border-secondary)_7px_8px)]",
+                      active && "ring-[1.5px] ring-teal-600"
+                    )}
+                  />
+                  <div
+                    style={{ gridColumn: colOf.get(lane.key), gridRow: `1 / span ${rows.length + 1}` }}
+                    className="relative z-[2] flex flex-col items-center gap-1 px-1 pt-3.5 text-center"
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onSelectWeek?.(`s:${lane.session.id}`, {
+                          sessionId: lane.session.id,
+                          date: lane.session.date,
+                          projected: false,
+                          past: false,
+                        })
+                      }
+                      aria-label={`${fmtDay(lane.date, { weekday: "long", month: "long", day: "numeric" })} is skipped. Open it.`}
+                      className="flex flex-col items-center gap-0.5 rounded-lg px-1 py-0.5"
+                    >
+                      <span className="font-mono text-[10.5px] text-quaternary">
+                        {fmtDay(lane.date, { weekday: "short" }).toUpperCase()}
+                      </span>
+                      <span className="font-serif text-[22px] leading-7 text-quaternary line-through">
+                        {Number(lane.date.slice(8, 10))}
+                      </span>
+                      <span className="font-mono text-[9.5px] tracking-[0.06em] text-quaternary">SKIPPED</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => restoreOccurrence(lane.session.id)}
+                      className="mt-1 rounded-md bg-primary px-1.5 py-1 text-[11px] font-semibold text-teal-700 shadow-xs hover:text-teal-800 touch:min-h-11 dark:text-teal-300"
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </Fragment>
+              );
+            }
+            const week = lane.week;
+            const i = (colOf.get(lane.key) ?? colOffset) - colOffset;
             const active = weekIsActive(week);
             const next = week.key === nextKey;
             const expected = week.slot.projected && !week.slot.past;
@@ -561,10 +645,10 @@ function ScheduleGrid({
             </div>
           )}
 
-          {weeks.map((week, i) => (
+          {weeks.map((week) => (
             <WeekHeader
               key={`head-${week.key}`}
-              column={i + colOffset}
+              column={colOf.get(week.key)!}
               week={week}
               today={today}
               isActive={weekIsActive(week)}
@@ -599,9 +683,9 @@ function ScheduleGrid({
                   canDrag={Boolean(draggingRow)}
                 />
               )}
-              {weeks.map((week, wi) => {
+              {weeks.map((week) => {
                 const cell = cellFor(week, row);
-                const place = { gridColumn: wi + colOffset, gridRow: ri + 2 };
+                const place = { gridColumn: colOf.get(week.key)!, gridRow: ri + 2 };
                 const ruled = hasRows && ri > 0;
                 if (!cell) {
                   return (
@@ -634,6 +718,12 @@ function ScheduleGrid({
         {!hasRows && <AddRow onAdd={onAddRow} first />}
       </div>
 
+      {hasRows && scrolled && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0 left-[8.75rem] z-[4] w-5 bg-gradient-to-r from-[rgba(10,34,37,0.07)] to-transparent"
+        />
+      )}
       {hiddenRight > 24 && (
         <>
           <div
@@ -648,7 +738,7 @@ function ScheduleGrid({
                 behavior: "smooth",
               })
             }
-            className="absolute top-[42%] right-1 z-[5] inline-flex h-8 items-center gap-1.5 rounded-full border border-primary bg-primary px-3 text-[12px] font-semibold text-primary shadow-xs transition hover:border-teal-300 touch:min-h-11"
+            className="absolute right-1 bottom-6 z-[5] inline-flex h-8 items-center gap-1.5 rounded-full border border-primary bg-primary px-3 text-[12px] font-semibold text-primary shadow-xs transition hover:border-teal-300 touch:min-h-11"
           >
             Later weeks
             <ArrowRight className="size-3.5" />

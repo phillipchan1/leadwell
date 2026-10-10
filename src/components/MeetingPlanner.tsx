@@ -53,6 +53,7 @@ export function MeetingPlanner({
   onOpenSession,
   historyView = true,
   oneOff = true,
+  narrow = false,
 }: {
   meeting: TrackedMeeting;
   /**
@@ -63,6 +64,8 @@ export function MeetingPlanner({
   historyView?: boolean;
   /** Offer "One-off date" in the toolbar. Off where the host's header has it. */
   oneOff?: boolean;
+  /** Hosted in a side panel rather than a page. */
+  narrow?: boolean;
   direction?: BoardDirection;
   selectedSlotKey: string | null;
   onSelectWeek: (slotKey: string, slot: Slot) => void;
@@ -98,6 +101,8 @@ export function MeetingPlanner({
   );
 
   const views = VIEWS.filter((v) => historyView || v.id !== "history");
+  // A side panel has no room to split; the week opens as a drawer instead.
+  const asSheet = isMobile || narrow;
 
   const body =
     view === "board" ? (
@@ -116,6 +121,7 @@ export function MeetingPlanner({
           selectedSlotKey={selectedSlotKey}
           onSelectWeek={openWeek}
           ahead={aheadForHorizon(horizon)}
+          narrow={narrow}
         />
       )
     ) : view === "history" ? (
@@ -259,7 +265,7 @@ export function MeetingPlanner({
           {body}
         </div>
 
-        {panel && !isMobile && (
+        {panel && !asSheet && (
           <aside
             aria-label="This week"
             className="occurrence-notes-aside sticky top-16 flex max-h-[calc(100dvh-7rem)] w-[min(46%,29rem)] shrink-0 flex-col overflow-hidden rounded-[20px] border border-secondary bg-primary shadow-[0_1px_2px_rgba(10,34,37,0.06),0_18px_40px_-28px_rgba(10,34,37,0.35)]"
@@ -269,7 +275,7 @@ export function MeetingPlanner({
         )}
       </div>
 
-      {panel && isMobile && (
+      {panel && asSheet && (
         <OccurrenceNotesSheet open onClose={onCloseNotes} label="This week">
           {panel}
         </OccurrenceNotesSheet>

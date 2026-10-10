@@ -222,10 +222,12 @@ export function buildToday(
     );
 
   const scopedMeetings = new Set(rows.map((r) => r.meeting.id));
+  // Parked is set aside on purpose; it isn't waiting for anything.
   const pool = doc.topics.filter(
     (t) =>
       t.status === "open" &&
       !t.sessionId &&
+      t.lane !== "parked" &&
       (!scopeId || !t.meetingId || scopedMeetings.has(t.meetingId))
   );
   const isAging = (t: Topic) => t.carried >= 3 || daysBetween(t.createdOn, today) >= 30;
