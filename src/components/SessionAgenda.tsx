@@ -89,12 +89,10 @@ export function SessionAgenda({
   const open = mine.filter((t) => t.status === "open").length;
 
   return (
-    <section className="meeting-editor-agenda mb-6 rounded-xl border border-secondary">
-      <div className="flex items-baseline justify-between gap-2 border-b border-stone-100 px-3 py-2 dark:border-stone-800/80">
-        <span className="text-caption font-semibold tracking-wide text-quaternary uppercase">
-          Agenda
-        </span>
-        <span className="text-caption tabular-nums text-quaternary">
+    <section className="meeting-editor-agenda mb-6 overflow-hidden rounded-xl border border-secondary bg-primary">
+      <div className="flex items-baseline justify-between gap-2 border-b border-secondary px-3.5 py-3">
+        <h2 className="text-[15px] font-semibold text-primary">Agenda</h2>
+        <span className="font-mono text-[11px] tabular-nums text-quaternary uppercase">
           {mine.length === 0
             ? "nothing planned"
             : `${mine.length - open} of ${mine.length} covered`}
@@ -102,7 +100,7 @@ export function SessionAgenda({
       </div>
 
       {(mine.length > 0 || curriculum.length > 0) && (
-        <ul className="divide-y divide-stone-100 dark:divide-stone-800/80">
+        <ul className="divide-y divide-[var(--color-border-secondary)]">
           {grouped.map((group) => (
             <li key={group.id} className="list-none">
               {group.label && (

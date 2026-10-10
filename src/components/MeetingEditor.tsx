@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
 import { SessionEditor } from "./SessionEditor";
 import { SessionAgenda } from "./SessionAgenda";
+import { RunContext } from "./RunContext";
+import { Avatar } from "./Avatar";
 
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
@@ -230,25 +232,55 @@ export function MeetingEditor({
         ? manager.name
         : subjectName;
 
+  const subjectPhoto = person?.photo ?? manager?.photo;
+  const runTitle = meeting.name?.trim()
+    ? meeting.name
+    : person
+      ? `1:1 with ${person.name}`
+      : manager
+        ? `Check-in with ${manager.name}`
+        : (team?.name ?? "Meeting");
+  const dayLine = date
+    ? new Date(`${date}T12:00:00`)
+        .toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })
+        .toUpperCase()
+    : "";
+
+  /*
+   * Run: the meeting while it's happening. Leather across the top so it reads
+   * as a different room from the rest of the app; the agenda on the left, the
+   * write-up in the middle in the serif, and the person's context on the
+   * right. Below lg the three stack, agenda first.
+   */
   return (
-    <div className="meeting-editor-fullscreen">
-      <header className="meeting-editor-topbar">
+    <div className="meeting-editor-fullscreen bg-secondary">
+      <header className="pad-safe-top flex shrink-0 flex-wrap items-center gap-3 bg-leather px-3 pb-2.5 text-leather-fg [--pad-safe-top:0.625rem] sm:px-5">
         <button
           type="button"
-          className="meeting-editor-back flex min-h-11 shrink-0 items-center gap-1"
           onClick={onClose}
+          aria-label={`Leave and go back to ${backLabel}`}
+          className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-leather-hi text-leather-ink transition-colors hover:text-leather-fg"
         >
-          <ArrowLeft className="size-4 shrink-0" />
-          <span className="max-w-[9rem] truncate">{backLabel}</span>
+          <ArrowLeft className="size-4" />
         </button>
-        <span className="meeting-editor-topbar-label">{meetingLabel}</span>
+        <Avatar name={subjectName} photo={subjectPhoto} size={36} className={team ? "!rounded-[10px]" : undefined} />
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-serif text-[19px] leading-6">{runTitle}</span>
+          <span className="font-mono text-[11px] tracking-[0.02em] text-leather-ink">
+            {dayLine}
+            {nextDate && ` · NEXT ${new Date(`${nextDate}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }).toUpperCase()}`}
+          </span>
+        </div>
         <div className="flex-1" />
         <button
           type="button"
-          className={`meeting-editor-tool-toggle ${showTools ? "is-active" : ""}`}
           onClick={() => setShowTools((v) => !v)}
+          aria-pressed={showTools}
+          className={`h-9 rounded-[9px] border px-3 text-[13px] font-medium transition-colors max-sm:hidden ${
+            showTools ? "border-leather-hi bg-leather-hi text-leather-fg" : "border-leather-line text-leather-ink hover:text-leather-fg"
+          }`}
         >
-          Tools
+          {listening ? "● Listening" : "Transcribe"}
         </button>
         <EntryMenu
           onDelete={async () => {
@@ -263,124 +295,150 @@ export function MeetingEditor({
             }
           }}
         />
+        <button
+          type="button"
+          onClick={onClose}
+          className="h-9 rounded-[9px] bg-gilt px-4 text-[13.5px] font-semibold text-[#013133] transition-[filter] hover:brightness-105"
+        >
+          Done
+        </button>
       </header>
 
       <div className="meeting-editor-scroll">
-        <div className="meeting-editor-page">
-          <header className="meeting-editor-header">
-            {editingMeta ? (
-              <div className="meeting-editor-meta-form">
-                <Input
-                  type="date"
-                  label="Date"
-                  size="sm"
-                  value={date}
-                  autoFocus={autoFocusUnlessTouch()}
-                  onChange={(value) => {
-                    setDate(value);
-                    persist({ date: value });
-                  }}
-                  onBlur={() => setEditingMeta(false)}
-                />
-                <Input
-                  type="date"
-                  label="Next time"
-                  size="sm"
-                  value={nextDate}
-                  onChange={(value) => {
-                    setNextDate(value);
-                    updateSession(session.id, {
-                      nextDate: value || undefined,
-                    });
-                  }}
-                  onBlur={() => setEditingMeta(false)}
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="meeting-editor-title-btn"
-                onClick={() => setEditingMeta(true)}
-                title="Edit dates"
-              >
-                <h1 className="meeting-editor-title">{formatEntryDate(date)}</h1>
-                <p className="meeting-editor-subtitle">
-                  {meetingLabel}
-                  {nextDate ? (
-                    <span>
-                      {" "}
-                      · Next {formatEntryDate(nextDate).replace(/^[^,]+, /, "")}
-                    </span>
-                  ) : null}
-                </p>
-              </button>
-            )}
+        <div className="flex min-h-full flex-wrap items-stretch">
+          {/* Agenda */}
+          <aside
+            aria-label="Agenda"
+            className="w-full border-secondary px-4 pt-6 sm:px-6 lg:w-[340px] lg:shrink-0 lg:border-r lg:pt-8 lg:pb-8"
+          >
+            <SessionAgenda session={session} meeting={meeting} />
+          </aside>
 
-            <input
-              type="text"
-              className="meeting-editor-point"
-              placeholder="Why we met this time…"
-              value={point}
-              onChange={(e) => {
-                setPoint(e.target.value);
-                persist({ point: e.target.value });
-              }}
-            />
-          </header>
-
-          {showTools && (
-            <div className="meeting-editor-tools">
-              <div className="meeting-editor-tools-row">
-                {speechSupported ? (
+          {/* The write-up */}
+          <main className="min-w-0 flex-[999_1_480px] bg-primary px-5 py-8 sm:px-10 lg:px-14 lg:py-10">
+            <div className="mx-auto flex w-full max-w-[680px] flex-col gap-6">
+              <header className="flex flex-col gap-3">
+                {editingMeta ? (
+                  <div className="meeting-editor-meta-form">
+                    <Input
+                      type="date"
+                      label="Date"
+                      size="sm"
+                      value={date}
+                      autoFocus={autoFocusUnlessTouch()}
+                      onChange={(value) => {
+                        setDate(value);
+                        persist({ date: value });
+                      }}
+                      onBlur={() => setEditingMeta(false)}
+                    />
+                    <Input
+                      type="date"
+                      label="Next time"
+                      size="sm"
+                      value={nextDate}
+                      onChange={(value) => {
+                        setNextDate(value);
+                        updateSession(session.id, {
+                          nextDate: value || undefined,
+                        });
+                      }}
+                      onBlur={() => setEditingMeta(false)}
+                    />
+                  </div>
+                ) : (
                   <button
                     type="button"
-                    className={`meeting-editor-chip ${listening ? "is-listening" : ""}`}
-                    onClick={toggleListen}
+                    className="meeting-editor-title-btn"
+                    onClick={() => setEditingMeta(true)}
+                    title="Edit dates"
                   >
-                    {listening ? "● Listening…" : "Listen"}
+                    <span className="eyebrow">{formatEntryDate(date)} · edit dates</span>
                   </button>
-                ) : (
-                  <span
-                    className="meeting-editor-chip cursor-not-allowed opacity-60"
-                    title="Live listen needs speech recognition, which this browser doesn't offer"
-                  >
-                    Listen unavailable — paste a transcript
-                  </span>
                 )}
-                <button
-                  type="button"
-                  className={`meeting-editor-chip ${showCapture ? "is-active" : ""}`}
-                  onClick={() => setShowCapture((v) => !v)}
-                >
-                  Transcript
-                </button>
-              </div>
-
-              {error && (
-                <p className="meeting-editor-error">{error}</p>
-              )}
-
-              {showCapture && (
-                <TextArea
-                  aria-label="Transcript"
-                  size="md"
-                  textAreaClassName="meeting-editor-transcript"
-                  placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
-                  value={transcript}
-                  onChange={saveTranscript}
+                <label htmlFor="why-we-met" className="sr-only">
+                  Why we met this time
+                </label>
+                <input
+                  id="why-we-met"
+                  type="text"
+                  className="w-full border-0 bg-transparent p-0 font-serif text-[26px] leading-[34px] font-[450] text-primary outline-none placeholder:text-placeholder focus-visible:!outline-none"
+                  placeholder="Why we met this time…"
+                  value={point}
+                  onChange={(e) => {
+                    setPoint(e.target.value);
+                    persist({ point: e.target.value });
+                  }}
                 />
-              )}
-            </div>
-          )}
+              </header>
 
-          <SessionAgenda session={session} meeting={meeting} />
-          <SessionEditor
-            sessionId={session.id}
-            value={notes}
-            onChange={saveNotes}
-            placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
-            autoFocus={!notes.trim() && autoFocusUnlessTouch()}
-          />
+              {showTools && (
+                <div className="meeting-editor-tools">
+                  <div className="meeting-editor-tools-row">
+                    {speechSupported ? (
+                      <button
+                        type="button"
+                        className={`meeting-editor-chip ${listening ? "is-listening" : ""}`}
+                        onClick={toggleListen}
+                      >
+                        {listening ? "● Listening…" : "Listen"}
+                      </button>
+                    ) : (
+                      <span
+                        className="meeting-editor-chip cursor-not-allowed opacity-60"
+                        title="Live listen needs speech recognition, which this browser doesn't offer"
+                      >
+                        Listen unavailable — paste a transcript
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className={`meeting-editor-chip ${showCapture ? "is-active" : ""}`}
+                      onClick={() => setShowCapture((v) => !v)}
+                    >
+                      Transcript
+                    </button>
+                  </div>
+
+                  {error && <p className="meeting-editor-error">{error}</p>}
+
+                  {showCapture && (
+                    <TextArea
+                      aria-label="Transcript"
+                      size="md"
+                      textAreaClassName="meeting-editor-transcript"
+                      placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
+                      value={transcript}
+                      onChange={saveTranscript}
+                    />
+                  )}
+                </div>
+              )}
+
+              <SessionEditor
+                sessionId={session.id}
+                value={notes}
+                onChange={saveNotes}
+                placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
+                autoFocus={!notes.trim() && autoFocusUnlessTouch()}
+              />
+
+              <p className="flex flex-wrap gap-x-5 gap-y-1 border-t border-secondary pt-4 text-[12px] text-quaternary">
+                <span>
+                  <span className="font-mono">/</span> for headings, lists and to-dos
+                </span>
+                <span>Saved as you type</span>
+              </p>
+            </div>
+          </main>
+
+          {/* What you want in your peripheral vision */}
+          <aside
+            aria-label={`About ${subjectName}`}
+            className="w-full border-secondary px-5 py-8 sm:px-6 xl:w-[320px] xl:shrink-0 xl:border-l"
+          >
+            <RunContext kind={meeting.subjectKind} id={meeting.subjectId} />
+          </aside>
         </div>
       </div>
     </div>
@@ -402,7 +460,7 @@ function EntryMenu({ onDelete }: { onDelete: () => void }) {
         type="button"
         aria-label="Entry actions"
         onClick={() => setOpen((v) => !v)}
-        className="flex size-11 items-center justify-center rounded-md text-stone-500 transition-colors hover:bg-stone-100 active:bg-stone-200 dark:hover:bg-stone-800 dark:active:bg-stone-700"
+        className="flex size-9 items-center justify-center rounded-[9px] text-leather-ink transition-colors hover:bg-leather-hi hover:text-leather-fg touch:size-11"
       >
         <DotsVertical className="size-4.5" />
       </button>
