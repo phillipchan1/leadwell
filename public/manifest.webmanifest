@@ -1,14 +1,14 @@
 {
   "name": "LeadWell",
   "short_name": "LeadWell",
-  "description": "Know your leaders. Run better 1:1s.",
+  "description": "A quiet instrument for leading people well — at work, at church and at home.",
   "start_url": "/",
   "scope": "/",
   "id": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#fafaf9",
-  "theme_color": "#0d9488",
+  "background_color": "#013133",
+  "theme_color": "#013133",
   "categories": ["productivity", "business"],
   "icons": [
     {

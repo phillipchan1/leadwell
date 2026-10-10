@@ -33,6 +33,45 @@ imported automatically on first sign-in.
   repository layer ([`src/lib/repo.ts`](src/lib/repo.ts)) syncs changed
   collections to Supabase (debounced) and hydrates on login.
 
+## Design language: Leather & Gilt
+
+A well-kept leather journal: a deep teal leather frames the app (the sidebar,
+the phone's tab bar, the Run header), the working surface is a cool paper,
+gilt marks what's worth celebrating (the mark, wins, answered prayer) and
+vesper violet is prayer and nothing else. Names and anything you write are set
+in **Newsreader**; everything you operate is **Instrument Sans**; time and
+counts are **IBM Plex Mono**, so a column of countdowns lines up like a ticker.
+All three are self-hosted, so the app still works offline.
+
+Color only ever means one thing. Teal: you can press it. One condition ramp
+(thriving → critical) is shared by health and readiness, and every state also
+has a shape — the five-bar **health meter**, the **rhythm ring** (arc = how far
+into the rhythm, center filled = prepped, color = state) and the **prayer
+flame** (filled, outlined, dashed when gone quiet, gilt when answered).
+Identity — life areas, CliftonStrengths in Gallup's own colors — is a square.
+
+The tokens live in [`src/styles/brand.css`](src/styles/brand.css). It redefines
+the `stone` and `teal` ramps every component was written against, which is how
+the whole app re-skinned from one file; the glyphs are in
+[`src/components/brand/glyphs.tsx`](src/components/brand/glyphs.tsx).
+
+## Five places
+
+| Place | Route | The question |
+|---|---|---|
+| **Today** (default) | `/today` | What needs me? The next move, the week, ideas waiting, who you're carrying |
+| **People** | `/circles`, `/tree`, `/table` | Who do I lead, and how are they? Three views, four lenses |
+| **Meetings** | `/meetings` | Am I ready to sit down? |
+| **Ideas** | `/ideas` | What do I want to raise? |
+| **Prayer** | `/prayer` | Who am I carrying? Opens at night |
+
+The life-area scope (All of life, Day job, Church…) sits at the top of the
+sidebar and scopes every place at once (`⇧1`–`⇧9`). **Capture** (`C`, or the
+gilt + on a phone) takes a topic with the Ideas grammar — `#tag @meeting !` —
+or hands off to adding a person, team or leader. `G` then `T` / `P` / `M` / `I` /
+`R` jumps between places. Writing up a meeting opens **Run**: the agenda, the
+write-up in the serif and the person's context side by side.
+
 ## Navigation model
 
 **The URL is the source of truth for what's selected.** Selection setters
@@ -57,6 +96,9 @@ sibling pager (`←` / `→`), close, and that promotion for every entity kind �
 profile components own content only, and render at both densities from one tree.
 
 ```
+/today                       what needs me — the front door
+/today?person=p3             a person peeked beside Today
+/circles                     People, drawn as rings around you
 /tree                        canvas, nothing open
 /tree?team=t1                team peek beside the canvas
 /tree?person=p3&s=sessions   person peek, 1:1s section
@@ -445,12 +487,12 @@ A person counts as **assessed** once any framework result is recorded. The team-
 
 | Domain | Color | Themes |
 |---|---|---|
-| Executing | `#1D9E75` | Achiever, Arranger, Belief, Consistency, Deliberative, Discipline, Focus, Responsibility, Restorative |
-| Influencing | `#EF9F27` | Activator, Command, Communication, Competition, Maximizer, Self-Assurance, Significance, Woo |
-| Relationship Building | `#D4537E` | Adaptability, Connectedness, Developer, Empathy, Harmony, Includer, Individualization, Positivity, Relator |
-| Strategic Thinking | `#7F77DD` | Analytical, Context, Futuristic, Ideation, Input, Intellection, Learner, Strategic |
+| Executing | `#7C3B8B` | Achiever, Arranger, Belief, Consistency, Deliberative, Discipline, Focus, Responsibility, Restorative |
+| Influencing | `#DD7B2B` | Activator, Command, Communication, Competition, Maximizer, Self-Assurance, Significance, Woo |
+| Relationship Building | `#2D78BD` | Adaptability, Connectedness, Developer, Empathy, Harmony, Includer, Individualization, Positivity, Relator |
+| Strategic Thinking | `#269364` | Analytical, Context, Futuristic, Ideation, Input, Intellection, Learner, Strategic |
 
-The map lives in [src/data/frameworks.ts](src/data/frameworks.ts) and drives strength-chip coloring, team domain balance, the org donut, and blind-spot detection.
+The colors are Gallup's own, so a chip here matches every report people already have. The map lives in [src/data/frameworks.ts](src/data/frameworks.ts) and drives strength-chip coloring, team domain balance, the org donut, and blind-spot detection.
 
 ## Notes
 

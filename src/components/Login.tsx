@@ -6,6 +6,7 @@ import {
 } from "../lib/auth";
 import { supabaseConfigured } from "../lib/supabase";
 import { Button } from "@/components/base/buttons/button";
+import { Mark, Wordmark } from "./brand/glyphs";
 
 /** Full-screen sign-in gate shown when there's no authenticated session. */
 export function Login() {
@@ -36,21 +37,30 @@ export function Login() {
     }
   };
 
+  // The first thing anyone sees, so it is the brand at its plainest: leather,
+  // the mark, and one sentence about what this is for.
   return (
-    <div className="flex h-full items-center justify-center bg-secondary p-6">
-      <div className="w-full max-w-sm rounded-2xl border border-secondary bg-primary p-8 text-center shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight">
-          Lead<span className="text-teal-600">Well</span>
-        </h1>
-        <p className="mt-2 text-sm text-quaternary">
-          Sign in to reach your teams, people, and coaching notes from anywhere.
-        </p>
+    <div className="pad-safe-top pad-safe-bottom flex h-full items-center justify-center bg-leather px-6 text-leather-fg">
+      <div className="flex w-full max-w-[380px] flex-col items-center gap-8 text-center">
+        <div className="flex items-center gap-3.5 text-[34px]">
+          <Mark size={52} />
+          <Wordmark />
+        </div>
+        <div className="flex flex-col gap-3">
+          <h1 className="font-serif text-[30px] leading-[36px] font-normal text-balance">
+            A quiet instrument for leading people well.
+          </h1>
+          <p className="text-[15px] leading-[23px] text-leather-ink">
+            At work, at church and at home. Sign in to reach your people, your meetings and your
+            prayer list from anywhere.
+          </p>
+        </div>
 
         {!supabaseConfigured ? (
-          <p className="mt-6 rounded-lg bg-amber-50 p-3 text-left text-xs leading-relaxed text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+          <p className="w-full rounded-xl bg-leather-hi p-4 text-left text-[13px] leading-relaxed text-leather-ink">
             Backend not configured. Add <code>VITE_SUPABASE_URL</code> and{" "}
-            <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code> and
-            restart the dev server. See <code>SETUP.md</code>.
+            <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code> and restart the dev
+            server. See <code>SETUP.md</code>.
           </p>
         ) : (
           <Button
@@ -61,7 +71,7 @@ export function Login() {
             isDisabled={busy}
             isLoading={busy}
             showTextWhileLoading
-            className="mt-6 w-full"
+            className="w-full"
           >
             {busy ? "Redirecting…" : "Continue with Google"}
           </Button>
@@ -78,13 +88,13 @@ export function Login() {
             isLoading={busy}
             showTextWhileLoading
             data-testid="dev-test-signin"
-            className="mt-3 w-full"
+            className="-mt-4 w-full"
           >
             {busy ? "Signing in…" : "Continue as test user (dev)"}
           </Button>
         )}
 
-        {error && <p className="mt-4 text-xs text-red-500">{error}</p>}
+        {error && <p className="text-[13px] text-gilt">{error}</p>}
       </div>
     </div>
   );
