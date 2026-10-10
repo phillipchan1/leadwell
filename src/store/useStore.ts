@@ -50,6 +50,7 @@ import { clearUndo } from "../lib/undo";
 import { migratePigments } from "../lib/pigments";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
+import { DEMO, toThisWeek } from "../lib/demo";
 import {
   defaultCurriculum,
   effectiveSlotId,
@@ -2870,6 +2871,14 @@ export const useStore = create<Store>((set, get) => ({
    * Called once at startup and again whenever auth state changes.
    */
   bootstrap: async () => {
+    if (DEMO) {
+      // The sample org, moved to this week. Nothing to sign in to or load.
+      if (get().phase === "ready") return;
+      get().hydrate(toThisWeek(seedData(), todayISO()), "demo", "demo@leadwell.app", {
+        fromCache: true,
+      });
+      return;
+    }
     const { data } = await supabase.auth.getSession();
     const session = data.session;
     if (!session) {
@@ -3061,6 +3070,7 @@ let lastRefreshAt = 0;
  * design: the app is already usable, so nothing here may take it away.
  */
 function revalidate(userId: string, email: string | null): Promise<void> {
+  if (DEMO) return Promise.resolve();
   if (refreshing) return refreshing;
   const job = (async () => {
     lastRefreshAt = Date.now();
@@ -3144,6 +3154,7 @@ let fullSyncPending = false;
 
 /** Whether a write is allowed: we've loaded, or we're pushing a cached doc. */
 function canSync(): boolean {
+  if (DEMO) return false;
   return repo.hasBaseline() || fullSyncPending;
 }
 

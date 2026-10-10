@@ -4,6 +4,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  // The demo build is served from wherever it's hosted, not a site root.
+  base: process.env.VITE_DEMO === "1" ? "./" : "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
