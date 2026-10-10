@@ -12,10 +12,13 @@ import { Plus } from "@untitledui/icons";
 export function InlineComposer({
   onAdd,
   placeholder = "Add a topic…",
+  label = "Add",
   compact,
 }: {
   onAdd: (raw: string) => void;
   placeholder?: string;
+  /** What the closed composer says: "Add to Prayer". */
+  label?: string;
   compact?: boolean;
 }) {
   const [draft, setDraft] = useState("");
@@ -39,12 +42,12 @@ export function InlineComposer({
           requestAnimationFrame(() => inputRef.current?.focus());
         }}
         className={cx(
-          "flex w-full items-center gap-1 rounded-md px-1.5 text-left text-caption text-quaternary transition hover:bg-tertiary hover:text-stone-600 dark:hover:text-stone-300",
-          compact ? "py-1" : "py-1.5"
+          "flex w-full items-center gap-1.5 rounded-[9px] px-2 text-left text-[12.5px] text-quaternary transition hover:bg-tertiary hover:text-secondary touch:min-h-11",
+          compact ? "h-8" : "h-9"
         )}
       >
-        <Plus className="size-3" />
-        Add
+        <Plus className="size-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
+        <span className="truncate">{label}</span>
       </button>
     );
   }
@@ -55,7 +58,7 @@ export function InlineComposer({
         e.preventDefault();
         commit();
       }}
-      className="px-0.5 py-0.5"
+      className="relative"
     >
       <input
         ref={inputRef}
@@ -80,9 +83,16 @@ export function InlineComposer({
           }
         }}
         className={cx(
-          "w-full rounded-md border border-teal-400 bg-primary px-1.5 py-1 text-xs text-stone-800 outline-none placeholder:text-quaternary dark:text-stone-100"
+          "w-full rounded-[10px] border border-teal-300 bg-primary pr-7 pl-2.5 text-[13px] text-primary shadow-[0_0_0_3px_var(--color-teal-50)] outline-none placeholder:text-quaternary dark:border-teal-700 dark:shadow-none",
+          compact ? "h-9" : "h-10"
         )}
       />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 font-mono text-[10px] text-quaternary"
+      >
+        ↵
+      </span>
     </form>
   );
 }

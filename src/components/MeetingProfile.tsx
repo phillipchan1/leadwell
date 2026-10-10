@@ -1,39 +1,56 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import type { MeetingRhythm, MeetingRole, TrackedMeeting } from "../types";
-import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
-import { SectionTitle, TintBadge } from "./ui";
-import { MeetingPlanner } from "./MeetingPlanner";
+import { AddOneOff, MeetingPlanner } from "./MeetingPlanner";
+import { weekName } from "./TopicBoard";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
 import { MeetingScheduleFields } from "./MeetingScheduleFields";
 import { CurriculumEditor } from "./CurriculumEditor";
 import { TagManager } from "./TagManager";
 import { confirmAction } from "./ConfirmDialog";
+import { Avatar } from "./Avatar";
+import { RhythmRing, STATE_TEXT } from "./brand/glyphs";
 import {
   RHYTHM_LABEL,
   RHYTHM_OPTIONS,
-  STATE_COLOR,
   STATE_LABEL,
+  daysBetween,
   formatCountdown,
   meetingSubjectName,
   meetingTitle,
   readinessOf,
+  todayISO,
 } from "../lib/readiness";
-import { looseTopics, topicsFor } from "../lib/topics";
+import {
+  boardLayout,
+  curriculumOf,
+  ensureSessionId,
+  slotDotClass,
+  topicsFor,
+  type Slot,
+} from "../lib/topics";
 import type { Density } from "./EntitySurface";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { entityModeFor, modeSection } from "../lib/entityModes";
+import { Play } from "@untitledui/icons";
+import { cx } from "@/utils/cx";
 
 const ROLE_OPTIONS: { label: string; value: MeetingRole }[] = [
   { label: "I convene it", value: "convene" },
   { label: "I attend it", value: "attend" },
 ];
+
+const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
 
 /**
  * One recurring meeting, as a thing in its own right.
@@ -41,8 +58,8 @@ const ROLE_OPTIONS: { label: string; value: MeetingRole }[] = [
  * This is the surface the whole feature turned on. Topics used to hang off a
  * person, which meant a staff meeting had nowhere to keep them and a team had
  * no board at all — so the meeting itself had to become somewhere you can
- * stand. Plan is the board, Notes is the history, Settings is what makes it
- * recurring.
+ * stand. Plan is the board, Write-ups is the history, Settings is what makes
+ * it recurring.
  */
 export function MeetingProfile({
   meeting,
@@ -59,143 +76,401 @@ export function MeetingProfile({
   const section = useStore((s) => s.section);
   const setSection = useStore((s) => s.setSection);
   const openSession = useStore((s) => s.openSession);
+  const addSession = useStore((s) => s.addSession);
+  const addExtraOccurrence = useStore((s) => s.addExtraOccurrence);
   const updateMeeting = useStore((s) => s.updateMeeting);
   const untrackMeeting = useStore((s) => s.untrackMeeting);
   const clearSelection = useStore((s) => s.clearSelection);
-  // Escape closed every other entity panel and not this one.
-  useDismiss(() => clearSelection());
 
-  /* On the five-mode contract now (see lib/entityModes). A meeting carries
-     three of the five: Plan is its `meetings` mode, Write-ups its `notes`, and
-     Settings its `profile`. `now` and `prayer` are omitted deliberately — the
-     contract documents why. */
+  /* On the five-mode contract (see lib/entityModes). A meeting carries three
+     of the five: Plan is its `meetings` mode, Write-ups its `notes`, and
+     Settings its `profile`. */
   const mode = entityModeFor("meeting", section);
-  const pad = density === "focus" ? "p-6" : "p-4";
+  const focus = density === "focus";
+  const pad = focus ? "px-4 sm:px-8" : "px-4 sm:px-6";
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
 
+  // Escape closes the open week first, then the meeting.
+  useDismiss(() => (selectedSlotKey ? setSelectedSlotKey(null) : clearSelection()));
+
   const closeNotes = useCallback(() => setSelectedSlotKey(null), []);
+  const onSelectWeek = useCallback((key: string) => setSelectedSlotKey(key), []);
 
-  const openSessionNotes = useCallback((sessionId: string) => {
-    setSelectedSlotKey(`s:${sessionId}`);
-  }, []);
-
-  const onSelectWeek = useCallback((slotKey: string) => {
-    setSelectedSlotKey(slotKey);
-  }, []);
-
+  /*
+   * Changing mode closes any open week — except when the change was made in
+   * order to open one (the header's "Next up", a new one-off), which parks
+   * the week here until the Plan tab is on screen.
+   */
+  const pendingKey = useRef<string | null>(null);
   useEffect(() => {
-    setSelectedSlotKey(null);
+    setSelectedSlotKey(pendingKey.current);
+    pendingKey.current = null;
   }, [mode]);
+  const showWeek = (key: string) => {
+    if (mode === "meetings") {
+      setSelectedSlotKey(key);
+      return;
+    }
+    pendingKey.current = key;
+    setSection(modeSection("meetings"));
+  };
 
   const subjectName = meetingSubjectName(meeting, { people, teams, managers });
   const title = meetingTitle(meeting, subjectName);
-  const readiness = readinessOf(meeting, { meetings: [meeting], sessions, topics });
-  const color = STATE_COLOR[readiness.state];
   const mine = topicsFor(topics, meeting.id);
   const openCount = mine.filter((t) => t.status === "open").length;
-  const loose = looseTopics(topics, sessions, meeting.id);
   const sessionCount = sessions.filter((s) => s.meetingId === meeting.id).length;
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div
-        className={`entity-header shrink-0 border-b border-secondary ${pad}`}
-      >
-        <h2
-          className={`truncate font-semibold tracking-tight text-stone-800 dark:text-stone-100 ${
-            density === "focus" ? "text-2xl" : "text-lg"
-          }`}
-        >
-          {title}
-        </h2>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <TintBadge color={color}>{STATE_LABEL[readiness.state]}</TintBadge>
-          <span className="text-caption text-quaternary">
-            {RHYTHM_LABEL[meeting.rhythm]}
-            {subjectName && ` · with ${subjectName}`}
-            {` · ${formatCountdown(readiness)}`}
-          </span>
-        </div>
-        {loose.length > 0 && (
-          <p className="mt-1 text-caption font-medium text-amber-700 dark:text-amber-500">
-            {loose.length} topic{loose.length === 1 ? "" : "s"} planned for a
-            meeting that's already been and gone.
-          </p>
-        )}
-      </div>
+  const today = todayISO();
+  const layout = useMemo(
+    () => boardLayout(meeting, sessions, topics, today, { ahead: 8 }),
+    [meeting, sessions, topics, today]
+  );
+  const next = layout.weeks.find((w) => !w.slot.past) ?? null;
 
-      <EntityModeTabs
-        subject="meeting"
-        mode={mode}
-        onMode={(next) => setSection(modeSection(next))}
-        counts={{ meetings: openCount, notes: sessionCount }}
+  const start = (slot: Slot) =>
+    openSession(ensureSessionId(meeting.id, slot, sessions, addSession));
+
+  const startLabel = next
+    ? daysBetween(today, next.slot.date) === 0
+      ? "Start today's meeting"
+      : `Start ${weekName(next.slot.date)}`
+    : null;
+
+  const actions = (
+    <>
+      <AddOneOff
+        onAdd={(date) => showWeek(`s:${addExtraOccurrence(meeting.id, date)}`)}
       />
+      {next && startLabel && (
+        <button
+          type="button"
+          onClick={() => start(next.slot)}
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white shadow-xs transition-colors hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400"
+        >
+          <Play aria-hidden className="size-3.5" />
+          {startLabel}
+        </button>
+      )}
+    </>
+  );
 
-      <div className="scroll-contain relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {mode === "meetings" && (
-          <div className={`flex min-h-0 flex-1 flex-col ${pad}`}>
-            <MeetingPlanner
-              meeting={meeting}
-              selectedSlotKey={selectedSlotKey}
-              onSelectWeek={onSelectWeek}
-              onCloseNotes={closeNotes}
-              onOpenSession={openSession}
-              historyView={false}
-            />
-          </div>
-        )}
-
-        {mode === "notes" && (
-          <div className={`min-h-0 flex-1 overflow-y-auto ${pad}`}>
-            <div className="space-y-3">
-              <TrackerLink meetingId={meeting.id} />
-              <SessionHistoryTable
-                meetingId={meeting.id}
-                onOpen={openSessionNotes}
-              />
-            </div>
-          </div>
-        )}
-
-        {mode === "notes" && selectedSlotKey && (
-          <OccurrenceNotesSheet
-            open
-            onClose={closeNotes}
-            label="Meeting notes"
-          >
-            <OccurrenceNotesPanel
-              meeting={meeting}
-              slotKey={selectedSlotKey}
-              onClose={closeNotes}
-              onOpenFullEditor={openSession}
-            />
-          </OccurrenceNotesSheet>
-        )}
-
-        {mode === "profile" && (
-          <MeetingSettings
-            meeting={meeting}
-            title={title}
-            unnamedFallback={subjectName ? `Meeting · ${subjectName}` : "Meeting"}
-            sessionCount={sessionCount}
-            pad={pad}
-            onChange={(patch) => updateMeeting(meeting.id, patch)}
-            onDelete={async () => {
-              if (
-                await confirmAction({
-                  title: `Delete "${title}"?`,
-                  body: `Its ${sessionCount} write-up${sessionCount === 1 ? "" : "s"} and ${mine.length} topic${mine.length === 1 ? "" : "s"} go with it. This can't be undone.`,
-                  confirmLabel: "Delete",
-                })
-              ) {
-                untrackMeeting(meeting.id);
-                clearSelection();
+  return (
+    <div className="scroll-contain relative flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-primary">
+      <header className={cx("entity-header @container shrink-0 pt-6 pb-5", pad)}>
+        <div className="flex flex-col gap-5">
+          <div className="flex items-start gap-4">
+            <Avatar
+              name={subjectName || title}
+              photo={
+                meeting.subjectKind === "person"
+                  ? people.find((p) => p.id === meeting.subjectId)?.photo
+                  : meeting.subjectKind === "manager"
+                    ? managers.find((m) => m.id === meeting.subjectId)?.photo
+                    : undefined
               }
-            }}
+              size={focus ? 60 : 52}
+              className={meeting.subjectKind === "team" ? "!rounded-[15px]" : undefined}
+            />
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <h1 className={cx("name leading-tight", focus ? "text-[34px] sm:text-[38px]" : "text-[28px]")}>
+                {title}
+              </h1>
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] text-secondary">
+                <span>
+                  {RHYTHM_LABEL[meeting.rhythm]}
+                  {meeting.rhythm !== "as_needed" && meeting.anchorWeekday !== undefined
+                    ? ` on ${WEEKDAY[meeting.anchorWeekday]}s`
+                    : ""}
+                </span>
+                {subjectName && (meeting.name?.trim() || meeting.subjectKind === "team") && (
+                  <>
+                    <span aria-hidden className="text-quaternary">·</span>
+                    <span>
+                      with <span className="font-serif text-[15.5px] text-primary">{subjectName}</span>
+                    </span>
+                  </>
+                )}
+                <span aria-hidden className="text-quaternary">·</span>
+                <span>{meeting.role === "attend" ? "you attend" : "you convene"}</span>
+              </p>
+              <PhoneRhythm meeting={meeting} />
+            </div>
+            <div className="flex shrink-0 items-center gap-2 max-md:hidden">{actions}</div>
+          </div>
+
+          <MeetingStatus
+            meeting={meeting}
+            next={next?.slot ?? null}
+            weeks={layout.weeks}
+            ideas={layout.bucket.slice(0, -1).reduce((n, g) => n + g.topics.length, 0)}
+            onRhythm={() => setSection(modeSection("profile"))}
+            onNext={(slot) => showWeek(slot.sessionId ? `s:${slot.sessionId}` : `p:${slot.date}`)}
           />
-        )}
+          <div className="flex flex-wrap gap-2 md:hidden">{actions}</div>
+        </div>
+      </header>
+
+      <div className="sticky top-0 z-20 bg-primary">
+        <EntityModeTabs
+          subject="meeting"
+          mode={mode}
+          onMode={(m) => setSection(modeSection(m))}
+          counts={{ meetings: openCount, notes: sessionCount }}
+        />
       </div>
+
+      {mode === "meetings" && (
+        <div className={cx("flex flex-col pt-5 pb-10", pad)}>
+          <MeetingPlanner
+            meeting={meeting}
+            selectedSlotKey={selectedSlotKey}
+            onSelectWeek={onSelectWeek}
+            onCloseNotes={closeNotes}
+            onOpenSession={openSession}
+            historyView={false}
+            oneOff={false}
+          />
+        </div>
+      )}
+
+      {mode === "notes" && (
+        <div className={cx("flex flex-col gap-4 pt-5 pb-10", pad)}>
+          <TrackerLink meetingId={meeting.id} />
+          <SessionHistoryTable meetingId={meeting.id} onOpen={(id) => setSelectedSlotKey(`s:${id}`)} />
+        </div>
+      )}
+
+      {mode === "notes" && selectedSlotKey && (
+        <OccurrenceNotesSheet open onClose={closeNotes} label="Meeting notes">
+          <OccurrenceNotesPanel
+            meeting={meeting}
+            slotKey={selectedSlotKey}
+            onClose={closeNotes}
+            onOpenFullEditor={openSession}
+            onMaterialized={(id) => setSelectedSlotKey(`s:${id}`)}
+          />
+        </OccurrenceNotesSheet>
+      )}
+
+      {mode === "profile" && (
+        <MeetingSettings
+          meeting={meeting}
+          title={title}
+          unnamedFallback={meetingTitle({ ...meeting, name: undefined }, subjectName)}
+          sessionCount={sessionCount}
+          pad={pad}
+          onChange={(patch) => updateMeeting(meeting.id, patch)}
+          onDelete={async () => {
+            if (
+              await confirmAction({
+                title: `Delete “${title}”?`,
+                body: `Its ${sessionCount} write-up${sessionCount === 1 ? "" : "s"} and ${mine.length} topic${mine.length === 1 ? "" : "s"} go with it. This can't be undone.`,
+                confirmLabel: "Delete",
+              })
+            ) {
+              untrackMeeting(meeting.id);
+              clearSelection();
+            }
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * The three things worth knowing before you plan: is the rhythm holding,
+ * what's on the next one, and which parts of the standing agenda keep getting
+ * skipped.
+ */
+function MeetingStatus({
+  meeting,
+  next,
+  weeks,
+  ideas,
+  onRhythm,
+  onNext,
+}: {
+  meeting: TrackedMeeting;
+  next: Slot | null;
+  weeks: ReturnType<typeof boardLayout>["weeks"];
+  ideas: number;
+  onRhythm: () => void;
+  onNext: (slot: Slot) => void;
+}) {
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const tags = useStore((s) => s.tags);
+  const reading = readinessOf(meeting, { meetings: [meeting], sessions, topics });
+  const curriculum = curriculumOf(meeting);
+  const upcoming = weeks.filter((w) => !w.slot.past);
+  const nextWeek = next ? upcoming.find((w) => w.slot.date === next.date) : undefined;
+  const minutes = curriculum.reduce((n, s) => n + (s.minutes ?? 0), 0);
+  const filledIn = (slotId: string) =>
+    Boolean(nextWeek?.cells.some((c) => c.slotId === slotId && c.topics.length > 0));
+  const planned = curriculum.filter((s) => filledIn(s.id));
+  const openNames = curriculum.filter((s) => !filledIn(s.id)).map((s) => s.label);
+  const plannedAhead = upcoming.reduce((n, w) => n + w.topics.length, 0);
+
+  return (
+    // On a phone the plan is the point; the rhythm rides under the title.
+    <div className="grid overflow-hidden rounded-[16px] border border-secondary bg-primary max-md:hidden @2xl:grid-cols-3">
+      <Cell label="Rhythm" aside={RHYTHM_LABEL[meeting.rhythm].toUpperCase()} onClick={onRhythm}>
+        <span className={cx("inline-flex items-center gap-2.5", STATE_TEXT[reading.state])}>
+          <RhythmRing reading={reading} size={24} />
+          <span className="font-mono text-[13px] font-medium uppercase">{formatCountdown(reading)}</span>
+          <span className="text-[13px] font-semibold">{STATE_LABEL[reading.state]}</span>
+        </span>
+        <p className="text-[13.5px] leading-5 text-secondary">
+          {reading.lastMet
+            ? `Last met ${fmt(reading.lastMet, { weekday: "short", month: "short", day: "numeric" })}.`
+            : "Not met yet."}
+        </p>
+      </Cell>
+
+      <Cell
+        label="Next up"
+        aside={minutes ? `${minutes} MIN` : undefined}
+        onClick={next ? () => onNext(next) : undefined}
+      >
+        {next ? (
+          <>
+            <p className="font-serif text-[19px] leading-6">
+              {fmt(next.date, { weekday: "long", month: "long", day: "numeric" })}
+            </p>
+            {curriculum.length > 0 ? (
+              <>
+                <span className="flex gap-1" aria-hidden>
+                  {curriculum.map((s) => (
+                    <span
+                      key={s.id}
+                      style={{ flexGrow: s.minutes || 1 }}
+                      className={cx(
+                        "h-1.5 basis-0 rounded-full",
+                        filledIn(s.id) ? slotDotClass(curriculum, s.id, tags) : "bg-quaternary"
+                      )}
+                    />
+                  ))}
+                </span>
+                <p className="text-[13px] leading-5 text-secondary">
+                  {planned.length} of {curriculum.length} sections planned
+                  {openNames.length > 0 && openNames.length < curriculum.length
+                    ? `. ${listNames(openNames)} ${openNames.length === 1 ? "is" : "are"} open.`
+                    : "."}
+                </p>
+              </>
+            ) : (
+              <p className="text-[13px] leading-5 text-secondary">
+                {nextWeek?.topics.length
+                  ? `${nextWeek.topics.length} topic${nextWeek.topics.length === 1 ? "" : "s"} planned.`
+                  : "Nothing planned yet."}
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="font-serif text-[19px] leading-6 text-secondary">Nothing coming up</p>
+            <p className="text-[13px] leading-5 text-secondary">
+              Set a rhythm in Settings, or add a one-off date.
+            </p>
+          </>
+        )}
+      </Cell>
+
+      {curriculum.length > 0 && upcoming.length > 0 ? (
+        <Cell label="Coverage" aside={`NEXT ${upcoming.length} ${upcoming.length === 1 ? "WEEK" : "WEEKS"}`}>
+          <div className="grid grid-cols-[minmax(0,auto)_auto_1fr] items-center gap-x-2.5 gap-y-1.5 text-[12.5px]">
+            {curriculum.map((s) => {
+              const filled = upcoming.map((w) =>
+                w.cells.some((c) => c.slotId === s.id && c.topics.length > 0)
+              );
+              const n = filled.filter(Boolean).length;
+              const dot = slotDotClass(curriculum, s.id, tags);
+              return (
+                <div key={s.id} className="contents" title={`${s.label}: planned in ${n} of the next ${filled.length}`}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <i aria-hidden className={cx("size-2 shrink-0 rounded-[2px]", dot)} />
+                    <span className="truncate">{s.label}</span>
+                  </span>
+                  <span aria-hidden className="flex items-end gap-[2.5px]">
+                    {filled.slice(0, 12).map((on, i) => (
+                      <i key={i} className={cx("h-2.5 w-[5px] rounded-[1.5px]", on ? dot : "bg-quaternary")} />
+                    ))}
+                  </span>
+                  <span className="font-mono text-[11px] text-quaternary">
+                    {n}/{filled.length}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Cell>
+      ) : (
+        <Cell label="Ideas">
+          <p className="font-serif text-[19px] leading-6">
+            {ideas} waiting
+          </p>
+          <p className="text-[13px] leading-5 text-secondary">
+            {plannedAhead
+              ? `${plannedAhead} topic${plannedAhead === 1 ? "" : "s"} planned ahead.`
+              : "Nothing planned ahead yet."}
+          </p>
+        </Cell>
+      )}
+    </div>
+  );
+}
+
+/** The rhythm in one line, for a phone, where the status panels don't fit. */
+function PhoneRhythm({ meeting }: { meeting: TrackedMeeting }) {
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  const reading = readinessOf(meeting, { meetings: [meeting], sessions, topics });
+  return (
+    <span className={cx("mt-1 inline-flex items-center gap-2 md:hidden", STATE_TEXT[reading.state])}>
+      <RhythmRing reading={reading} size={18} />
+      <span className="font-mono text-[12px] font-medium uppercase">{formatCountdown(reading)}</span>
+      <span className="text-[12.5px] font-semibold">{STATE_LABEL[reading.state]}</span>
+    </span>
+  );
+}
+
+function listNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+function Cell({
+  label,
+  aside,
+  onClick,
+  children,
+}: {
+  label: string;
+  aside?: string;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  const body = (
+    <>
+      <span className="flex w-full items-center gap-2">
+        <span className="eyebrow">{label}</span>
+        {aside && (
+          <span className="ml-auto shrink-0 font-mono text-[11px] whitespace-nowrap text-quaternary">{aside}</span>
+        )}
+      </span>
+      {children}
+    </>
+  );
+  const cls =
+    "flex min-w-0 flex-col gap-2.5 border-secondary px-5 py-4 text-left not-last:border-b @2xl:not-last:border-r @2xl:not-last:border-b-0";
+  return onClick ? (
+    <button type="button" onClick={onClick} className={cx(cls, "transition-colors hover:bg-secondary")}>
+      {body}
+    </button>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }
 
@@ -220,13 +495,12 @@ function MeetingSettings({
   const setCurriculum = useStore((s) => s.setCurriculum);
 
   return (
-    <div className={`flex flex-col gap-6 ${pad}`}>
-      <section className="space-y-2.5">
-        <SectionTitle>What it's called</SectionTitle>
+    <div className={cx("flex max-w-3xl flex-col gap-8 pt-6 pb-12", pad)}>
+      <SettingsSection title="What it's called">
         <Input
           size="md"
           label="Name"
-          placeholder={`Staff meeting, weekly sync, Practice…`}
+          placeholder="Staff meeting, weekly sync, Practice…"
           hint={`Left blank it's “${unnamedFallback}”.`}
           value={name}
           onChange={setName}
@@ -238,10 +512,9 @@ function MeetingSettings({
             }
           }}
         />
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-2.5">
-        <SectionTitle>How often</SectionTitle>
+      <SettingsSection title="How often">
         <NativeSelect
           size="md"
           label="Rhythm"
@@ -280,45 +553,65 @@ function MeetingSettings({
           onChange={(e) => onChange({ role: e.target.value as MeetingRole })}
           options={ROLE_OPTIONS}
         />
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-2.5">
-        <SectionTitle>Standing agenda</SectionTitle>
-        <p className="text-caption text-quaternary">
-          Every occurrence inherits these slots, in this order. Give one a tag
-          and anything dropped there is labelled automatically — that's what
-          keeps coverage honest without tagging by hand.
-        </p>
+      <SettingsSection
+        title="Standing agenda"
+        note="Every occurrence gets these sections, in this order. Give one a tag and anything placed in it is labelled automatically — that's what keeps coverage honest without tagging by hand."
+      >
         <CurriculumEditor
           slots={meeting.curriculum ?? []}
           onChange={(next) => setCurriculum(meeting.id, next)}
         />
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-2.5">
-        <SectionTitle>Tags</SectionTitle>
-        <p className="text-caption text-quaternary">
-          Shared across every meeting — renaming one here renames it everywhere.
-        </p>
+      <SettingsSection
+        title="Tags"
+        note="Shared across every meeting — renaming one here renames it everywhere."
+      >
         <TagManager />
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-2">
-        <SectionTitle>Where the notes live</SectionTitle>
+      <SettingsSection title="Where the notes live">
         <TrackerLink meetingId={meeting.id} />
-      </section>
+      </SettingsSection>
 
-      <section className="space-y-2">
-        <SectionTitle>Danger zone</SectionTitle>
-        <p className="text-caption text-quaternary">
-          {sessionCount > 0
+      <SettingsSection
+        title="Danger zone"
+        note={
+          sessionCount > 0
             ? `This meeting has ${sessionCount} write-up${sessionCount === 1 ? "" : "s"}. Consider switching it to As needed instead — history is worth keeping even when the rhythm stops.`
-            : "Nothing has been logged against this meeting yet."}
-        </p>
-        <Button size="sm" color="secondary-destructive" onClick={onDelete}>
-          Delete "{title}"
-        </Button>
-      </section>
+            : "Nothing has been logged against this meeting yet."
+        }
+      >
+        <button
+          type="button"
+          onClick={onDelete}
+          className="inline-flex h-9 items-center self-start rounded-[9px] border border-cond-critical/40 px-3.5 text-[13px] font-semibold text-cond-critical-ink transition-colors hover:bg-cond-critical-soft"
+        >
+          Delete “{title}”
+        </button>
+      </SettingsSection>
     </div>
+  );
+}
+
+function SettingsSection({
+  title,
+  note,
+  children,
+}: {
+  title: string;
+  note?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 className="eyebrow">{title}</h2>
+        {note && <p className="max-w-[60ch] text-[13px] leading-5 text-tertiary">{note}</p>}
+      </div>
+      {children}
+    </section>
   );
 }

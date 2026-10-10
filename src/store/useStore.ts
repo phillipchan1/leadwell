@@ -2424,15 +2424,20 @@ export const useStore = create<Store>((set, get) => ({
     const topic = get().topics.find((t) => t.id === id);
     if (!topic) return null;
 
-    // "Beside it" is what the user can see: the same slot on the board, or the
-    // same lane. Reordering against the whole meeting would move a card past
-    // rows that aren't on screen.
+    // "Beside it" is what the user can see: the same section of the same week
+    // on the board, or the same lane. Reordering against the whole meeting
+    // would move a card past rows that aren't on screen, and the card would
+    // visibly refuse to budge.
+    const curriculum =
+      get().meetings.find((m) => m.id === topic.meetingId)?.curriculum ?? [];
+    const row = effectiveSlotId(topic, curriculum);
     const siblings = get()
       .topics.filter(
         (t) =>
           t.meetingId === topic.meetingId &&
           t.sessionId === topic.sessionId &&
           (t.sessionId ? true : t.lane === topic.lane) &&
+          effectiveSlotId(t, curriculum) === row &&
           (topic.status === "open" ? t.status === "open" : t.status !== "open")
       )
       .sort((a, b) => a.order - b.order);

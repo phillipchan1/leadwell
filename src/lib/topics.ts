@@ -100,14 +100,40 @@ const SLOT_DOT = [
   "bg-tag6",
 ] as const;
 
-export function slotChipClass(curriculum: CurriculumSlot[], slotId?: string): string {
+/**
+ * Which of the six tag colours a section wears.
+ *
+ * A section that carries a tag wears that tag's colour, so Prayer is the same
+ * colour on the board, in the agenda and on the Ideas page. It used to be the
+ * section's position in the list, which painted Prayer green in the staff
+ * meeting and blue everywhere else. Untagged sections fall back to position.
+ */
+export function slotTone(
+  curriculum: CurriculumSlot[],
+  slotId?: string,
+  tags?: { id: string; color: number }[]
+): number {
   const i = curriculum.findIndex((s) => s.id === slotId);
-  return SLOT_CHIP[i < 0 ? 0 : i % SLOT_CHIP.length];
+  const tagId = i >= 0 ? curriculum[i].tagId : undefined;
+  const tag = tagId ? tags?.find((t) => t.id === tagId) : undefined;
+  if (tag) return tag.color % SLOT_DOT.length;
+  return (i < 0 ? 0 : i) % SLOT_DOT.length;
 }
 
-export function slotDotClass(curriculum: CurriculumSlot[], slotId?: string): string {
-  const i = curriculum.findIndex((s) => s.id === slotId);
-  return SLOT_DOT[i < 0 ? 0 : i % SLOT_DOT.length];
+export function slotChipClass(
+  curriculum: CurriculumSlot[],
+  slotId?: string,
+  tags?: { id: string; color: number }[]
+): string {
+  return SLOT_CHIP[slotTone(curriculum, slotId, tags)];
+}
+
+export function slotDotClass(
+  curriculum: CurriculumSlot[],
+  slotId?: string,
+  tags?: { id: string; color: number }[]
+): string {
+  return SLOT_DOT[slotTone(curriculum, slotId, tags)];
 }
 
 /** One occurrence on the planner — a real session, or a date we expect. */

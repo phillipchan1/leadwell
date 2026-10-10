@@ -782,7 +782,11 @@ export function meetingTitle(
 ): string {
   const name = meeting.name?.trim();
   if (name) return name;
-  return subjectName ? `Meeting · ${subjectName}` : "Meeting";
+  if (!subjectName) return "Meeting";
+  // Said the way you'd say it: "1:1 with Sarah", "Frontier Staff meeting".
+  return meeting.subjectKind === "team"
+    ? `${subjectName} meeting`
+    : `1:1 with ${subjectName}`;
 }
 
 /** Who or what a meeting is with. Named things only — the id is never shown. */

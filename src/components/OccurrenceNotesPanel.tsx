@@ -1,315 +1,381 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Session, TrackedMeeting } from "../types";
-import { RHYTHM_LABEL, todayISO } from "../lib/readiness";
+import {
+  RHYTHM_LABEL,
+  daysBetween,
+  meetingSubjectName,
+  meetingTitle,
+  todayISO,
+} from "../lib/readiness";
 import { cx } from "@/utils/cx";
 import { useStore } from "../store/useStore";
-import { Input } from "@/components/base/input/input";
-import { parseColumnKey, topicsFor, type Slot } from "../lib/topics";
-import { seedNotesFromTopics } from "../lib/sessionNotes";
+import { parseColumnKey, plannedSlots } from "../lib/topics";
 import { SessionAgenda } from "./SessionAgenda";
 import { SessionEditor } from "./SessionEditor";
-import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
-import { Expand01, X } from "@untitledui/icons";
+import { Calendar, Expand01, Play, X } from "@untitledui/icons";
 
+const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
+
+/**
+ * The occurrence a key names: the session it points at, or whatever is on the
+ * books for that date. A skipped week still resolves — to its skipped
+ * session — so the panel can say so and offer it back.
+ */
 function resolveSession(
   meetingId: string,
   slotKey: string,
-  sessions: ReturnType<typeof useStore.getState>["sessions"]
-) {
+  sessions: Session[]
+): { session: Session | null; date: string | null } {
   const target = parseColumnKey(slotKey);
   if (target.kind === "session") {
-    return sessions.find((s) => s.id === target.sessionId) ?? null;
+    const session = sessions.find((s) => s.id === target.sessionId) ?? null;
+    return { session, date: session?.date ?? null };
   }
   if (target.kind === "projected") {
-    return (
-      sessions.find(
-        (s) => s.meetingId === meetingId && s.date === target.date && s.kind !== "skipped"
-      ) ?? null
-    );
+    const onDay = sessions.filter((s) => s.meetingId === meetingId && s.date === target.date);
+    const session = onDay.find((s) => s.kind !== "skipped") ?? onDay[0] ?? null;
+    return { session, date: target.date };
   }
-  return null;
-}
-
-function resolveSlot(
-  meetingId: string,
-  slotKey: string,
-  sessions: ReturnType<typeof useStore.getState>["sessions"]
-): Slot | null {
-  const target = parseColumnKey(slotKey);
-  if (target.kind === "session") {
-    const session = sessions.find((s) => s.id === target.sessionId);
-    if (!session) return null;
-    const today = new Date().toISOString().slice(0, 10);
-    return {
-      sessionId: session.id,
-      date: session.date,
-      projected: false,
-      past: session.date < today,
-    };
-  }
-  if (target.kind === "projected") {
-    const today = new Date().toISOString().slice(0, 10);
-    const existing = sessions.find(
-      (s) => s.meetingId === meetingId && s.date === target.date
-    );
-    return {
-      sessionId: existing?.id ?? null,
-      date: target.date,
-      projected: !existing,
-      past: target.date < today,
-    };
-  }
-  return null;
+  return { session: null, date: null };
 }
 
 /**
- * Notes and agenda for one occurrence — the dedicated write-up surface.
+ * One occurrence: when it is, what's on it, and the write-up.
+ *
+ * Opening a week only looks at it. Nothing is booked until something goes in
+ * — a topic, a note, a start — at which point `ensure` makes the occurrence
+ * real and tells the host its new key.
  */
 export function OccurrenceNotesPanel({
   meeting,
   slotKey,
   onClose,
   onOpenFullEditor,
+  onMaterialized,
 }: {
   meeting: TrackedMeeting;
   slotKey: string;
   onClose?: () => void;
   onOpenFullEditor?: (sessionId: string) => void;
+  /** The occurrence just became a real session. */
+  onMaterialized?: (sessionId: string, date: string) => void;
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
   const updateSession = useStore((s) => s.updateSession);
-  const session = useMemo(
+  const addSession = useStore((s) => s.addSession);
+  const addExtraOccurrence = useStore((s) => s.addExtraOccurrence);
+  const today = todayISO();
+
+  const { session, date } = useMemo(
     () => resolveSession(meeting.id, slotKey, sessions),
     [meeting.id, slotKey, sessions]
   );
-  const slot = useMemo(
-    () => resolveSlot(meeting.id, slotKey, sessions),
-    [meeting.id, slotKey, sessions]
-  );
-  const [notes, setNotes] = useState(session?.notes ?? "");
 
+  // Is this date one the rhythm draws? If not, writing into it logs a one-off.
+  const onRhythm = useMemo(
+    () =>
+      Boolean(date) &&
+      plannedSlots(meeting, sessions, topics, today, 26).some((s) => s.date === date),
+    [meeting, sessions, topics, today, date]
+  );
+
+  const [notes, setNotes] = useState(session?.notes ?? "");
   useEffect(() => {
-    if (!session) return;
-    setNotes(session.notes ?? "");
+    setNotes(session?.notes ?? "");
   }, [session?.id, session?.notes]);
 
-  useEffect(() => {
-    if (!session) return;
-    const seeded = seedNotesFromTopics(
-      session,
-      topicsFor(topics, meeting.id),
-      meeting.curriculum ?? []
-    );
-    if (seeded) {
-      updateSession(session.id, { notes: seeded });
-      setNotes(seeded);
-    }
-  }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!date) return null;
 
-  if (!session || !slot) return null;
+  const ensure = (): string => {
+    if (session && session.kind !== "skipped") return session.id;
+    const id = onRhythm
+      ? addSession({ meetingId: meeting.id, date })
+      : addExtraOccurrence(meeting.id, date);
+    onMaterialized?.(id, date);
+    return id;
+  };
 
-  const skipped = session.kind === "skipped";
+  const skipped = session?.kind === "skipped";
+  const subjectName = meetingSubjectName(meeting, { people, teams, managers });
+  const title = meetingTitle(meeting, subjectName);
 
   return (
     <div className="occurrence-notes-panel flex h-full min-h-0 flex-col bg-primary">
-      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-secondary px-4 py-3">
-        <OccurrenceWhen
-          meeting={meeting}
-          session={session}
-          onGone={onClose}
-        />
-        <div className="flex shrink-0 items-center gap-1">
-          {onOpenFullEditor && !skipped && (
-            <ButtonUtility
-              size="sm"
-              color="tertiary"
-              icon={Expand01}
-              tooltip="Full editor"
-              onClick={() => onOpenFullEditor(session.id)}
-            />
-          )}
-          {onClose && (
-            <ButtonUtility
-              size="sm"
-              color="tertiary"
-              icon={X}
-              tooltip="Close"
-              onClick={onClose}
-            />
-          )}
-        </div>
-      </div>
+      <OccurrenceWhen
+        meeting={meeting}
+        title={title}
+        session={session}
+        date={date}
+        onRhythm={onRhythm}
+        onGone={onClose}
+        onClose={onClose}
+        onStart={
+          onOpenFullEditor && !skipped ? () => onOpenFullEditor(ensure()) : undefined
+        }
+      />
 
       {skipped ? (
-        <p className="px-4 py-8 text-center text-sm text-quaternary">
-          This week isn't happening. Anything planned for it went back to Ideas.
-        </p>
+        <div className="flex flex-col items-start gap-1.5 px-5 py-8">
+          <p className="font-serif text-[19px] text-secondary italic">This week isn't happening.</p>
+          <p className="text-[13px] text-tertiary">
+            Anything planned for it went back to Ideas.
+          </p>
+        </div>
       ) : (
-      <div className="scroll-contain min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <SessionAgenda session={session} meeting={meeting} />
-        <SessionEditor
-          value={notes}
-          onChange={(value) => {
-            setNotes(value);
-            updateSession(session.id, {
-              notes: value.trim() || undefined,
-            });
-          }}
-          sessionId={session.id}
-          placeholder="What did you cover?"
-        />
-      </div>
+        <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
+          <div className="px-5 py-5">
+            <SessionAgenda session={session} meeting={meeting} ensureSession={ensure} />
+          </div>
+          <div className="flex flex-col gap-2 border-t border-secondary px-5 pt-4 pb-6">
+            <span className="eyebrow">Notes</span>
+            <div className="occurrence-notes-editor">
+              <SessionEditor
+                value={notes}
+                onChange={(value) => {
+                  setNotes(value);
+                  const id = value.trim() || session ? ensure() : null;
+                  if (id) updateSession(id, { notes: value.trim() || undefined });
+                }}
+                // Keyed by the occurrence, not the session, so the first
+                // keystroke that books the week doesn't remount the editor.
+                sessionId={`${meeting.id}:${date}`}
+                placeholder="What did you cover? Type / for headings, lists and to-dos."
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-const fmt = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-
 /**
  * When this occurrence is, and changing it the way a calendar does: move just
  * this one, or the series from here on; skip a week; add or remove a one-off.
- *
- * The date used to be a bare input that silently moved the session — and with
- * it, the rhythm, which projected from wherever the last one landed.
  */
 function OccurrenceWhen({
   meeting,
+  title,
   session,
+  date,
+  onRhythm,
   onGone,
+  onClose,
+  onStart,
 }: {
   meeting: TrackedMeeting;
-  session: Session;
+  title: string;
+  session: Session | null;
+  date: string;
+  onRhythm: boolean;
   onGone?: () => void;
+  onClose?: () => void;
+  onStart?: () => void;
 }) {
   const moveOccurrence = useStore((s) => s.moveOccurrence);
   const skipOccurrence = useStore((s) => s.skipOccurrence);
   const restoreOccurrence = useStore((s) => s.restoreOccurrence);
   const [editing, setEditing] = useState(false);
-  const [date, setDate] = useState(session.date);
+  const [to, setTo] = useState(date);
   const today = todayISO();
 
   useEffect(() => {
-    setDate(session.date);
+    setTo(date);
     setEditing(false);
-  }, [session.id, session.date]);
+  }, [session?.id, date]);
 
   const recurring = meeting.rhythm !== "as_needed";
-  const extra = session.kind === "extra";
-  const skipped = session.kind === "skipped";
-  const moved = Boolean(session.seriesDate && session.seriesDate !== session.date && !skipped);
-  // Opening a week seeds an agenda into its notes, so notes alone don't mean
-  // it happened. A future meeting is always movable; a past one only while
-  // nothing was written.
-  const upcoming = session.date >= today;
-  const changeable = upcoming || !session.notes?.trim();
-  const from = { sessionId: session.id, date: session.date };
+  const extra = session?.kind === "extra" || (!session && !onRhythm);
+  const skipped = session?.kind === "skipped";
+  const moved = Boolean(session?.seriesDate && session.seriesDate !== session.date && !skipped);
+  // A future meeting is always movable; a past one only while nothing was
+  // written, because a written-up meeting happened on the day it did.
+  const upcoming = date >= today;
+  const changeable = upcoming || !session?.notes?.trim();
+  const from = { sessionId: session?.id ?? null, date };
 
-  const subtitle = skipped
+  const days = daysBetween(today, date);
+  const when =
+    days === 0
+      ? "Today"
+      : days === 1
+        ? "Tomorrow"
+        : days === -1
+          ? "Yesterday"
+          : days > 0
+            ? `In ${days} days`
+            : `${-days} days ago`;
+  const detail = skipped
     ? "Skipped"
     : extra
-      ? "One-off meeting"
+      ? session
+        ? "One-off"
+        : "Not a regular date"
       : moved
-        ? `Moved from ${fmt(session.seriesDate!)}`
+        ? `Moved from ${fmt(session!.seriesDate!, { weekday: "short", month: "short", day: "numeric" })}`
         : recurring
-          ? RHYTHM_LABEL[meeting.rhythm]
-          : undefined;
+          ? `${RHYTHM_LABEL[meeting.rhythm]} · ${session ? "booked" : "not booked yet"}`
+          : session
+            ? "Booked"
+            : "Not booked yet";
 
   const apply = (scope: "one" | "series") => {
-    if (!date || date === session.date) {
+    if (!to || to === date) {
       setEditing(false);
       return;
     }
-    moveOccurrence(meeting.id, from, date, scope);
+    moveOccurrence(meeting.id, from, to, scope);
     setEditing(false);
   };
 
+  const quiet =
+    "inline-flex h-9 items-center gap-1.5 rounded-[9px] px-2.5 text-[13px] font-semibold text-secondary transition-colors hover:bg-secondary hover:text-primary touch:min-h-11";
+
   return (
-    <div className="min-w-0 flex-1 space-y-2">
-      <div>
-        <p className={cx("text-md font-semibold", skipped ? "text-quaternary line-through" : "text-primary")}>
-          {fmt(session.date)}
-        </p>
-        {subtitle && <p className="text-sm text-tertiary">{subtitle}</p>}
+    <div className="flex shrink-0 flex-col gap-3.5 border-b border-secondary px-5 pt-5 pb-4">
+      <div className="flex items-start gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate font-mono text-[11px] text-quaternary uppercase">
+            {fmt(date, { weekday: "long" })} · {title}
+          </span>
+          <h2
+            className={cx(
+              "font-serif text-[30px] leading-[34px]",
+              skipped && "text-quaternary line-through"
+            )}
+          >
+            {fmt(date, { month: "long", day: "numeric" })}
+          </h2>
+          <span className="text-[13px] text-secondary">
+            {when} · {detail}
+          </span>
+        </div>
+        {onStart && (
+          <ButtonUtility
+            size="sm"
+            color="tertiary"
+            icon={Expand01}
+            tooltip="Open as a full page"
+            onClick={onStart}
+          />
+        )}
+        {onClose && (
+          <ButtonUtility size="sm" color="tertiary" icon={X} tooltip="Close" onClick={onClose} />
+        )}
       </div>
 
       {editing ? (
-        <div className="space-y-2">
-          <Input
-            size="sm"
-            type="date"
-            aria-label="New date"
-            inputClassName="tabular-nums"
-            value={date}
-            onChange={setDate}
-            autoFocus
-          />
+        <div className="flex flex-col gap-2.5 rounded-[12px] bg-secondary p-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] font-semibold text-secondary">Move it to</span>
+            <input
+              type="date"
+              aria-label="New date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              autoFocus
+              onKeyDown={(e) => e.key === "Escape" && setEditing(false)}
+              className="h-9 rounded-[9px] border border-primary bg-primary px-2.5 font-mono text-[12.5px] text-primary outline-none focus:border-teal-400"
+            />
+          </label>
           <div className="flex flex-wrap gap-2">
             {recurring && !extra ? (
               <>
-                <Button size="sm" onClick={() => apply("one")} isDisabled={date === session.date}>
-                  Just this meeting
-                </Button>
-                <Button size="sm" color="secondary" onClick={() => apply("series")} isDisabled={date === session.date}>
-                  All future meetings
-                </Button>
+                <button
+                  type="button"
+                  onClick={() => apply("one")}
+                  disabled={to === date}
+                  className="h-9 rounded-[9px] bg-teal-600 px-3 text-[13px] font-semibold text-white disabled:opacity-50 dark:bg-teal-500 dark:text-stone-950"
+                >
+                  Just this one
+                </button>
+                <button
+                  type="button"
+                  onClick={() => apply("series")}
+                  disabled={to === date}
+                  className="h-9 rounded-[9px] border border-primary bg-primary px-3 text-[13px] font-semibold text-primary disabled:opacity-50"
+                >
+                  This and every one after
+                </button>
               </>
             ) : (
-              <Button size="sm" onClick={() => apply("one")} isDisabled={date === session.date}>
+              <button
+                type="button"
+                onClick={() => apply("one")}
+                disabled={to === date}
+                className="h-9 rounded-[9px] bg-teal-600 px-3 text-[13px] font-semibold text-white disabled:opacity-50 dark:bg-teal-500 dark:text-stone-950"
+              >
                 Move
-              </Button>
+              </button>
             )}
-            <Button size="sm" color="tertiary" onClick={() => setEditing(false)}>
+            <button type="button" onClick={() => setEditing(false)} className={quiet}>
               Cancel
-            </Button>
+            </button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex flex-wrap items-center gap-1.5">
           {skipped ? (
-            <Button size="sm" color="link-color" onClick={() => restoreOccurrence(session.id)}>
+            <button
+              type="button"
+              onClick={() => session && restoreOccurrence(session.id)}
+              className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white dark:bg-teal-500 dark:text-stone-950"
+            >
               Restore this week
-            </Button>
+            </button>
           ) : (
             <>
-              {changeable && (
-                <Button size="sm" color="link-color" onClick={() => setEditing(true)}>
-                  Reschedule
-                </Button>
+              {onStart && (
+                <button
+                  type="button"
+                  onClick={onStart}
+                  className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white shadow-xs transition-colors hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950"
+                >
+                  <Play aria-hidden className="size-3.5" />
+                  {upcoming ? "Start meeting" : "Open write-up"}
+                </button>
               )}
-              {moved && changeable && (
-                <Button size="sm" color="link-gray" onClick={() => restoreOccurrence(session.id)}>
+              {changeable && (
+                <button type="button" onClick={() => setEditing(true)} className={quiet}>
+                  <Calendar aria-hidden className="size-4 text-tertiary" />
+                  Reschedule
+                </button>
+              )}
+              {moved && changeable && session && (
+                <button
+                  type="button"
+                  onClick={() => restoreOccurrence(session.id)}
+                  className={quiet}
+                >
                   Move back
-                </Button>
+                </button>
               )}
               {changeable && recurring && !extra && (
-                <Button
-                  size="sm"
-                  color="link-gray"
+                <button
+                  type="button"
                   onClick={() => skipOccurrence(meeting.id, from)}
+                  className={quiet}
                 >
                   Skip this week
-                </Button>
+                </button>
               )}
-              {extra && changeable && (
-                <Button
-                  size="sm"
-                  color="link-gray"
+              {extra && session && changeable && (
+                <button
+                  type="button"
                   onClick={() => {
                     skipOccurrence(meeting.id, from);
                     onGone?.();
                   }}
+                  className={quiet}
                 >
                   Remove one-off
-                </Button>
+                </button>
               )}
             </>
           )}

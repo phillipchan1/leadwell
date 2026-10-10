@@ -311,7 +311,7 @@ export function MeetingEditor({
             aria-label="Agenda"
             className="w-full border-secondary px-4 pt-6 sm:px-6 lg:w-[340px] lg:shrink-0 lg:border-r lg:pt-8 lg:pb-8"
           >
-            <SessionAgenda session={session} meeting={meeting} />
+            <SessionAgenda session={session} meeting={meeting} ensureSession={() => session.id} />
           </aside>
 
           {/* The write-up */}

@@ -929,11 +929,17 @@ label:focus-within > .field-label,
 /* Occurrence notes side panel */
 
 .occurrence-notes-panel .notion-block-editor {
-  @apply min-h-[40vh];
+  @apply min-h-[12rem];
+}
+
+/* The week panel is a glance-and-jot surface: the Blocks/Markdown switch
+   lives on the full page (and on ⌘⇧M), not in a 30rem column. */
+.occurrence-notes-editor .session-editor-mode-bar {
+  @apply hidden;
 }
 
 .occurrence-notes-aside {
-  @apply flex min-h-0 flex-col bg-white dark:bg-stone-900;
+  @apply flex min-h-0 flex-col;
 }
 
 /* ── Full-screen session editor (Notion-like) ── */

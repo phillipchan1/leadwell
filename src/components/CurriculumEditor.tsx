@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CurriculumSlot } from "../types";
 import { useStore } from "../store/useStore";
 import { Input } from "@/components/base/input/input";
@@ -60,19 +60,17 @@ export function CurriculumEditor({
     <div className="space-y-2">
       {slots.length === 0 && (
         <p className="text-caption text-quaternary">
-          No standing slots yet. Add the shape of this meeting — Prayer,
-          Training, Discussion — and empty cells will show up every week.
+          No sections yet. Add the shape of this meeting — Prayer, Training,
+          Discussion — and every week on the board gets a row for each.
         </p>
       )}
       <ul className="space-y-1.5">
         {slots.map((slot, i) => (
           <li key={slot.id} className="flex items-center gap-1">
-            <Input
-              size="sm"
-              aria-label={`Slot ${i + 1} name`}
-              value={slot.label}
-              onChange={(value) => rename(slot.id, value)}
-              className="min-w-0 flex-1"
+            <SlotName
+              label={slot.label}
+              index={i}
+              onCommit={(value) => rename(slot.id, value)}
             />
             <label className="shrink-0">
               <span className="sr-only">Tag for {slot.label || "slot"}</span>
@@ -125,7 +123,7 @@ export function CurriculumEditor({
               size="xs"
               color="tertiary"
               icon={X}
-              tooltip="Remove slot"
+              tooltip="Remove section"
               onClick={() => remove(slot.id)}
             />
           </li>
@@ -140,8 +138,8 @@ export function CurriculumEditor({
       >
         <Input
           size="sm"
-          placeholder="Add a slot…"
-          aria-label="New curriculum slot"
+          placeholder="Add a section…"
+          aria-label="New section"
           value={draft}
           onChange={setDraft}
           className="min-w-0 flex-1"
@@ -157,5 +155,51 @@ export function CurriculumEditor({
         </Button>
       </form>
     </div>
+  );
+}
+
+/**
+ * A section's name, committed when you leave the field.
+ *
+ * It used to write every keystroke straight to the meeting, and the meeting
+ * drops sections with no name — so selecting the name to retype it deleted
+ * the section, and untagged everything in it, before the first new letter
+ * landed. A blank name now just puts the old one back.
+ */
+function SlotName({
+  label,
+  index,
+  onCommit,
+}: {
+  label: string;
+  index: number;
+  onCommit: (value: string) => void;
+}) {
+  const [value, setValue] = useState(label);
+  useEffect(() => setValue(label), [label]);
+  const commit = () => {
+    const next = value.trim();
+    if (!next) {
+      setValue(label);
+      return;
+    }
+    if (next !== label) onCommit(next);
+  };
+  return (
+    <Input
+      size="sm"
+      aria-label={`Section ${index + 1} name`}
+      value={value}
+      onChange={setValue}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
+        if (e.key === "Escape") setValue(label);
+      }}
+      className="min-w-0 flex-1"
+    />
   );
 }

@@ -79,6 +79,7 @@ export function MeetingCalendar({
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
+  const tags = useStore((s) => s.tags);
   const addSession = useStore((s) => s.addSession);
   const placeTopic = useStore((s) => s.placeTopic);
   const today = todayISO();
@@ -108,41 +109,41 @@ export function MeetingCalendar({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <ButtonUtility
-          size="sm"
-          color="tertiary"
-          icon={ChevronLeft}
-          tooltip="Previous month"
-          onClick={() => setMonth((m) => shiftMonth(m, -1))}
-        />
-        <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">
-          {monthLabel(month)}
-        </span>
-        <ButtonUtility
-          size="sm"
-          color="tertiary"
-          icon={ChevronRight}
-          tooltip="Next month"
-          onClick={() => setMonth((m) => shiftMonth(m, 1))}
-        />
-        {month !== currentMonth(today) && (
-          <Button
+      <div className="flex items-center gap-1">
+        <h3 className="font-serif text-[22px] leading-7">{monthLabel(month)}</h3>
+        <span className="ml-auto flex items-center gap-1">
+          {month !== currentMonth(today) && (
+            <Button
+              size="sm"
+              color="link-gray"
+              className="mr-2 shrink-0"
+              onClick={() => setMonth(currentMonth(today))}
+            >
+              Today
+            </Button>
+          )}
+          <ButtonUtility
             size="sm"
-            color="link-gray"
-            className="ml-auto shrink-0"
-            onClick={() => setMonth(currentMonth(today))}
-          >
-            Today
-          </Button>
-        )}
+            color="tertiary"
+            icon={ChevronLeft}
+            tooltip="Previous month"
+            onClick={() => setMonth((m) => shiftMonth(m, -1))}
+          />
+          <ButtonUtility
+            size="sm"
+            color="tertiary"
+            icon={ChevronRight}
+            tooltip="Next month"
+            onClick={() => setMonth((m) => shiftMonth(m, 1))}
+          />
+        </span>
       </div>
 
-      <div className="grid min-h-[32rem] flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(0,1fr))] gap-px overflow-hidden rounded-xl border border-secondary bg-stone-200 dark:bg-stone-800">
+      <div className="grid min-h-[32rem] flex-1 grid-cols-7 grid-rows-[auto_repeat(6,minmax(0,1fr))] gap-px overflow-hidden rounded-[16px] border border-secondary bg-[var(--color-border-secondary)]">
         {WEEKDAYS.map((d) => (
           <div
             key={d}
-            className="bg-secondary px-2 py-1.5 text-[11px] font-medium text-quaternary"
+            className="bg-primary px-2.5 pt-2.5 pb-1.5 font-mono text-[10.5px] text-quaternary uppercase"
           >
             {d}
           </div>
@@ -162,6 +163,7 @@ export function MeetingCalendar({
               day={day}
               today={today}
               curriculum={curriculum}
+              tags={tags}
               occurrenceLabel={occurrenceLabel}
               selected={selected}
               onSelect={() => openDay(day)}
@@ -172,15 +174,14 @@ export function MeetingCalendar({
 
       {(unscheduled.backlog.length > 0 || unscheduled.parked.length > 0) && (
         <div className="space-y-2">
-          <p className="text-caption font-semibold tracking-wide text-stone-400 uppercase dark:text-stone-500">
-            Unscheduled
-          </p>
+          <p className="eyebrow">Ideas not on a date yet</p>
           <div className="flex flex-wrap gap-1.5">
             {unscheduled.backlog.map((t) => (
               <UnscheduledChip
                 key={t.id}
                 text={t.text}
                 tag={slotLabelOf(curriculum, t.slotId)}
+                dot={t.slotId ? slotDotClass(curriculum, t.slotId, tags) : undefined}
                 onPlace={(date) => {
                   const day = grid.find((d) => d.date === date);
                   if (!day) return;
@@ -189,16 +190,20 @@ export function MeetingCalendar({
                     addSession({ meetingId: meeting.id, date: day.date });
                   placeTopic(t.id, { sessionId, slotId: t.slotId });
                 }}
-                dates={grid.filter((d) => d.inMonth).map((d) => d.date)}
+                // Only days this meeting actually happens, and not ones
+                // already gone — anything else would invent a meeting.
+                dates={grid
+                  .filter((d) => d.inMonth && d.slot && !d.slot.past)
+                  .map((d) => d.date)}
               />
             ))}
             {unscheduled.parked.map((t) => (
               <span
                 key={t.id}
-                className="max-w-full truncate rounded-md border border-dashed border-primary px-2 py-0.5 text-caption text-quaternary"
-                title={t.text}
+                className="max-w-full truncate rounded-[7px] border border-dashed border-primary px-2 py-1 text-[12px] text-quaternary"
+                title={`Parked: ${t.text}`}
               >
-                {t.text}
+                Parked · {t.text}
               </span>
             ))}
           </div>
@@ -214,6 +219,7 @@ function CalendarCell({
   selected,
   onSelect,
   curriculum,
+  tags,
   occurrenceLabel,
 }: {
   day: CalendarDay;
@@ -221,6 +227,7 @@ function CalendarCell({
   selected: boolean;
   onSelect: () => void;
   curriculum: ReturnType<typeof curriculumOf>;
+  tags: { id: string; color: number }[];
   occurrenceLabel: string;
 }) {
   const isToday = day.date === today;
@@ -229,60 +236,58 @@ function CalendarCell({
   const empty = day.topics.length === 0;
   const shown = day.topics.slice(0, 3);
   const extra = day.topics.length - shown.length;
+  const open = day.topics.filter((t) => t.status === "open").length;
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      aria-label={`Open ${dateLabel(day.date)}`}
+      aria-label={`Open ${dateLabel(day.date)}${hasOccurrence ? ` — ${occurrenceLabel}` : ""}`}
       aria-pressed={selected}
       className={cx(
-        "group relative flex min-h-[4.75rem] flex-col gap-0.5 bg-primary p-1.5 text-left transition",
-        "hover:bg-stone-50 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-500 dark:hover:bg-stone-800/70",
-        !day.inMonth && "bg-stone-50/80 opacity-50 dark:bg-stone-950/40",
-        selected && "z-[1] bg-teal-50/40 ring-2 ring-inset ring-teal-500 dark:bg-teal-950/20 dark:ring-teal-600"
+        "group relative flex min-h-[5.25rem] flex-col gap-1 p-2 text-left transition-colors",
+        "focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600",
+        day.inMonth ? "bg-primary hover:bg-secondary" : "bg-secondary/70 hover:bg-secondary",
+        selected && "z-[1] !bg-teal-50 ring-2 ring-teal-600 ring-inset dark:!bg-teal-950/40 dark:ring-teal-500"
       )}
     >
       <span className="flex items-start justify-between gap-1">
         <span
           className={cx(
             "inline-flex size-6 items-center justify-center rounded-full text-[13px] tabular-nums",
-            isToday && "bg-teal-600 font-semibold text-white",
-            !isToday && "text-stone-600 dark:text-stone-300"
+            isToday
+              ? "bg-teal-600 font-semibold text-white dark:bg-teal-500 dark:text-stone-950"
+              : !day.inMonth
+                ? "text-quaternary"
+                : hasOccurrence
+                  ? "font-semibold text-primary"
+                  : "text-tertiary"
           )}
         >
           {dayNumber(day.date)}
         </span>
-        <span
-          className={cx(
-            "grid size-5 shrink-0 place-items-center rounded text-stone-400 transition-opacity",
-            empty
-              ? "opacity-70 group-hover:opacity-100 group-focus-visible:opacity-100"
-              : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-          )}
+        <Plus
           aria-hidden
-        >
-          <Plus className="size-3.5" />
-        </span>
+          className="size-3.5 shrink-0 text-quaternary opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        />
       </span>
 
-      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+      <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">
         {shown.map((t) => (
           <li
             key={t.id}
             className={cx(
-              "flex items-center gap-1 truncate rounded-sm px-1 py-0.5 text-[11px] leading-snug",
-              past
-                ? "bg-amber-50 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"
-                : "bg-teal-50 text-teal-900 dark:bg-teal-950/40 dark:text-teal-200"
+              "flex items-center gap-1.5 truncate rounded-[6px] px-1.5 py-[3px] text-[11.5px] leading-snug",
+              t.status !== "open"
+                ? "text-quaternary line-through"
+                : past
+                  ? "bg-cond-watch-soft text-cond-watch-ink"
+                  : "bg-secondary text-primary"
             )}
           >
             {t.slotId && (
-              <span
-                className={cx(
-                  "size-1.5 shrink-0 rounded-full",
-                  slotDotClass(curriculum, t.slotId)
-                )}
+              <i
+                className={cx("size-1.5 shrink-0 rounded-[1.5px]", slotDotClass(curriculum, t.slotId, tags))}
                 aria-hidden
               />
             )}
@@ -292,19 +297,22 @@ function CalendarCell({
         {hasOccurrence && empty && (
           <li
             className={cx(
-              "truncate rounded-sm px-1 py-0.5 text-[11px] leading-snug",
+              "truncate rounded-[6px] px-1.5 py-[3px] text-[11.5px] leading-snug",
               day.slot?.projected
-                ? "border border-dashed border-teal-300 text-teal-700/80 dark:border-teal-700 dark:text-teal-400/80"
-                : "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-200"
+                ? "border border-dashed border-teal-300 text-teal-800 dark:border-teal-700 dark:text-teal-300"
+                : "bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
             )}
           >
             {occurrenceLabel}
           </li>
         )}
         {extra > 0 && (
-          <li className="px-1 text-[11px] text-quaternary">+{extra} more</li>
+          <li className="px-1.5 font-mono text-[10.5px] text-quaternary">+{extra} MORE</li>
         )}
       </ul>
+      {past && open > 0 && (
+        <span className="sr-only">{open} not covered</span>
+      )}
     </button>
   );
 }
@@ -312,25 +320,29 @@ function CalendarCell({
 function UnscheduledChip({
   text,
   tag,
+  dot,
   dates,
   onPlace,
 }: {
   text: string;
   tag?: string;
+  dot?: string;
   dates: string[];
   onPlace: (date: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
   const label = tag ? `${tag} · ${text}` : text;
+  const square = dot ? <i aria-hidden className={cx("size-2 shrink-0 rounded-[2px]", dot)} /> : null;
 
   if (!dates.length) {
     return (
       <span
-        className="max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 dark:text-stone-300"
+        className="inline-flex max-w-full items-center gap-1.5 truncate rounded-[7px] border border-secondary bg-primary px-2 py-1 text-[12px] text-secondary"
         title={label}
       >
-        {label}
+        {square}
+        <span className="truncate">{text}</span>
       </span>
     );
   }
@@ -339,14 +351,16 @@ function UnscheduledChip({
     <span className="relative inline-block max-w-full">
       <button
         type="button"
-        className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 max-w-full truncate rounded-md bg-tertiary px-2 py-0.5 text-caption text-stone-600 hover:bg-stone-200 dark:text-stone-300 dark:hover:bg-stone-700"
-        title={`Schedule: ${label}`}
+        className="outline-focus-ring inline-flex max-w-full items-center gap-1.5 truncate rounded-[7px] border border-secondary bg-primary px-2 py-1 text-[12px] text-secondary transition-colors hover:border-teal-300 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3"
+        title={`Put “${label}” on a date`}
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        {label}
+        {square}
+        <span className="truncate">{text}</span>
       </button>
       {open && (
-        <ul className="absolute z-10 mt-1 max-h-40 w-48 overflow-y-auto rounded-lg border border-stone-200 bg-primary py-1 shadow-lg dark:border-stone-700">
+        <ul className="absolute z-10 mt-1 max-h-48 w-52 overflow-y-auto rounded-[12px] border border-secondary bg-primary py-1 shadow-lg">
           {dates.map((d) => (
             <li key={d}>
               <button

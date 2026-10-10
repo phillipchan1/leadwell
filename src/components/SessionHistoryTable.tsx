@@ -7,15 +7,14 @@ import {
 } from "../lib/session";
 import { topicsFor } from "../lib/topics";
 import { daysBetween, todayISO } from "../lib/readiness";
-import { Badge } from "@/components/base/badges/badges";
-import { tableRowActivationProps } from "@/lib/rowActivation";
+import { cx } from "@/utils/cx";
 
-const STATUS_COLOR: Record<string, "sky" | "warning" | "success" | "gray"> = {
-  scheduled: "sky",
-  needs_notes: "warning",
-  done: "success",
-  elsewhere: "gray",
-  skipped: "gray",
+const STATUS_CHIP: Record<string, string> = {
+  scheduled: "bg-teal-50 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300",
+  needs_notes: "bg-cond-watch-soft text-cond-watch-ink",
+  done: "bg-cond-thriving-soft text-cond-thriving-ink",
+  elsewhere: "bg-secondary text-tertiary",
+  skipped: "bg-secondary text-quaternary line-through",
 };
 
 function whenHint(date: string, today: string): string {
@@ -26,6 +25,9 @@ function whenHint(date: string, today: string): string {
   if (days > 1) return `in ${days}d`;
   return `${Math.abs(days)}d ago`;
 }
+
+const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
 
 /**
  * Every logged occurrence — past, today, and upcoming. Click a row to open
@@ -69,91 +71,90 @@ export function SessionHistoryTable({
   const upcoming = rows.filter((r) => r.date > today).reverse();
 
   const renderRow = (row: (typeof rows)[number]) => {
-            const status = sessionStatus(row, notesElsewhere, today);
-            const summary = sessionSummary(row);
-            const count = topicCounts.get(row.id) ?? 0;
-            return (
-              <tr
-                key={row.id}
-                {...tableRowActivationProps(() => onOpen(row.id), {
-                  label: `Open the write-up for ${row.date}`,
+    const status = sessionStatus(row, notesElsewhere, today);
+    const summary = sessionSummary(row, 140);
+    const count = topicCounts.get(row.id) ?? 0;
+    const moved = row.kind !== "skipped" && row.seriesDate && row.seriesDate !== row.date;
+    const meta = [
+      whenHint(row.date, today),
+      row.kind === "extra" ? "one-off" : null,
+      moved ? `moved from ${fmt(row.seriesDate!, { weekday: "short" })}` : null,
+      count ? `${count} topic${count === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
+    return (
+      <li key={row.id}>
+        <button
+          type="button"
+          onClick={() => onOpen(row.id)}
+          aria-label={`Open the write-up for ${fmt(row.date, { weekday: "long", month: "long", day: "numeric" })}`}
+          className="flex w-full items-start gap-4 px-4 py-3.5 text-left transition-colors hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
+        >
+          <span className="flex w-14 shrink-0 flex-col">
+            <span className="font-mono text-[10.5px] text-quaternary">
+              {fmt(row.date, { weekday: "short" }).toUpperCase()}
+            </span>
+            <span className="flex items-baseline gap-1">
+              <span className="font-serif text-[22px] leading-7">{Number(row.date.slice(8, 10))}</span>
+              <span className="text-[12px] text-tertiary">
+                {fmt(row.date, {
+                  month: "short",
+                  year: row.date.slice(0, 4) === today.slice(0, 4) ? undefined : "2-digit",
                 })}
-                className="cursor-pointer transition-colors hover:bg-secondary focus-visible:bg-secondary"
-              >
-                <td className="px-3 py-2.5 whitespace-nowrap tabular-nums text-secondary">
-                  {new Date(`${row.date}T00:00:00Z`).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    year: row.date.slice(0, 4) === today.slice(0, 4) ? undefined : "numeric",
-                    timeZone: "UTC",
-                  })}
-                  <span className="ml-1.5 text-quaternary">
-                    {whenHint(row.date, today)}
-                  </span>
-                  {row.kind === "extra" && (
-                    <span className="ml-1.5 text-brand-secondary">· One-off</span>
-                  )}
-                  {row.kind !== "skipped" && row.seriesDate && row.seriesDate !== row.date && (
-                    <span className="ml-1.5 text-brand-secondary">
-                      · moved from{" "}
-                      {new Date(`${row.seriesDate}T00:00:00Z`).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        timeZone: "UTC",
-                      })}
-                    </span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <Badge size="sm" color={STATUS_COLOR[status]}>
-                    {sessionStatusLabel(status)}
-                  </Badge>
-                </td>
-                <td className="hidden max-w-[14rem] truncate px-3 py-2.5 text-tertiary sm:table-cell">
-                  {summary || (
-                    <span className="text-quaternary">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-quaternary">
-                  {count || "—"}
-                </td>
-              </tr>
-            );
+              </span>
+            </span>
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col gap-1 pt-0.5">
+            {summary ? (
+              <span className="line-clamp-2 font-serif text-[16px] leading-[22px] text-primary">
+                {summary}
+              </span>
+            ) : (
+              <span className="text-[13.5px] leading-[22px] text-quaternary">
+                {status === "skipped" ? "Didn't happen." : "No notes yet."}
+              </span>
+            )}
+            <span className="font-mono text-[10.5px] text-quaternary uppercase">{meta.join(" · ")}</span>
+          </span>
+          <span
+            className={cx(
+              "mt-1 inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[12px] font-semibold",
+              STATUS_CHIP[status]
+            )}
+          >
+            {sessionStatusLabel(status)}
+          </span>
+        </button>
+      </li>
+    );
   };
 
   if (!rows.length) {
     return (
-      <p className="rounded-xl border border-dashed border-primary px-4 py-8 text-center text-sm text-quaternary">
-        Nothing logged yet. Open a week on the Plan board to write up a meeting.
-      </p>
+      <div className="flex flex-col items-start gap-1 rounded-[16px] border border-dashed border-primary px-6 py-8">
+        <p className="font-serif text-[19px] text-secondary italic">Nothing written up yet.</p>
+        <p className="text-[13px] text-tertiary">Open a week on the Plan board to write one up.</p>
+      </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-secondary">
-      <table className="w-full min-w-[20rem] border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-secondary bg-secondary text-xs font-medium text-quaternary">
-            <th className="px-3 py-2 font-semibold">Date</th>
-            <th className="px-3 py-2 font-semibold">Status</th>
-            <th className="hidden px-3 py-2 font-semibold sm:table-cell">
-              Summary
-            </th>
-            <th className="px-3 py-2 text-right font-semibold">Topics</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-secondary">
-          {past.map(renderRow)}
-          {upcoming.length > 0 && (
-            <tr className="bg-secondary">
-              <td colSpan={4} className="px-3 py-1.5 text-xs font-medium text-quaternary">
-                Coming up
-              </td>
-            </tr>
-          )}
-          {upcoming.map(renderRow)}
-        </tbody>
-      </table>
+    <div className="flex flex-col gap-6">
+      {past.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h3 className="eyebrow">Looking back</h3>
+          <ul className="divide-y divide-secondary overflow-hidden rounded-[16px] border border-secondary bg-primary">
+            {past.map(renderRow)}
+          </ul>
+        </section>
+      )}
+      {upcoming.length > 0 && (
+        <section className="flex flex-col gap-2">
+          <h3 className="eyebrow">Coming up</h3>
+          <ul className="divide-y divide-secondary overflow-hidden rounded-[16px] border border-secondary bg-primary">
+            {upcoming.map(renderRow)}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

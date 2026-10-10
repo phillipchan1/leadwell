@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -54,23 +55,21 @@ export function TopicDetail({
   const [pointDraft, setPointDraft] = useState("");
   const pointRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      const el = e.target as HTMLElement | null;
-      // Two steps: the first Escape leaves the field you are typing in, the
-      // second closes the panel. Closing straight out of a half-typed point
-      // loses the point.
-      if (el?.closest("input, textarea")) {
-        (el as HTMLElement).blur();
-        return;
-      }
-      onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  /*
+   * On the shared Escape stack, so Escape closes this and only this — it used
+   * to listen on the window alongside the meeting behind it, and one press
+   * closed both. Two steps: the first Escape leaves the field you are typing
+   * in, the second closes the panel; closing straight out of a half-typed
+   * point loses the point.
+   */
+  useDismiss(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (el?.closest("input, textarea")) {
+      el.blur();
+      return;
+    }
+    onClose();
+  });
 
   if (!topic) return null;
 

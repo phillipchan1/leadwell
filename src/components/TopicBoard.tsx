@@ -1,23 +1,21 @@
-import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import type { CurriculumSlot, Topic, TrackedMeeting } from "../types";
+import type { CurriculumSlot, Tag, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
 import { InlineComposer } from "./InlineComposer";
 import { TopicDetail } from "./TopicDetail";
 import {
   boardLayout,
-  curriculumBalance,
   curriculumOf,
   looseTopics,
   nextSlotAfter,
   parseColumnKey,
   plannedSlots,
-  slotChipClass,
   slotDotClass,
   slotKey,
   type BucketGroup,
@@ -25,32 +23,34 @@ import {
   type WeekCell,
   type WeekColumn,
 } from "../lib/topics";
-import { MEETING_LABEL, todayISO } from "../lib/readiness";
+import { MEETING_LABEL, daysBetween, todayISO } from "../lib/readiness";
 import { sessionSummary } from "../lib/session";
 import { deleteWithUndo, doWithUndo } from "../lib/undo";
-import { Input } from "@/components/base/input/input";
-import { Button } from "@/components/base/buttons/button";
-import { NativeSelect } from "@/components/base/select/select-native";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
-import { DotsGrid } from "@untitledui/icons";
+import { ArrowRight, ChevronRight, DotsGrid, Plus } from "@untitledui/icons";
 import {
   useReorderableRow,
   type MoveResult,
 } from "@/hooks/use-reorderable-row";
 import { announce } from "@/lib/announce";
 import { MOD_LABEL } from "@/lib/keys";
+import { IdeasIcon } from "./shell/places";
 import { cx } from "@/utils/cx";
 
 /**
- * Curriculum scaffolder — ideas on top, schedule below. Both stay mounted so
- * drag-and-drop works without switching views.
+ * The planner: this meeting's ideas in a tray on the left, its weeks laid out
+ * to the right as sheets, one row per section of the standing agenda.
+ *
+ * Both halves stay mounted so a card can be dragged from the tray onto a week
+ * and back without switching views. The grid is the point of the page — it
+ * shows at a glance which weeks are planned and which sections keep getting
+ * skipped, which is the thing no calendar shows you.
  */
 
 export type BoardDirection = "down" | "up";
 
 const HANDLE_LABEL = (name: string) =>
   `Move “${name}” — Alt with up or down arrow to reorder, Delete to remove`;
-const HANDLE_TITLE = "Drag, or ⌥↑ / ⌥↓ to reorder · Delete to remove";
 
 const CAPTURE_PLACEHOLDER: Record<BoardDirection, string> = {
   down: "Something to raise…",
@@ -60,23 +60,27 @@ const CAPTURE_PLACEHOLDER: Record<BoardDirection, string> = {
 type MoveGroup = { label: string; options: { key: string; label: string }[] };
 
 type CardHandlers = {
-  curriculum: CurriculumSlot[];
   moveGroups: MoveGroup[];
   handleProps: ReturnType<typeof useBoardDnD>["handleProps"];
-  onText: (id: string, text: string) => void;
   onMove: (id: string, key: string) => void;
   onReorder: (id: string, direction: -1 | 1) => MoveResult;
   onCover: (id: string, covered: boolean) => void;
-  onTag: (id: string, slotId?: string) => void;
-  onAddTag?: (label: string) => string | undefined;
   onRoll: (topic: Topic) => void;
   onBacklog: (id: string) => void;
   onDelete: (topic: Topic) => void;
-  /** Capture straight into a cell, with the `#tag !` grammar. */
+  /** Capture straight into a cell, with the `#tag @meeting !` grammar. */
   onAddHere?: (raw: string, key: string) => void;
-  /** Open the full idea — sub-points, notes, placement. */
+  /** Open the full idea — title, sub-points, notes, placement. */
   onOpen?: (id: string) => void;
 };
+
+const fmtDay = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
+
+/** "Mon, Aug 17" — the week's name everywhere a list has to say it. */
+export function weekName(iso: string): string {
+  return fmtDay(iso, { weekday: "short", month: "short", day: "numeric" });
+}
 
 export function TopicBoard({
   meeting,
@@ -93,11 +97,10 @@ export function TopicBoard({
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
-  const updateTopic = useStore((s) => s.updateTopic);
+  const tags = useStore((s) => s.tags);
   const placeTopic = useStore((s) => s.placeTopic);
   const placeTopicAt = useStore((s) => s.placeTopicAt);
   const captureTopics = useStore((s) => s.captureTopics);
-  const [openTopicId, setOpenTopicId] = useState<string | null>(null);
   const coverTopic = useStore((s) => s.coverTopic);
   const rollTopic = useStore((s) => s.rollTopic);
   const deleteTopic = useStore((s) => s.deleteTopic);
@@ -106,6 +109,19 @@ export function TopicBoard({
   const addSession = useStore((s) => s.addSession);
   const addMeetingRow = useStore((s) => s.addMeetingRow);
   const setCurriculum = useStore((s) => s.setCurriculum);
+  const setTab = useStore((s) => s.setTab);
+  const [openTopicId, setOpenTopicId] = useState<string | null>(null);
+
+  /*
+   * With a week open beside the board there isn't room for the tray as well,
+   * so it folds to a rail. Opening it from the rail holds until the week
+   * closes.
+   */
+  const [trayWhileOpen, setTrayWhileOpen] = useState(false);
+  useEffect(() => {
+    if (!selectedSlotKey) setTrayWhileOpen(false);
+  }, [selectedSlotKey]);
+  const trayFolded = Boolean(selectedSlotKey) && !trayWhileOpen;
 
   const removeTopic = useCallback(
     (topic: Topic) => {
@@ -123,7 +139,7 @@ export function TopicBoard({
 
   /*
    * An idea that isn't on a week has no meeting to be covered in, so ticking it
-   * is done and it leaves the inbox. A tick is an easy slip, so it gets the
+   * is done and it leaves the tray. A tick is an easy slip, so it gets the
    * same Undo a delete does rather than vanishing silently.
    */
   const completeIdea = useCallback(
@@ -150,11 +166,6 @@ export function TopicBoard({
   const loose = useMemo(
     () => looseTopics(topics, sessions, meeting.id, today),
     [topics, sessions, meeting.id, today]
-  );
-  const balance = useMemo(
-    () =>
-      curriculum.length ? curriculumBalance(layout.weeks, curriculum) : [],
-    [curriculum, layout.weeks]
   );
 
   const place = useCallback(
@@ -195,7 +206,8 @@ export function TopicBoard({
     [placeTopicAt, meeting.id]
   );
 
-  const { drag, zoneRef: columnRef, handleProps } = useBoardDnD(placeAt);
+  const dnd = useBoardDnD(placeAt);
+  const { drag, zoneRef: columnRef, handleProps } = dnd;
   const dragged = drag ? topics.find((t) => t.id === drag.id) : null;
 
   const roll = useCallback(
@@ -217,22 +229,23 @@ export function TopicBoard({
   const moveGroups: MoveGroup[] = [
     {
       label: "Ideas",
-      options: layout.bucket.map((g) => ({ key: g.key, label: g.label })),
+      options: layout.bucket.map((g) => ({
+        key: g.key,
+        label: g.label === "Ideas" ? "Ideas" : `Ideas · ${g.label}`,
+      })),
     },
     ...layout.weeks.map((week) => ({
-      label: week.label,
+      label: weekName(week.slot.date),
       options: week.cells.map((c) => ({
         key: c.key,
-        label: c.label ? `${week.label} · ${c.label}` : week.label,
+        label: c.label ? `${weekName(week.slot.date)} · ${c.label}` : weekName(week.slot.date),
       })),
     })),
   ];
 
   const cardProps: CardHandlers = {
-    curriculum,
     moveGroups,
     handleProps,
-    onText: (id, text) => updateTopic(id, { text }),
     onAddHere: (raw, key) =>
       captureTopics(raw, { ...parseColumnKey(key), meetingId: meeting.id }),
     onOpen: setOpenTopicId,
@@ -244,8 +257,6 @@ export function TopicBoard({
       if (covered && topic && !topic.sessionId) completeIdea(topic);
       else coverTopic(id, covered);
     },
-    onTag: (id, slotId) => updateTopic(id, { slotId }),
-    onAddTag: (label) => addMeetingRow(meeting.id, label),
     onRoll: roll,
     onBacklog: (id) => placeTopic(id, { lane: "backlog" }),
     onDelete: removeTopic,
@@ -256,72 +267,88 @@ export function TopicBoard({
   const ideaCount = ideaGroups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
-    <div className="@container space-y-3">
+    <div className="@container flex flex-col gap-4">
       {loose.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-900 dark:bg-amber-950/40">
-          <p className="min-w-0 flex-1 text-xs text-amber-900 dark:text-amber-400">
-            {loose.length} topic{loose.length === 1 ? " was" : "s were"} planned
-            for a {MEETING_LABEL[meeting.subjectKind]} that's already been and
-            gone.
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-cond-watch-soft px-4 py-3">
+          <p className="min-w-0 flex-1 text-[13.5px] leading-5 text-cond-watch-ink">
+            <b className="font-semibold">
+              {loose.length} topic{loose.length === 1 ? "" : "s"}
+            </b>{" "}
+            {loose.length === 1 ? "was" : "were"} planned for a{" "}
+            {MEETING_LABEL[meeting.subjectKind]} that's been and gone, and never
+            ticked off.
           </p>
-          <Button
-            size="sm"
-            color="secondary"
-            className="shrink-0"
+          <button
+            type="button"
             onClick={() => loose.forEach(roll)}
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-[12.5px] font-semibold text-primary shadow-xs touch:min-h-11"
           >
-            Roll forward
-          </Button>
+            Carry to the next one
+            <ArrowRight className="size-3.5" />
+          </button>
         </div>
       )}
 
-      <div className="grid items-start gap-6 @4xl:grid-cols-[20rem_minmax(0,1fr)]">
-      <div className="@4xl:sticky @4xl:top-2">
-      <IdeasPanel
-        direction={direction}
-        curriculum={curriculum}
-        groups={ideaGroups}
-        parked={parked}
-        ideaCount={ideaCount}
-        drag={drag}
-        columnRef={columnRef}
-        cardProps={cardProps}
-        onCapture={(raw, slotId) =>
-          captureTopics(raw, {
-            kind: "lane",
-            lane: "backlog",
-            slotId,
-            meetingId: meeting.id,
-          })
-        }
-      />
+      <div
+        className={cx(
+          "flex gap-5",
+          trayFolded ? "items-start" : "flex-col @3xl:flex-row @3xl:items-start"
+        )}
+      >
+        {trayFolded ? (
+          <TrayRail count={ideaCount} onOpen={() => setTrayWhileOpen(true)} />
+        ) : (
+          <div className="@3xl:sticky @3xl:top-16 @3xl:w-[18rem] @3xl:shrink-0">
+            <IdeasTray
+              direction={direction}
+              curriculum={curriculum}
+              tags={tags}
+              groups={ideaGroups}
+              parked={parked}
+              ideaCount={ideaCount}
+              drag={drag}
+              columnRef={columnRef}
+              cardProps={cardProps}
+              onFold={selectedSlotKey ? () => setTrayWhileOpen(false) : undefined}
+              onAllIdeas={() => setTab("ideas")}
+              onCapture={(raw, slotId) =>
+                captureTopics(raw, {
+                  kind: "lane",
+                  lane: "backlog",
+                  slotId,
+                  meetingId: meeting.id,
+                })
+              }
+            />
+          </div>
+        )}
 
-      </div>
-
-      <ScheduleGrid
-        weeks={layout.weeks}
-        balance={balance}
-        onReorderRows={(ids) => {
-          const byId = new Map(curriculum.map((c) => [c.id, c]));
-          setCurriculum(
-            meeting.id,
-            ids.map((id) => byId.get(id)!).filter(Boolean)
-          );
-        }}
-        curriculum={curriculum}
-        selectedSlotKey={selectedSlotKey}
-        drag={drag}
-        columnRef={columnRef}
-        cardProps={cardProps}
-        onSelectWeek={onSelectWeek}
-        onAddRow={(label) => addMeetingRow(meeting.id, label)}
-      />
+        <ScheduleGrid
+          weeks={layout.weeks}
+          curriculum={curriculum}
+          tags={tags}
+          today={today}
+          selectedSlotKey={selectedSlotKey}
+          drag={drag}
+          columnRef={columnRef}
+          scrollerRef={dnd.scrollerRef}
+          cardProps={cardProps}
+          onSelectWeek={onSelectWeek}
+          onAddRow={(label) => addMeetingRow(meeting.id, label)}
+          onReorderRows={(ids) => {
+            const byId = new Map(curriculum.map((c) => [c.id, c]));
+            setCurriculum(
+              meeting.id,
+              ids.map((id) => byId.get(id)!).filter(Boolean)
+            );
+          }}
+        />
       </div>
 
       {drag && dragged && (
-        <li
+        <div
           aria-hidden
-          className="pointer-events-none fixed z-50 list-none rounded-lg border border-teal-400 bg-primary px-2 py-1.5 text-xs leading-snug shadow-lg dark:border-teal-600"
+          className="pointer-events-none fixed z-50 -rotate-2 rounded-[10px] border border-teal-200 bg-primary px-2.5 py-2 text-[13px] leading-[18px] text-primary shadow-[0_14px_32px_-10px_rgba(10,34,37,0.35),0_2px_6px_rgba(10,34,37,0.12)] dark:border-teal-800"
           style={{
             left: drag.x - drag.dx,
             top: drag.y - drag.dy,
@@ -329,7 +356,7 @@ export function TopicBoard({
           }}
         >
           {dragged.text}
-        </li>
+        </div>
       )}
       {/*
         The full idea, opened from any card on the board. A card stays a
@@ -346,33 +373,82 @@ export function TopicBoard({
   );
 }
 
+// ── The grid ───────────────────────────────────────────────────────────────
+
+type GridRow = { id: string; label: string; slotId?: string; minutes?: number };
+
 function ScheduleGrid({
   weeks,
   curriculum,
+  tags,
+  today,
   selectedSlotKey,
   drag,
   columnRef,
+  scrollerRef,
   cardProps,
   onSelectWeek,
   onAddRow,
-  balance,
   onReorderRows,
 }: {
-  balance: ReturnType<typeof curriculumBalance>;
-  onReorderRows: (ids: string[]) => void;
   weeks: WeekColumn[];
   curriculum: CurriculumSlot[];
+  tags: Tag[];
+  today: string;
   selectedSlotKey?: string | null;
   drag: ReturnType<typeof useBoardDnD>["drag"];
   columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
+  scrollerRef: ReturnType<typeof useBoardDnD>["scrollerRef"];
   cardProps: CardHandlers;
   onSelectWeek?: (slotKey: string, slot: Slot) => void;
   onAddRow: (label: string) => void;
+  onReorderRows: (ids: string[]) => void;
 }) {
   const sessions = useStore((s) => s.sessions);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const scrollLeftRef = useRef(0);
+  const [hiddenRight, setHiddenRight] = useState(0);
   const [draggingRow, setDraggingRow] = useState<string | null>(null);
   const [overRow, setOverRow] = useState<string | null>(null);
+
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHiddenRight(Math.max(0, el.scrollWidth - el.clientWidth - el.scrollLeft));
+  }, []);
+
+  // The board re-renders on every store change; keep the strip where it was.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = scrollLeftRef.current;
+    measure();
+  });
+
+  // Opening a week from elsewhere (the header's Next up, a new one-off)
+  // brings its column into view.
+  useEffect(() => {
+    if (!selectedSlotKey) return;
+    const head = scrollRef.current?.querySelector<HTMLElement>('[aria-expanded="true"]');
+    head?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  }, [selectedSlotKey]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  const setScroller = useCallback(
+    (el: HTMLDivElement | null) => {
+      scrollRef.current = el;
+      // Dragging a card near the edge pans the strip.
+      scrollerRef(el);
+    },
+    [scrollerRef]
+  );
+
   const dropRow = (targetId: string) => {
     if (!draggingRow || draggingRow === targetId) return;
     const ids = curriculum.map((c) => c.id).filter((id) => id !== draggingRow);
@@ -381,252 +457,327 @@ function ScheduleGrid({
     const to = curriculum.findIndex((c) => c.id === targetId);
     ids.splice(from < to ? at + 1 : at, 0, draggingRow);
     onReorderRows(ids);
-    announce("Row moved.");
-  };
-  const scrollLeftRef = useRef(0);
-
-  const weekCount = Math.max(weeks.length, 1);
-  const colWidth = "13rem";
-  const gridCols = curriculum.length
-    ? `8rem repeat(${weekCount}, ${colWidth})`
-    : `repeat(${weekCount}, ${colWidth})`;
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollLeft = scrollLeftRef.current;
-  });
-
-  const onScroll = () => {
-    scrollLeftRef.current = scrollRef.current?.scrollLeft ?? 0;
+    announce("Section moved.");
   };
 
-  const sessionForWeek = (week: WeekColumn) => {
-    if (!week.slot.sessionId) return null;
-    return sessions.find((s) => s.id === week.slot.sessionId) ?? null;
-  };
+  const hasRows = curriculum.length > 0;
+  const rows: GridRow[] = hasRows
+    ? [
+        ...curriculum.map((s) => ({ id: s.id, label: s.label, slotId: s.id, minutes: s.minutes })),
+        { id: "untagged", label: "Untagged" },
+      ]
+    : [{ id: "all", label: "" }];
 
-  const cellFor = (week: WeekColumn, slotId?: string) =>
-    week.cells.find((c) => c.slotId === slotId) ??
-    week.cells.find((c) => !c.slotId && !slotId);
+  const colOffset = hasRows ? 2 : 1;
+  const template = [
+    hasRows ? "8.75rem" : null,
+    ...weeks.map((w) => (w.slot.past ? "7.75rem" : hasRows ? "11.5rem" : "13rem")),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const upcoming = weeks.filter((w) => !w.slot.past);
+  const nextKey = upcoming[0]?.key;
 
   const weekIsActive = (week: WeekColumn): boolean => {
     if (!selectedSlotKey) return false;
-    const occ = slotKey(week.slot);
-    if (selectedSlotKey === occ) return true;
-    return Boolean(
-      week.slot.sessionId && selectedSlotKey === `s:${week.slot.sessionId}`
+    return (
+      selectedSlotKey === slotKey(week.slot) ||
+      selectedSlotKey === `p:${week.slot.date}` ||
+      Boolean(week.slot.sessionId && selectedSlotKey === `s:${week.slot.sessionId}`)
     );
   };
 
-  if (!curriculum.length) {
+  const cellFor = (week: WeekColumn, row: GridRow) =>
+    row.slotId
+      ? week.cells.find((c) => c.slotId === row.slotId)
+      : week.cells.find((c) => !c.slotId);
+
+  const preview = (week: WeekColumn) => {
+    const s = week.slot.sessionId ? sessions.find((o) => o.id === week.slot.sessionId) : null;
+    return s ? sessionSummary(s, 64) : "";
+  };
+
+  if (!weeks.length) {
     return (
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="scroll-contain overflow-x-auto pb-1"
-      >
-        <div
-          className="inline-grid gap-x-3"
-          style={{ gridTemplateColumns: gridCols }}
-        >
-          {weeks.map((week) => {
-            const past = week.slot.past;
-            const isActive = weekIsActive(week);
-            const cell = week.cells[0];
-            return (
-              <div key={week.slot.date} className="flex flex-col">
-                <WeekHeader
-                  week={week}
-                  isActive={isActive}
-                  notesPreview={
-                    sessionForWeek(week)
-                      ? sessionSummary(sessionForWeek(week)!)
-                      : ""
-                  }
-                  onSelect={() => onSelectWeek?.(slotKey(week.slot), week.slot)}
-                />
-                {cell && (
-                  <GridCell
-                    cell={cell}
-                    past={past}
-                    inSlot={Boolean(week.slot.sessionId)}
-                    drag={drag}
-                    columnRef={columnRef}
-                    cardProps={cardProps}
-                    compact
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <AddRow onAdd={onAddRow} first />
+      <div className="flex min-h-40 flex-1 flex-col items-start justify-center gap-1 rounded-[16px] border border-dashed border-primary px-6 py-8">
+        <p className="font-serif text-[19px] text-secondary italic">Nothing on the calendar yet.</p>
+        <p className="text-[13px] text-tertiary">
+          Set how often you meet in Settings, or add a one-off date.
+        </p>
       </div>
     );
   }
 
-  const rows: { id: string; label: string; slotId?: string }[] = [
-    ...curriculum.map((s) => ({ id: s.id, label: s.label, slotId: s.id })),
-    { id: "untagged", label: "Untagged" },
-  ];
-
   return (
-    <div
-      ref={scrollRef}
-      onScroll={onScroll}
-      className="scroll-contain overflow-x-auto pb-1"
-    >
-      {/*
-        No hairline grid. The skeleton is mostly empty by design — eight weeks
-        of four rows is thirty-two cells holding maybe six topics — and drawing
-        a box around every one of them made the emptiness the loudest thing on
-        the page. Rows are carried by the labels and one faint rule; columns by
-        their headers and the gap.
-      */}
+    <div className="relative min-w-0 flex-1">
       <div
-        className="inline-grid gap-x-3"
-        style={{ gridTemplateColumns: gridCols }}
+        ref={setScroller}
+        onScroll={() => {
+          scrollLeftRef.current = scrollRef.current?.scrollLeft ?? 0;
+          measure();
+        }}
+        className="scroll-contain scrollbar-hide overflow-x-auto pb-3"
       >
-        <div className="sticky left-0 z-20 bg-primary" />
+        <div
+          className="relative inline-grid gap-x-3"
+          style={{
+            gridTemplateColumns: template,
+            gridTemplateRows: `auto repeat(${rows.length}, minmax(${hasRows ? "5.75rem" : "12rem"}, auto))`,
+          }}
+        >
+          {/* The sheets: one per week, behind its header and cells. */}
+          {weeks.map((week, i) => {
+            const active = weekIsActive(week);
+            const next = week.key === nextKey;
+            const expected = week.slot.projected && !week.slot.past;
+            return (
+              <div
+                key={`sheet-${week.key}`}
+                aria-hidden
+                style={{ gridColumn: i + colOffset, gridRow: `1 / span ${rows.length + 1}` }}
+                className={cx(
+                  "rounded-[14px] transition-colors",
+                  active
+                    ? "bg-teal-50 ring-[1.5px] ring-teal-600 dark:bg-teal-950/40 dark:ring-teal-500"
+                    : week.slot.past
+                      ? "bg-secondary"
+                      : expected
+                        ? "border-[1.5px] border-dashed border-primary"
+                        : next
+                          ? "bg-primary ring-[1.5px] ring-teal-600 shadow-[0_0_0_5px_var(--color-teal-50)] dark:ring-teal-500 dark:shadow-none"
+                          : "bg-primary shadow-[0_0_0_1px_var(--color-border-secondary)]"
+                )}
+              />
+            );
+          })}
 
-        {weeks.map((week) => {
-          const isActive = weekIsActive(week);
-          return (
-            <WeekHeader
-              key={week.slot.date}
-              week={week}
-              isActive={isActive}
-              notesPreview={
-                sessionForWeek(week)
-                  ? sessionSummary(sessionForWeek(week)!)
-                  : ""
-              }
-              onSelect={() => onSelectWeek?.(slotKey(week.slot), week.slot)}
-              grid
-            />
-          );
-        })}
-
-        {rows.map((row) => (
-          <Fragment key={row.id}>
+          {hasRows && (
             <div
-              draggable={Boolean(row.slotId)}
-              onDragStart={(e) => {
-                if (!row.slotId) return;
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", row.slotId);
-                setDraggingRow(row.slotId);
-              }}
-              onDragEnd={() => {
-                setDraggingRow(null);
-                setOverRow(null);
-              }}
-              onDragOver={(e) => {
-                if (!draggingRow || !row.slotId) return;
-                e.preventDefault();
-                setOverRow(row.slotId);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (row.slotId) dropRow(row.slotId);
-                setDraggingRow(null);
-                setOverRow(null);
-              }}
-              title={row.slotId ? "Drag to reorder rows" : undefined}
-              className={cx(
-                "group/row sticky left-0 z-10 flex items-start gap-1.5 border-t border-stone-100 bg-primary py-3 pr-3 dark:border-stone-900",
-                row.slotId && "cursor-grab active:cursor-grabbing",
-                draggingRow === row.slotId && "opacity-50",
-                overRow === row.slotId && draggingRow !== row.slotId && "shadow-[inset_0_2px_0_0_var(--color-teal-500)]"
-              )}
+              style={{ gridColumn: 1, gridRow: 1 }}
+              className="sticky left-0 z-[3] flex items-end bg-primary pb-3"
             >
-              {row.slotId ? (
-                <DotsGrid aria-hidden className="mt-0.5 size-3 shrink-0 text-quaternary" />
-              ) : (
-                <span aria-hidden className="size-3 shrink-0" />
-              )}
-              <span className="min-w-0">
-                <span
-                  className={cx(
-                    "flex items-center gap-1.5 text-xs leading-snug font-semibold break-words",
-                    row.slotId ? "text-secondary" : "text-quaternary"
-                  )}
-                >
-                  {row.slotId && (
-                    <span
-                      aria-hidden
-                      className={cx("size-1.5 shrink-0 rounded-full", slotDotClass(curriculum, row.slotId))}
-                    />
-                  )}
-                  {row.label}
-                </span>
-                {row.slotId && (() => {
-                  const b = balance.find((x) => x.slot.id === row.slotId);
-                  if (!b) return null;
-                  return (
-                    <span
-                      className="mt-0.5 block text-caption text-quaternary tabular-nums"
-                      title={`Planned in ${b.filled} of the next ${b.total} weeks`}
-                    >
-                      {b.filled}/{b.total} weeks
-                    </span>
-                  );
-                })()}
-              </span>
+              <span className="eyebrow">Standing agenda</span>
             </div>
-            {weeks.map((week) => {
-              const cell = row.slotId
-                ? cellFor(week, row.slotId)
-                : week.cells.find((c) => !c.slotId);
-              if (!cell) {
+          )}
+
+          {weeks.map((week, i) => (
+            <WeekHeader
+              key={`head-${week.key}`}
+              column={i + colOffset}
+              week={week}
+              today={today}
+              isActive={weekIsActive(week)}
+              isNext={week.key === nextKey}
+              notesPreview={preview(week)}
+              onSelect={() => onSelectWeek?.(slotKey(week.slot), week.slot)}
+            />
+          ))}
+
+          {rows.map((row, ri) => (
+            <Fragment key={row.id}>
+              {hasRows && (
+                <RowLabel
+                  row={row}
+                  gridRow={ri + 2}
+                  weeks={upcoming}
+                  dotClass={row.slotId ? slotDotClass(curriculum, row.slotId, tags) : undefined}
+                  dragging={draggingRow === row.slotId}
+                  over={overRow === row.slotId && draggingRow !== row.slotId}
+                  onDragStart={() => row.slotId && setDraggingRow(row.slotId)}
+                  onDragEnd={() => {
+                    setDraggingRow(null);
+                    setOverRow(null);
+                  }}
+                  onDragOver={() => draggingRow && row.slotId && setOverRow(row.slotId)}
+                  onDrop={() => {
+                    if (row.slotId) dropRow(row.slotId);
+                    setDraggingRow(null);
+                    setOverRow(null);
+                  }}
+                  onAddRow={ri === rows.length - 1 ? onAddRow : undefined}
+                  canDrag={Boolean(draggingRow)}
+                />
+              )}
+              {weeks.map((week, wi) => {
+                const cell = cellFor(week, row);
+                const place = { gridColumn: wi + colOffset, gridRow: ri + 2 };
+                const ruled = hasRows && ri > 0;
+                if (!cell) {
+                  return (
+                    <div
+                      key={`${row.id}-${week.key}`}
+                      style={place}
+                      className={cx(ruled && "border-t border-secondary")}
+                    />
+                  );
+                }
                 return (
-                  <div
-                    key={`${row.id}-${week.slot.date}`}
-                    className="min-h-12 border-t border-stone-100 dark:border-stone-900"
+                  <GridCell
+                    key={cell.key}
+                    style={place}
+                    cell={cell}
+                    ruled={ruled}
+                    past={week.slot.past}
+                    tickable={Boolean(week.slot.sessionId)}
+                    drag={drag}
+                    columnRef={columnRef}
+                    cardProps={cardProps}
+                    dropLabel={`Drop into ${weekName(week.slot.date)}${row.slotId ? ` · ${row.label}` : ""}`}
+                    composerLabel={row.slotId ? `Add to ${row.label}` : "Add a topic"}
                   />
                 );
-              }
-              return (
-                <GridCell
-                  key={cell.key}
-                  cell={cell}
-                  past={week.slot.past}
-                  inSlot={Boolean(week.slot.sessionId)}
-                  drag={drag}
-                  columnRef={columnRef}
-                  cardProps={cardProps}
-                  compact
-                  ruled
-                />
-              );
-            })}
-          </Fragment>
-        ))}
+              })}
+            </Fragment>
+          ))}
+        </div>
+        {!hasRows && <AddRow onAdd={onAddRow} first />}
       </div>
-      <AddRow onAdd={onAddRow} />
+
+      {hiddenRight > 24 && (
+        <>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 right-0 z-[4] w-24 bg-gradient-to-r from-transparent to-[var(--color-bg-primary)]"
+          />
+          <button
+            type="button"
+            onClick={() =>
+              scrollRef.current?.scrollBy({
+                left: Math.round((scrollRef.current?.clientWidth ?? 600) * 0.75),
+                behavior: "smooth",
+              })
+            }
+            className="absolute top-[42%] right-1 z-[5] inline-flex h-8 items-center gap-1.5 rounded-full border border-primary bg-primary px-3 text-[12px] font-semibold text-primary shadow-xs transition hover:border-teal-300 touch:min-h-11"
+          >
+            Later weeks
+            <ArrowRight className="size-3.5" />
+          </button>
+        </>
+      )}
     </div>
   );
 }
 
-/** "+ Add row", on the board itself — where the need for one is noticed. */
+function RowLabel({
+  row,
+  gridRow,
+  weeks,
+  dotClass,
+  dragging,
+  over,
+  canDrag,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  onAddRow,
+}: {
+  row: GridRow;
+  gridRow: number;
+  /** Upcoming weeks only — coverage looks forward. */
+  weeks: WeekColumn[];
+  dotClass?: string;
+  dragging: boolean;
+  over: boolean;
+  canDrag: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
+  onAddRow?: (label: string) => void;
+}) {
+  const filled = row.slotId
+    ? weeks.map((w) => w.cells.some((c) => c.slotId === row.slotId && c.topics.length > 0))
+    : [];
+  const count = filled.filter(Boolean).length;
+
+  return (
+    <div
+      style={{ gridColumn: 1, gridRow }}
+      draggable={Boolean(row.slotId)}
+      onDragStart={(e) => {
+        if (!row.slotId) return;
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", row.slotId);
+        onDragStart();
+      }}
+      onDragEnd={onDragEnd}
+      onDragOver={(e) => {
+        if (!canDrag || !row.slotId) return;
+        e.preventDefault();
+        onDragOver();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      title={row.slotId ? "Drag to reorder sections" : undefined}
+      className={cx(
+        "group/row sticky left-0 z-[3] flex flex-col gap-1.5 bg-primary py-3.5 pr-3",
+        gridRow > 2 && "border-t border-secondary",
+        row.slotId && "cursor-grab active:cursor-grabbing",
+        dragging && "opacity-50",
+        over && "shadow-[inset_0_2px_0_0_var(--color-teal-600)]"
+      )}
+    >
+      <span className="flex items-center gap-2 text-[13.5px] leading-5 font-semibold">
+        {row.slotId ? (
+          <DotsGrid aria-hidden className="size-3 shrink-0 text-quaternary opacity-50 transition-opacity group-hover/row:opacity-100" />
+        ) : (
+          <span aria-hidden className="size-3 shrink-0" />
+        )}
+        {dotClass && <i aria-hidden className={cx("size-2 shrink-0 rounded-[2px]", dotClass)} />}
+        <span className={cx("min-w-0 break-words", !row.slotId && "text-tertiary")}>{row.label}</span>
+      </span>
+      {row.minutes ? (
+        <span className="pl-5 font-mono text-[10.5px] text-quaternary">{row.minutes} MIN</span>
+      ) : null}
+      {row.slotId && filled.length > 0 && (
+        <span
+          className="flex items-center gap-2 pl-5"
+          title={`Planned in ${count} of the next ${filled.length} weeks`}
+        >
+          <span aria-hidden className="flex items-end gap-[2.5px]">
+            {filled.slice(0, 12).map((on, i) => (
+              <i
+                key={i}
+                className={cx("h-[9px] w-[5px] rounded-[1.5px]", on ? dotClass : "bg-quaternary")}
+              />
+            ))}
+          </span>
+          <span className="font-mono text-[10.5px] text-quaternary">
+            {count}/{filled.length}
+          </span>
+        </span>
+      )}
+      {onAddRow && <AddRow onAdd={onAddRow} />}
+    </div>
+  );
+}
+
+/** "+ Add a section", on the board itself — where the need for one is noticed. */
 function AddRow({ onAdd, first }: { onAdd: (label: string) => void; first?: boolean }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   if (!open) {
     return (
-      <Button
-        size="sm"
-        color="link-gray"
-        className="mt-2"
+      <button
+        type="button"
         onClick={() => setOpen(true)}
+        className={cx(
+          "inline-flex items-center gap-1 self-start rounded-md text-[12px] font-semibold text-teal-700 hover:text-teal-800 touch:min-h-11 dark:text-teal-400",
+          first ? "mt-3" : "mt-2 pl-5"
+        )}
       >
-        {first ? "+ Split weeks into rows by tag" : "+ Add row"}
-      </Button>
+        <Plus className="size-3.5" />
+        {first ? "Split weeks into sections" : "Add a section"}
+      </button>
     );
   }
   return (
     <form
-      className="mt-2 flex max-w-sm items-center gap-2"
+      className={cx("flex flex-col gap-1.5", first ? "mt-3 max-w-xs" : "mt-2")}
       onSubmit={(e) => {
         e.preventDefault();
         if (!draft.trim()) return;
@@ -634,84 +785,119 @@ function AddRow({ onAdd, first }: { onAdd: (label: string) => void; first?: bool
         setDraft("");
       }}
     >
-      <Input
-        size="sm"
+      <input
         autoFocus
         placeholder="Prayer, Training…"
-        aria-label="New row"
+        aria-label="New section"
         value={draft}
-        onChange={setDraft}
-        className="min-w-0 flex-1"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => !draft.trim() && setOpen(false)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") {
+            setDraft("");
+            setOpen(false);
+          }
         }}
+        className="h-8 w-full min-w-0 rounded-lg border border-teal-300 bg-primary px-2 text-[12.5px] outline-none dark:border-teal-700"
       />
-      <Button size="sm" color="secondary" type="submit" isDisabled={!draft.trim()}>
-        Add
-      </Button>
-      <Button size="sm" color="tertiary" onClick={() => setOpen(false)}>
-        Done
-      </Button>
+      <span className="text-[11px] text-quaternary">Enter to add · Esc to stop</span>
     </form>
   );
 }
 
+function weekStatus(week: WeekColumn, today: string): { text: string; tone: string } {
+  const total = week.topics.length;
+  const open = week.topics.filter((t) => t.status === "open").length;
+  const covered = total - open;
+  if (week.slot.past) {
+    if (total === 0) return { text: "Nothing planned", tone: "text-quaternary" };
+    if (open === 0) return { text: "All covered", tone: "text-cond-thriving-ink" };
+    return { text: `${open} not covered`, tone: "text-cond-watch-ink" };
+  }
+  const days = daysBetween(today, week.slot.date);
+  const when = days === 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`;
+  return {
+    text: covered > 0 ? `${when} · ${covered} of ${total} covered` : when,
+    tone: "text-tertiary",
+  };
+}
+
 function WeekHeader({
+  column,
   week,
+  today,
   isActive,
+  isNext,
   notesPreview,
   onSelect,
-  grid,
 }: {
+  column: number;
   week: WeekColumn;
+  today: string;
   isActive: boolean;
+  isNext: boolean;
   notesPreview: string;
   onSelect: () => void;
-  grid?: boolean;
 }) {
   const past = week.slot.past;
+  const expected = week.slot.projected && !past;
+  const status = weekStatus(week, today);
+  const flag = isActive ? "Open" : isNext ? "Next" : null;
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-expanded={isActive}
+      aria-label={`${fmtDay(week.slot.date, { weekday: "long", month: "long", day: "numeric" })}. ${status.text}. ${isActive ? "Close" : "Open"} this week.`}
+      style={{ gridColumn: column, gridRow: 1 }}
       className={cx(
-        "rounded-lg border-b-2 px-2 py-2 text-left transition-colors",
-        isActive
-          ? "border-teal-500 dark:border-teal-600"
-          : "border-stone-200 hover:bg-tertiary dark:border-stone-800",
-        !grid && "rounded-b-none"
+        "group/week relative z-[2] flex min-w-0 flex-col gap-0.5 rounded-t-[14px] px-3.5 pt-3.5 pb-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-inset",
+        past && !isActive && "opacity-70 hover:opacity-100"
       )}
     >
-      <div
-        className={cx(
-          "truncate text-sm font-semibold tracking-tight tabular-nums",
-          past ? "text-quaternary" : "text-primary"
-        )}
-      >
-        {week.label}
-      </div>
-      {week.exception && (
-        <div className="truncate text-xs font-medium text-brand-secondary">
-          {week.exception}
-        </div>
-      )}
-      {week.hint && (
-        <div
+      <span className="flex h-[17px] items-center gap-2">
+        <span
           className={cx(
-            "truncate text-xs",
-            past && week.hint.includes("not covered")
-              ? "text-amber-700 dark:text-amber-500"
-              : "text-quaternary"
+            "font-mono text-[10.5px]",
+            isActive ? "text-teal-700 dark:text-teal-300" : "text-quaternary"
           )}
         >
-          {week.hint}
-        </div>
-      )}
+          {fmtDay(week.slot.date, { weekday: "short" }).toUpperCase()}
+        </span>
+        {flag && (
+          <span className="inline-flex h-[17px] items-center rounded-[5px] bg-teal-600 px-1.5 font-mono text-[9.5px] font-medium tracking-[0.06em] text-white uppercase dark:bg-teal-500 dark:text-stone-950">
+            {flag}
+          </span>
+        )}
+        {week.exception ? (
+          <span className="truncate font-mono text-[9.5px] tracking-[0.06em] text-teal-700 uppercase dark:text-teal-300">
+            {week.exception}
+          </span>
+        ) : expected && !flag ? (
+          <span className="font-mono text-[9.5px] tracking-[0.06em] text-quaternary">EXPECTED</span>
+        ) : null}
+      </span>
+      <span className="flex items-baseline gap-1.5">
+        <span
+          className={cx(
+            "font-serif leading-[30px] transition-colors group-hover/week:text-teal-700 dark:group-hover/week:text-teal-300",
+            past ? "text-[22px]" : "text-[26px]",
+            expected && "text-secondary"
+          )}
+        >
+          {Number(week.slot.date.slice(8, 10))}
+        </span>
+        <span className="text-[12.5px] text-tertiary">
+          {fmtDay(week.slot.date, { month: "short" })}
+        </span>
+      </span>
+      <span className={cx("truncate text-[11.5px]", isActive ? "text-teal-800 dark:text-teal-300" : status.tone)}>
+        {status.text}
+      </span>
       {notesPreview && (
-        <div className="mt-0.5 truncate text-caption text-teal-700 dark:text-teal-400">
+        <span className="mt-1 line-clamp-2 font-serif text-[13px] leading-[17px] text-secondary italic">
           {notesPreview}
-        </div>
+        </span>
       )}
     </button>
   );
@@ -719,75 +905,77 @@ function WeekHeader({
 
 function GridCell({
   cell,
+  style,
+  ruled,
   past,
-  inSlot,
+  tickable,
   drag,
   columnRef,
   cardProps,
-  compact,
-  ruled,
+  dropLabel,
+  composerLabel,
 }: {
   cell: WeekCell;
+  style: React.CSSProperties;
+  ruled: boolean;
   past: boolean;
-  inSlot: boolean;
+  tickable: boolean;
   drag: ReturnType<typeof useBoardDnD>["drag"];
   columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
-  compact?: boolean;
-  /** Carries the row divider in the skeleton grid. */
-  ruled?: boolean;
+  dropLabel: string;
+  composerLabel: string;
 }) {
   const active = drag?.over === cell.key;
   // Where it would land, not just where it would go. In a cell that is a
   // running order, the position *is* the decision.
   const at = active ? drag!.index : -1;
   const line = (
-    <li
-      key="drop-line"
-      aria-hidden
-      className="h-0.5 list-none rounded-full bg-teal-500"
-    />
+    <li key="drop-line" aria-hidden className="h-0.5 list-none rounded-full bg-teal-600" />
   );
 
-  const rows: ReactNode[] = [];
+  const items: ReactNode[] = [];
   cell.topics.forEach((t, i) => {
-    if (active && at === i) rows.push(line);
-    rows.push(
-      <TopicCard
+    if (active && at === i) items.push(line);
+    items.push(
+      <BoardCard
         key={t.id}
         topic={t}
         columnKey={cell.key}
         past={past}
-        tickable={inSlot}
+        tickable={tickable}
         covered={t.status !== "open"}
         isDragging={drag?.id === t.id}
-        compact={compact}
-        showTag={false}
-        showMove
         {...cardProps}
       />
     );
   });
-  if (active && at >= cell.topics.length) rows.push(line);
+  if (active && at >= cell.topics.length) items.push(line);
 
   return (
     <div
       ref={columnRef(cell.key)}
+      style={style}
       className={cx(
-        "group/cell min-h-12 py-1.5",
-        ruled && "border-t border-stone-100 dark:border-stone-900",
-        active &&
-          "rounded-lg bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
+        "group/cell relative z-[2] flex min-w-0 flex-col gap-1.5 p-1.5",
+        ruled && "border-t border-secondary",
+        active && "rounded-[11px] bg-teal-50/90 outline-[1.5px] outline-teal-600 outline-dashed -outline-offset-4 dark:bg-teal-950/50"
       )}
     >
-      <ul className="flex flex-col gap-1">{rows}</ul>
-      {/* Capture where it belongs. Hidden until the column is hovered, or the
-          board becomes thirty identical Add buttons. */}
-      {cardProps.onAddHere && (
-        <div className="opacity-0 transition focus-within:opacity-100 group-hover/cell:opacity-100">
+      {items.length > 0 && <ul className="flex flex-col gap-1.5">{items}</ul>}
+      {active && cell.topics.length === 0 && (
+        <p className="px-1.5 py-1 text-[11.5px] font-semibold text-teal-800 dark:text-teal-300">
+          {dropLabel}
+        </p>
+      )}
+      {/* Capture where it belongs. Hidden until the cell is hovered, or the
+          board becomes thirty identical Add buttons. Never into the past. */}
+      {!drag && !past && cardProps.onAddHere && (
+        <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/cell:opacity-100 touch:opacity-100">
           <InlineComposer
             compact
-            placeholder="Add a topic…  #tag !"
+            label={composerLabel}
+            placeholder={`${composerLabel}…  #tag !`}
             onAdd={(raw) => cardProps.onAddHere?.(raw, cell.key)}
           />
         </div>
@@ -796,9 +984,27 @@ function GridCell({
   );
 }
 
-function IdeasPanel({
+// ── The tray ───────────────────────────────────────────────────────────────
+
+function TrayRail({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Show ideas (${count})`}
+      className="sticky top-16 flex w-12 shrink-0 flex-col items-center gap-2.5 rounded-[14px] bg-tertiary py-3.5 text-secondary transition-colors hover:bg-quaternary"
+    >
+      <IdeasIcon className="size-[18px]" />
+      <span className="font-mono text-[11px]">{count}</span>
+      <span className="font-serif text-[15px] text-primary [writing-mode:vertical-rl]">Ideas</span>
+    </button>
+  );
+}
+
+function IdeasTray({
   direction,
   curriculum,
+  tags,
   groups,
   parked,
   ideaCount,
@@ -806,9 +1012,12 @@ function IdeasPanel({
   columnRef,
   cardProps,
   onCapture,
+  onFold,
+  onAllIdeas,
 }: {
   direction: BoardDirection;
   curriculum: CurriculumSlot[];
+  tags: Tag[];
   groups: BucketGroup[];
   parked?: BucketGroup;
   ideaCount: number;
@@ -816,20 +1025,24 @@ function IdeasPanel({
   columnRef: ReturnType<typeof useBoardDnD>["zoneRef"];
   cardProps: CardHandlers;
   onCapture: (text: string, slotId?: string) => void;
+  onFold?: () => void;
+  onAllIdeas: () => void;
 }) {
   const [draft, setDraft] = useState("");
-  const [tag, setTag] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [parkedOpen, setParkedOpen] = useState(false);
+
+  // Filtering to a section means adding into it, too.
+  const slotOf = filter !== "all" && filter !== "untagged" ? filter : undefined;
+  const filterLabel = curriculum.find((s) => s.id === slotOf)?.label;
 
   const capture = () => {
     const text = draft.trim();
     if (!text) return;
-    const slotId = tag || undefined;
-    onCapture(text, slotId);
+    onCapture(text, slotOf);
     setDraft("");
     // Never let a capture vanish behind the active filter.
-    const landsIn = text.includes("#") ? "all" : (slotId ?? "untagged");
+    const landsIn = text.includes("#") ? "all" : (slotOf ?? "untagged");
     if (filter !== "all" && filter !== landsIn) setFilter(landsIn);
   };
 
@@ -837,158 +1050,160 @@ function IdeasPanel({
     drag?.over === key || (key === "backlog" && drag?.over?.startsWith("backlog"));
 
   const visible = groups.flatMap((g) => {
-    if (filter === "all") return g.topics.length ? [{ group: g, topics: g.topics }] : [];
-    if (filter === "untagged" && g.key === "backlog")
-      return g.topics.length ? [{ group: g, topics: g.topics }] : [];
-    if (g.slotId === filter)
-      return g.topics.length ? [{ group: g, topics: g.topics }] : [];
+    if (!g.topics.length) return [];
+    if (filter === "all") return [g];
+    if (filter === "untagged" && g.key === "backlog") return [g];
+    if (g.slotId === filter) return [g];
     return [];
   });
+  // Mid-drag every group is a target, empty or not.
+  const listGroups = drag ? groups : visible;
 
-  const listGroups = drag
-    ? groups.map((g) => ({ group: g, topics: g.topics }))
-    : visible;
-
-  const filters: { id: string; label: string; count: number }[] = [
+  const filters: { id: string; label: string; count: number; slotId?: string }[] = [
     { id: "all", label: "All", count: ideaCount },
   ];
-  if (groups.some((g) => g.key === "backlog" && g.topics.length))
-    filters.push({
-      id: "untagged",
-      label: "Untagged",
-      count: groups.find((g) => g.key === "backlog")?.topics.length ?? 0,
-    });
+  const untagged = groups.find((g) => g.key === "backlog" && curriculum.length > 0);
+  if (untagged && (untagged.topics.length || filter === "untagged"))
+    filters.push({ id: "untagged", label: "Untagged", count: untagged.topics.length });
   for (const s of curriculum) {
-    const n =
-      groups.find((g) => g.slotId === s.id)?.topics.length ?? 0;
-    if (n > 0) filters.push({ id: s.id, label: s.label, count: n });
+    const n = groups.find((g) => g.slotId === s.id)?.topics.length ?? 0;
+    if (n > 0 || filter === s.id) filters.push({ id: s.id, label: s.label, count: n, slotId: s.id });
   }
 
   return (
-    <div className="rounded-xl border border-secondary bg-primary">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-secondary px-4 py-2.5">
-        <h4 className="text-sm font-semibold text-primary">
-          Ideas
-          <span className="ml-1.5 font-normal text-quaternary tabular-nums">
-            {ideaCount}
-          </span>
-        </h4>
-        {filters.length > 1 && (
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter ideas">
-            {filters.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                aria-pressed={filter === f.id}
-                onClick={() => {
-                  setFilter(f.id);
-                  // Filtering to a row means adding into it, too.
-                  if (f.id === "untagged") setTag("");
-                  else if (f.id !== "all") setTag(f.id);
-                }}
-                className={cx(
-                  "h-6 rounded-md px-2 text-xs font-medium transition",
-                  filter === f.id
-                    ? "bg-tertiary text-primary"
-                    : "text-quaternary hover:text-secondary"
-                )}
-              >
-                {f.label}
-                <span className="ml-1 tabular-nums opacity-60">{f.count}</span>
-              </button>
-            ))}
-          </div>
-        )}
+    <section
+      aria-label="Ideas for this meeting"
+      className="flex flex-col gap-3.5 rounded-[18px] bg-tertiary px-3.5 pt-4 pb-3"
+    >
+      <div className="flex items-baseline gap-2 px-1">
+        <h2 className="font-serif text-[22px] leading-[26px]">Ideas</h2>
+        <span className="font-mono text-[12px] text-quaternary">{ideaCount}</span>
+        <span className="ml-auto flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onAllIdeas}
+            className="text-[12px] font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400"
+          >
+            All ideas
+          </button>
+          {onFold && (
+            <button
+              type="button"
+              onClick={onFold}
+              className="text-[12px] font-semibold text-tertiary hover:text-secondary"
+            >
+              Hide
+            </button>
+          )}
+        </span>
       </div>
 
-      <div className="space-y-3 p-3">
-        <form
-          className="flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            capture();
-          }}
-        >
-          <Input
-            size="sm"
-            placeholder={`${CAPTURE_PLACEHOLDER[direction]}  #tag`}
-            aria-label="Add an idea"
-            value={draft}
-            onChange={setDraft}
-            className="min-w-0 flex-1 @4xl:basis-full"
-            enterKeyHint="done"
-          />
-          {curriculum.length > 0 && (
-            <NativeSelect
-              size="sm"
-              className="w-auto shrink-0 @4xl:flex-1"
-              aria-label="Row"
-              value={tag}
-              onChange={(e) => setTag(e.target.value)}
-              options={[
-                { label: "Untagged", value: "" },
-                ...curriculum.map((s) => ({ label: s.label, value: s.id })),
-              ]}
-            />
-          )}
-          <Button size="sm" color="secondary" type="submit" isDisabled={!draft.trim()}>
-            Add
-          </Button>
-        </form>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          capture();
+        }}
+        className="flex h-[42px] items-center gap-2 rounded-[11px] border border-secondary bg-primary px-3 shadow-[0_1px_1.5px_rgba(10,34,37,0.05)] focus-within:border-teal-300 dark:focus-within:border-teal-700"
+      >
+        <Plus aria-hidden className="size-3.5 shrink-0 text-quaternary" />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={filterLabel ? `Add to ${filterLabel}…` : CAPTURE_PLACEHOLDER[direction]}
+          aria-label={filterLabel ? `Add an idea to ${filterLabel}` : "Add an idea"}
+          enterKeyHint="done"
+          className="min-w-0 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-quaternary"
+        />
+        <span aria-hidden className="font-mono text-[10.5px] text-quaternary">
+          #tag ↵
+        </span>
+      </form>
 
-        <div
-          ref={columnRef("backlog")}
-          className={cx(
-            "max-h-[min(22rem,45vh)] space-y-3 overflow-y-auto rounded-lg @4xl:max-h-[60vh]",
-            drag && "min-h-[4rem]",
-            dropActive("backlog") &&
-              "ring-2 ring-teal-400 dark:ring-teal-600"
-          )}
-        >
+      {filters.length > 1 && (
+        <div className="-mx-1 flex flex-wrap gap-0.5" role="group" aria-label="Filter ideas">
+          {filters.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              aria-pressed={filter === f.id}
+              onClick={() => setFilter(f.id)}
+              className={cx(
+                "inline-flex h-[26px] items-center gap-1.5 rounded-full px-2 text-[12px] font-medium transition-colors touch:min-h-11",
+                filter === f.id
+                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                  : "text-tertiary hover:bg-primary hover:text-secondary"
+              )}
+            >
+              {f.slotId && (
+                <i
+                  aria-hidden
+                  className={cx("size-2 rounded-[2px]", slotDotClass(curriculum, f.slotId, tags))}
+                />
+              )}
+              {f.label}
+              <span className="font-mono text-[10.5px] opacity-70">{f.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div
+        ref={columnRef("backlog")}
+        className={cx(
+          "-mx-1 flex max-h-[min(30rem,55vh)] flex-col gap-3 overflow-y-auto rounded-xl px-1 py-0.5",
+          drag && "min-h-16",
+          dropActive("backlog") && !groups.some((g) => g.key !== "backlog" && drag?.over === g.key) &&
+            "ring-2 ring-teal-500"
+        )}
+      >
         {listGroups.length === 0 && (
-          <p className="py-6 text-center text-sm text-quaternary">
+          <p className="px-2 py-5 font-serif text-[16px] leading-6 text-secondary italic">
             {ideaCount === 0
               ? drag
-                ? "Drop here to return to ideas."
-                : "Nothing in the bucket yet — capture something above."
-              : "No ideas match this filter."}
+                ? "Drop here to take it off the week."
+                : "Nothing waiting. Capture something above."
+              : "Nothing in this section."}
           </p>
         )}
-        {listGroups.map(({ group, topics: list }) => (
+        {listGroups.map((group) => (
           <div
             key={group.key}
             ref={columnRef(group.key)}
             className={cx(
-              "rounded-md px-1",
-              dropActive(group.key) &&
-                "bg-teal-50/80 ring-2 ring-inset ring-teal-400 dark:bg-teal-950/40 dark:ring-teal-600"
+              "flex flex-col gap-1.5 rounded-[11px]",
+              drag && "p-1",
+              drag?.over === group.key && "bg-teal-50/90 ring-2 ring-teal-500 ring-inset dark:bg-teal-950/40"
             )}
           >
-            {filter === "all" && group.label !== "Ideas" && (
-              <p className="mb-1.5 px-1 text-xs font-medium text-quaternary">
+            {(filter === "all" || drag) && group.label !== "Ideas" && (
+              <span className="eyebrow flex items-center gap-1.5 px-1">
+                {group.slotId && (
+                  <i
+                    aria-hidden
+                    className={cx("size-2 rounded-[2px]", slotDotClass(curriculum, group.slotId, tags))}
+                  />
+                )}
                 {group.label}
-              </p>
+              </span>
             )}
-            {(drag || list.length > 0) && (
-            <ul className="space-y-1.5">
-              {list.map((t) => (
-                <TopicCard
-                  key={t.id}
-                  topic={t}
-                  columnKey={group.key}
-                  past={false}
-                  tickable
-                  covered={false}
-                  isDragging={drag?.id === t.id}
-                  showTag={false}
-                  showMove
-                  {...cardProps}
-                />
-              ))}
-            </ul>
+            {group.topics.length > 0 && (
+              <ul className="flex flex-col gap-1.5">
+                {group.topics.map((t) => (
+                  <BoardCard
+                    key={t.id}
+                    topic={t}
+                    columnKey={group.key}
+                    past={false}
+                    tickable
+                    covered={false}
+                    isDragging={drag?.id === t.id}
+                    {...cardProps}
+                  />
+                ))}
+              </ul>
             )}
-            {drag && list.length === 0 && (
-              <p className="py-2 text-center text-caption text-quaternary">
+            {drag && group.topics.length === 0 && (
+              <p className="rounded-[10px] border border-dashed border-primary px-2 py-2.5 text-center text-[11.5px] text-quaternary">
                 Drop in {group.label.toLowerCase()}
               </p>
             )}
@@ -1000,27 +1215,30 @@ function IdeasPanel({
         <div
           ref={columnRef(parked.key)}
           className={cx(
-            "border-t border-secondary pt-2",
-            drag?.over === parked.key && "rounded-lg ring-2 ring-teal-400"
+            "border-t border-primary pt-1",
+            drag?.over === parked.key && "rounded-lg bg-teal-50/90 ring-2 ring-teal-500 dark:bg-teal-950/40"
           )}
         >
           <button
             type="button"
-            className="flex w-full items-baseline justify-between py-1 text-left"
+            className="flex h-9 w-full items-center gap-2 px-1.5 text-left text-[12.5px] font-medium text-tertiary hover:text-secondary"
             onClick={() => setParkedOpen((v) => !v)}
             aria-expanded={parkedOpen}
           >
-            <span className="text-xs font-medium text-quaternary">
-              Parked
-            </span>
-            <span className="text-xs tabular-nums text-quaternary">
-              {parked.topics.length}
-            </span>
+            Parked
+            <span className="font-mono text-[11px]">{parked.topics.length}</span>
+            <ChevronRight
+              aria-hidden
+              className={cx("ml-auto size-3.5 transition-transform", parkedOpen && "rotate-90")}
+            />
           </button>
+          {drag && !parkedOpen && (
+            <p className="px-1.5 pb-2 text-[11.5px] text-quaternary">Drop here to set it aside.</p>
+          )}
           {parkedOpen && parked.topics.length > 0 && (
-            <ul className="mt-1.5 space-y-1.5">
+            <ul className="flex flex-col gap-1.5 pb-1">
               {parked.topics.map((t) => (
-                <TopicCard
+                <BoardCard
                   key={t.id}
                   topic={t}
                   columnKey={parked.key}
@@ -1028,8 +1246,6 @@ function IdeasPanel({
                   tickable
                   covered={false}
                   isDragging={drag?.id === t.id}
-                  showTag={false}
-                  showMove
                   {...cardProps}
                 />
               ))}
@@ -1037,30 +1253,76 @@ function IdeasPanel({
           )}
         </div>
       )}
-      </div>
-    </div>
+    </section>
   );
 }
 
-function TopicCard({
+// ── The card ───────────────────────────────────────────────────────────────
+
+function NotesGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-3" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round">
+      <path d="M6 3.5h8.5L19 8v12.5H6z" />
+      <path d="M14 3.5V8.5h5M9 13h7M9 16.5h5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** One muted line under the title, in priority order. */
+function cardMeta(topic: Topic, covered: boolean): ReactNode[] {
+  if (covered) return [];
+  const out: ReactNode[] = [];
+  if (topic.returnedOn) {
+    out.push(
+      <span key="back" className="text-cond-watch-ink">
+        Came back
+        {topic.returnedFromDate ? ` · ${fmtDay(topic.returnedFromDate, { month: "short", day: "numeric" })}` : ""}
+      </span>
+    );
+  } else if (topic.carried > 1) {
+    out.push(
+      <span key="pushed" className="text-cond-watch-ink">
+        Pushed {topic.carried}×
+      </span>
+    );
+  }
+  if (topic.dueDate) {
+    const late = topic.dueDate < todayISO();
+    out.push(
+      <span key="due" className={late ? "text-cond-critical-ink" : undefined}>
+        Due {fmtDay(topic.dueDate, { month: "short", day: "numeric" })}
+      </span>
+    );
+  }
+  if (topic.points?.length) {
+    out.push(
+      <span key="pts">
+        {topic.points.filter((p) => p.done).length}/{topic.points.length} points
+      </span>
+    );
+  }
+  if (topic.detail?.trim()) {
+    out.push(
+      <span key="notes" title="Has notes" className="inline-flex">
+        <NotesGlyph />
+      </span>
+    );
+  }
+  return out;
+}
+
+function BoardCard({
   topic,
   columnKey,
   past,
   tickable,
   covered,
   isDragging,
-  compact,
-  showTag = true,
-  showMove = true,
-  curriculum,
   moveGroups,
   handleProps,
-  onText,
   onMove,
   onReorder,
   onCover,
-  onTag,
-  onAddTag,
   onRoll,
   onBacklog,
   onDelete,
@@ -1073,15 +1335,10 @@ function TopicCard({
   tickable: boolean;
   covered: boolean;
   isDragging: boolean;
-  compact?: boolean;
-  showTag?: boolean;
-  showMove?: boolean;
 } & CardHandlers) {
   const ref = useRef<HTMLLIElement>(null);
   const name = topic.text || "topic";
   const down = useRef<{ x: number; y: number } | null>(null);
-  const [newTagOpen, setNewTagOpen] = useState(false);
-  const [newTagLabel, setNewTagLabel] = useState("");
   const { rowProps, handleProps: keyHandleProps } = useReorderableRow({
     label: `“${name}”`,
     onMove: (dir) => onReorder(topic.id, dir),
@@ -1090,41 +1347,24 @@ function TopicCard({
 
   const grab = handleProps(topic.id, columnKey, ref);
   /*
-   * Drag from anywhere on the card. A 24px dot is a target you have to aim for,
-   * and this board asks you to move things constantly. Controls opt out by tag
-   * so a checkbox tick stays a tick; a drag only begins past the slop threshold
-   * anyway, so the two never compete.
+   * Drag from anywhere on the card — this board asks you to move things
+   * constantly, and a dot-sized handle is a target you have to aim for.
+   * Controls opt out so a tick stays a tick; a drag only begins past the slop
+   * threshold anyway, so the two never compete.
    */
   const cardGrab = {
     ...grab,
     onPointerDown: (e: ReactPointerEvent) => {
       down.current = { x: e.clientX, y: e.clientY };
       const el = e.target as HTMLElement | null;
-      if (
-        el?.closest(
-          'input, select, textarea, a, label, [role="checkbox"], button'
-        )
-      ) {
-        return;
-      }
+      if (el?.closest('input, select, textarea, a, label, [role="checkbox"], button')) return;
       grab.onPointerDown(e);
     },
-    /*
-     * A press that never travelled is a click, and a click opens the idea —
-     * except on the textarea, which owns the title and edits in place. The
-     * distance check keeps "drag it to next week" from also opening a panel
-     * every time you let go.
-     */
+    // A press that never travelled is a click, and a click opens the idea.
     onClick: (e: ReactMouseEvent) => {
       if (!onOpen) return;
       const el = e.target as HTMLElement | null;
-      if (
-        el?.closest(
-          'textarea, input, select, a, label, [role="checkbox"], button'
-        )
-      ) {
-        return;
-      }
+      if (el?.closest('input, select, textarea, a, label, [role="checkbox"], button')) return;
       const start = down.current;
       down.current = null;
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
@@ -1132,230 +1372,119 @@ function TopicCard({
     },
   };
 
+  const meta = cardMeta(topic, covered);
+  const slipped = past && !covered;
+
   return (
     <li
       ref={ref}
       data-drag-item={topic.id}
       {...rowProps}
       className={cx(
-        "group relative rounded-lg border bg-primary",
-        // Amber means "this slipped". A topic you ticked off didn't.
+        "group/card relative list-none rounded-[10px] border transition-[border-color,box-shadow]",
         covered
-          ? "border-secondary"
-          : past
-            ? "border-amber-300 dark:border-amber-800"
-            : "border-secondary shadow-xs",
-        isDragging && "opacity-40",
-        compact && "text-xs"
+          ? "border-transparent bg-secondary"
+          : slipped
+            ? "border-cond-watch bg-primary shadow-[inset_3px_0_0_var(--color-cond-watch)]"
+            : "border-secondary bg-primary shadow-[0_1px_1.5px_rgba(10,34,37,0.05)] hover:border-primary hover:shadow-[0_2px_6px_-2px_rgba(10,34,37,0.14)]",
+        isDragging && "opacity-35"
       )}
     >
+      {/*
+        The keyboard handle: ⌥↑/⌥↓ to reorder, Delete to remove. Invisible
+        until it has focus — the whole card is the drag target for a pointer,
+        and a visible grip would eat a fifth of a narrow column.
+      */}
+      <button
+        type="button"
+        aria-label={HANDLE_LABEL(name)}
+        title="Drag, or ⌥↑ / ⌥↓ to reorder · Delete to remove"
+        className="absolute top-1.5 -left-2.5 z-10 flex size-5 cursor-grab touch-none items-center justify-center rounded-md bg-primary text-quaternary opacity-0 shadow-xs ring-1 ring-secondary select-none group-hover/card:opacity-100 focus-visible:opacity-100"
+        {...keyHandleProps}
+        {...handleProps(topic.id, columnKey, ref)}
+      >
+        <DotsGrid className="size-3" />
+      </button>
+
       <div
         {...cardGrab}
-        className={cx(
-          "flex cursor-grab items-start gap-1 touch:gap-2 active:cursor-grabbing",
-          compact ? "px-1.5 py-1.5" : "px-2 py-2"
-        )}
+        className="flex cursor-grab items-start gap-2 px-2.5 py-2 active:cursor-grabbing"
       >
-        <button
-          type="button"
-          aria-label={HANDLE_LABEL(name)}
-          title={HANDLE_TITLE}
-          className={cx(
-            "flex shrink-0 cursor-grab touch-none items-center justify-center rounded text-stone-400 select-none active:cursor-grabbing hover:text-stone-500 dark:text-stone-600 dark:hover:text-stone-400",
-            compact ? "size-5 -ml-0.5" : "size-6 -ml-0.5 touch:size-11"
-          )}
-          {...keyHandleProps}
-          {...handleProps(topic.id, columnKey, ref)}
-        >
-          <DotsGrid className={compact ? "size-3" : "size-4"} />
-        </button>
-
-        {/*
-          In a meeting week or the inbox a topic is a to-do, so the tick leads,
-          where every checklist puts it. It used to trail the title, in the same
-          corner the hover-revealed Delete sat on top of — reaching to tick it
-          off landed on delete instead.
-        */}
         {tickable && (
           <Checkbox
             size="sm"
-            aria-label={`${topic.sessionId ? "Covered" : "Complete"} "${name}"`}
+            aria-label={`${topic.sessionId ? "Covered" : "Done"}: “${name}”`}
             isSelected={covered}
             onChange={(selected) => onCover(topic.id, selected)}
-            className={cx("shrink-0", compact ? "mt-0.5" : "mt-1")}
+            className="mt-px shrink-0"
           />
         )}
-
         <div className="min-w-0 flex-1">
-          <textarea
+          <p
             className={cx(
-              "w-full resize-none border-0 bg-transparent p-0 leading-snug outline-none",
-              compact ? "text-xs" : "text-sm touch:text-md",
+              "text-[13px] leading-[18px] break-words",
               covered ? "text-quaternary line-through" : "text-primary"
             )}
-            rows={1}
-            ref={(el) => {
-              if (!el) return;
-              el.style.height = "auto";
-              el.style.height = `${el.scrollHeight}px`;
-            }}
-            value={topic.text}
-            onChange={(e) => {
-              e.target.style.height = "auto";
-              e.target.style.height = `${e.target.scrollHeight}px`;
-              onText(topic.id, e.target.value);
-            }}
-          />
-          {/*
-            One muted line, in priority order. A card that came back has to say
-            why without becoming the loudest thing in the column.
-          */}
-          {(topic.returnedOn || topic.points?.length || topic.detail?.trim()) &&
-            !covered && (
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-caption text-quaternary">
-                {topic.returnedOn && (
-                  <span className="text-amber-700 dark:text-amber-500">
-                    not covered{" "}
-                    {topic.returnedFromDate
-                      ? new Date(
-                          `${topic.returnedFromDate}T00:00:00Z`
-                        ).toLocaleDateString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          timeZone: "UTC",
-                        })
-                      : "last time"}
-                  </span>
-                )}
-                {topic.points?.length ? (
-                  <span className="tabular-nums">
-                    {topic.points.filter((pt) => pt.done).length}/
-                    {topic.points.length} points
-                  </span>
-                ) : null}
-                {topic.detail?.trim() ? (
-                  <span className="opacity-70">notes</span>
-                ) : null}
-              </div>
+          >
+            {topic.urgent && !covered && (
+              <span className="mr-1 font-semibold text-cond-critical-ink" aria-label="Urgent">
+                !
+              </span>
             )}
-
-          {!compact && showTag && curriculum.length > 0 && (
-            <div className="mt-0.5 flex flex-wrap items-center gap-1">
-              {newTagOpen ? (
-                <form
-                  className="inline-flex min-w-0 items-center gap-1"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const id = onAddTag?.(newTagLabel);
-                    if (!id) return;
-                    onTag(topic.id, id);
-                    setNewTagLabel("");
-                    setNewTagOpen(false);
-                  }}
-                >
-                  <Input
-                    size="sm"
-                    placeholder="New tag…"
-                    aria-label={`New tag for “${name}”`}
-                    value={newTagLabel}
-                    onChange={setNewTagLabel}
-                    className="min-w-[5rem]"
-                    autoFocus
-                  />
-                  <Button
-                    size="sm"
-                    color="secondary"
-                    type="submit"
-                    isDisabled={!newTagLabel.trim()}
-                  >
-                    Add
-                  </Button>
-                </form>
-              ) : (
-                <label className="inline-flex min-w-0">
-                  <span className="sr-only">Tag for “{name}”</span>
-                  <select
-                    value={topic.slotId ?? ""}
-                    onChange={(e) => {
-                      if (e.target.value === "__new__") {
-                        setNewTagOpen(true);
-                        return;
-                      }
-                      onTag(topic.id, e.target.value || undefined);
-                    }}
-                    className={cx(
-                      "max-w-full cursor-pointer truncate rounded px-1 py-px text-caption font-medium outline-none",
-                      topic.slotId
-                        ? slotChipClass(curriculum, topic.slotId)
-                        : "bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400"
-                    )}
-                  >
-                    <option value="">Untagged</option>
-                    {curriculum.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.label}
-                      </option>
-                    ))}
-                    {onAddTag && <option value="__new__">+ New tag…</option>}
-                  </select>
-                </label>
-              )}
-              {topic.carried > 1 && !covered && (
-                <span className="text-caption text-amber-700 dark:text-amber-500">
-                  pushed {topic.carried}×
-                </span>
-              )}
+            {topic.text || <span className="text-quaternary italic">Untitled</span>}
+          </p>
+          {meta.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] tracking-[0.02em] text-quaternary uppercase">
+              {meta}
             </div>
           )}
         </div>
-
-        {/*
-          No Delete on the card. Removing a topic is rare and destructive; it
-          lives in the topic's own panel (click the card) and on the handle's
-          Delete key, not one hover away from the checkbox.
-        */}
       </div>
 
-      {past && !covered && !compact && (
-        <div className="flex flex-wrap items-center gap-1 border-t border-amber-200 px-2 py-1 touch:gap-2 dark:border-amber-900/70">
-          <Button size="sm" color="link-gray" onClick={() => onRoll(topic)}>
-            → Next week
-          </Button>
-          <Button size="sm" color="link-gray" onClick={() => onBacklog(topic.id)}>
-            Ideas
-          </Button>
+      {slipped && (
+        <div className="flex flex-wrap items-center gap-x-3 border-t border-cond-watch-soft px-2.5 py-1.5">
+          <button
+            type="button"
+            onClick={() => onRoll(topic)}
+            className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-cond-watch-ink hover:underline touch:min-h-11"
+          >
+            Next time
+            <ArrowRight className="size-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onBacklog(topic.id)}
+            className="text-[11.5px] font-semibold text-tertiary hover:underline touch:min-h-11"
+          >
+            Back to ideas
+          </button>
         </div>
       )}
 
       {/*
         "Move to…" is the keyboard and screen-reader path, so it cannot simply
         be hidden — a display:none control leaves the tab order. It collapses
-        to nothing instead, and opens on hover, on focus, or on touch, where
+        to nothing instead, and opens on keyboard focus, or on touch, where
         there is no hover to rely on.
       */}
-      {showMove && (
-        <label className="flex max-h-0 items-center gap-1 overflow-hidden border-secondary px-2 opacity-0 transition-all duration-150 touch:max-h-12 touch:border-t touch:py-1 touch:opacity-100 has-focus-visible:max-h-12 has-focus-visible:border-t has-focus-visible:py-1 has-focus-visible:opacity-100">
-          <span className="sr-only">Move "{topic.text || "topic"}" to</span>
-          <select
-            value={columnKey}
-            onChange={(e) => onMove(topic.id, e.target.value)}
-            className={cx(
-              "w-full cursor-pointer touch:min-h-11 rounded border-0 bg-transparent py-0 text-quaternary outline-none",
-              compact ? "min-h-7 text-caption" : "min-h-8 text-caption touch:text-md"
-            )}
-          >
-            {moveGroups.map((g) => (
-              <optgroup key={g.label} label={g.label}>
-                {g.options.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </label>
-      )}
+      <label className="flex max-h-0 items-center gap-1 overflow-hidden border-secondary px-2.5 opacity-0 transition-all duration-150 touch:max-h-12 touch:border-t touch:py-1 touch:opacity-100 has-focus-visible:max-h-12 has-focus-visible:border-t has-focus-visible:py-1 has-focus-visible:opacity-100">
+        <span className="sr-only">Move “{name}” to</span>
+        <select
+          value={columnKey}
+          onChange={(e) => onMove(topic.id, e.target.value)}
+          className="min-h-7 w-full cursor-pointer rounded border-0 bg-transparent py-0 text-[11.5px] text-tertiary outline-none touch:min-h-11"
+        >
+          {moveGroups.map((g) => (
+            <optgroup key={g.label} label={g.label}>
+              {g.options.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
     </li>
   );
 }

@@ -3,30 +3,28 @@ import type { TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import {
   aheadForHorizon,
-  ensureSessionId,
   HORIZON_DEFAULT,
   type Horizon,
   type Slot,
 } from "../lib/topics";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { TopicBoard, type BoardDirection } from "./TopicBoard";
+import { PhonePlan } from "./PhonePlan";
 import { MeetingCalendar } from "./MeetingCalendar";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
-import { NativeSelect } from "@/components/base/select/select-native";
-import { Button } from "@/components/base/buttons/button";
-import { Input } from "@/components/base/input/input";
-import { Plus } from "@untitledui/icons";
+import { Calendar, ChevronDown } from "@untitledui/icons";
 import { todayISO } from "../lib/readiness";
 import { cx } from "@/utils/cx";
 
 export type PlanView = "board" | "calendar" | "history";
 
 /*
- * Two shapes of the same plan. There was a third, Ideas, which drew the backlog
- * a second time — the board already keeps it beside the weeks.
+ * Two shapes of the same plan — the board and a month — plus History where
+ * the host has nowhere else to look back (a person's page). The meeting page
+ * has its own Write-ups tab, so it turns History off.
  */
 const VIEWS: { id: PlanView; label: string }[] = [
   { id: "board", label: "Board" },
@@ -35,14 +33,16 @@ const VIEWS: { id: PlanView; label: string }[] = [
 ];
 
 const HORIZON_OPTIONS: { label: string; value: Horizon }[] = [
-  { label: "Next 4", value: 4 },
-  { label: "Next 8", value: 8 },
-  { label: "Quarter", value: 12 },
-  { label: "All booked", value: "all" },
+  { label: "Next 4 weeks", value: 4 },
+  { label: "Next 8 weeks", value: 8 },
+  { label: "Next quarter", value: 12 },
+  { label: "Everything booked", value: "all" },
 ];
 
 /**
- * One meeting's plan surface — board and calendar are the same data, two shapes.
+ * One meeting's plan surface — board and calendar are the same data, two
+ * shapes. Opening a week puts it beside the board on a desktop and in a sheet
+ * on a phone; either way the board stays where it was.
  */
 export function MeetingPlanner({
   meeting,
@@ -52,6 +52,7 @@ export function MeetingPlanner({
   onCloseNotes,
   onOpenSession,
   historyView = true,
+  oneOff = true,
 }: {
   meeting: TrackedMeeting;
   /**
@@ -60,6 +61,8 @@ export function MeetingPlanner({
    * write-ups mode (the meeting page).
    */
   historyView?: boolean;
+  /** Offer "One-off date" in the toolbar. Off where the host's header has it. */
+  oneOff?: boolean;
   direction?: BoardDirection;
   selectedSlotKey: string | null;
   onSelectWeek: (slotKey: string, slot: Slot) => void;
@@ -67,7 +70,6 @@ export function MeetingPlanner({
   onOpenSession?: (sessionId: string) => void;
 }) {
   const sessions = useStore((s) => s.sessions);
-  const addSession = useStore((s) => s.addSession);
   const addExtraOccurrence = useStore((s) => s.addExtraOccurrence);
   const [view, setView] = useState<PlanView>("board");
   const [horizon, setHorizon] = useState<Horizon>(HORIZON_DEFAULT);
@@ -76,42 +78,46 @@ export function MeetingPlanner({
   const viewRoving = useRovingFocus();
   const panelId = useId();
 
+  /*
+   * Opening a week only looks at it. It used to book the occurrence on the
+   * spot — and seed its notes — so a glance at a Monday three weeks out
+   * counted as a meeting on the books, and a click on a past day in the
+   * calendar invented one that never happened. The panel now makes the
+   * occurrence real the first time you put something in it.
+   */
   const openWeek = useCallback(
-    (slotKeyArg: string, slot: Slot) => {
-      const sessionId = ensureSessionId(
-        meeting.id,
-        slot,
-        sessions,
-        addSession
-      );
-      const canonicalKey = `s:${sessionId}`;
-      if (
-        selectedSlotKey === canonicalKey ||
-        selectedSlotKey === slotKeyArg
-      ) {
+    (key: string, slot: Slot) => {
+      const canonical = slot.sessionId ? `s:${slot.sessionId}` : `p:${slot.date}`;
+      if (selectedSlotKey === canonical || selectedSlotKey === key) {
         onCloseNotes();
         return;
       }
-      onSelectWeek(canonicalKey, slot);
+      onSelectWeek(canonical, slot);
     },
-    [addSession, meeting.id, onCloseNotes, onSelectWeek, selectedSlotKey, sessions]
+    [onCloseNotes, onSelectWeek, selectedSlotKey]
   );
 
-  /*
-   * The board plans the next eight weeks; Ideas is the whole backlog for this
-   * meeting, organised. The strip beside the board only ever has room for the
-   * next few, which is fine while planning and useless while deciding what is
-   * even worth raising.
-   */
-  const boardOrCalendar =
+  const views = VIEWS.filter((v) => historyView || v.id !== "history");
+
+  const body =
     view === "board" ? (
-      <TopicBoard
-        meeting={meeting}
-        direction={direction}
-        selectedSlotKey={selectedSlotKey}
-        onSelectWeek={openWeek}
-        ahead={aheadForHorizon(horizon)}
-      />
+      isMobile ? (
+        <PhonePlan
+          meeting={meeting}
+          direction={direction}
+          ahead={aheadForHorizon(horizon)}
+          onSelectWeek={openWeek}
+          onOpenSession={onOpenSession}
+        />
+      ) : (
+        <TopicBoard
+          meeting={meeting}
+          direction={direction}
+          selectedSlotKey={selectedSlotKey}
+          onSelectWeek={openWeek}
+          ahead={aheadForHorizon(horizon)}
+        />
+      )
     ) : view === "history" ? (
       <SessionHistoryTable
         meetingId={meeting.id}
@@ -138,16 +144,33 @@ export function MeetingPlanner({
       />
     );
 
+  const panel = selectedSlotKey ? (
+    <OccurrenceNotesPanel
+      meeting={meeting}
+      slotKey={selectedSlotKey}
+      onClose={onCloseNotes}
+      onOpenFullEditor={onOpenSession}
+      onMaterialized={(id, date) =>
+        onSelectWeek(`s:${id}`, {
+          sessionId: id,
+          date,
+          projected: false,
+          past: date < todayISO(),
+        })
+      }
+    />
+  ) : null;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div
           {...viewRoving.groupProps}
-          className="inline-flex h-9 shrink-0 items-stretch gap-0.5 rounded-lg bg-tertiary p-0.5 touch:h-auto touch:gap-2"
+          className="inline-flex shrink-0 gap-0.5 rounded-[11px] bg-tertiary p-[3px]"
           role="tablist"
           aria-label="Plan view"
         >
-          {VIEWS.filter((v) => historyView || v.id !== "history").map((v) => (
+          {views.map((v) => (
             <button
               key={v.id}
               type="button"
@@ -157,11 +180,10 @@ export function MeetingPlanner({
               aria-controls={panelId}
               {...viewRoving.itemProps(view === v.id)}
               className={cx(
-                "rounded-md px-3 text-sm font-medium transition",
-                "touch:min-h-11 touch:min-w-11",
+                "h-8 rounded-lg px-3 text-[13px] transition-colors touch:min-h-11",
                 view === v.id
-                  ? "bg-primary text-primary shadow-xs"
-                  : "text-quaternary hover:text-secondary"
+                  ? "bg-primary font-semibold text-primary shadow-[0_1px_2px_rgba(10,34,37,0.12)]"
+                  : "font-medium text-tertiary hover:text-secondary"
               )}
               onClick={() => setView(v.id)}
             >
@@ -171,100 +193,119 @@ export function MeetingPlanner({
         </div>
 
         {view === "board" && meeting.rhythm !== "as_needed" && (
-          <NativeSelect
-            size="sm"
-            className="w-auto shrink-0"
-            aria-label="How far ahead to plan"
-            value={String(horizon)}
-            onChange={(e) => {
-              const v = e.target.value;
-              setHorizon(v === "all" ? "all" : (Number(v) as Horizon));
-            }}
-            options={HORIZON_OPTIONS.map((o) => ({
-              label: o.label,
-              value: String(o.value),
-            }))}
-          />
+          <label className="relative inline-flex h-[38px] shrink-0 items-center rounded-[9px] border border-primary bg-primary pr-8 pl-3 text-[13px] font-semibold text-primary shadow-xs focus-within:ring-2 focus-within:ring-teal-600">
+            <span className="sr-only">How far ahead to plan</span>
+            <select
+              value={String(horizon)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setHorizon(v === "all" ? "all" : (Number(v) as Horizon));
+              }}
+              className="absolute inset-0 cursor-pointer appearance-none opacity-0"
+            >
+              {HORIZON_OPTIONS.map((o) => (
+                <option key={String(o.value)} value={String(o.value)}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            {HORIZON_OPTIONS.find((o) => o.value === horizon)?.label}
+            <ChevronDown aria-hidden className="pointer-events-none absolute right-2.5 size-3.5 text-quaternary" />
+          </label>
         )}
-        {view !== "history" && (
-        <div className="ml-auto">
-          <AddOneOff
-            onAdd={(date) => {
-              const id = addExtraOccurrence(meeting.id, date);
-              onSelectWeek(`s:${id}`, {
-                sessionId: id,
-                date,
-                projected: false,
-                past: false,
-              });
-            }}
-          />
-        </div>
+
+        {view === "board" && !isMobile && (
+          <span className="inline-flex items-center gap-3.5 text-[12px] text-tertiary max-lg:hidden">
+            <span className="inline-flex items-center gap-1.5">
+              <i aria-hidden className="h-2.5 w-3.5 rounded-[3px] border border-primary bg-primary" />
+              Booked
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <i aria-hidden className="h-2.5 w-3.5 rounded-[3px] border border-dashed border-primary" />
+              Expected
+            </span>
+          </span>
         )}
+
+        <span className="ml-auto flex items-center gap-3">
+          {view === "board" && !isMobile && !selectedSlotKey && (
+            <span className="text-[12.5px] text-tertiary max-xl:hidden">
+              Drag an idea onto a week. Click a date to open it.
+            </span>
+          )}
+          {oneOff && view !== "history" && (
+            <AddOneOff
+              onAdd={(date) => {
+                const id = addExtraOccurrence(meeting.id, date);
+                onSelectWeek(`s:${id}`, {
+                  sessionId: id,
+                  date,
+                  projected: false,
+                  past: date < todayISO(),
+                });
+              }}
+            />
+          )}
+        </span>
       </div>
 
-      <div
-        className={cx(
-          "flex min-h-0 flex-1",
-          selectedSlotKey && !isMobile && "gap-0 overflow-hidden"
-        )}
-      >
+      <div className="flex items-start gap-5">
         <div
           id={panelId}
           role="tabpanel"
           aria-labelledby={`${panelId}-tab-${view}`}
-          className={cx(
-            "flex min-h-0 min-w-0 flex-1 flex-col",
-            selectedSlotKey && !isMobile ? "overflow-hidden" : "overflow-y-auto"
-          )}
+          className="flex min-w-0 flex-1 flex-col"
         >
-          {boardOrCalendar}
+          {body}
         </div>
 
-        {selectedSlotKey && !isMobile && (
-          <aside className="occurrence-notes-aside w-[min(42%,28rem)] shrink-0 border-l border-secondary">
-            <OccurrenceNotesPanel
-              meeting={meeting}
-              slotKey={selectedSlotKey}
-              onClose={onCloseNotes}
-              onOpenFullEditor={onOpenSession}
-            />
+        {panel && !isMobile && (
+          <aside
+            aria-label="This week"
+            className="occurrence-notes-aside sticky top-16 flex max-h-[calc(100dvh-7rem)] w-[min(46%,29rem)] shrink-0 flex-col overflow-hidden rounded-[20px] border border-secondary bg-primary shadow-[0_1px_2px_rgba(10,34,37,0.06),0_18px_40px_-28px_rgba(10,34,37,0.35)]"
+          >
+            {panel}
           </aside>
         )}
       </div>
 
-      {selectedSlotKey && isMobile && (
-        <OccurrenceNotesSheet
-          open
-          onClose={onCloseNotes}
-          label="Meeting notes"
-        >
-          <OccurrenceNotesPanel
-            meeting={meeting}
-            slotKey={selectedSlotKey}
-            onClose={onCloseNotes}
-            onOpenFullEditor={onOpenSession}
-          />
+      {panel && isMobile && (
+        <OccurrenceNotesSheet open onClose={onCloseNotes} label="This week">
+          {panel}
         </OccurrenceNotesSheet>
       )}
     </div>
   );
 }
 
-/** "+ One-off" — a meeting outside the rhythm, with this board's ideas and rows. */
-function AddOneOff({ onAdd }: { onAdd: (date: string) => void }) {
+/** A meeting outside the rhythm, with this board's ideas and sections. */
+export function AddOneOff({
+  onAdd,
+  className,
+}: {
+  onAdd: (date: string) => void;
+  className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(todayISO());
   if (!open) {
     return (
-      <Button size="sm" color="secondary" iconLeading={Plus} onClick={() => setOpen(true)}>
-        One-off meeting
-      </Button>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cx(
+          "inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] border border-primary bg-primary px-3.5 text-[13px] font-semibold text-primary shadow-xs transition-colors hover:bg-secondary touch:min-h-11",
+          className
+        )}
+      >
+        <Calendar aria-hidden className="size-4 text-tertiary" />
+        One-off date
+      </button>
     );
   }
   return (
     <form
-      className="flex items-center gap-2"
+      className={cx("flex items-center gap-2", className)}
       onSubmit={(e) => {
         e.preventDefault();
         if (!date) return;
@@ -272,21 +313,29 @@ function AddOneOff({ onAdd }: { onAdd: (date: string) => void }) {
         setOpen(false);
       }}
     >
-      <Input
-        size="sm"
+      <input
         type="date"
         aria-label="One-off meeting date"
-        inputClassName="tabular-nums"
         value={date}
-        onChange={setDate}
+        onChange={(e) => setDate(e.target.value)}
         autoFocus
+        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        className="h-9 rounded-[9px] border border-teal-300 bg-primary px-2.5 font-mono text-[12.5px] text-primary outline-none dark:border-teal-700"
       />
-      <Button size="sm" type="submit" isDisabled={!date}>
+      <button
+        type="submit"
+        disabled={!date}
+        className="h-9 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white disabled:opacity-50 dark:bg-teal-500 dark:text-stone-950"
+      >
         Add
-      </Button>
-      <Button size="sm" color="tertiary" onClick={() => setOpen(false)}>
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="h-9 rounded-[9px] px-2.5 text-[13px] font-semibold text-tertiary hover:text-secondary"
+      >
         Cancel
-      </Button>
+      </button>
     </form>
   );
 }
