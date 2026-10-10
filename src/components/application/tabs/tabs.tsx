@@ -38,10 +38,13 @@ const getTabStyles = ({ isFocusVisible, isSelected, isHovered }: AriaTabRenderPr
         isFocusVisible && "outline-2 -outline-offset-2",
         (isSelected || isHovered) && "bg-primary_alt text-secondary shadow-xs ring-1 ring-primary ring-inset *:data-icon:text-fg-secondary_hover",
     ),
+    // Selected is ink, not brand: teal means "you can press it", and every tab
+    // in the strip can be pressed. The underline says which one you're on.
     underline: cx(
         "rounded-none border-b-2 border-transparent outline-focus-ring *:data-icon:text-fg-quaternary",
         isFocusVisible && "outline-2 -outline-offset-2",
-        (isSelected || isHovered) && "border-fg-brand-primary_alt text-brand-secondary *:data-icon:text-fg-brand-secondary_hover",
+        isHovered && !isSelected && "text-secondary",
+        isSelected && "border-fg-primary text-primary *:data-icon:text-fg-secondary",
     ),
     line: cx(
         "rounded-none border-l-2 border-transparent outline-focus-ring *:data-icon:text-fg-quaternary",
@@ -88,7 +91,7 @@ const getHorizontalStyles = ({ size, fullWidth }: { size?: "sm" | "md"; fullWidt
        2px in on a fine pointer and 12px in on a touch one, against content that
        started at the container edge. The padding still does its job between
        tabs and still carries the touch target. */
-    underline: cx("gap-3 -mx-0.5 touch:-mx-3", fullWidth && "w-full gap-4"),
+    underline: cx("gap-5 -mx-0.5 touch:-mx-3 touch:gap-3", fullWidth && "w-full gap-4"),
     line: "gap-2",
 });
 

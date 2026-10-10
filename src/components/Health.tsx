@@ -21,8 +21,9 @@ import {
 } from "../lib/health";
 import { Input } from "@/components/base/input/input";
 import { Label } from "@/components/base/input/label";
-import { NativeSelect } from "@/components/base/select/select-native";
 import { Explain } from "./Explain";
+import { HEALTH_PILL, HealthMeter } from "./brand/glyphs";
+import { cx } from "@/utils/cx";
 
 /** The property dropdown. `null` from onChange means "clear the rating". */
 export function HealthSelect({
@@ -38,7 +39,6 @@ export function HealthSelect({
   ariaLabel?: string;
   className?: string;
 }) {
-  const color = value ? HEALTH_COLOR[value] : undefined;
   const compact = size === "sm";
   const options = [
     { label: "Not rated", value: "" },
@@ -58,14 +58,11 @@ export function HealthSelect({
         /* Hand-rolled rather than the design-system select, so it carries the
            touch floors itself: 16px keeps iOS from zooming the page on focus,
            and min-h-11 makes a 26px row control a real target. */
-        className={`w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-md border-0 px-2 py-1 text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500/40 touch:min-h-11 touch:text-md ${
-          value ? "" : "text-quaternary"
-        } ${className}`}
-        style={
-          color
-            ? { backgroundColor: color + "1f", color }
-            : { backgroundColor: "transparent" }
-        }
+        className={cx(
+          "w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-full border-0 px-2.5 py-1 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500/40 touch:min-h-11 touch:text-md",
+          value ? HEALTH_PILL[value] : "bg-transparent text-quaternary",
+          className
+        )}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -76,17 +73,39 @@ export function HealthSelect({
     );
   }
 
+  /* The full-size control is the scale itself: five levels side by side, one
+     tap each, the meter on every one so the scale teaches itself. A dropdown
+     hid four of the five answers behind a click. */
   return (
-    <NativeSelect
+    <div
+      role="radiogroup"
       aria-label={ariaLabel}
-      title={value ? HEALTH_HINT[value] : "Not rated yet"}
-      value={value ?? ""}
-      onChange={(e) => onChange((e.target.value || null) as HealthLevel | null)}
+      className={cx("flex flex-wrap gap-1.5", className)}
       onClick={(e) => e.stopPropagation()}
-      options={options}
-      selectClassName={`cursor-pointer font-medium ${className}`}
-      style={color ? { color } : undefined}
-    />
+    >
+      {HEALTH_LEVELS.map((l) => {
+        const on = value === l;
+        return (
+          <button
+            key={l}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            title={HEALTH_HINT[l]}
+            onClick={() => onChange(on ? null : l)}
+            className={cx(
+              "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold transition-colors touch:min-h-11",
+              on
+                ? cx("border-transparent", HEALTH_PILL[l])
+                : "border-secondary text-tertiary hover:border-primary hover:text-secondary"
+            )}
+          >
+            <HealthMeter level={on ? l : undefined} size={16} />
+            {HEALTH_LABEL[l]}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -101,7 +120,6 @@ export function HealthChip({
   derived?: boolean;
   size?: "sm" | "md";
 }) {
-  const color = HEALTH_COLOR[health.level];
   const stale = isStale(health);
   const rated = formatRatedOn(health);
   const title = [
@@ -114,19 +132,18 @@ export function HealthChip({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md font-medium ${
-        size === "sm" ? "px-1.5 py-0.5 text-caption" : "px-2 py-0.5 text-xs"
-      }`}
-      style={{ backgroundColor: color + "1f", color }}
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-full font-semibold",
+        size === "sm" ? "py-0.5 pr-1.5 pl-1 text-caption" : "py-0.5 pr-2 pl-1.5 text-xs",
+        // A team read averaged from its people is hollow — it isn't my call.
+        derived ? "border border-dashed border-current bg-transparent" : "",
+        HEALTH_PILL[health.level],
+        derived && "!bg-transparent"
+      )}
       title={title}
     >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{
-          backgroundColor: derived ? "transparent" : color,
-          boxShadow: derived ? `inset 0 0 0 1.5px ${color}` : undefined,
-        }}
-      />
+      <HealthMeter level={health.level} size={size === "sm" ? 13 : 15} />
+      {derived && "~"}
       {HEALTH_LABEL[health.level]}
       {stale && <span className="opacity-60">·&nbsp;stale</span>}
     </span>

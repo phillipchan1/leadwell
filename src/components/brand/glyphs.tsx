@@ -1,3 +1,4 @@
+import type { SVGProps } from "react";
 import type { HealthLevel } from "@/types";
 import type { Readiness, ReadinessState } from "@/lib/readiness";
 import type { PrayerState } from "@/lib/prayer";
@@ -115,6 +116,15 @@ export function HealthMeter({
     </svg>
   );
 }
+
+/** Soft pill classes for a health level — the chip, the header, the table. */
+export const HEALTH_PILL: Record<HealthLevel, string> = {
+  thriving: "bg-cond-thriving-soft text-cond-thriving-ink",
+  solid: "bg-cond-solid-soft text-cond-solid-ink",
+  watch: "bg-cond-watch-soft text-cond-watch-ink",
+  strained: "bg-cond-strained-soft text-cond-strained-ink",
+  critical: "bg-cond-critical-soft text-cond-critical-ink",
+};
 
 // ── Rhythm ring ───────────────────────────────────────────────────────────
 
@@ -275,3 +285,23 @@ export function PrayerFlame({
 
 /** The flame path, for places that need to draw it inline. */
 export const FLAME_PATH = FLAME;
+
+/**
+ * The flame as an icon, with the same props as the icon set the app already
+ * uses — so it drops into a Button's `iconLeading` or a tab's `icon`.
+ */
+export function FlameIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.9}
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d={FLAME} />
+    </svg>
+  );
+}

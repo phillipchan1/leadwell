@@ -13,12 +13,13 @@ import { derivedRead, hasLeadershipRead } from "../lib/derive";
 import { meetingFor, todayISO, type CheckFix } from "../lib/readiness";
 import { teamsLedBy } from "../lib/teams";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
-import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import { TintBadge, ProgressBar, ProfileAdminLinks, SectionTitle } from "./ui";
+import { ProgressBar, ProfileAdminLinks, SectionTitle } from "./ui";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { EntityModeTabs } from "./EntityModeTabs";
+import { EntityHeader, IdentityChip } from "./EntityHeader";
+import { personDomainId } from "../lib/teams";
 
 import { AssessmentEditor } from "./AssessmentEditor";
 import { HealthField } from "./Health";
@@ -74,7 +75,10 @@ export function PersonProfile({
   const trackMeeting = useStore((s) => s.trackMeeting);
   const addSession = useStore((s) => s.addSession);
 
+  const domains = useStore((s) => s.domains);
+  const selectMeeting = useStore((s) => s.selectMeeting);
   const team = teams.find((t) => t.id === person.teamId);
+  const domain = domains.find((d) => d.id === personDomainId(person, teams));
   const capacity = capacities.find((c) => c.id === team?.capacityId);
   // Teams that are theirs to run, not mine.
   const led = teamsLedBy(teams, person.id);
@@ -95,8 +99,6 @@ export function PersonProfile({
   const myGoals = goals.filter((g) => g.personId === person.id);
   const myNotes = notes.filter((n) => n.personId === person.id);
 
-  const lastSession = mySessions.find((o) => o.notes?.trim());
-  const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
   const mode = entityMode(section);
   const setMode = (next: EntityMode) => setSection(modeSection(next));
@@ -140,53 +142,74 @@ export function PersonProfile({
       className="relative flex h-full min-h-0 flex-col overflow-hidden bg-primary"
       data-person-mode={mode}
     >
-      {/* Header */}
-      <div className="entity-header shrink-0 border-b border-secondary bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:bg-stone-900/90">
-        <div className="flex items-start gap-3">
-          <Avatar
-            name={person.name}
-            photo={person.photo}
-            size={52}
-            className="entity-header-avatar"
-          />
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold">{person.name}</h2>
-            <div className="text-xs text-stone-500">
-              {[person.role, team?.name ?? "Reports directly to me"]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
+      <EntityHeader
+        kind="person"
+        id={person.id}
+        name={person.name}
+        photo={person.photo}
+        density={density}
+        health={person.health}
+        showHealth={!isLeadUp}
+        prayer={person.prayer}
+        onMode={setMode}
+        meta={
+          <div className="flex flex-col gap-1">
+            <span className="truncate">
+              {person.role && <>{person.role} · </>}
+              {team ? (
+                <button
+                  type="button"
+                  onClick={() => selectTeam(team.id)}
+                  className="font-serif text-[15.5px] hover:underline hover:decoration-1 hover:underline-offset-4"
+                >
+                  {team.name}
+                </button>
+              ) : (
+                "Reports directly to me"
+              )}
+            </span>
             {led.length > 0 && (
-              <div className="entity-header-secondary mt-1 flex flex-wrap items-center gap-1">
-                <span className="text-caption text-quaternary">
-                  Leads
-                </span>
+              <span className="entity-header-secondary flex flex-wrap items-center gap-1.5 text-[13px] text-quaternary">
+                Leads
                 {led.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => selectTeam(t.id)}
-                    className="outline-focus-ring focus-visible:outline-2 focus-visible:outline-offset-2 touch:min-h-11 touch:px-3 rounded-md bg-tertiary px-1.5 py-0.5 text-caption text-tertiary hover:bg-stone-200 dark:hover:bg-stone-700"
+                    className="font-serif text-[15px] text-secondary hover:underline hover:decoration-1 hover:underline-offset-4 touch:min-h-11"
                   >
                     {t.name}
                   </button>
                 ))}
-              </div>
+              </span>
             )}
-            {capacity && (
-              <div className="entity-header-secondary mt-1">
-                <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
-              </div>
-            )}
-            <div className="entity-header-secondary mt-1 text-caption text-quaternary">
-              {nextSession &&
-                `Next meeting ${nextSession}`}
-              {nextSession && lastSession && " · "}
-              {lastSession && `Last ${lastSession.date}`}
-            </div>
           </div>
-        </div>
-      </div>
+        }
+        chips={
+          <>
+            {domain && <IdentityChip color={domain.color}>{domain.name}</IdentityChip>}
+            {mbtiKey && <IdentityChip>{mbtiKey}</IdentityChip>}
+            {person.assessments.enneagram && (
+              <IdentityChip>Enneagram {person.assessments.enneagram}</IdentityChip>
+            )}
+            {capacity && <IdentityChip>{capacity.label}</IdentityChip>}
+            {isLeadUp && <IdentityChip>Leading up</IdentityChip>}
+          </>
+        }
+        actions={
+          <>
+            <Button size="sm" color="secondary" onClick={() => setMode("notes")}>
+              Write a note
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => (meeting ? selectMeeting(meeting.id) : setMode("meetings"))}
+            >
+              {meeting ? (isLeadUp ? "Plan the check-in" : "Plan the 1:1") : "Set up a 1:1"}
+            </Button>
+          </>
+        }
+      />
 
       <EntityModeTabs
         subject={isLeadUp ? "leadUpPerson" : "person"}

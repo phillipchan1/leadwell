@@ -6,7 +6,7 @@ import { hasLeadershipRead } from "../lib/derive";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import { TintBadge, ProgressBar, SectionTitle } from "./ui";
+import { ProgressBar, SectionTitle } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Input } from "@/components/base/input/input";
@@ -18,6 +18,7 @@ import { StatsBar } from "./StatsBar";
 import { PrepPanel } from "./PrepPanel";
 import { SubjectMeetings } from "./SubjectMeetings";
 import { EntityModeTabs } from "./EntityModeTabs";
+import { EntityHeader, IdentityChip } from "./EntityHeader";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { confirmAction } from "./ConfirmDialog";
 import { deleteWithUndo } from "../lib/undo";
@@ -54,6 +55,7 @@ export function TeamProfile({
   const setSection = useStore((s) => s.setSection);
   const selectTeam = useStore((s) => s.selectTeam);
   const selectPerson = useStore((s) => s.selectPerson);
+  const selectMeeting = useStore((s) => s.selectMeeting);
   const selectedPersonId = useStore((s) => s.selectedPersonId);
   const updateTeam = useStore((s) => s.updateTeam);
   const setHealth = useStore((s) => s.setHealth);
@@ -162,68 +164,86 @@ export function TeamProfile({
     >
       {/* Header — identity only. The name stays editable in place; everything
           that isn't identity moved into a mode. */}
-      <header
-        className="entity-header shrink-0 border-b border-secondary px-4 py-4 sm:px-6"
-        style={{ borderTop: `3px solid ${accent}` }}
-      >
-        <div>
-          <div className="flex items-center gap-2">
-            <input
-              className="-ml-2 min-w-0 flex-1 rounded-lg bg-transparent px-2 py-1 text-2xl font-semibold tracking-tight text-primary outline-none transition-[background-color,box-shadow] duration-150 hover:bg-secondary focus:bg-secondary focus:shadow-[inset_0_0_0_1.5px_rgb(13_148_136/0.35)]"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={saveName}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  (e.target as HTMLInputElement).blur();
-                }
-                if (e.key === "Escape") {
-                  setName(team.name);
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              aria-label="Team name"
-            />
-            {/* "Delete" used to sit right beside "Settings" — a mis-tap
-                destroyed the team and every member on it. Deleting lives in
-                the team's settings modal, next to the rest of its admin. */}
-            <Button
-              size="sm"
-              color="secondary"
-              className="shrink-0"
-              onClick={() => openModal({ kind: "team", team })}
-            >
+      <EntityHeader
+        kind="team"
+        id={team.id}
+        name={team.name}
+        square
+        density={density}
+        health={team.health}
+        prayer={team.prayer}
+        onMode={setMode}
+        title={
+          <input
+            className="name -ml-2 min-w-0 rounded-lg bg-transparent px-2 py-0.5 text-[28px] leading-tight text-primary outline-none transition-[background-color,box-shadow] duration-150 hover:bg-secondary focus:bg-secondary focus:shadow-[inset_0_0_0_1.5px_var(--color-teal-300)] sm:text-[34px]"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+              if (e.key === "Escape") {
+                setName(team.name);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            aria-label="Team name"
+          />
+        }
+        meta={
+          <span className="flex flex-wrap items-center gap-x-1.5">
+            <span>
+              {members.length} {members.length === 1 ? "person" : "people"}
+            </span>
+            {parent && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>
+                  under{" "}
+                  <button type="button" onClick={() => selectTeam(parent.id)} className="font-serif text-[15.5px] hover:underline hover:decoration-1 hover:underline-offset-4">
+                    {parent.name}
+                  </button>
+                </span>
+              </>
+            )}
+            {leader && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>
+                  led by{" "}
+                  <button type="button" onClick={() => selectPerson(leader.id)} className="font-serif text-[15.5px] hover:underline hover:decoration-1 hover:underline-offset-4">
+                    {leader.name}
+                  </button>
+                </span>
+              </>
+            )}
+          </span>
+        }
+        chips={
+          <>
+            {domain && <IdentityChip color={domain.color}>{domain.name}</IdentityChip>}
+            {capacity && <IdentityChip>{capacity.label}</IdentityChip>}
+            {team.direction === "up" && <IdentityChip>Reports up</IdentityChip>}
+          </>
+        }
+        actions={
+          /* "Delete" used to sit right beside "Settings" — a mis-tap
+             destroyed the team and every member on it. Deleting lives in the
+             team's settings modal, next to the rest of its admin. */
+          <>
+            <Button size="sm" color="secondary" onClick={() => openModal({ kind: "team", team })}>
               Settings
             </Button>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
-              {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
-              {capacity && (
-                <TintBadge color={capacity.color}>{capacity.label}</TintBadge>
-              )}
-              <span>
-                {members.length} {members.length === 1 ? "person" : "people"}
-              </span>
-              <span className="text-stone-400 dark:text-stone-600">·</span>
-              <span>
-                {team.lastMet ? (
-                  <>
-                    Met{" "}
-                    <span className="font-medium text-stone-700 dark:text-stone-400">
-                      {team.lastMet}
-                    </span>
-                  </>
-                ) : (
-                  "Not met yet"
-                )}
-              </span>
-              {team.direction === "up" && <span>· Reports up</span>}
-            </div>
-          </div>
-        </div>
-      </header>
+            {teamMeeting && (
+              <Button size="sm" onClick={() => selectMeeting(teamMeeting.id)}>
+                Plan {teamMeeting.name?.trim() || "the meeting"}
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <EntityModeTabs
         subject="team"

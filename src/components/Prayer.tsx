@@ -1,9 +1,9 @@
 /**
  * The prayer dimension, in every density it's needed at.
  *
- * It keeps exactly one thing of its own: **the open hand and a muted violet**.
- * The hand (`HeartHand`) marks this mode everywhere it appears — the tab, the
- * canvas layer, the scan bar, the chip on a card — and the violet stays outside
+ * It keeps exactly one thing of its own: **the flame and vesper violet**. The
+ * flame marks this mode everywhere it appears — the tab, the canvas layer, the
+ * scan bar, the chip on a card — and the violet stays outside
  * the traffic-light colors health and readiness share, because nothing here is
  * a warning and none of it is scored.
  *
@@ -15,7 +15,7 @@
  * the app uses: it's always open, and Enter saves it.
  */
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { HeartHand } from "@untitledui/icons";
+import { FlameIcon } from "./brand/glyphs";
 import { useStore } from "../store/useStore";
 import type { PrayerEntry, PrayerEntryKind, PrayerSubjectKind } from "../types";
 import type { Prayer } from "../types";
@@ -40,7 +40,7 @@ import { confirmAction } from "./ConfirmDialog";
 import { autoFocusUnlessTouch } from "../lib/pointer";
 
 /** The one anchor. Imported from here so the mode has a single icon. */
-export { HeartHand as PrayerIcon };
+export { FlameIcon as PrayerIcon };
 
 /** Burden is the default; scripture is the one variation worth a toggle. */
 const KIND_LABEL: Record<PrayerEntryKind, string> = {
@@ -86,7 +86,7 @@ export function PrayerMark({
       style={{ backgroundColor: color + "1f", color }}
       title={title}
     >
-      <HeartHand className={size === "sm" ? "size-3" : "size-3.5"} />
+      <FlameIcon className={size === "sm" ? "size-3" : "size-3.5"} />
       {shortSincePrayed(prayer)}
     </span>
   );
@@ -224,7 +224,7 @@ export function CardPrayer({
               className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-caption font-medium text-violet-700 transition-colors touch:min-h-11 hover:bg-violet-100/80 disabled:text-violet-400 disabled:hover:bg-transparent dark:text-violet-300 dark:hover:bg-violet-950/60 dark:disabled:text-violet-500"
               title={PRAYER_HINT[state]}
             >
-              <HeartHand
+              <FlameIcon
                 className="size-3"
                 style={{ color: PRAYER_COLOR[state] }}
               />
@@ -250,7 +250,7 @@ export function CardPrayer({
           onClick={() => setPrayer(subjectKind, subjectId, true)}
           className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-violet-700 touch:min-h-11 hover:text-violet-800 dark:text-violet-300 dark:hover:text-violet-200"
         >
-          <HeartHand className="size-3.5 text-stone-400 dark:text-stone-500" />
+          <FlameIcon className="size-3.5 text-stone-400 dark:text-stone-500" />
           Take up in prayer
         </button>
       )}
@@ -339,7 +339,7 @@ export function PrayerDot({ prayer }: { prayer?: Prayer }) {
     <Explain
       text={`${PRAYER_LABEL[state]}${prayer.focus ? ` — ${prayer.focus}` : ""}`}
     >
-      <HeartHand
+      <FlameIcon
         className="size-3 shrink-0"
         style={{ color: PRAYER_COLOR[state] }}
       />
@@ -439,7 +439,7 @@ export function PrayerPanel({
         {prayer ? (
           <>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <HeartHand
+              <FlameIcon
                 className="size-4 shrink-0 self-center"
                 style={{ color: PRAYER_COLOR[state] }}
               />
@@ -477,7 +477,7 @@ export function PrayerPanel({
               <Button
                 size="sm"
                 color="secondary"
-                iconLeading={HeartHand}
+                iconLeading={FlameIcon}
                 isDisabled={prayedToday}
                 onClick={() => markPrayed(subjectKind, subjectId)}
               >
@@ -502,7 +502,7 @@ export function PrayerPanel({
         ) : (
           <div className="flex flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <HeartHand className="size-4 text-stone-400 dark:text-stone-500" />
+              <FlameIcon className="size-4 text-stone-400 dark:text-stone-500" />
               <span className="text-sm text-stone-600 dark:text-stone-300">
                 {subjectName} isn't on your prayer list.
               </span>
@@ -514,7 +514,7 @@ export function PrayerPanel({
             </p>
             <Button
               size="sm"
-              iconLeading={HeartHand}
+              iconLeading={FlameIcon}
               onClick={() => setPrayer(subjectKind, subjectId, true)}
             >
               Take up in prayer

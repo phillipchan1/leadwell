@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import type { Manager } from "../types";
-import { Avatar } from "./Avatar";
-import { TintBadge, ProfileAdminLinks } from "./ui";
+import { ProfileAdminLinks } from "./ui";
+import { EntityHeader, IdentityChip } from "./EntityHeader";
+import { Button } from "@/components/base/buttons/button";
 import { ManagerModal } from "./forms";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
@@ -45,6 +46,7 @@ export function ManagerProfile({
   const section = useStore((s) => s.section);
   const setSection = useStore((s) => s.setSection);
   const selectManager = useStore((s) => s.selectManager);
+  const selectMeeting = useStore((s) => s.selectMeeting);
   const updateManagerLeadUp = useStore((s) => s.updateManagerLeadUp);
   const deleteManager = useStore((s) => s.deleteManager);
 
@@ -58,8 +60,6 @@ export function ManagerProfile({
     .sort((a, b) => b.date.localeCompare(a.date));
   const myNotes = notes.filter((n) => n.personId === manager.id);
 
-  const lastSession = mySessions.find((o) => o.notes?.trim());
-  const nextSession = mySessions.find((o) => o.nextDate)?.nextDate;
 
   const mode = entityMode(section);
   const setMode = (next: EntityMode) => setSection(modeSection(next));
@@ -91,26 +91,35 @@ export function ManagerProfile({
       data-manager-mode={mode}
     >
       {/* Header — identity only; everything else lives in a mode */}
-      <div className="entity-header shrink-0 border-b border-secondary bg-white/90 px-4 py-4 backdrop-blur sm:px-6 dark:bg-stone-900/90">
-        <div className="flex items-start gap-3">
-          <Avatar name={manager.name} photo={manager.photo} size={52} />
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold">{manager.name}</h2>
-            <div className="text-xs text-stone-500">
-              {manager.role ?? "Leader I report to"}
-            </div>
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <TintBadge color="#3B82F6">Leading up</TintBadge>
-              {domain && <TintBadge color={domain.color}>{domain.name}</TintBadge>}
-            </div>
-            <div className="mt-1 text-caption text-quaternary">
-              {nextSession && `Next meeting ${nextSession}`}
-              {nextSession && lastSession && " · "}
-              {lastSession && `Last ${lastSession.date}`}
-            </div>
-          </div>
-        </div>
-      </div>
+      <EntityHeader
+        kind="manager"
+        id={manager.id}
+        name={manager.name}
+        photo={manager.photo}
+        density={density}
+        showHealth={false}
+        prayer={manager.prayer}
+        onMode={setMode}
+        meta={manager.role ?? "Leader I report to"}
+        chips={
+          <>
+            <IdentityChip>Leading up</IdentityChip>
+            {domain && <IdentityChip color={domain.color}>{domain.name}</IdentityChip>}
+          </>
+        }
+        actions={
+          <>
+            <Button size="sm" color="secondary" onClick={() => setMode("profile")}>
+              Their manual
+            </Button>
+            {checkIn && (
+              <Button size="sm" onClick={() => selectMeeting(checkIn.id)}>
+                Plan the check-in
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <EntityModeTabs
         subject="manager"

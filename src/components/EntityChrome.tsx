@@ -254,7 +254,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             <Button
               size="sm"
               color="link-gray"
-              className="max-w-[45%] truncate"
+              className="max-w-[45%] truncate font-serif !text-[15px] !font-normal"
               onClick={trail.parent.go}
             >
               {trail.parent.label}
@@ -265,7 +265,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             />
           </>
         )}
-        <span className="truncate px-1 py-1 font-medium text-stone-700 dark:text-stone-200">
+        <span className="truncate px-1 py-1 font-serif text-[15px] text-stone-800 dark:text-stone-100">
           {trail.label}
         </span>
       </nav>

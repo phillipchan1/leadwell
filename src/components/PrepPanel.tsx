@@ -1,11 +1,13 @@
 import type { MeetingRhythm, MeetingSubjectKind, TrackedMeeting } from "../types";
+import { RhythmRing, STATE_TEXT } from "./brand/glyphs";
+import { friendlyDates } from "../lib/today";
+import { cx } from "@/utils/cx";
 import { useState } from "react";
 import { useStore } from "../store/useStore";
 import {
   MEETING_LABEL,
   RHYTHM_LABEL,
   RHYTHM_OPTIONS,
-  STATE_COLOR,
   STATE_LABEL,
   formatCountdown,
   meetingAgenda,
@@ -167,7 +169,6 @@ function MeetingPrep({
 
   const agenda = meetingAgenda(topics, sessions, meeting.id);
   const readiness = meetingReadiness(meeting, sessions, agenda);
-  const color = STATE_COLOR[readiness.state];
   const sessionCount = sessionsFor(meeting.id, sessions).length;
 
   return (
@@ -206,32 +207,18 @@ function MeetingPrep({
       </div>
 
       <div className="rounded-xl border border-secondary">
-        <div
-          className="flex items-center gap-2.5 rounded-t-xl px-3 py-2.5"
-          style={{ backgroundColor: color + "14" }}
-        >
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{
-              backgroundColor:
-                readiness.state === "drifting" ? "transparent" : color,
-              boxShadow:
-                readiness.state === "drifting"
-                  ? `inset 0 0 0 2px ${color}`
-                  : undefined,
-            }}
-          />
+        <div className="flex items-center gap-3 rounded-t-xl border-b border-secondary bg-secondary/60 px-3.5 py-3 dark:bg-transparent">
+          <RhythmRing reading={readiness} size={26} />
           <div className="min-w-0 flex-1">
-            <div className="text-xs font-semibold" style={{ color }}>
+            <div className={cx("text-[13px] font-semibold", STATE_TEXT[readiness.state])}>
               {STATE_LABEL[readiness.state]}
             </div>
-            <div className="truncate text-caption text-quaternary">
-              {readiness.headline}
+            <div className="truncate text-caption text-tertiary">
+              {friendlyDates(readiness.headline)}
             </div>
           </div>
           <span
-            className="shrink-0 font-mono text-caption tabular-nums"
-            style={{ color }}
+            className={cx("shrink-0 font-mono text-[11.5px] font-medium uppercase tabular-nums", STATE_TEXT[readiness.state])}
             title={
               readiness.projected
                 ? `Projected from the ${RHYTHM_LABEL[meeting.rhythm].toLowerCase()} rhythm — not booked`
@@ -249,15 +236,17 @@ function MeetingPrep({
               className="flex items-start gap-2.5 px-3 py-2 text-xs"
             >
               <span
-                className="mt-0.5 grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full text-caption font-bold text-white"
-                style={
-                  check.done
-                    ? { backgroundColor: STATE_COLOR.ready }
-                    : { boxShadow: `inset 0 0 0 1.5px ${STATE_COLOR.prep_due}` }
-                }
+                className={cx(
+                  "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full",
+                  check.done ? "bg-cond-thriving" : "border-[1.5px] border-cond-watch"
+                )}
                 aria-hidden
               >
-                {check.done ? "✓" : ""}
+                {check.done && (
+                  <svg viewBox="0 0 24 24" className="size-2.5 stroke-white dark:stroke-stone-950" fill="none" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12.5l4.2 4.2L19 7" />
+                  </svg>
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <div
@@ -271,7 +260,7 @@ function MeetingPrep({
                 </div>
                 {check.detail && (
                   <div className="truncate text-caption text-quaternary">
-                    {check.detail}
+                    {friendlyDates(check.detail)}
                   </div>
                 )}
               </div>
