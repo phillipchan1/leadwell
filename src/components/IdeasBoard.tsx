@@ -84,7 +84,11 @@ export function IdeasBoard({ meetingId }: { meetingId?: string } = {}) {
   const labelOf = useMemo(() => {
     const src = { people, teams, managers };
     return new Map(
-      meetings.map((m) => [m.id, meetingTitle(m, meetingSubjectName(m, src))])
+      // A meeting is called by its own name, or by who it's with.
+      meetings.map((m) => {
+        const who = meetingSubjectName(m, src);
+        return [m.id, m.name?.trim() || who || meetingTitle(m, who)];
+      })
     );
   }, [meetings, people, teams, managers]);
 
@@ -277,6 +281,12 @@ export function IdeasBoard({ meetingId }: { meetingId?: string } = {}) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {!meetingId && (
+        <header className="flex flex-col gap-1 pb-1">
+          <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em]">Ideas</h1>
+          <p className="font-serif text-[17px] text-secondary italic">What do I want to raise?</p>
+        </header>
+      )}
       {/* Capture */}
       <form
         className="flex flex-wrap items-end gap-2 rounded-xl border border-secondary bg-primary p-3 shadow-xs"
@@ -515,7 +525,15 @@ export function IdeasBoard({ meetingId }: { meetingId?: string } = {}) {
                         />
                       </>
                     ) : (
-                      <span className="min-w-0 flex-1 truncate px-1 text-xs font-semibold text-stone-700 dark:text-stone-200">
+                      <span
+                        className={cx(
+                          "min-w-0 flex-1 truncate px-1",
+                          // Columns named after people or meetings are names, so serif.
+                          groupBy === "meeting" && col.id !== UNASSIGNED
+                            ? "font-serif text-[15px] text-primary"
+                            : "text-xs font-semibold text-stone-700 dark:text-stone-200"
+                        )}
+                      >
                         {col.label}
                       </span>
                     )}

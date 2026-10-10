@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { RhythmRing, STATE_TEXT } from "./brand/glyphs";
+import { cx } from "@/utils/cx";
 import { useStore } from "../store/useStore";
 import type { MeetingSubjectKind, TrackedMeeting } from "../types";
 import {
   RHYTHM_LABEL,
-  STATE_COLOR,
   STATE_LABEL,
   formatCountdown,
   meetingSubjectName,
@@ -12,7 +13,7 @@ import {
   type Readiness,
 } from "../lib/readiness";
 import { looseTopics, topicsFor } from "../lib/topics";
-import { Card, SectionTitle, TintBadge } from "./ui";
+import { Card } from "./ui";
 import { Th } from "./Th";
 import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
@@ -70,7 +71,9 @@ export function MeetingsTable() {
       const mine = topicsFor(topics, meeting.id);
       return {
         meeting,
-        title: meetingTitle(meeting, subjectName),
+        // A 1:1 is called by the person's name; "Meeting · Sarah Kim" says
+        // the same thing with more words.
+        title: meeting.name?.trim() || subjectName || meetingTitle(meeting, subjectName),
         subjectName,
         readiness: readinessOf(meeting, { meetings, sessions, topics }),
         open: mine.filter((t) => t.status === "open").length,
@@ -128,9 +131,10 @@ export function MeetingsTable() {
     <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
       <div className="flex flex-col gap-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <SectionTitle>Meetings</SectionTitle>
-            <p className="mt-1 text-xs text-quaternary">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em]">Meetings</h1>
+            <p className="font-serif text-[17px] text-secondary italic">Am I ready to sit down?</p>
+            <p className="mt-1 font-mono text-[11.5px] tracking-[0.03em] text-quaternary uppercase">
               {rows.length} recurring
               {totalLoose > 0 && (
                 <>
@@ -193,18 +197,19 @@ export function MeetingsTable() {
                     className="w-full rounded-xl border border-secondary bg-primary p-3 text-left touch:min-h-11"
                   >
                     <div className="flex items-center gap-2">
-                      <StateDot readiness={r.readiness} />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-stone-800 dark:text-stone-100">
+                      <RhythmRing reading={r.readiness} size={18} />
+                      <span className="min-w-0 flex-1 truncate font-serif text-[17px] text-primary">
                         {r.title}
                       </span>
                       <span
-                        className="shrink-0 font-mono text-caption tabular-nums"
-                        style={{ color: STATE_COLOR[r.readiness.state] }}
+                        className={cx("shrink-0 font-mono text-caption uppercase tabular-nums", STATE_TEXT[r.readiness.state])}
                       >
                         {formatCountdown(r.readiness)}
                       </span>
                     </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-4 text-caption text-quaternary">
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-[26px] text-caption text-quaternary">
+                      <span>{kindLabel(r)}</span>
+                      <span>·</span>
                       <span>{RHYTHM_LABEL[r.meeting.rhythm]}</span>
                       <span>·</span>
                       <span>
@@ -249,12 +254,12 @@ export function MeetingsTable() {
                       )}
                       className="cursor-pointer hover:bg-stone-50 focus-visible:bg-stone-50 dark:hover:bg-stone-800/40 dark:focus-visible:bg-stone-800/40"
                     >
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <StateDot readiness={r.readiness} />
-                          <span className="truncate font-medium text-stone-800 dark:text-stone-100">
+                      <td className="px-4 py-3">
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate font-serif text-[17px] leading-[22px] text-primary">
                             {r.title}
                           </span>
+                          <span className="truncate text-[12.5px] text-quaternary">{kindLabel(r)}</span>
                         </div>
                       </td>
                       <td className="px-3 py-2 text-xs text-quaternary">
@@ -262,8 +267,7 @@ export function MeetingsTable() {
                       </td>
                       <td className="px-3 py-2">
                         <span
-                          className="font-mono text-xs tabular-nums"
-                          style={{ color: STATE_COLOR[r.readiness.state] }}
+                          className={cx("font-mono text-xs uppercase tabular-nums", STATE_TEXT[r.readiness.state])}
                         >
                           {formatCountdown(r.readiness)}
                         </span>
@@ -275,9 +279,10 @@ export function MeetingsTable() {
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <TintBadge color={STATE_COLOR[r.readiness.state]}>
+                        <span className={cx("inline-flex items-center gap-2 text-[13px] font-medium", STATE_TEXT[r.readiness.state])}>
+                          <RhythmRing reading={r.readiness} size={18} />
                           {STATE_LABEL[r.readiness.state]}
-                        </TintBadge>
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -300,22 +305,11 @@ const STATE_RANK: Record<string, number> = {
   dormant: 0,
 };
 
-function StateDot({ readiness }: { readiness: Readiness }) {
-  const color = STATE_COLOR[readiness.state];
-  return (
-    <span
-      aria-hidden
-      className="h-2 w-2 shrink-0 rounded-full"
-      title={STATE_LABEL[readiness.state]}
-      style={{
-        // Drifting is drawn hollow so it reads as absence, not alarm — the
-        // same treatment the canvas and the prep panel already give it.
-        backgroundColor: readiness.state === "drifting" ? "transparent" : color,
-        boxShadow:
-          readiness.state === "drifting" ? `inset 0 0 0 2px ${color}` : undefined,
-      }}
-    />
-  );
+/** Who a meeting is with, in one word or name: "1:1", the team, "Check-in". */
+function kindLabel(r: { meeting: { subjectKind: string; name?: string }; subjectName?: string }) {
+  if (r.meeting.subjectKind === "person") return "1:1";
+  if (r.meeting.subjectKind === "manager") return r.meeting.name ? `Check-in · ${r.subjectName ?? ""}` : "Check-in";
+  return r.meeting.name ? (r.subjectName ?? "Team") : "Team meeting";
 }
 
 function LooseBadge({ count }: { count: number }) {
