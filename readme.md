@@ -74,12 +74,14 @@ write-up in the serif and the person's context side by side.
 
 ### A meeting: Ideas → Plan → Run
 
-Every recurring meeting is a page of its own (`/meeting/:id/plan`). Its header
+Every recurring meeting is a page of its own (`/m/staff-meeting`). Its header
 answers three things — is the rhythm holding, what's on the next one, and which
 sections of the standing agenda keep getting skipped (a coverage strip per
 section over the next eight weeks). Under it:
 
-- **Plan** — this meeting's ideas in a tray, its weeks as sheets beside it, one
+- **Agenda** — the next occurrence as a running order (see below), the page a
+  meeting opens on and the one to bookmark.
+- **Plan ahead** — this meeting's ideas in a tray, its weeks as sheets beside it, one
   row per section of the standing agenda. Drag an idea onto a week, or type into
   a cell with the `#tag @meeting !` grammar. Booked weeks are solid, weeks the
   rhythm only expects are dashed, skipped weeks stay as a narrow column you can
@@ -121,14 +123,38 @@ sibling pager (`←` / `→`), close, and that promotion for every entity kind �
 profile components own content only, and render at both densities from one tree.
 
 ```
-/today                       what needs me — the front door
-/today?person=p3             a person peeked beside Today
+/                            Today: what needs me — the front door
+/?person=p3                  a person peeked beside Today
 /circles                     People, drawn as rings around you
+/m/staff-meeting             that meeting's agenda for its next occurrence
+/m/staff-meeting/plan        the same meeting, planned weeks ahead
 /tree                        canvas, nothing open
 /tree?team=t1                team peek beside the canvas
 /tree?person=p3&s=sessions   person peek, 1:1s section
 /person/p3/sessions          same person, same section, full page
 ```
+
+## Your teams and meeting agendas
+
+**Today** (`/`) is where the app opens, and under the next move it answers the
+weekly question — *is each team I lead ready for its next meeting?* — with one
+card per team, sorted by how soon it meets. Each card leads with that meeting
+and the sections of its next occurrence (`Prayer 2 · Training 0 · Discussion
+3`), then the team's next step and open follow-ups. A delegated team rides along
+on its leader's 1:1 rather than getting a card of its own.
+
+Every card opens the meeting's **Agenda** — its default mode, and the page to
+bookmark. It shows one occurrence: the four readiness checks while it's the
+next one, follow-ups that outlive any single meeting, and the same cards and
+ideas rail as the board, drawn as one running order. `←` / `→` step to later
+occurrences, which is how you plan further out without leaving the agenda.
+**Plan ahead** is the eight-week board it used to open on.
+
+Meetings are addressed by a slug derived from their name (`/m/staff-meeting`,
+or `/m/sarah-kim` for an unnamed 1:1); ids still resolve and old
+`/meeting/<id>` links redirect to the slug. Each page sets its own tab title, so
+a bookmark reads "Staff meeting — LeadWell". Slugs aren't stored: renaming a
+meeting changes its address.
 
 Because a peek is not tied to the canvas, clicking a row in the People table
 opens it in place instead of throwing you back to the tree.

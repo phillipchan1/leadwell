@@ -51,6 +51,7 @@ import { migratePigments } from "../lib/pigments";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
 import { DEMO, toThisWeek } from "../lib/demo";
+import { meetingSlugs, resolveMeetingKey } from "../lib/slugs";
 import {
   defaultCurriculum,
   effectiveSlotId,
@@ -83,6 +84,7 @@ import {
 import {
   DEFAULT_TAB,
   routePath,
+  setMeetingSlugResolver,
   type Route,
   type Selection,
   type Tab,
@@ -1233,7 +1235,7 @@ export const useStore = create<Store>((set, get) => ({
   syncStatus: "idle",
   userId: null,
   userEmail: null,
-  tab: "today",
+  tab: DEFAULT_TAB,
   treeDomainId: null,
   healthScan: [],
   prayerScan: [],
@@ -1329,9 +1331,10 @@ export const useStore = create<Store>((set, get) => ({
     if (s.focused) go(routePath({ view: "focus", target: sel }));
     else goTab(s, sel, "tree");
   },
-  // A meeting is reached from the Meetings tab or from its subject's profile,
+  // A meeting is reached from Home, the Meetings tab or its subject's profile,
   // and there's no canvas node for it — so it always opens in focus, where the
-  // planner has the width the board actually needs.
+  // agenda and the planner have the width they need. No section means the
+  // agenda for the next occurrence: the page worth bookmarking.
   selectMeeting: (id, section) => {
     const s = get();
     if (!id) {
@@ -1341,7 +1344,7 @@ export const useStore = create<Store>((set, get) => ({
     go(
       routePath({
         view: "focus",
-        target: { kind: "meeting", id, section: section ?? "plan" },
+        target: { kind: "meeting", id, section },
       })
     );
   },
@@ -1375,7 +1378,7 @@ export const useStore = create<Store>((set, get) => ({
     // Land back where you opened it from. Coming off the planner, closing the
     // write-up should return to the board, not jump sideways to a profile you
     // were never on.
-    if (s.selectedMeetingId === meeting.id) {
+    if (resolveMeetingKey(s, s.selectedMeetingId ?? "") === meeting.id) {
       go(
         routePath({
           view: "focus",
@@ -1459,7 +1462,10 @@ export const useStore = create<Store>((set, get) => ({
       if (sel.kind === "person") next.selectedPersonId = sel.id;
       else if (sel.kind === "team") next.selectedTeamId = sel.id;
       else if (sel.kind === "manager") next.selectedManagerId = sel.id;
-      else if (sel.kind === "meeting") next.selectedMeetingId = sel.id;
+      // The URL may carry a slug. Resolve it when the data is here; before
+      // it loads the slug stands in, and App re-applies the route once ready.
+      else if (sel.kind === "meeting")
+        next.selectedMeetingId = resolveMeetingKey(s, sel.id);
       else next.selectedMe = true;
       return next;
     }),
@@ -3048,6 +3054,13 @@ export const useStore = create<Store>((set, get) => ({
     get().hydrate(doc, userId, get().userEmail);
   },
 }));
+
+/* Every meeting link the app writes goes through `routePath`, which can't see
+   the data; this hands it the current id → slug mapping on demand. */
+setMeetingSlugResolver(
+  (id) => meetingSlugs(useStore.getState()).slugById.get(id)
+);
+
 
 // Persist data changes to Supabase, debounced. UI state stays session-only
 // (dark mode persists to localStorage in toggleDark). repo.syncData compares

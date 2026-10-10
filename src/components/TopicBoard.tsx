@@ -16,6 +16,7 @@ import {
   nextSlotAfter,
   parseColumnKey,
   plannedSlots,
+  SLOTS_AHEAD,
   slotDotClass,
   slotKey,
   type BucketGroup,
@@ -89,6 +90,7 @@ export function TopicBoard({
   onSelectWeek,
   ahead,
   narrow = false,
+  occurrence,
 }: {
   meeting: TrackedMeeting;
   direction?: BoardDirection;
@@ -97,6 +99,15 @@ export function TopicBoard({
   ahead?: number;
   /** A side panel, not a page: the tray starts folded so the weeks get the room. */
   narrow?: boolean;
+  /**
+   * Draw one occurrence (by date) as a full-width running order instead of
+   * the strip of weeks. The Agenda uses it: same cards, same drops, same
+   * ideas tray — one meeting with room to read it.
+   *
+   * By date rather than slot key because the key changes under you: a
+   * projected week becomes a real session the moment something lands on it.
+   */
+  occurrence?: string;
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
@@ -328,7 +339,15 @@ export function TopicBoard({
 
         <ScheduleGrid
           meetingId={meeting.id}
-          weeks={layout.weeks}
+          weeks={
+            occurrence
+              ? layout.weeks.filter((w) => w.slot.date === occurrence)
+              : layout.weeks
+          }
+          agenda={Boolean(occurrence)}
+          // Coverage is measured over the board's usual runway, even when the
+          // agenda pages half a year ahead to reach the week it shows.
+          coverage={layout.weeks.filter((w) => !w.slot.past).slice(0, SLOTS_AHEAD)}
           curriculum={curriculum}
           tags={tags}
           today={today}
@@ -384,6 +403,8 @@ type GridRow = { id: string; label: string; slotId?: string; minutes?: number };
 function ScheduleGrid({
   meetingId,
   weeks,
+  agenda = false,
+  coverage,
   curriculum,
   tags,
   today,
@@ -398,6 +419,10 @@ function ScheduleGrid({
 }: {
   meetingId: string;
   weeks: WeekColumn[];
+  /** One occurrence, full width, no week header — see `TopicBoard.occurrence`. */
+  agenda?: boolean;
+  /** The upcoming weeks the section rows report coverage over. */
+  coverage?: WeekColumn[];
   curriculum: CurriculumSlot[];
   tags: Tag[];
   today: string;
@@ -483,7 +508,7 @@ function ScheduleGrid({
    * narrow column of its own, with the way back.
    */
   const lastDate = weeks[weeks.length - 1]?.slot.date;
-  const skipped = sessions
+  const skipped = agenda ? [] : sessions
     .filter(
       (o) =>
         o.meetingId === meetingId &&
@@ -504,13 +529,21 @@ function ScheduleGrid({
   const template = [
     hasRows ? "8.75rem" : null,
     ...lanes.map((l) =>
-      l.kind === "skip" ? "4.5rem" : l.week.slot.past ? "7.75rem" : hasRows ? "11.5rem" : "13rem"
+      agenda
+        ? "minmax(0, 1fr)"
+        : l.kind === "skip"
+          ? "4.5rem"
+          : l.week.slot.past
+            ? "7.75rem"
+            : hasRows
+              ? "11.5rem"
+              : "13rem"
     ),
   ]
     .filter(Boolean)
     .join(" ");
 
-  const upcoming = weeks.filter((w) => !w.slot.past);
+  const upcoming = coverage ?? weeks.filter((w) => !w.slot.past);
   const nextKey = upcoming[0]?.key;
 
   const weekIsActive = (week: WeekColumn): boolean => {
@@ -554,7 +587,7 @@ function ScheduleGrid({
         className="scroll-contain scrollbar-hide overflow-x-auto pb-3"
       >
         <div
-          className="relative inline-grid gap-x-3"
+          className={cx("relative gap-x-3", agenda ? "grid w-full" : "inline-grid")}
           style={{
             gridTemplateColumns: template,
             gridTemplateRows: `auto repeat(${rows.length}, minmax(${hasRows ? "5.75rem" : "12rem"}, auto))`,
@@ -619,10 +652,16 @@ function ScheduleGrid({
               <div
                 key={`sheet-${week.key}`}
                 aria-hidden
-                style={{ gridColumn: i + colOffset, gridRow: `1 / span ${rows.length + 1}` }}
+                // An agenda has no header row; its sheet starts with the first section.
+                style={{
+                  gridColumn: i + colOffset,
+                  gridRow: agenda ? `2 / span ${rows.length}` : `1 / span ${rows.length + 1}`,
+                }}
                 className={cx(
                   "rounded-[14px] transition-colors",
-                  active
+                  agenda
+                    ? "bg-primary shadow-[0_0_0_1px_var(--color-border-secondary)]"
+                    : active
                     ? "bg-teal-50 ring-[1.5px] ring-teal-600 dark:bg-teal-950/40 dark:ring-teal-500"
                     : week.slot.past
                       ? "bg-secondary"
@@ -636,7 +675,7 @@ function ScheduleGrid({
             );
           })}
 
-          {hasRows && (
+          {hasRows && !agenda && (
             <div
               style={{ gridColumn: 1, gridRow: 1 }}
               className="sticky left-0 z-[3] flex items-end bg-primary pb-3"
@@ -645,7 +684,7 @@ function ScheduleGrid({
             </div>
           )}
 
-          {weeks.map((week) => (
+          {!agenda && weeks.map((week) => (
             <WeekHeader
               key={`head-${week.key}`}
               column={colOf.get(week.key)!}
@@ -709,6 +748,7 @@ function ScheduleGrid({
                     cardProps={cardProps}
                     dropLabel={`Drop into ${weekName(week.slot.date)}${row.slotId ? ` · ${row.label}` : ""}`}
                     composerLabel={row.slotId ? `Add to ${row.label}` : "Add a topic"}
+                    alwaysCompose={agenda}
                   />
                 );
               })}
@@ -1004,7 +1044,14 @@ function GridCell({
   cardProps,
   dropLabel,
   composerLabel,
+  alwaysCompose = false,
 }: {
+  /**
+   * Keep the composer on screen. The strip hides it until hover so eight
+   * weeks don't become thirty identical Add buttons; an agenda has one per
+   * section, and adding to it is the main thing you came to do.
+   */
+  alwaysCompose?: boolean;
   cell: WeekCell;
   style: React.CSSProperties;
   ruled: boolean;
@@ -1061,7 +1108,12 @@ function GridCell({
       {/* Capture where it belongs. Hidden until the cell is hovered, or the
           board becomes thirty identical Add buttons. Never into the past. */}
       {!drag && !past && cardProps.onAddHere && (
-        <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover/cell:opacity-100 touch:opacity-100">
+        <div
+          className={cx(
+            !alwaysCompose &&
+              "opacity-0 transition-opacity focus-within:opacity-100 group-hover/cell:opacity-100 touch:opacity-100"
+          )}
+        >
           <InlineComposer
             compact
             label={composerLabel}

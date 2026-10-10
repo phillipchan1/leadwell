@@ -109,6 +109,9 @@ export function ManagerProfile({
         }
         actions={
           <>
+            <Button size="sm" color="tertiary" onClick={() => setEditing(true)}>
+              Edit
+            </Button>
             <Button size="sm" color="secondary" onClick={() => setMode("profile")}>
               Their manual
             </Button>

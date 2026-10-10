@@ -198,6 +198,9 @@ export function PersonProfile({
         }
         actions={
           <>
+            <Button size="sm" color="tertiary" onClick={() => setEditingPerson(true)}>
+              Edit
+            </Button>
             <Button size="sm" color="secondary" onClick={() => setMode("notes")}>
               Write a note
             </Button>

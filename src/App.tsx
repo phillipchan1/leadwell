@@ -8,6 +8,8 @@ import {
   parseRoute,
   routePath,
 } from "./lib/routes";
+import { meetingSubjectName, meetingTitle } from "./lib/readiness";
+import { entityModeFor, modeTabs } from "./lib/entityModes";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -20,7 +22,7 @@ import { Sidebar } from "./components/shell/Sidebar";
 import { PhoneHeader, PhoneTabBar } from "./components/shell/PhoneChrome";
 import { useScopeShortcuts } from "./components/shell/ScopeMenu";
 import { usePlaceBadges } from "./components/shell/badges";
-import { lastPeopleTab, rememberPeopleTab } from "./components/shell/places";
+import { lastPeopleTab, placeOf, rememberPeopleTab } from "./components/shell/places";
 import { PeopleHeader } from "./components/people/PeopleHeader";
 import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
@@ -87,6 +89,7 @@ function useRouteSync() {
   const navigate = useNavigate();
   const location = useLocation();
   const applyRoute = useStore((s) => s.applyRoute);
+  const phase = useStore((s) => s.phase);
 
   // Registered in layout so a click in the first paint already navigates.
   useEffect(() => {
@@ -102,8 +105,9 @@ function useRouteSync() {
       navigate(PEOPLE_FILTER_PATH + location.hash, { replace: true });
       return;
     }
+    // Overview was the old dashboard; Today is what replaced the idea of one.
     if (path === LEGACY_OVERVIEW_PATH) {
-      navigate("/today" + location.search + location.hash, { replace: true });
+      navigate("/" + location.search + location.hash, { replace: true });
       return;
     }
     const route = parseRoute(location.pathname, location.search);
@@ -112,7 +116,24 @@ function useRouteSync() {
       return;
     }
     applyRoute(route);
-  }, [location.pathname, location.search, applyRoute, navigate]);
+    // A meeting reached by an old `/meeting/<id>` link, or by id under `/m/`,
+    // settles on its readable address once the data can name it — so the
+    // address bar shows the bookmark worth keeping.
+    if (route.view === "focus" && route.target.kind === "meeting") {
+      const id = useStore.getState().selectedMeetingId;
+      if (id) {
+        const canonical = routePath({
+          view: "focus",
+          target: { ...route.target, id },
+        });
+        if (canonical !== location.pathname) {
+          navigate(canonical + location.search + location.hash, { replace: true });
+        }
+      }
+    }
+    // `phase` re-applies the route once the data lands, so a cold
+    // `/m/staff-meeting` link resolves its slug to the meeting's id.
+  }, [location.pathname, location.search, applyRoute, navigate, phase]);
 }
 
 /**
@@ -142,11 +163,13 @@ function useDropStaleSelection() {
   useEffect(() => {
     if (phase !== "ready") return;
     if (sessionId && !sessions.some((o) => o.id === sessionId)) {
-      navigate("/tree", { replace: true });
+      navigate("/", { replace: true });
       return;
     }
     if (selected || selectedMe || !hasSelectionInUrl) return;
-    navigate(focused ? "/tree" : `/${tab}`, { replace: true });
+    navigate(focused ? "/" : routePath({ view: "tab", tab, peek: null }), {
+      replace: true,
+    });
   }, [
     phase,
     sessionId,
@@ -158,6 +181,46 @@ function useDropStaleSelection() {
     tab,
     navigate,
   ]);
+}
+
+/**
+ * Every page names itself, so a bookmark reads "Staff meeting" instead of a
+ * bookmarks bar full of "LeadWell". The meeting agenda is the page people save,
+ * which is why a meeting's title leads with the meeting and only names the mode
+ * when it isn't the agenda.
+ */
+function useDocumentTitle() {
+  const selected = useSelectedEntity();
+  const tab = useStore((s) => s.tab);
+  const section = useStore((s) => s.section);
+  const me = useStore((s) => s.me);
+  const people = useStore((s) => s.people);
+  const teams = useStore((s) => s.teams);
+  const managers = useStore((s) => s.managers);
+
+  let title: string | undefined;
+  if (!selected) {
+    title = placeOf(tab).label;
+  } else if (selected.kind === "meeting") {
+    const m = selected.meeting;
+    title = meetingTitle(m, meetingSubjectName(m, { people, teams, managers }));
+    const mode = entityModeFor("meeting", section);
+    if (mode !== "now") {
+      title += ` · ${modeTabs("meeting").find((t) => t.id === mode)?.label}`;
+    }
+  } else if (selected.kind === "person") {
+    title = selected.person.name;
+  } else if (selected.kind === "team") {
+    title = selected.team.name;
+  } else if (selected.kind === "manager") {
+    title = selected.manager.name;
+  } else {
+    title = me.name.trim() || "My profile";
+  }
+
+  useEffect(() => {
+    document.title = title ? `${title} — LeadWell` : "LeadWell";
+  }, [title]);
 }
 
 /**
@@ -211,6 +274,7 @@ function useGlobalShortcuts() {
 export default function App() {
   useRouteSync();
   useDropStaleSelection();
+  useDocumentTitle();
   // Above every phase gate: the sign-in screen has a field too.
   useKeyboardInset();
   // Likewise above the gates — a failed write has to be announced on the

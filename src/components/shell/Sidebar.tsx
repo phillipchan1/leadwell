@@ -44,7 +44,7 @@ export function Sidebar({
       className="pad-safe-top flex w-[232px] shrink-0 flex-col gap-3.5 overflow-y-auto bg-leather px-3 pb-3 text-leather-ink [--pad-safe-top:1.125rem] max-lg:hidden"
     >
       <a
-        href="/today"
+        href="/"
         onClick={(e) => {
           e.preventDefault();
           goPlace("today");

@@ -8,6 +8,7 @@ import type { MeetingRhythm, MeetingRole, TrackedMeeting } from "../types";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { AddOneOff, MeetingPlanner } from "./MeetingPlanner";
+import { MeetingAgenda } from "./MeetingAgenda";
 import { weekName } from "./TopicBoard";
 import { SessionHistoryTable } from "./SessionHistoryTable";
 import { TrackerLink } from "./TrackerLink";
@@ -58,8 +59,9 @@ const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) =>
  * This is the surface the whole feature turned on. Topics used to hang off a
  * person, which meant a staff meeting had nowhere to keep them and a team had
  * no board at all — so the meeting itself had to become somewhere you can
- * stand. Plan is the board, Write-ups is the history, Settings is what makes
- * it recurring.
+ * stand. Agenda is the next occurrence as a running order, Plan ahead is the
+ * board of the weeks to come, Write-ups is the history, Settings is what
+ * makes it recurring.
  */
 export function MeetingProfile({
   meeting,
@@ -82,9 +84,9 @@ export function MeetingProfile({
   const untrackMeeting = useStore((s) => s.untrackMeeting);
   const clearSelection = useStore((s) => s.clearSelection);
 
-  /* On the five-mode contract (see lib/entityModes). A meeting carries three
-     of the five: Plan is its `meetings` mode, Write-ups its `notes`, and
-     Settings its `profile`. */
+  /* On the five-mode contract (see lib/entityModes). A meeting carries four
+     of the five: Agenda is its `now`, Plan ahead its `meetings`, Write-ups
+     its `notes`, and Settings its `profile`. */
   const mode = entityModeFor("meeting", section);
   const focus = density === "focus";
   const pad = focus ? "px-4 sm:px-8" : "px-4 sm:px-6";
@@ -112,7 +114,7 @@ export function MeetingProfile({
       return;
     }
     pendingKey.current = key;
-    setSection(modeSection("meetings"));
+    setSection(modeSection("meetings", "meeting"));
   };
 
   const subjectName = meetingSubjectName(meeting, { people, teams, managers });
@@ -204,8 +206,9 @@ export function MeetingProfile({
             next={next?.slot ?? null}
             weeks={layout.weeks}
             ideas={layout.bucket.slice(0, -1).reduce((n, g) => n + g.topics.length, 0)}
-            onRhythm={() => setSection(modeSection("profile"))}
-            onNext={(slot) => showWeek(slot.sessionId ? `s:${slot.sessionId}` : `p:${slot.date}`)}
+            onRhythm={() => setSection(modeSection("profile", "meeting"))}
+            // The Agenda is the next one, as a running order.
+            onNext={() => setSection(modeSection("now", "meeting"))}
           />
           <div className="flex flex-wrap gap-2 md:hidden">{actions}</div>
         </div>
@@ -215,10 +218,16 @@ export function MeetingProfile({
         <EntityModeTabs
           subject="meeting"
           mode={mode}
-          onMode={(m) => setSection(modeSection(m))}
+          onMode={(m) => setSection(modeSection(m, "meeting"))}
           counts={{ meetings: openCount, notes: sessionCount }}
         />
       </div>
+
+      {mode === "now" && (
+        <div className={cx("flex flex-col pt-5 pb-10", pad)}>
+          <MeetingAgenda meeting={meeting} onOpenSession={openSession} narrow={!focus} />
+        </div>
+      )}
 
       {mode === "meetings" && (
         <div className={cx("flex flex-col pt-5 pb-10", pad)}>

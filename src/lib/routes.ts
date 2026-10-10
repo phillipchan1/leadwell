@@ -5,7 +5,7 @@
  * full-page **focus** route. Promotion between them is just a route change,
  * which is what makes every entity deep-linkable and back-button-safe.
  *
- *   /today                       what needs me — the front door
+ *   /                            Today — what needs me, the front door
  *   /tree                        canvas, nothing open
  *   /tree?team=t1                team peek beside the canvas
  *   /tree?person=p3&s=sessions   person peek, 1:1s section
@@ -14,7 +14,8 @@
  *   /person/p3/sessions/s42      full-screen editor for session s42
  *   /meetings                    every recurring meeting
  *   /prayer                      who I'm carrying
- *   /meeting/m4/plan             the planner for one recurring meeting
+ *   /m/staff-meeting             one meeting's agenda for its next occurrence
+ *   /m/staff-meeting/plan        the same meeting, planned weeks ahead
  *   /me                          my own profile in focus
  *
  * A meeting is an entity kind rather than a page of its own, so it inherits
@@ -70,9 +71,23 @@ const ID_KINDS: EntityKind[] = ["team", "person", "manager", "meeting"];
 /**
  * Today — what needs me. Nobody opens the app wanting the shape of the org;
  * they open it asking who needs them this week. `/` and unknown tab paths
- * land here.
+ * land here — including `/home`, the teams page that Today absorbed.
  */
 export const DEFAULT_TAB: Tab = "today";
+/**
+ * Meetings are addressed by a readable slug (`/m/staff-meeting`) because the
+ * agenda is the page people bookmark. `routes.ts` is pure and knows nothing
+ * about the data, so the store installs the id → slug lookup at startup; until
+ * it does, or for a meeting with no usable name, the id stands in.
+ */
+let meetingSlugOf: (id: string) => string | undefined = () => undefined;
+
+export function setMeetingSlugResolver(fn: (id: string) => string | undefined) {
+  meetingSlugOf = fn;
+}
+
+/** Short prefix for the readable meeting address. `/meeting/:id` still parses. */
+const MEETING_PREFIX = "m";
 
 function isTab(value: string | undefined): value is Tab {
   return TABS.includes(value as Tab);
@@ -99,6 +114,19 @@ export function parseRoute(pathname: string, search: string): Route {
   if (head === "me") {
     return { view: "focus", target: { kind: "me", id: "", section: rest[0] } };
   }
+  // The id may be a slug here. The store resolves it against the data, which
+  // a pure parser can't see — and which may not have loaded yet on a cold link.
+  if (head === MEETING_PREFIX && rest[0]) {
+    return {
+      view: "focus",
+      target: {
+        kind: "meeting",
+        id: decodeURIComponent(rest[0]),
+        section: rest[1],
+        sessionId: rest[2] ? decodeURIComponent(rest[2]) : undefined,
+      },
+    };
+  }
   if (ID_KINDS.includes(head as EntityKind) && rest[0]) {
     return {
       view: "focus",
@@ -121,7 +149,12 @@ export function parseRoute(pathname: string, search: string): Route {
 export function routePath(route: Route): string {
   if (route.view === "focus") {
     const { kind, id, section, sessionId } = route.target;
-    const base = kind === "me" ? "/me" : `/${kind}/${encodeURIComponent(id)}`;
+    const base =
+      kind === "me"
+        ? "/me"
+        : kind === "meeting"
+          ? `/${MEETING_PREFIX}/${encodeURIComponent(meetingSlugOf(id) ?? id)}`
+          : `/${kind}/${encodeURIComponent(id)}`;
     if (!section) return base;
     const withSection = `${base}/${section}`;
     return sessionId
@@ -138,7 +171,9 @@ export function routePath(route: Route): string {
     if (peek.sessionId) params.set("session", peek.sessionId);
   }
   const query = params.toString();
-  return `/${route.tab}${query ? `?${query}` : ""}`;
+  // Home is the root, so the address you'd type is the address you get.
+  const path = route.tab === DEFAULT_TAB ? "/" : `/${route.tab}`;
+  return `${path}${query ? `?${query}` : ""}`;
 }
 
 export function sameSelection(

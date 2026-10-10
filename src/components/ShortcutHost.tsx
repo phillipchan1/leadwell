@@ -19,6 +19,8 @@ export type GoTarget =
 
 const GO_KEYS: Record<string, GoTarget> = {
   t: "today",
+  // Home (the teams you lead) now lives on Today; the key still gets you there.
+  h: "today",
   p: "people",
   m: "meetings",
   i: "ideas",

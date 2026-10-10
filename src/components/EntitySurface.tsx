@@ -5,6 +5,7 @@ import { EntityChrome, useEntityTrail } from "./EntityChrome";
 import { useSwipePager } from "@/hooks/use-sheet";
 import { Skeleton } from "./Skeleton";
 import { keyboardOwner } from "@/lib/keys";
+import { findMeeting } from "../lib/slugs";
 
 /**
  * The profiles pull in the whole markdown stack and the assessment editors —
@@ -78,7 +79,9 @@ export function useSelectedEntity(): Selected {
   if (team) return { kind: "team", team };
   const manager = managers.find((m) => m.id === selectedManagerId);
   if (manager) return { kind: "manager", manager };
-  const meeting = meetings.find((m) => m.id === selectedMeetingId);
+  // By id or by slug: a cold `/m/staff-meeting` link is applied before the
+  // data that resolves the slug has loaded.
+  const meeting = findMeeting({ meetings, people, teams, managers }, selectedMeetingId);
   if (meeting) return { kind: "meeting", meeting };
   if (selectedMe) return { kind: "me" };
   return null;

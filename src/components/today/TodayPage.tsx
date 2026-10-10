@@ -19,6 +19,7 @@ import {
 } from "@/lib/today";
 import { shortSincePrayed } from "@/lib/prayer";
 import { Avatar } from "../Avatar";
+import { YourTeams } from "./YourTeams";
 import { HealthMeter, PrayerFlame, RhythmRing, STATE_TEXT } from "../brand/glyphs";
 import { cx } from "@/utils/cx";
 
@@ -108,6 +109,7 @@ export function TodayPage() {
           <div className="flex min-w-0 flex-[1.75_1_520px] flex-col gap-7">
             {model.nextMove ? <NextMove row={model.nextMove} /> : <AllClear />}
             <ComingUp rows={model.thisWeek} nextWeek={model.nextWeek} />
+            <YourTeams scopeId={scopeId} />
             <IdeasWaiting ideas={model.ideas} />
           </div>
           <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-5">
