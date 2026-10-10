@@ -766,10 +766,10 @@ function Row({
               className="h-6 w-6 shrink-0 rounded-md"
               style={{
                 backgroundColor:
-                  (record.domain?.color ?? record.capacity?.color ?? "#0D9488") +
+                  (record.domain?.color ?? record.capacity?.color ?? "#006967") +
                   "24",
                 boxShadow: `inset 0 0 0 1.5px ${
-                  record.domain?.color ?? record.capacity?.color ?? "#0D9488"
+                  record.domain?.color ?? record.capacity?.color ?? "#006967"
                 }55`,
               }}
               aria-hidden
@@ -1054,10 +1054,10 @@ function MobileRecordCard({
               className="size-8 shrink-0 rounded-md"
               style={{
                 backgroundColor:
-                  (record.domain?.color ?? record.capacity?.color ?? "#0D9488") +
+                  (record.domain?.color ?? record.capacity?.color ?? "#006967") +
                   "24",
                 boxShadow: `inset 0 0 0 1.5px ${
-                  record.domain?.color ?? record.capacity?.color ?? "#0D9488"
+                  record.domain?.color ?? record.capacity?.color ?? "#006967"
                 }55`,
               }}
               aria-hidden

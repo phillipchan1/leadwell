@@ -428,7 +428,7 @@ export function OrgTree() {
         id: `e-${t.id}`,
         type: "smoothstep" as const,
         style: {
-          stroke: capacity?.color ?? "#a8a29e",
+          stroke: capacity?.color ?? "#8e9c9c",
           strokeWidth: 1.5,
           opacity: 0.55,
         },
@@ -451,7 +451,7 @@ export function OrgTree() {
         target: reportNodeId(p.id),
         type: "smoothstep" as const,
         style: {
-          stroke: domain?.color ?? "#a8a29e",
+          stroke: domain?.color ?? "#8e9c9c",
           strokeWidth: 1.5,
           opacity: 0.55,
         },
@@ -749,7 +749,7 @@ function DomainTab({
       }`}
       style={
         active
-          ? { backgroundColor: color ?? "#0D9488" }
+          ? { backgroundColor: color ?? "#006967" }
           : undefined
       }
     >
@@ -1621,7 +1621,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
   const subTeams = teams.filter((t) => t.parentId === team.id);
   const nextAction = teamActions.find((a) => a.teamId === team.id && !a.done);
   const selected = activeTeamId === team.id;
-  const accent = domain?.color ?? capacity?.color ?? "#0D9488";
+  const accent = domain?.color ?? capacity?.color ?? "#006967";
   const teamMeeting = meetingFor(meetings, "team", team.id);
   const {
     people: showPeople,
@@ -1843,7 +1843,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
                   key={p.id}
                   person={p}
                   selected={p.id === selectedPersonId}
-                  capacityColor={capacity?.color ?? "#0D9488"}
+                  capacityColor={capacity?.color ?? "#006967"}
                   showHealth={showHealth}
                   showPrayer={showPrayer}
                   dimmed={rowDimmed(p)}

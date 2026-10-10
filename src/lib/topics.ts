@@ -83,21 +83,21 @@ export function slotLabelOf(
 }
 
 const SLOT_CHIP = [
-  "bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-400",
-  "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-400",
-  "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400",
-  "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-400",
-  "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400",
-  "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-400",
+  "bg-tag1-soft text-tag1-ink",
+  "bg-tag2-soft text-tag2-ink",
+  "bg-tag3-soft text-tag3-ink",
+  "bg-tag4-soft text-tag4-ink",
+  "bg-tag5-soft text-tag5-ink",
+  "bg-tag6-soft text-tag6-ink",
 ] as const;
 
 const SLOT_DOT = [
-  "bg-teal-500",
-  "bg-violet-500",
-  "bg-amber-500",
-  "bg-sky-500",
-  "bg-rose-500",
-  "bg-orange-500",
+  "bg-tag1",
+  "bg-tag2",
+  "bg-tag3",
+  "bg-tag4",
+  "bg-tag5",
+  "bg-tag6",
 ] as const;
 
 export function slotChipClass(curriculum: CurriculumSlot[], slotId?: string): string {

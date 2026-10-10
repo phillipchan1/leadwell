@@ -71,12 +71,12 @@ export const STATE_LABEL: Record<ReadinessState, string> = {
 
 /** Canvas needs raw hex (inline styles on React Flow nodes). */
 export const STATE_COLOR: Record<ReadinessState, string> = {
-  dormant: "#d6d3d1",
-  resting: "#a8a29e",
-  ready: "#0e9f6e",
-  prep_due: "#dd8f11",
-  loose_end: "#cf4f45",
-  drifting: "#cf4f45",
+  dormant: "#C8D4D4",
+  resting: "#7DAD7E",
+  ready: "#247E56",
+  prep_due: "#F1A048",
+  loose_end: "#D36340",
+  drifting: "#C13B42",
 };
 
 /** States that mean you owe something before you walk in. */

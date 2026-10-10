@@ -70,10 +70,10 @@ export const PRAYER_LABEL: Record<PrayerState, string> = {
  * canvas shouldn't read it as one.
  */
 export const PRAYER_COLOR: Record<PrayerState, string> = {
-  fresh: "#7C6BC4",
-  carrying: "#9B8FD1",
-  cold: "#A8A29E",
-  none: "#D6D3D1",
+  fresh: "#7B62C4",
+  carrying: "#9A88D8",
+  cold: "#8E9C9C",
+  none: "#C8D4D4",
 };
 
 export const PRAYER_HINT: Record<PrayerState, string> = {

@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { LIFE_AREA_SWATCHES } from "../lib/pigments";
 import { useStore } from "../store/useStore";
 import type {
   Health,
@@ -37,16 +38,7 @@ function nextHealth(
 }
 
 // A palette for auto-coloring newly created domains.
-const DOMAIN_PALETTE = [
-  "#3B82F6",
-  "#8B5CF6",
-  "#EC4899",
-  "#14B8A6",
-  "#F59E0B",
-  "#0D9488",
-  "#EF4444",
-  "#6366F1",
-];
+const DOMAIN_PALETTE: readonly string[] = LIFE_AREA_SWATCHES;
 
 /** Pick or create a life-area domain. Shared by the team and manager modals. */
 function DomainPicker({

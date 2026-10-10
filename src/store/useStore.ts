@@ -47,6 +47,7 @@ import { clearDoc, loadDoc, saveDoc } from "../lib/docCache";
 import { clearIndex } from "../lib/search";
 import { clearRecents } from "../lib/recents";
 import { clearUndo } from "../lib/undo";
+import { migratePigments } from "../lib/pigments";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
 import {
@@ -694,6 +695,9 @@ function migrateActions(actions: Action[]): Action[] {
 function migrateDoc(doc: PersistedData): PersistedData {
   const topics = doc.topics ?? [];
   const needsFill = topics.some((t) => !t.tagIds || !t.carriedFrom);
+  // Life areas and capacities still on the retired Tailwind defaults move to
+  // the identity pigments. Hand-picked colors are left alone.
+  const pigments = migratePigments(doc.domains ?? [], doc.capacities ?? []);
   return {
     ...doc,
     // Collections added after this cache may have been written.
@@ -711,8 +715,8 @@ function migrateDoc(doc: PersistedData): PersistedData {
     people: doc.people ?? [],
     teams: doc.teams ?? [],
     managers: doc.managers ?? [],
-    domains: doc.domains ?? [],
-    capacities: doc.capacities ?? [],
+    domains: pigments.domains,
+    capacities: pigments.capacities,
     actions: doc.actions ?? [],
     goals: doc.goals ?? [],
     notes: doc.notes ?? [],

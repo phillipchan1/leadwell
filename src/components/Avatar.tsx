@@ -1,4 +1,6 @@
-import { avatarColor, initials } from "../lib/derive";
+import { initials } from "../lib/derive";
+import { avatarClass } from "../lib/pigments";
+import { cx } from "@/utils/cx";
 
 export function Avatar({
   name,
@@ -19,12 +21,15 @@ export function Avatar({
   const style: React.CSSProperties = {
     width: size,
     height: size,
-    fontSize: size * 0.38,
+    fontSize: size * 0.4,
     boxShadow: ring ? `0 0 0 2.5px ${ring}` : undefined,
   };
-  const cls = `flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold text-white select-none ${
-    dimmed ? "opacity-40 grayscale" : ""
-  } ${className}`;
+  // Initials are a name, so they're set in the serif like every name.
+  const cls = cx(
+    "flex shrink-0 items-center justify-center overflow-hidden rounded-full font-serif font-medium select-none",
+    dimmed && "opacity-40 grayscale",
+    className
+  );
 
   if (photo) {
     return (
@@ -34,7 +39,7 @@ export function Avatar({
     );
   }
   return (
-    <div className={cls} style={{ ...style, backgroundColor: avatarColor(name) }}>
+    <div className={cx(cls, avatarClass(name))} style={style}>
       {initials(name)}
     </div>
   );

@@ -54,10 +54,10 @@ export const DOMAINS: StrengthDomain[] = [
 ];
 
 export const DOMAIN_COLOR: Record<StrengthDomain, string> = {
-  Executing: "#1D9E75",
-  Influencing: "#EF9F27",
-  "Relationship Building": "#D4537E",
-  "Strategic Thinking": "#7F77DD",
+  Executing: "#7C3B8B",
+  Influencing: "#DD7B2B",
+  "Relationship Building": "#2D78BD",
+  "Strategic Thinking": "#269364",
 };
 
 // ---------------------------------------------------------------------------

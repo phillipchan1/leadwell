@@ -1,0 +1,222 @@
+/* ── Leather & Gilt ──────────────────────────────────────────────────────
+   The design language, stated once. See the redesign canvas for the why;
+   this file is the what.
+
+   Two moves do most of the work:
+
+   1. The `stone` and `teal` ramps are *redefined* rather than replaced. Every
+      screen in the app was written against `stone-*` (warm grey) and
+      `teal-*` (brand), so re-pointing those two ramps re-skins all of them in
+      one place: stone becomes a grey tinted toward the leather, teal becomes
+      the deeper Wellwater. A component migrated to semantic tokens later
+      renders the same pixels it does now.
+
+   2. Everything that means something gets a named token with a light value
+      here and a dark value in the `.dark` block below: the leather that
+      frames the app, gilt, vesper (prayer), the condition ramp shared by
+      health and readiness, avatar tints and tag pigments.
+
+   Rule of thumb: teal means you can press it. Gilt is something to
+   celebrate. Vesper is prayer and nothing else. Condition colors are state,
+   and state is always round; identity (life areas, strengths) is square. */
+
+@theme {
+  /* Neutrals, tinted toward the leather. One ramp serves both themes: light
+     pages are 50, light ink is 900; dark pages are 950, dark cards are 900. */
+  --color-stone-50: #f2f7f7;
+  --color-stone-100: #e9f1f0;
+  --color-stone-200: #d8e2e2;
+  --color-stone-300: #c8d4d4;
+  --color-stone-400: #8e9c9c;
+  --color-stone-500: #5f6d6e;
+  --color-stone-600: #3f5153;
+  --color-stone-700: #2e3f41;
+  --color-stone-800: #223133;
+  --color-stone-900: #0f1d1f;
+  --color-stone-950: #081415;
+
+  /* Wellwater. 600 is the press color in light, 400 in dark. */
+  --color-teal-50: #edfaf9;
+  --color-teal-100: #d7f4f2;
+  --color-teal-200: #b0e5e2;
+  --color-teal-300: #80d2ce;
+  --color-teal-400: #56bcb9;
+  --color-teal-500: #22928f;
+  --color-teal-600: #006967;
+  --color-teal-700: #005452;
+  --color-teal-800: #00403f;
+  --color-teal-900: #00302f;
+  --color-teal-950: #001d1c;
+
+  /* The leather that frames the app: sidebar, tab bar, the Run header. It
+     stays dark in both themes; only its depth changes. */
+  --color-leather: #013133;
+  --color-leather-hi: #114143;
+  --color-leather-line: #244648;
+  --color-leather-ink: #acc3c1;
+  --color-leather-fg: #e6efee;
+  --color-leather-mute: #7e9997;
+
+  /* Gilt: the mark, wins banked, answered prayer. */
+  --color-gilt: #e1b34d;
+  --color-gilt-ink: #8a5f18;
+  --color-gilt-soft: #fcf2d6;
+  --color-gilt-line: #f1dda6;
+
+  /* Vesper: prayer, and only prayer. */
+  --color-vesper: #6a51a4;
+  --color-vesper-soft: #f1edff;
+  --color-vesper-line: #d9cff5;
+  --color-vesper-glow: #bcabf1;
+  --color-on-vesper: #fcfefe;
+
+  /* Condition — one ramp for health and readiness. Each step differs in
+     lightness as well as hue, and always ships with a label and a shape. */
+  --color-cond-thriving: #247e56;
+  --color-cond-thriving-soft: #def5e8;
+  --color-cond-thriving-ink: #1d6a48;
+  --color-cond-solid: #7dad7e;
+  --color-cond-solid-soft: #e6f8e6;
+  --color-cond-solid-ink: #3f7446;
+  --color-cond-watch: #f1a048;
+  --color-cond-watch-soft: #ffefd7;
+  --color-cond-watch-ink: #a3591c;
+  --color-cond-strained: #d36340;
+  --color-cond-strained-soft: #ffe9df;
+  --color-cond-strained-ink: #aa442b;
+  --color-cond-critical: #c13b42;
+  --color-cond-critical-soft: #ffe9e8;
+  --color-cond-critical-ink: #a1252e;
+  --color-meter-off: #d8e2e2;
+
+  /* Avatar tints: initials in the serif on six quiet grounds. */
+  --color-av1: #f4e3d1;
+  --color-av1-ink: #65461e;
+  --color-av2: #d1edeb;
+  --color-av2-ink: #085955;
+  --color-av3: #e7e3f9;
+  --color-av3-ink: #50456f;
+  --color-av4: #dcecd9;
+  --color-av4-ink: #385631;
+  --color-av5: #d6e9f9;
+  --color-av5-ink: #295171;
+  --color-av6: #f9dee2;
+  --color-av6-ink: #6e3c44;
+
+  /* Tag pigments: sage, heather, ochre, slate, rose, olive. Muted on purpose
+     — a tag is metadata and should never out-shout what it labels. */
+  --color-tag1: #679270;
+  --color-tag1-soft: #e3f4e6;
+  --color-tag1-ink: #31623d;
+  --color-tag2: #816fa3;
+  --color-tag2-soft: #f1ebfd;
+  --color-tag2-ink: #5c4a7b;
+  --color-tag3: #bc8f4d;
+  --color-tag3-soft: #f9eddd;
+  --color-tag3-ink: #6f4e1a;
+  --color-tag4: #507fa7;
+  --color-tag4-soft: #e1f1ff;
+  --color-tag4-ink: #2a597f;
+  --color-tag5: #af6974;
+  --color-tag5-soft: #ffe8eb;
+  --color-tag5-ink: #7b414b;
+  --color-tag6: #758953;
+  --color-tag6-soft: #eaf2e0;
+  --color-tag6-ink: #4b5d28;
+
+  /* Three voices. Newsreader for people and the words written about them,
+     Instrument Sans for everything you operate, Plex Mono for time. */
+  --font-sans: "Instrument Sans Variable", "Instrument Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-serif: "Newsreader Variable", "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-body: var(--font-sans);
+  --font-display: var(--font-serif);
+  --font-journal: var(--font-serif);
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  .dark {
+    --color-leather: #04191b;
+    --color-leather-hi: #0e2a2c;
+    --color-leather-line: #163133;
+    --color-leather-ink: #9db0af;
+    --color-leather-mute: #6f8584;
+
+    --color-gilt: #ebc166;
+    --color-gilt-ink: #ebc166;
+    --color-gilt-soft: #2a2110;
+    --color-gilt-line: #4a3a18;
+
+    --color-vesper: #bcabf1;
+    --color-vesper-soft: #1f1b33;
+    --color-vesper-line: #3a3260;
+    --color-on-vesper: #160f2b;
+
+    --color-cond-thriving: #4fbf8a;
+    --color-cond-thriving-soft: #0f3324;
+    --color-cond-thriving-ink: #4fbf8a;
+    --color-cond-solid: #93c795;
+    --color-cond-solid-soft: #18301d;
+    --color-cond-solid-ink: #93c795;
+    --color-cond-watch: #f5ae5e;
+    --color-cond-watch-soft: #3a2812;
+    --color-cond-watch-ink: #f5ae5e;
+    --color-cond-strained: #ee8466;
+    --color-cond-strained-soft: #3a1e15;
+    --color-cond-strained-ink: #ee8466;
+    --color-cond-critical: #f0707a;
+    --color-cond-critical-soft: #3a1619;
+    --color-cond-critical-ink: #f0707a;
+    --color-meter-off: #2e3f41;
+
+    --color-av1: #3b2a17;
+    --color-av1-ink: #ebcba7;
+    --color-av2: #123432;
+    --color-av2-ink: #a4deda;
+    --color-av3: #2f2a40;
+    --color-av3-ink: #d3caf5;
+    --color-av4: #23331f;
+    --color-av4-ink: #bddbb6;
+    --color-av5: #1c3041;
+    --color-av5-ink: #b1d6f6;
+    --color-av6: #3f2529;
+    --color-av6-ink: #f5c1c8;
+
+    --color-tag1-soft: #1a2e1e;
+    --color-tag1-ink: #a4d1ac;
+    --color-tag2-soft: #2c243a;
+    --color-tag2-ink: #cbbaeb;
+    --color-tag3-soft: #342611;
+    --color-tag3-ink: #dfbe92;
+    --color-tag4-soft: #172b3b;
+    --color-tag4-ink: #9ecaef;
+    --color-tag5-soft: #3a2024;
+    --color-tag5-ink: #edb2ba;
+    --color-tag6-soft: #242c16;
+    --color-tag6-ink: #bacd9b;
+  }
+
+  /* Names are always serif. Opt in with `.name`; the optical-size axis keeps
+     Newsreader crisp from a 13px list row to a 44px page title. */
+  .name {
+    font-family: var(--font-serif);
+    font-optical-sizing: auto;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+
+  /* Countdowns and dates line up like a ticker. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Eyebrow: the small uppercase section label. Used sparingly. */
+@utility eyebrow {
+  font-size: 0.6875rem;
+  line-height: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-quaternary);
+}

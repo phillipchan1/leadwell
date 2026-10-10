@@ -39,7 +39,7 @@ export function TintBadge({
 
 export function ProgressBar({
   value,
-  color = "#0D9488",
+  color = "#006967",
   className = "",
 }: {
   value: number; // 0–100

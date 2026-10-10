@@ -90,7 +90,7 @@ export function TeamProfile({
     .filter((t) => t.parentId === team.id)
     .sort((a, b) => a.order - b.order);
   const members = people.filter((p) => p.teamId === team.id);
-  const accent = domain?.color ?? capacity?.color ?? "#0D9488";
+  const accent = domain?.color ?? capacity?.color ?? "#006967";
 
   const openActions = teamActions.filter((a) => a.teamId === team.id && !a.done);
   const doneActions = teamActions.filter((a) => a.teamId === team.id && a.done);

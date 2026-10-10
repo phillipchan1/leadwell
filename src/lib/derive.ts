@@ -132,19 +132,3 @@ export function initials(name: string): string {
     .join("");
 }
 
-/** Stable pastel-ish color for initials avatars, keyed off the name. */
-export function avatarColor(name: string): string {
-  const palette = [
-    "#0D9488",
-    "#8B5CF6",
-    "#F59E0B",
-    "#D4537E",
-    "#1D9E75",
-    "#7F77DD",
-    "#EF9F27",
-    "#3B82F6",
-  ];
-  let hash = 0;
-  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) | 0;
-  return palette[Math.abs(hash) % palette.length];
-}

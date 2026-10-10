@@ -32,11 +32,11 @@ export const HEALTH_LABEL: Record<HealthLevel, string> = {
 };
 
 export const HEALTH_COLOR: Record<HealthLevel, string> = {
-  thriving: "#0D9488",
-  solid: "#65A30D",
-  watch: "#F59E0B",
-  strained: "#EA580C",
-  critical: "#DC2626",
+  thriving: "#247E56",
+  solid: "#7DAD7E",
+  watch: "#F1A048",
+  strained: "#D36340",
+  critical: "#C13B42",
 };
 
 /** What each level means, so the dropdown teaches the scale as you use it. */
@@ -124,7 +124,7 @@ export function filterLabel(value: HealthFilterValue): string {
 }
 
 export function filterColor(value: HealthFilterValue): string {
-  return value === "unrated" ? "#a8a29e" : HEALTH_COLOR[value];
+  return value === "unrated" ? "#B8BFC0" : HEALTH_COLOR[value];
 }
 
 /**

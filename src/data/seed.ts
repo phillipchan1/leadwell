@@ -31,22 +31,22 @@ export const seedMe: Me = {
 
 // Life areas / contexts. Teams are color-tagged by the domain they live in.
 export const seedDomains: Domain[] = [
-  { id: "dom-work", name: "Day job", color: "#3B82F6" },
-  { id: "dom-church", name: "Church", color: "#8B5CF6" },
-  { id: "dom-family", name: "Family", color: "#EC4899" },
-  { id: "dom-community", name: "Community", color: "#14B8A6" },
+  { id: "dom-work", name: "Day job", color: "#4F76A8" },
+  { id: "dom-church", name: "Church", color: "#924666" },
+  { id: "dom-family", name: "Family", color: "#A87AA3" },
+  { id: "dom-community", name: "Community", color: "#748A4C" },
 ];
 
 export const capUp: Capacity = {
   id: "cap-up",
   label: "Report up",
-  color: "#3B82F6",
+  color: "#4F76A8",
 };
 
 export const seedCapacities: Capacity[] = [
-  { id: "cap-manager", label: "Manager", color: "#0D9488" },
-  { id: "cap-leader", label: "Leader", color: "#8B5CF6" },
-  { id: "cap-influence", label: "Influence", color: "#F59E0B" },
+  { id: "cap-manager", label: "Manager", color: "#3E7F86" },
+  { id: "cap-leader", label: "Leader", color: "#816FA3" },
+  { id: "cap-influence", label: "Influence", color: "#B58A45" },
   capUp,
 ];
 
