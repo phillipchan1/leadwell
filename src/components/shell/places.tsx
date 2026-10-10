@@ -108,8 +108,8 @@ export const PLACES: Place[] = [
     id: "people",
     label: "People",
     question: "Who do I lead, and how are they?",
-    tab: "tree",
-    tabs: ["tree", "table"],
+    tab: "circles",
+    tabs: ["circles", "tree", "table"],
     goKey: "P",
     icon: ({ className }) => <PeopleIcon className={className} />,
   },
@@ -153,15 +153,21 @@ const PEOPLE_VIEW_KEY = "leadwell:people-view";
 export function lastPeopleTab(): Tab {
   try {
     const v = localStorage.getItem(PEOPLE_VIEW_KEY);
-    if (v === "tree" || v === "table") return v;
+    if (v === "circles" || v === "tree" || v === "table") return v;
   } catch {
     // Private mode or blocked storage: fall through to the default view.
   }
-  return "tree";
+  // Circles needs room to read; a phone opens People on the outline instead.
+  try {
+    if (!window.matchMedia("(min-width: 1024px)").matches) return "tree";
+  } catch {
+    // No matchMedia (tests, old engines): fall through to Circles.
+  }
+  return "circles";
 }
 
 export function rememberPeopleTab(tab: Tab) {
-  if (tab !== "tree" && tab !== "table") return;
+  if (tab !== "circles" && tab !== "tree" && tab !== "table") return;
   try {
     localStorage.setItem(PEOPLE_VIEW_KEY, tab);
   } catch {

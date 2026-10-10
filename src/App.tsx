@@ -21,6 +21,7 @@ import { PhoneHeader, PhoneTabBar } from "./components/shell/PhoneChrome";
 import { useScopeShortcuts } from "./components/shell/ScopeMenu";
 import { usePlaceBadges } from "./components/shell/badges";
 import { lastPeopleTab, rememberPeopleTab } from "./components/shell/places";
+import { PeopleHeader } from "./components/people/PeopleHeader";
 import { Skeleton } from "./components/Skeleton";
 import { useKeyboardInset } from "./hooks/use-keyboard-inset";
 import { useSyncToasts } from "./hooks/use-sync-toasts";
@@ -46,6 +47,9 @@ const IdeasBoard = lazy(() =>
 );
 const MeetingsTable = lazy(() =>
   import("./components/MeetingsTable").then((m) => ({ default: m.MeetingsTable }))
+);
+const CirclesView = lazy(() =>
+  import("./components/people/CirclesView").then((m) => ({ default: m.CirclesView }))
 );
 const TodayPage = lazy(() =>
   import("./components/today/TodayPage").then((m) => ({ default: m.TodayPage }))
@@ -349,8 +353,10 @@ export default function App() {
                 selected && "max-lg:hidden"
               )}
             >
+              {(tab === "circles" || tab === "tree" || tab === "table") && <PeopleHeader />}
               <Suspense fallback={<PaneFallback />}>
                 {tab === "today" && <TodayPage />}
+                {tab === "circles" && <CirclesView />}
                 {tab === "tree" && <OrgTree />}
                 {tab === "ideas" && <IdeasBoard />}
                 {tab === "meetings" && <MeetingsTable />}

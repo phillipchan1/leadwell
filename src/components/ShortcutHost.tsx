@@ -13,6 +13,7 @@ export type GoTarget =
   | "meetings"
   | "ideas"
   | "prayer"
+  | "circles"
   | "tree"
   | "table";
 

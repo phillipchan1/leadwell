@@ -24,10 +24,17 @@
 
 /**
  * One id per surface. The five places in the sidebar map onto these; People
- * owns two of them (`tree`, the canvas, and `table`, the list), because a view
+ * owns three of them (`circles`, `tree` and `table`, the list), because a view
  * of the same place is still its own URL.
  */
-export type Tab = "today" | "tree" | "table" | "ideas" | "meetings" | "prayer";
+export type Tab =
+  | "today"
+  | "circles"
+  | "tree"
+  | "table"
+  | "ideas"
+  | "meetings"
+  | "prayer";
 export type EntityKind = "team" | "person" | "manager" | "meeting" | "me";
 
 export type Selection = {
@@ -44,7 +51,7 @@ export type Route =
   | { view: "tab"; tab: Tab; peek: Selection | null }
   | { view: "focus"; target: Selection };
 
-const TABS: Tab[] = ["today", "tree", "table", "ideas", "meetings", "prayer"];
+const TABS: Tab[] = ["today", "circles", "tree", "table", "ideas", "meetings", "prayer"];
 
 /**
  * `/people` was a fifth destination rendering a strict subset of `/table` —

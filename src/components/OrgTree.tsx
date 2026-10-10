@@ -31,11 +31,9 @@ import {
 } from "../store/useStore";
 import type { Manager, Person, Prayer, Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
-import { MODE_LAYERS, MODE_SCAN, TREE_MODES } from "../lib/treeMode";
-import { useShortcut } from "@/hooks/use-shortcut";
-import { useRovingFocus } from "@/hooks/use-roving-focus";
+import { MODE_LAYERS, MODE_SCAN } from "../lib/treeMode";
 import { rowActivationProps } from "@/lib/rowActivation";
-import { DIGIT_CHORDS, keyboardOwner } from "@/lib/keys";
+import { keyboardOwner } from "@/lib/keys";
 import {
   HEALTH_COLOR,
   HEALTH_FILTER_VALUES,
@@ -223,8 +221,6 @@ export function OrgTree() {
   const treeDomainId = useStore((s) => s.treeDomainId);
   const healthScan = useStore((s) => s.healthScan);
   const prayerScan = useStore((s) => s.prayerScan);
-  const setTreeDomainId = useStore((s) => s.setTreeDomainId);
-  const setTreeMode = useStore((s) => s.setTreeMode);
   const openModal = useStore((s) => s.openModal);
   const me = useStore((s) => s.me);
   const selectMe = useStore((s) => s.selectMe);
@@ -243,27 +239,8 @@ export function OrgTree() {
    * `e.code`, not `e.key` — Shift+1 reports "!" on a US layout and something
    * different again on every other one.
    */
-  useShortcut(
-    (e) => {
-      const digit = /^Digit([1-9])$/.exec(e.code);
-      if (!digit) return;
-      const n = Number(digit[1]);
-      if (e.shiftKey) {
-        const options: (string | null)[] = [null, ...domains.map((d) => d.id)];
-        const id = options[n - 1];
-        if (id !== undefined) setTreeDomainId(id);
-        return;
-      }
-      const mode = TREE_MODES[n - 1];
-      if (mode) setTreeMode(mode.id);
-    },
-    {
-      chord: DIGIT_CHORDS,
-      keysLabel: "1–4",
-      label: "Switch tree mode — Chart, Prep, Assess, Pray",
-      group: "Org tree",
-    }
-  );
+  // 1–4 (lens) are registered by the People header, so they work in every
+  // view of People — Circles, Tree and List — not just on the canvas.
   // ⇧1–⇧9 (life-area scope) are registered once by the shell now, so the
   // scope changes from every place rather than only while the canvas is up.
 
@@ -488,10 +465,7 @@ export function OrgTree() {
 
   const filterRow = (
     <>
-      {/* The mode bar stays out in the open at every width: it's the primary
-          control, and it's what the 1–4 shortcuts and the readme both treat as
-          the headline question. */}
-      <ModeBar />
+      {/* The lens bar lives in the People header now, shared by every view. */}
 
       <div className="max-lg:hidden flex flex-col gap-2">{filters}</div>
 
@@ -1087,61 +1061,6 @@ const dimStyle = (dim: boolean): CSSProperties => ({
  * the control the canvas used to hoard. Pray keeps its violet: it's the one
  * question here that isn't about how they're performing.
  */
-function ModeBar() {
-  const treeMode = useStore((s) => s.treeMode);
-  const setTreeMode = useStore((s) => s.setTreeMode);
-  // These were `role="tablist"`/`role="tab"` with no arrow-key handling and no
-  // tabpanel to control — a promise to assistive tech that the widget didn't
-  // keep. They're a set of exclusive filters, so: a radiogroup, and now with
-  // the roving arrow keys a radiogroup is supposed to have.
-  const { groupProps, itemProps } = useRovingFocus();
-  return (
-    <div
-      {...groupProps}
-      className="flex flex-wrap gap-1.5 touch:gap-2"
-      role="radiogroup"
-      aria-label="What I'm here to do"
-    >
-      {TREE_MODES.map((mode) => {
-        const on = mode.id === treeMode;
-        const pray = mode.id === "pray";
-        return (
-          <button
-            key={mode.id}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            {...itemProps(on)}
-            onClick={() => setTreeMode(mode.id)}
-            title={`${mode.question} (${mode.key})`}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm shadow-sm transition-colors touch:min-h-11 ${
-              on
-                ? pray
-                  ? "border-violet-500 bg-violet-50 font-medium text-violet-700 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300"
-                  : "border-teal-500 bg-teal-50 font-medium text-teal-700 dark:border-teal-600 dark:bg-teal-950/40 dark:text-teal-300"
-                : "border-primary bg-primary text-tertiary hover:border-stone-400 dark:hover:border-stone-500"
-            }`}
-          >
-            {pray && <PrayerIcon className="size-3.5" />}
-            {mode.label}
-            <kbd
-              className={`hidden rounded px-1 font-mono text-caption sm:inline ${
-                on
-                  ? pray
-                    ? "bg-violet-100 text-violet-600 dark:bg-violet-900/60 dark:text-violet-300"
-                    : "bg-teal-100 text-teal-600 dark:bg-teal-900/60 dark:text-teal-300"
-                  : "bg-tertiary text-quaternary"
-              }`}
-            >
-              {mode.key}
-            </kbd>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 /** Readiness state as a small colored chip — the glanceable "am I ready". */
 /** Proportional bar of member readiness states, worst-first. */
 function ReadinessBar({ readings }: { readings: Readiness[] }) {
@@ -1206,7 +1125,7 @@ const MeNode = memo(function MeNode() {
       >
         <Avatar name={me.name} photo={me.photo} size={44} />
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{me.name}</div>
+          <div className="truncate font-serif text-[16px] leading-5 font-medium">{me.name}</div>
           <div className="text-xs text-stone-500">
             {me.title ?? "Leader"} · {teamCount} teams · {assessed}/
             {peopleCount} with a read
@@ -1262,7 +1181,7 @@ const ManagerNode = memo(function ManagerNode({ data }: NodeProps) {
         <div className="flex items-center gap-2.5">
           <Avatar name={manager.name} photo={manager.photo} size={34} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-semibold">{manager.name}</div>
+            <div className="truncate font-serif text-[14px] leading-[18px] font-medium">{manager.name}</div>
             <div className="truncate text-caption text-quaternary">
               {[manager.role, domain?.name].filter(Boolean).join(" · ") ||
                 "I report to"}
@@ -1372,7 +1291,7 @@ const DirectReportNode = memo(function DirectReportNode({ data }: NodeProps) {
         <div className="flex items-center gap-2.5">
           <Avatar name={person.name} photo={person.photo} size={34} />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-semibold">{person.name}</div>
+            <div className="truncate font-serif text-[14px] leading-[18px] font-medium">{person.name}</div>
             <div className="truncate text-caption text-quaternary">
               {[person.role, domain?.name].filter(Boolean).join(" · ") ||
                 "Direct report"}
@@ -1575,7 +1494,7 @@ const TeamNode = memo(function TeamNode({ data }: NodeProps) {
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{team.name}</div>
+              <div className="truncate font-serif text-[16px] leading-5 font-medium">{team.name}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
                 {parent && (
                   <span className="text-caption text-quaternary">
