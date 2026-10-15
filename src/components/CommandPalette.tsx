@@ -74,6 +74,24 @@ type Row = {
   run: () => void;
 };
 
+/**
+ * Rows clustered by group, groups in order of first appearance. Listed as
+ * they come, groups interleave and their headings repeat: two "Go to"s and
+ * two "Create"s at rest, three "People"s in a ten-row search.
+ */
+function clusterByGroup(rows: Row[]): Row[] {
+  const order: string[] = [];
+  const byGroup = new Map<string, Row[]>();
+  for (const row of rows) {
+    if (!byGroup.has(row.group)) {
+      byGroup.set(row.group, []);
+      order.push(row.group);
+    }
+    byGroup.get(row.group)!.push(row);
+  }
+  return order.flatMap((g) => byGroup.get(g)!);
+}
+
 /** Rows shown before anything is typed. Enough to scan, not enough to read. */
 const RESTING_LIMIT = 30;
 const RECENT_LIMIT = 8;
@@ -290,7 +308,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             .slice(0, RECENT_LIMIT)
             .map((doc) => ({ ...docRow(doc), group: "Recent" }))
         : [];
-      return [...recentRows, ...commands].slice(0, RESTING_LIMIT);
+      return clusterByGroup([...recentRows, ...commands]).slice(0, RESTING_LIMIT);
     }
 
     const commandHits = commands
@@ -313,19 +331,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       .sort((a, b) => b.s - a.s)
       .slice(0, 40);
 
-    // Then cluster by group, keeping groups in best-match order. Sorting purely
-    // by score interleaves them, and the rendered headers repeat — three
-    // separate "People" headings in one ten-row list.
-    const order: string[] = [];
-    const byGroup = new Map<string, Row[]>();
-    for (const { row } of scored) {
-      if (!byGroup.has(row.group)) {
-        byGroup.set(row.group, []);
-        order.push(row.group);
-      }
-      byGroup.get(row.group)!.push(row);
-    }
-    return order.flatMap((g) => byGroup.get(g)!);
+    return clusterByGroup(scored.map(({ row }) => row));
   }, [commands, docRow, index, ranks, recents, trimmed]);
 
   // A new query invalidates the highlight — otherwise Enter runs whatever
@@ -364,7 +370,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      className="fixed inset-0 z-50 flex min-h-dvh w-full items-end justify-center bg-overlay/70 px-0 pt-4 backdrop-blur-[6px] sm:items-start sm:px-8 sm:pt-[12vh]"
+      // The top inset goes through the variable the modal's max height is
+      // measured against; set as plain padding, the list ran off the bottom.
+      className="fixed inset-0 z-50 flex min-h-dvh w-full items-end justify-center bg-overlay/70 px-0 backdrop-blur-[6px] [--modal-pt:16px] sm:items-start sm:px-8 sm:[--modal-pt:12vh]"
     >
       <SysModal className="max-w-xl">
         <Dialog aria-label="Command palette" className="flex max-h-[inherit] flex-col">
@@ -385,7 +393,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               }
               role="combobox"
               aria-autocomplete="list"
-              className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-stone-400 dark:placeholder:text-stone-500"
+              className="min-w-0 flex-1 bg-transparent text-base text-ellipsis outline-none placeholder:text-stone-400 dark:placeholder:text-stone-500"
             />
             <kbd className="hidden shrink-0 rounded bg-tertiary px-1.5 py-0.5 font-mono text-caption text-quaternary sm:inline">
               Esc

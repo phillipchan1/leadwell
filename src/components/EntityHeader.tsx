@@ -164,7 +164,7 @@ function StatusTrio({
       {showHealth && (
         <Cell onClick={() => onMode("now")} label="My read" aside={rated ? (isStale(health) ? "stale" : rated) : undefined}>
           {health ? (
-            <span className={cx("inline-flex h-7 items-center gap-2 self-start rounded-full pr-2.5 pl-2 text-[13px] font-semibold", HEALTH_PILL[health.level])}>
+            <span className={cx("inline-flex h-7 items-center gap-2 self-start rounded-full pr-2.5 pl-2 text-[13px] font-semibold whitespace-nowrap", HEALTH_PILL[health.level])}>
               <HealthMeter level={health.level} />
               {HEALTH_LABEL[health.level]}
             </span>
@@ -185,10 +185,10 @@ function StatusTrio({
       >
         {reading ? (
           <>
-            <span className={cx("inline-flex items-center gap-2.5", STATE_TEXT[reading.state])}>
+            <span className={cx("inline-flex flex-wrap items-center gap-x-2.5 gap-y-1", STATE_TEXT[reading.state])}>
               <RhythmRing reading={reading} size={24} />
-              <span className="font-mono text-[13px] font-medium uppercase">{formatCountdown(reading)}</span>
-              <span className="text-[13px] font-semibold">{STATE_LABEL[reading.state]}</span>
+              <span className="font-mono text-[13px] font-medium whitespace-nowrap uppercase">{formatCountdown(reading)}</span>
+              <span className="text-[13px] font-semibold whitespace-nowrap">{STATE_LABEL[reading.state]}</span>
             </span>
             <p className="text-[13.5px] leading-5 text-secondary">
               {lastMet ? `Last met ${lastMet}.` : "Not met yet."}
@@ -269,7 +269,7 @@ function Cell({
 /** A small identity chip: life area square, or a plain label (type, capacity). */
 export function IdentityChip({ color, children }: { color?: string; children: ReactNode }) {
   return (
-    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-secondary bg-primary px-2 text-[12px] text-secondary">
+    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-secondary bg-primary px-2 text-[12px] whitespace-nowrap text-secondary">
       {color && <i className="size-2 shrink-0 rounded-[2px]" style={{ backgroundColor: color }} aria-hidden="true" />}
       {children}
     </span>

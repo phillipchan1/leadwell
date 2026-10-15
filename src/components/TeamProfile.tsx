@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
 import { useDismiss } from "@/hooks/use-dismiss";
 import type { Team } from "../types";
@@ -6,7 +6,7 @@ import { hasLeadershipRead } from "../lib/derive";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 import { Avatar } from "./Avatar";
 import type { Density } from "./EntitySurface";
-import { ProgressBar, SectionTitle } from "./ui";
+import { SectionTitle } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Input } from "@/components/base/input/input";
@@ -257,7 +257,7 @@ export function TeamProfile({
       <div className="scroll-contain @container min-h-0 flex-1 overflow-y-auto">
         {/* ── Now: the audit loop — my read, readiness, what's next ─────── */}
         {mode === "now" && (
-          <div className="grid gap-6 px-4 py-5 sm:px-6 @3xl:grid-cols-2 @3xl:items-start">
+          <div className="grid gap-6 px-4 py-5 sm:px-6 @4xl:grid-cols-2 @4xl:items-start">
             <div className="flex min-w-0 flex-col gap-6">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <section className="min-w-[15rem] max-w-sm flex-1">
@@ -378,9 +378,6 @@ export function TeamProfile({
                   <div key={g.id} className="group">
                     <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                       <span className="flex-1">{g.title}</span>
-                      <span className="text-xs text-quaternary">
-                        {Math.round(g.progress)}%
-                      </span>
                       <ButtonUtility
                         size="xs"
                         color="tertiary"
@@ -395,6 +392,9 @@ export function TeamProfile({
                           )
                         }
                       />
+                      <span className="w-9 text-right text-xs text-quaternary tabular-nums">
+                        {Math.round(g.progress)}%
+                      </span>
                     </div>
                     <input
                       type="range"
@@ -407,8 +407,8 @@ export function TeamProfile({
                         })
                       }
                       className="goal-range mb-0.5 w-full"
+                        style={{ ["--goal-pct" as string]: `${g.progress}%` }}
                     />
-                    <ProgressBar value={g.progress} />
                   </div>
                 ))}
               </div>
@@ -697,6 +697,16 @@ function ActionRow({
   const [value, setValue] = useState(text);
   useEffect(() => setValue(text), [text]);
 
+  // Grow with the text. At one fixed row, a step longer than the card hid
+  // its second line with nothing to say it was there.
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
   return (
     <li
       className={`group flex items-start gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
@@ -741,8 +751,9 @@ function ActionRow({
       </button>
       <div className="min-w-0 flex-1">
         <textarea
+          ref={ref}
           rows={1}
-          className={`w-full resize-none bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none touch:min-h-11 touch:text-md ${
+          className={`block w-full resize-none overflow-hidden bg-transparent py-0.5 text-[0.95rem] leading-snug outline-none touch:min-h-11 touch:text-md ${
             done
               ? "text-quaternary line-through decoration-stone-300"
               : "text-stone-800 dark:text-stone-100"

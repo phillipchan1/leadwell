@@ -185,12 +185,12 @@ export function PeekPanel() {
   );
 
   return (
-    /* Below lg this is the only surface on screen, so it takes the full width,
+    /* Below xl this is the only surface on screen, so it takes the full width,
        ignores the stored percentage and drops the divider entirely. */
     <div
       ref={ref}
       style={{ "--peek-w": `${panelPct}%` } as CSSProperties}
-      className="relative flex min-w-0 flex-1 shrink-0 flex-col bg-primary lg:w-[var(--peek-w)] lg:min-w-[32rem] lg:flex-none lg:border-l lg:border-stone-200 lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:lg:border-stone-800 dark:lg:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
+      className="relative flex min-w-0 flex-1 shrink-0 flex-col bg-primary xl:w-[var(--peek-w)] xl:min-w-[32rem] xl:flex-none xl:border-l xl:border-stone-200 xl:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:xl:border-stone-800 dark:xl:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
     >
       {/* The divider. Keyboard-resizable too, because a drag handle that only
           answers to a mouse is a control half the people here can't reach. */}
@@ -222,10 +222,10 @@ export function PeekPanel() {
           }
         }}
         title="Drag to resize · double-click to reset"
-        /* A 3px-wide grip is a mouse target. Above lg with a coarse pointer —
+        /* A 3px-wide grip is a mouse target. Above xl with a coarse pointer —
            a tablet in landscape — it widens to a thumb's worth and the grip
            stops hiding, because there is no hover to reveal it with. */
-        className="group absolute top-0 -left-1.5 z-20 hidden h-full w-3 cursor-col-resize touch-none outline-none touch:-left-3 touch:w-6 lg:block"
+        className="group absolute top-0 -left-1.5 z-20 hidden h-full w-3 cursor-col-resize touch-none outline-none touch:-left-3 touch:w-6 xl:block"
       >
         <span
           aria-hidden

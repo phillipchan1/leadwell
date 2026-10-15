@@ -40,6 +40,7 @@ import {
 import { MODE_COLUMNS } from "../lib/treeMode";
 import {
   STATE_LABEL,
+  dayName,
   formatCountdown,
 } from "../lib/readiness";
 import { Avatar } from "./Avatar";
@@ -61,6 +62,18 @@ import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 import { cx } from "@/utils/cx";
 
 type ColumnKey = Exclude<SortKey, "name">;
+
+/**
+ * Columns that step aside when the table's card is narrow. Eight columns need
+ * ~1,170px; at 1440 the card has 1,160 and at 1280 about 1,000, so the last
+ * one or two ran past the card's edge. These two say least that isn't on
+ * screen already: the outline shows who a row is under, and Ready counts
+ * down to the next date.
+ */
+const NARROW_HIDE: Partial<Record<ColumnKey, string>> = {
+  under: "@max-[75rem]:hidden",
+  next: "@max-[65rem]:hidden",
+};
 
 const COLUMNS: {
   key: ColumnKey;
@@ -583,7 +596,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
           ))}
       </div>
 
-      <Card className="max-lg:hidden overflow-x-auto">
+      <Card className="@container max-lg:hidden overflow-x-auto">
         <table className="w-full min-w-[52rem] text-sm">
           <thead className="sticky top-0 z-10 bg-primary">
             <tr className="border-b border-secondary text-left text-xs text-quaternary">
@@ -599,6 +612,7 @@ export function TableView({ variant = "table" }: { variant?: TableVariant } = {}
                   key={c.key}
                   onClick={() => sortBy(c.key, c.descFirst)}
                   sorted={sortedDir(c.key)}
+                  className={NARROW_HIDE[c.key]}
                 >
                   {c.label}
                 </Th>
@@ -782,7 +796,10 @@ function Row({
               dimmed={record.coverage === 0}
             />
           )}
-          <div className="min-w-0">
+          {/* Capped: in an auto-width table `truncate` doesn't limit anything,
+              so the longest mandate set the column and squeezed Health and
+              Why down to a few letters each. */}
+          <div className="min-w-0 max-w-[16rem]">
             <div
               className={`truncate ${isTeam ? "font-medium" : ""}`}
               title={record.name}
@@ -799,7 +816,7 @@ function Row({
       </td>
 
       {columns.map((key) => (
-        <td key={key} className="px-4 py-2 align-middle text-stone-500">
+        <td key={key} className={cx("px-4 py-2 align-middle text-stone-500", NARROW_HIDE[key])}>
           <Cell
             column={key}
             record={record}
@@ -827,7 +844,7 @@ function Cell({
 
   switch (column) {
     case "type":
-      return <span className="text-xs">{record.typeLabel}</span>;
+      return <span className="text-xs whitespace-nowrap">{record.typeLabel}</span>;
     case "under":
       return <span className="truncate text-xs">{record.underName}</span>;
     case "domain":
@@ -884,7 +901,7 @@ function Cell({
       );
     case "next":
       return record.nextDate ? (
-        <span className="text-xs tabular-nums">{record.nextDate}</span>
+        <span className="text-xs whitespace-nowrap tabular-nums">{dayName(record.nextDate)}</span>
       ) : (
         dash
       );
@@ -923,7 +940,7 @@ function NoteCell({
 
   return (
     <input
-      className="w-full min-w-[10rem] rounded-md bg-transparent px-1.5 py-1 text-xs outline-none touch:min-h-11 touch:text-md hover:bg-stone-100 focus:bg-stone-100 dark:hover:bg-stone-800 dark:focus:bg-stone-800"
+      className="w-full min-w-[8rem] rounded-md bg-transparent px-1.5 py-1 text-xs text-ellipsis outline-none touch:min-h-11 touch:text-md hover:bg-stone-100 focus:bg-stone-100 dark:hover:bg-stone-800 dark:focus:bg-stone-800"
       placeholder="Why?"
       title={value || undefined}
       value={value}
@@ -1108,7 +1125,7 @@ function MobileRecordCard({
         )}
         {record.nextDate && (
           <span className="text-xs tabular-nums text-quaternary">
-            Next {record.nextDate}
+            Next {dayName(record.nextDate)}
           </span>
         )}
       </div>

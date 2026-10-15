@@ -239,7 +239,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
           color="link-gray"
           iconLeading={ArrowLeft}
           onClick={close}
-          className="shrink-0 lg:hidden"
+          className="shrink-0 xl:hidden"
         >
           <span className="sr-only">Back</span>
         </Button>
@@ -255,7 +255,9 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             <Button
               size="sm"
               color="link-gray"
-              className="max-w-[45%] truncate font-serif !text-[15px] !font-normal"
+              // The button centres its label, so truncating the button cut the
+              // name from both ends. The label truncates, from the right.
+              className="max-w-[45%] justify-start font-serif !text-[15px] !font-normal *:data-text:min-w-0 *:data-text:truncate"
               onClick={trail.parent.go}
             >
               {trail.parent.label}
@@ -294,7 +296,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
       )}
 
       <div className="ml-1 flex shrink-0 items-center gap-2">
-        {/* Peek↔focus promotion is a split-pane idea; below lg there is only
+        {/* Peek↔focus promotion is a split-pane idea; below xl there is only
             ever one surface, so the control has nothing to mean. */}
         {mode === "peek" ? (
           <ButtonUtility
@@ -303,7 +305,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             icon={Expand01}
             tooltip="Expand to full page (⌘↵)"
             onClick={openFocus}
-            className="max-lg:hidden"
+            className="max-xl:hidden"
           />
         ) : (
           <ButtonUtility
@@ -312,7 +314,7 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
             icon={Minimize01}
             tooltip="Back to split view (⌘↵)"
             onClick={closeFocus}
-            className="max-lg:hidden"
+            className="max-xl:hidden"
           />
         )}
         <ButtonUtility

@@ -13,24 +13,29 @@ export function StatsBar({ people }: { people: Person[] }) {
   const spots = blindSpots(people);
 
   return (
-    <Card className="grid grid-cols-1 gap-6 bg-stone-50/60 p-5 dark:bg-stone-950/40 md:grid-cols-3">
+    // Columns by the card's own width, not the window's: in a 720px panel
+    // the window said three, and the legend wrapped to two words a line.
+    <Card className="@container bg-stone-50/60 p-5 dark:bg-stone-950/40">
+     <div className="grid grid-cols-1 gap-6 @2xl:grid-cols-[1.4fr_1fr_1fr]">
       {/* Strengths balance donut */}
       <div className="flex items-center gap-4">
         <StrengthsDonut counts={counts} size={96} />
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <SectionTitle>Strengths balance</SectionTitle>
-          {DOMAINS.map((d) => (
-            <div key={d} className="flex items-center gap-2 text-xs">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: DOMAIN_COLOR[d] }}
-              />
-              <span className="text-tertiary">{d}</span>
-              <span className="text-quaternary">
-                {totalThemes ? Math.round((counts[d] / totalThemes) * 100) : 0}%
-              </span>
-            </div>
-          ))}
+          <div className="grid grid-cols-[auto_auto_auto] items-center justify-start gap-x-2 gap-y-1 text-xs whitespace-nowrap">
+            {DOMAINS.map((d) => (
+              <div key={d} className="contents">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: DOMAIN_COLOR[d] }}
+                />
+                <span className="text-tertiary">{d}</span>
+                <span className="text-right text-quaternary tabular-nums">
+                  {totalThemes ? Math.round((counts[d] / totalThemes) * 100) : 0}%
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -67,6 +72,7 @@ export function StatsBar({ people }: { people: Person[] }) {
         <MixRow label="Enneagram" mix={mix.enneagram} />
         <MixRow label="MBTI" mix={mix.mbti} />
       </div>
+     </div>
     </Card>
   );
 }

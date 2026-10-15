@@ -254,7 +254,7 @@ function NextMove({ row }: { row: MeetingRow }) {
         <button
           type="button"
           onClick={() => fix(row, check)}
-          className="inline-flex h-10 items-center gap-2.5 rounded-[9px] bg-teal-600 px-4 text-[14px] font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-400 dark:text-stone-950 dark:hover:bg-teal-300"
+          className="inline-flex h-10 items-center gap-2.5 rounded-[9px] bg-teal-600 px-4 text-[14px] font-semibold whitespace-nowrap text-white transition-colors hover:bg-teal-700 dark:bg-teal-400 dark:text-stone-950 dark:hover:bg-teal-300"
         >
           {check ? FIX_ACTION[check.fix] : "Open the meeting"}
         </button>
@@ -344,7 +344,9 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
               <li
                 key={row.meeting.id}
                 className={cx(
-                  "grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3.5 @min-[560px]:grid-cols-[64px_minmax(0,1fr)_140px_auto] @min-[560px]:px-5",
+                  // The action column is fixed so every row's status lines up;
+                  // at `auto` each row sized it to its own label.
+                  "grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3.5 @min-[560px]:grid-cols-[64px_minmax(0,1fr)_140px_7.5rem] @min-[560px]:px-5",
                   i > 0 && "border-t border-secondary"
                 )}
               >
@@ -356,7 +358,9 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                   <span className="truncate font-serif text-[19px] leading-[23px] font-medium hover:underline hover:decoration-1 hover:underline-offset-4">
                     {row.title}
                   </span>
-                  <span className="truncate text-[13px] text-quaternary">
+                  {/* Two lines where the row is narrow; one cut-off line hid how
+                      much was on the agenda, which is the point of the row. */}
+                  <span className="line-clamp-2 text-[13px] text-quaternary @min-[560px]:line-clamp-1">
                     {[
                       row.meeting.subjectKind === "person" ? "1:1" : row.subject?.kind === "team" ? row.subject.name : row.subject?.name,
                       RHYTHM_LABEL[row.meeting.rhythm].toLowerCase(),
@@ -375,7 +379,7 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                     <button
                       type="button"
                       onClick={() => fix(row, action.check)}
-                      className="text-right text-[13px] font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400"
+                      className="text-right text-[13px] font-semibold whitespace-nowrap text-teal-700 hover:text-teal-800 dark:text-teal-400"
                     >
                       {action.label}
                     </button>
@@ -445,8 +449,8 @@ function IdeasWaiting({ ideas }: { ideas: ReturnType<typeof buildToday>["ideas"]
     <section className="flex flex-col gap-3.5">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-[15px] leading-5 font-semibold">
-          Ideas waiting for a home{" "}
-          <span className="font-mono text-[12px] font-medium text-quaternary">
+          Ideas waiting for a home
+          <span className="ml-2 font-mono text-[12px] font-medium text-quaternary">
             {ideas.count}
             {ideas.aging ? ` · ${ideas.aging} aging` : ""}
           </span>
@@ -576,8 +580,10 @@ function HowTheyreDoing({ health }: { health: ReturnType<typeof buildToday>["hea
             <li key={`${s.kind}:${s.id}`} className="border-b border-secondary last:border-b-0">
               <button type="button" onClick={() => open(s)} className="flex w-full items-center gap-2.5 py-2.5 text-left">
                 <HealthMeter level={s.health?.level} label={s.health ? HEALTH_LABEL[s.health.level] : undefined} />
-                <span className="min-w-0 flex-1 truncate font-serif text-[16px]">{s.name}</span>
-                <span className="max-w-[45%] truncate text-[12px] text-quaternary">{s.health?.note ?? s.role ?? ""}</span>
+                {/* The name keeps its width and the note takes the rest; with
+                    the note capped at 45% it cut off beside empty space. */}
+                <span className="max-w-[55%] shrink-0 truncate font-serif text-[16px]">{s.name}</span>
+                <span className="min-w-0 flex-1 truncate text-right text-[12px] text-quaternary">{s.health?.note ?? s.role ?? ""}</span>
               </button>
             </li>
           ))}

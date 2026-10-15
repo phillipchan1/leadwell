@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Plus, SearchLg, Trash01, X } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
@@ -22,6 +22,7 @@ import { TopicDetail } from "./TopicDetail";
 import { Avatar } from "./Avatar";
 import { RhythmRing } from "./brand/glyphs";
 import { MeetingsSwitch } from "./shell/MeetingsSwitch";
+import { StripPager, fitColumns, pageStrip } from "./StripPager";
 import type { Topic, TrackedMeeting } from "@/types";
 
 type GroupBy = "meeting" | "tag";
@@ -39,6 +40,9 @@ function nextLabel(date: string, today: string): string {
   if (d === 1) return "TOMORROW";
   return `${fmt(date, { weekday: "short" }).toUpperCase()} ${Number(date.slice(8, 10))}`;
 }
+
+/** An empty column is only a drop target, so it stays narrow. */
+const EMPTY_COL_W = 208; // 13rem
 
 /**
  * Everything not yet on a week.
@@ -262,6 +266,45 @@ export function IdeasBoard() {
   );
 
   const dnd = useBoardDnD(onDrop);
+
+  /*
+   * The columns are a strip wider than the page. At fixed widths the last one
+   * showing was sliced through its cards; sized by `fitColumns`, the edge
+   * falls between two, and the pager moves a page at a time.
+   */
+  const [strip, setStrip] = useState<HTMLDivElement | null>(null);
+  const [stripBox, setStripBox] = useState(0);
+  const [stripAt, setStripAt] = useState({ back: false, forward: false });
+  const measureStrip = useCallback(() => {
+    if (!strip) return;
+    setStripBox(strip.clientWidth);
+    const back = strip.scrollLeft > 4;
+    const forward = strip.scrollWidth - strip.clientWidth - strip.scrollLeft > 1;
+    setStripAt((at) => (at.back === back && at.forward === forward ? at : { back, forward }));
+  }, [strip]);
+  useLayoutEffect(() => {
+    if (!strip) return;
+    measureStrip();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measureStrip);
+    ro.observe(strip);
+    if (strip.firstElementChild) ro.observe(strip.firstElementChild);
+    return () => ro.disconnect();
+  }, [strip, measureStrip]);
+  const colW = fitColumns(
+    stripBox,
+    columns.map((c) => ({ fixed: c.topics.length === 0 ? EMPTY_COL_W : undefined })),
+    { gap: 12, min: 240, max: 352 }
+  );
+  const { scrollerRef } = dnd;
+  const stripRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      setStrip(el);
+      // Dragging a card near the edge pans the strip.
+      scrollerRef(el);
+    },
+    [scrollerRef]
+  );
 
   const toggleSelect = (topic: Topic, shift: boolean) => {
     setSelected((prev) => {
@@ -494,7 +537,24 @@ export function IdeasBoard() {
           })}
         </div>
 
-        <div className="flex h-9 w-full items-center gap-2 rounded-[9px] bg-tertiary px-2.5 sm:ml-auto sm:w-56">
+        {!isPhone && (stripAt.back || stripAt.forward) && (
+          <span className="sm:ml-auto">
+            <StripPager
+              canBack={stripAt.back}
+              canForward={stripAt.forward}
+              onPage={(dir) => strip && pageStrip(strip, dir, { gap: 12 })}
+              backLabel="Previous columns"
+              forwardLabel="More columns"
+              forwardText="More"
+            />
+          </span>
+        )}
+        <div
+          className={cx(
+            "flex h-9 w-full items-center gap-2 rounded-[9px] bg-tertiary px-2.5 sm:w-56",
+            !(!isPhone && (stripAt.back || stripAt.forward)) && "sm:ml-auto"
+          )}
+        >
           <SearchLg aria-hidden className="size-3.5 shrink-0 text-quaternary" />
           <input
             value={query}
@@ -575,7 +635,8 @@ export function IdeasBoard() {
           <div
             // A new lens starts from its first column, not wherever the last one was scrolled.
             key={groupBy}
-            ref={dnd.scrollerRef}
+            ref={stripRef}
+            onScroll={measureStrip}
             className="scroll-contain min-w-0 flex-1 overflow-x-auto pb-3"
           >
             <div className="inline-flex min-w-full items-start gap-3">
@@ -587,9 +648,10 @@ export function IdeasBoard() {
                   <section
                     key={col.key}
                     aria-label={col.label}
+                    data-lane
+                    style={{ width: empty ? EMPTY_COL_W : colW }}
                     className={cx(
                       "group/col flex min-h-[24rem] shrink-0 flex-col gap-2 rounded-[16px] p-3",
-                      empty ? "w-[13rem]" : "w-[17.5rem]",
                       queue
                         ? "border-[1.5px] border-dashed border-primary"
                         : empty

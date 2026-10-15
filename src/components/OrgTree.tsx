@@ -563,11 +563,14 @@ export function OrgTree() {
             style={{ opacity: 0.35 }}
           />
           <Controls showInteractive={false} position="bottom-right" />
+          {/* Sized through `style`: React Flow draws the map at
+              `style.width ?? 200`, so a class left it 200×150 and running
+              past the canvas's edge. */}
           <MiniMap
             pannable
             zoomable
             position="top-right"
-            className="!h-24 !w-36"
+            style={{ width: 144, height: 96 }}
           />
           <Panel position="top-left" className="flex flex-wrap items-center gap-3">
             <div className="flex flex-wrap gap-2" role="group" aria-label="Add">
@@ -589,10 +592,6 @@ export function OrgTree() {
                 + Manager
               </Button>
             </div>
-            <span
-              className="hidden h-5 w-px bg-stone-200 sm:block dark:bg-stone-700"
-              aria-hidden
-            />
             <Button size="sm" color="link-gray" onClick={resetLayout}>
               Reset layout
             </Button>

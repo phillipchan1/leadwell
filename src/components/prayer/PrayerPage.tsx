@@ -247,10 +247,10 @@ function CarriedCard({
           <Avatar name={c.name} photo={c.photo} size={44} className={c.kind === "team" ? "!rounded-xl" : undefined} />
         </button>
         <div className="flex min-w-0 flex-col gap-0.5">
-          <button type="button" onClick={onOpen} className="truncate text-left font-serif text-[22px] leading-7 font-medium hover:underline hover:decoration-1 hover:underline-offset-4 sm:text-[24px]">
+          <button type="button" onClick={onOpen} className="truncate text-left font-serif text-[22px] leading-7 font-medium hover:underline hover:decoration-1 hover:underline-offset-4 sm:text-[24px] sm:leading-8">
             {c.name}
           </button>
-          <span className="truncate text-[13px] text-quaternary">{meta}</span>
+          <span className="line-clamp-2 text-[13px] text-quaternary">{meta}</span>
         </div>
         <span className="ml-auto shrink-0">
           {prayedToday ? (

@@ -185,20 +185,24 @@ export function MeetingProfile({
                     ? ` on ${WEEKDAY[meeting.anchorWeekday]}s`
                     : ""}
                 </span>
+                {/* Each separator travels with the words after it, so a wrap
+                    never leaves a line ending on "·". */}
                 {subjectName && (meeting.name?.trim() || meeting.subjectKind === "team") && (
-                  <>
-                    <span aria-hidden className="text-quaternary">·</span>
-                    <span>
-                      with <span className="font-serif text-[15.5px] text-primary">{subjectName}</span>
-                    </span>
-                  </>
+                  <span className="whitespace-nowrap">
+                    <span aria-hidden className="mr-2 text-quaternary">·</span>
+                    with <span className="font-serif text-[15.5px] text-primary">{subjectName}</span>
+                  </span>
                 )}
-                <span aria-hidden className="text-quaternary">·</span>
-                <span>{meeting.role === "attend" ? "you attend" : "you convene"}</span>
+                <span className="whitespace-nowrap">
+                  <span aria-hidden className="mr-2 text-quaternary">·</span>
+                  {meeting.role === "attend" ? "you attend" : "you convene"}
+                </span>
               </p>
               <PhoneRhythm meeting={meeting} />
             </div>
-            <div className="flex shrink-0 items-center gap-2 max-md:hidden">{actions}</div>
+            {/* Inline only from lg: at md the ~320px of buttons squeezed the
+                title down to "1:1 with Sarah" and a lone "Kim". */}
+            <div className="flex shrink-0 items-center gap-2 max-lg:hidden">{actions}</div>
           </div>
 
           <MeetingStatus
@@ -210,7 +214,7 @@ export function MeetingProfile({
             // The Agenda is the next one, as a running order.
             onNext={() => setSection(modeSection("now", "meeting"))}
           />
-          <div className="flex flex-wrap gap-2 md:hidden">{actions}</div>
+          <div className="flex flex-wrap gap-2 lg:hidden">{actions}</div>
         </div>
       </header>
 
@@ -327,10 +331,10 @@ function MeetingStatus({
     // On a phone the plan is the point; the rhythm rides under the title.
     <div className="grid overflow-hidden rounded-[16px] border border-secondary bg-primary max-md:hidden @2xl:grid-cols-3">
       <Cell label="Rhythm" aside={RHYTHM_LABEL[meeting.rhythm].toUpperCase()} onClick={onRhythm}>
-        <span className={cx("inline-flex items-center gap-2.5", STATE_TEXT[reading.state])}>
+        <span className={cx("inline-flex flex-wrap items-center gap-x-2.5 gap-y-1", STATE_TEXT[reading.state])}>
           <RhythmRing reading={reading} size={24} />
-          <span className="font-mono text-[13px] font-medium uppercase">{formatCountdown(reading)}</span>
-          <span className="text-[13px] font-semibold">{STATE_LABEL[reading.state]}</span>
+          <span className="font-mono text-[13px] font-medium whitespace-nowrap uppercase">{formatCountdown(reading)}</span>
+          <span className="text-[13px] font-semibold whitespace-nowrap">{STATE_LABEL[reading.state]}</span>
         </span>
         <p className="text-[13.5px] leading-5 text-secondary">
           {reading.lastMet

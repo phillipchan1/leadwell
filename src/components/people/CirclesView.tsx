@@ -31,6 +31,9 @@ type Facts = {
   photo?: string;
 };
 
+/** The smallest a node may render, as a share of its full size. */
+const NODE_FLOOR = 0.62;
+
 export function CirclesView() {
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
@@ -88,6 +91,12 @@ export function CirclesView() {
   // On a phone this is a glance at the shape, so it fits rather than scrolls.
   const scale = wrapW ? Math.max(0.34, Math.min(1, wrapW / layout.width)) : 1;
   const offset = Math.max(0, (wrapW - layout.width * scale) / 2);
+  /*
+   * The nodes give back some of the shrink. Scaled with the drawing, names
+   * came out ~6px beside an open panel and on a phone; scaled back up to at
+   * least 62% of their size, they read, and the spacing still shows the shape.
+   */
+  const zoom = Math.min(1 / scale, Math.max(1, NODE_FLOOR / scale));
 
   const selectedKey = selectedPersonId
     ? `person:${selectedPersonId}`
@@ -123,7 +132,7 @@ export function CirclesView() {
     <div className="flex flex-wrap items-start gap-6">
       <div
         ref={wrapRef}
-        className="relative min-w-0 flex-[999_1_560px] overflow-x-auto overflow-y-hidden rounded-[18px] border border-secondary bg-primary"
+        className="relative box-content min-w-0 flex-[999_1_560px] overflow-x-auto overflow-y-hidden rounded-[18px] border border-secondary bg-primary"
         style={{ height: layout.height * scale }}
       >
         <div
@@ -197,7 +206,7 @@ export function CirclesView() {
                 onClick={() => open(n)}
                 aria-label="You — open your profile"
                 className="absolute flex size-[72px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-leather font-serif text-[22px] text-leather-fg shadow-[0_0_0_4px_var(--color-bg-primary),0_0_0_5px_var(--color-gilt)]"
-                style={{ left: center.x, top: center.y }}
+                style={{ left: center.x, top: center.y, scale: zoom }}
               >
                 {me.photo ? (
                   <img src={me.photo} alt="" className="size-full rounded-full object-cover" />
@@ -214,6 +223,7 @@ export function CirclesView() {
                 square={n.kind === "team" ? domainColor(n.domainId) : undefined}
                 selected={selectedKey === n.key}
                 dimmed={dimmed(n)}
+                zoom={zoom}
                 onOpen={() => open(n)}
               />
             ) : (
@@ -224,6 +234,7 @@ export function CirclesView() {
                 lens={lens}
                 selected={selectedKey === n.key}
                 dimmed={dimmed(n)}
+                zoom={zoom}
                 onOpen={() => open(n)}
               />
             )
@@ -261,6 +272,7 @@ function PersonNode({
   lens,
   selected,
   dimmed,
+  zoom,
   onOpen,
 }: {
   node: CircleNode;
@@ -268,6 +280,8 @@ function PersonNode({
   lens: TreeMode;
   selected: boolean;
   dimmed: boolean;
+  /** Counter-scale against the drawing's fit; see `zoom` in CirclesView. */
+  zoom: number;
   onOpen: () => void;
 }) {
   const ring = lensRing(lens, facts, node.kind);
@@ -289,7 +303,8 @@ function PersonNode({
         "group absolute flex w-[132px] -translate-x-1/2 flex-col items-center gap-1.5 transition-opacity",
         dimmed && "opacity-30"
       )}
-      style={{ left: node.x, top: node.y - 20 }}
+      // Scaled about the avatar's centre, which is the point on the ring.
+      style={{ left: node.x, top: node.y - 20, scale: zoom, transformOrigin: "50% 20px" }}
     >
       <span
         className={cx(
@@ -329,6 +344,7 @@ function PillNode({
   square,
   selected,
   dimmed,
+  zoom,
   onOpen,
 }: {
   node: CircleNode;
@@ -337,6 +353,7 @@ function PillNode({
   square?: string;
   selected: boolean;
   dimmed: boolean;
+  zoom: number;
   onOpen: () => void;
 }) {
   const level = facts?.health?.level;
@@ -358,7 +375,8 @@ function PillNode({
         selected && "ring-2 ring-teal-500 ring-offset-2 ring-offset-[var(--color-bg-primary)]",
         dimmed && "opacity-30"
       )}
-      style={{ left: node.x, top: node.y }}
+      // Pills are wider than a name, so they take back a little less.
+      style={{ left: node.x, top: node.y, scale: Math.max(1, zoom * 0.88) }}
     >
       {square && <i className="size-2 shrink-0 rounded-[2px]" style={{ backgroundColor: square }} aria-hidden="true" />}
       <span className="truncate">{node.name}</span>

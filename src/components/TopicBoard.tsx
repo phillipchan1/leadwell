@@ -29,6 +29,7 @@ import { sessionSummary } from "../lib/session";
 import { deleteWithUndo, doWithUndo } from "../lib/undo";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
 import { ArrowRight, ChevronRight, DotsGrid, Plus } from "@untitledui/icons";
+import { StripPager, fitColumns, pageStrip } from "./StripPager";
 import {
   useReorderableRow,
   type MoveResult,
@@ -135,7 +136,26 @@ export function TopicBoard({
   useEffect(() => {
     if (!selectedSlotKey && !narrow) setTrayWhileOpen(false);
   }, [selectedSlotKey, narrow]);
-  const trayFolded = (narrow || Boolean(selectedSlotKey)) && !trayWhileOpen;
+
+  /*
+   * Between the width where the tray moves up beside the weeks and the width
+   * where both fit, the tray would leave room for barely one whole week. It
+   * folds to its rail there too.
+   */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [cramped, setCramped] = useState(false);
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el || occurrence) return;
+    const check = () => setCramped(el.clientWidth >= 768 && el.clientWidth < 1000);
+    check();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [occurrence]);
+  const foldable = narrow || Boolean(selectedSlotKey) || cramped;
+  const trayFolded = foldable && !trayWhileOpen;
 
   const removeTopic = useCallback(
     (topic: Topic) => {
@@ -281,7 +301,7 @@ export function TopicBoard({
   const ideaCount = ideaGroups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
-    <div className="@container flex flex-col gap-4">
+    <div ref={rootRef} className="@container flex flex-col gap-4">
       {loose.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-cond-watch-soft px-4 py-3">
           <p className="min-w-0 flex-1 text-[13.5px] leading-5 text-cond-watch-ink">
@@ -323,7 +343,7 @@ export function TopicBoard({
               drag={drag}
               columnRef={columnRef}
               cardProps={cardProps}
-              onFold={selectedSlotKey || narrow ? () => setTrayWhileOpen(false) : undefined}
+              onFold={foldable ? () => setTrayWhileOpen(false) : undefined}
               onAllIdeas={() => setTab("ideas")}
               onCapture={(raw, slotId) =>
                 captureTopics(raw, {
@@ -400,6 +420,16 @@ export function TopicBoard({
 
 type GridRow = { id: string; label: string; slotId?: string; minutes?: number };
 
+/** The strip's fixed measures, in px: they size the week columns to fit. */
+const LABEL_W = 140; // 8.75rem
+const GAP = 12; // gap-x-3
+const PAST_W = 124; // 7.75rem
+const SKIP_W = 72; // 4.5rem
+/** Room past the last sheet for its ring and halo, which overflow would clip. */
+const RING_ROOM = 8;
+const WEEK_MIN = { rows: 168, bare: 196 };
+const WEEK_MAX = 320; // 20rem
+
 function ScheduleGrid({
   meetingId,
   weeks,
@@ -441,6 +471,7 @@ function ScheduleGrid({
   const [scrolled, setScrolled] = useState(false);
   const scrollLeftRef = useRef(0);
   const [hiddenRight, setHiddenRight] = useState(0);
+  const [box, setBox] = useState(0);
   const [draggingRow, setDraggingRow] = useState<string | null>(null);
   const [overRow, setOverRow] = useState<string | null>(null);
 
@@ -449,6 +480,7 @@ function ScheduleGrid({
     if (!el) return;
     setHiddenRight(Math.max(0, el.scrollWidth - el.clientWidth - el.scrollLeft));
     setScrolled(el.scrollLeft > 4);
+    setBox(el.clientWidth);
   }, []);
 
   // The board re-renders on every store change; keep the strip where it was.
@@ -526,22 +558,31 @@ function ScheduleGrid({
 
   const colOffset = hasRows ? 2 : 1;
   const colOf = new Map(lanes.map((l, i) => [l.key, i + colOffset]));
+  const fixedOf = (l: Lane) =>
+    l.kind === "skip" ? SKIP_W : l.week.slot.past ? PAST_W : undefined;
+  const weekW = fitColumns(
+    box,
+    lanes.map((l) => ({ fixed: fixedOf(l) })),
+    {
+      gap: GAP,
+      lead: hasRows ? LABEL_W : 0,
+      tail: RING_ROOM,
+      min: hasRows ? WEEK_MIN.rows : WEEK_MIN.bare,
+      max: WEEK_MAX,
+    }
+  );
   const template = [
-    hasRows ? "8.75rem" : null,
-    ...lanes.map((l) =>
-      agenda
-        ? "minmax(0, 1fr)"
-        : l.kind === "skip"
-          ? "4.5rem"
-          : l.week.slot.past
-            ? "7.75rem"
-            : hasRows
-              ? "11.5rem"
-              : "13rem"
-    ),
+    hasRows ? `${LABEL_W}px` : null,
+    ...lanes.map((l) => (agenda ? "minmax(0, 1fr)" : `${fixedOf(l) ?? weekW}px`)),
   ]
     .filter(Boolean)
     .join(" ");
+
+  const page = (dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (el) pageStrip(el, dir, { gap: GAP, lead: hasRows ? LABEL_W + GAP : 0, tail: RING_ROOM });
+  };
+  const pages = !agenda && (scrolled || hiddenRight > RING_ROOM + 1);
 
   const upcoming = coverage ?? weeks.filter((w) => !w.slot.past);
   const nextKey = upcoming[0]?.key;
@@ -576,21 +617,37 @@ function ScheduleGrid({
     );
   }
 
+  // In the board's empty corner (above the grid when there are no section
+  // labels). It used to float over the last column's cards.
+  const pager = pages && (
+    <StripPager
+      canBack={scrolled}
+      canForward={hiddenRight > RING_ROOM + 1}
+      onPage={page}
+      backLabel="Earlier weeks"
+      forwardLabel="Later weeks"
+    />
+  );
+
   return (
     <div className="relative min-w-0 flex-1">
+      {!hasRows && pager && <div className="flex justify-end pb-2">{pager}</div>}
       <div
         ref={setScroller}
         onScroll={() => {
           scrollLeftRef.current = scrollRef.current?.scrollLeft ?? 0;
           measure();
         }}
-        className="scroll-contain scrollbar-hide overflow-x-auto pb-3"
+        // A scroller clips on both axes, and the next week's ring and halo
+        // sit just outside its sheet: the padding gives them room.
+        className="scroll-contain scrollbar-hide -mt-2 overflow-x-auto pt-2 pb-3"
       >
         <div
           className={cx("relative gap-x-3", agenda ? "grid w-full" : "inline-grid")}
           style={{
             gridTemplateColumns: template,
             gridTemplateRows: `auto repeat(${rows.length}, minmax(${hasRows ? "5.75rem" : "12rem"}, auto))`,
+            paddingRight: agenda ? undefined : RING_ROOM,
           }}
         >
           {/* The sheets: one per week, behind its header and cells. */}
@@ -601,6 +658,7 @@ function ScheduleGrid({
                 <Fragment key={lane.key}>
                   <div
                     aria-hidden
+                    data-lane
                     style={{ gridColumn: colOf.get(lane.key), gridRow: `1 / span ${rows.length + 1}` }}
                     className={cx(
                       "rounded-[14px] bg-[repeating-linear-gradient(135deg,transparent_0_7px,var(--color-border-secondary)_7px_8px)]",
@@ -652,15 +710,18 @@ function ScheduleGrid({
               <div
                 key={`sheet-${week.key}`}
                 aria-hidden
+                data-lane
                 // An agenda has no header row; its sheet starts with the first section.
                 style={{
                   gridColumn: i + colOffset,
                   gridRow: agenda ? `2 / span ${rows.length}` : `1 / span ${rows.length + 1}`,
                 }}
                 className={cx(
+                  // Outlines are drawn inside the sheet: one drawn outside it was
+                  // clipped wherever the sheet met the scroller's edge.
                   "rounded-[14px] transition-colors",
                   agenda
-                    ? "bg-primary shadow-[0_0_0_1px_var(--color-border-secondary)]"
+                    ? "bg-primary shadow-[inset_0_0_0_1px_var(--color-border-secondary)]"
                     : active
                     ? "bg-teal-50 ring-[1.5px] ring-teal-600 dark:bg-teal-950/40 dark:ring-teal-500"
                     : week.slot.past
@@ -669,7 +730,7 @@ function ScheduleGrid({
                         ? "border-[1.5px] border-dashed border-primary"
                         : next
                           ? "bg-primary ring-[1.5px] ring-teal-600 shadow-[0_0_0_5px_var(--color-teal-50)] dark:ring-teal-500 dark:shadow-none"
-                          : "bg-primary shadow-[0_0_0_1px_var(--color-border-secondary)]"
+                          : "bg-primary shadow-[inset_0_0_0_1px_var(--color-border-secondary)]"
                 )}
               />
             );
@@ -678,8 +739,11 @@ function ScheduleGrid({
           {hasRows && !agenda && (
             <div
               style={{ gridColumn: 1, gridRow: 1 }}
-              className="sticky left-0 z-[3] flex items-end bg-primary pb-3"
+              // Reaches up over the scroller's padding so a ring sliding
+              // under the labels doesn't show above them.
+              className="sticky left-0 z-[3] -mt-2 flex flex-col items-start justify-between gap-3 bg-primary pt-5 pb-3"
             >
+              {pager || <span />}
               <span className="eyebrow">Standing agenda</span>
             </div>
           )}
@@ -763,27 +827,6 @@ function ScheduleGrid({
           aria-hidden
           className="pointer-events-none absolute inset-y-0 left-[8.75rem] z-[4] w-5 bg-gradient-to-r from-[rgba(10,34,37,0.07)] to-transparent"
         />
-      )}
-      {hiddenRight > 24 && (
-        <>
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-y-0 right-0 z-[4] w-24 bg-gradient-to-r from-transparent to-[var(--color-bg-primary)]"
-          />
-          <button
-            type="button"
-            onClick={() =>
-              scrollRef.current?.scrollBy({
-                left: Math.round((scrollRef.current?.clientWidth ?? 600) * 0.75),
-                behavior: "smooth",
-              })
-            }
-            className="absolute right-1 bottom-6 z-[5] inline-flex h-8 items-center gap-1.5 rounded-full border border-primary bg-primary px-3 text-[12px] font-semibold text-primary shadow-xs transition hover:border-teal-300 touch:min-h-11"
-          >
-            Later weeks
-            <ArrowRight className="size-3.5" />
-          </button>
-        </>
       )}
     </div>
   );
@@ -1269,21 +1312,27 @@ function IdeasTray({
               type="button"
               aria-pressed={filter === f.id}
               onClick={() => setFilter(f.id)}
-              className={cx(
-                "inline-flex h-[26px] items-center gap-1.5 rounded-full px-2 text-[12px] font-medium transition-colors touch:min-h-11",
-                filter === f.id
-                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
-                  : "text-tertiary hover:bg-primary hover:text-secondary"
-              )}
+              // The button is the 44px touch target; the pill inside it keeps
+              // its 26px, so the selected one doesn't swell into a black disc.
+              className="group/chip inline-flex items-center text-[12px] font-medium touch:min-h-11"
             >
-              {f.slotId && (
-                <i
-                  aria-hidden
-                  className={cx("size-2 rounded-[2px]", slotDotClass(curriculum, f.slotId, tags))}
-                />
-              )}
-              {f.label}
-              <span className="font-mono text-[10.5px] opacity-70">{f.count}</span>
+              <span
+                className={cx(
+                  "inline-flex h-[26px] items-center gap-1.5 rounded-full px-2 transition-colors",
+                  filter === f.id
+                    ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                    : "text-tertiary group-hover/chip:bg-primary group-hover/chip:text-secondary"
+                )}
+              >
+                {f.slotId && (
+                  <i
+                    aria-hidden
+                    className={cx("size-2 rounded-[2px]", slotDotClass(curriculum, f.slotId, tags))}
+                  />
+                )}
+                {f.label}
+                <span className="font-mono text-[10.5px] opacity-70">{f.count}</span>
+              </span>
             </button>
           ))}
         </div>

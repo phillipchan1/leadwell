@@ -430,7 +430,7 @@ export function PrayerPanel({
   return (
     /* Capped at a reading measure: these are sentences you wrote, and a line
        of prose 1,400px wide is unreadable on a focus route. */
-    <div className={`flex max-w-2xl flex-col gap-6 ${padded ? "p-4" : ""}`}>
+    <div className={`flex max-w-2xl flex-col gap-6 ${padded ? "p-4 sm:p-6" : ""}`}>
       {/* The standing state. Not a form — a line about where this sits. */}
       <section
         className="prayer-panel rounded-2xl px-4 py-4"

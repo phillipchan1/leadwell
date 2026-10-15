@@ -14,7 +14,7 @@ import { meetingFor, todayISO, type CheckFix } from "../lib/readiness";
 import { teamsLedBy } from "../lib/teams";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
 import type { Density } from "./EntitySurface";
-import { ProgressBar, ProfileAdminLinks, SectionTitle } from "./ui";
+import { ProfileAdminLinks, SectionTitle } from "./ui";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { EntityModeTabs } from "./EntityModeTabs";
@@ -154,7 +154,9 @@ export function PersonProfile({
         onMode={setMode}
         meta={
           <div className="flex flex-col gap-1">
-            <span className="truncate">
+            {/* Wraps rather than truncating: beside the header's buttons the
+                line was cut to "Operations Coordinator · …" with room below. */}
+            <span>
               {person.role && <>{person.role} · </>}
               {team ? (
                 <button
@@ -229,7 +231,7 @@ export function PersonProfile({
       <div className="scroll-contain @container relative min-h-0 flex-1 overflow-y-auto">
         {/* ── Now: where we stand, and what I owe them ──────────────────── */}
         {mode === "now" && (
-          <div className="grid gap-6 p-4 sm:p-6 @3xl:grid-cols-2 @3xl:items-start">
+          <div className="grid gap-6 p-4 sm:p-6 @4xl:grid-cols-2 @4xl:items-start">
             <div className="flex min-w-0 flex-col gap-6">
               {/* My call, not a read of their assessments. */}
               <section className="max-w-sm">
@@ -259,9 +261,6 @@ export function PersonProfile({
                     <div key={g.id} className="group">
                       <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                         <span className="flex-1">{g.title}</span>
-                        <span className="text-xs text-quaternary">
-                          {Math.round(g.progress)}%
-                        </span>
                         <ButtonUtility
                           size="xs"
                           color="tertiary"
@@ -276,6 +275,9 @@ export function PersonProfile({
                             )
                           }
                         />
+                        <span className="w-9 text-right text-xs text-quaternary tabular-nums">
+                          {Math.round(g.progress)}%
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -286,8 +288,8 @@ export function PersonProfile({
                           updateGoal(g.id, { progress: Number(e.target.value) })
                         }
                         className="goal-range mb-0.5 w-full"
+                        style={{ ["--goal-pct" as string]: `${g.progress}%` }}
                       />
-                      <ProgressBar value={g.progress} />
                     </div>
                   ))}
                 </div>

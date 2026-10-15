@@ -66,7 +66,9 @@ export function CurriculumEditor({
       )}
       <ul className="space-y-1.5">
         {slots.map((slot, i) => (
-          <li key={slot.id} className="flex items-center gap-1">
+          // On a phone the controls beside the name left it ~34px; the name
+          // takes its own line there and the controls sit under it.
+          <li key={slot.id} className="flex flex-wrap items-center gap-1 max-sm:pb-1.5">
             <SlotName
               label={slot.label}
               index={i}
@@ -77,7 +79,7 @@ export function CurriculumEditor({
               <select
                 value={slot.tagId ?? ""}
                 onChange={(e) => patch(slot.id, { tagId: e.target.value || undefined })}
-                className="rounded-md border border-secondary bg-primary px-1.5 py-1 text-caption text-stone-700 outline-none dark:text-stone-200"
+                className="h-9 rounded-lg border border-secondary bg-primary px-2 text-caption text-stone-700 outline-none dark:text-stone-200"
               >
                 <option value="">No tag</option>
                 {tags.map((t) => (
@@ -100,7 +102,7 @@ export function CurriculumEditor({
                     minutes: e.target.value ? Number(e.target.value) : undefined,
                   })
                 }
-                className="w-14 rounded-md border border-secondary bg-primary px-1.5 py-1 text-caption tabular-nums outline-none"
+                className="h-9 w-16 rounded-lg border border-secondary bg-primary px-2 text-caption tabular-nums outline-none"
               />
             </label>
             <ButtonUtility
@@ -199,7 +201,7 @@ function SlotName({
         }
         if (e.key === "Escape") setValue(label);
       }}
-      className="min-w-0 flex-1"
+      className="min-w-0 flex-1 max-sm:basis-full"
     />
   );
 }

@@ -392,15 +392,17 @@ export default function App() {
         {inFocus ? (
           <FocusView />
         ) : (
-          /* Main + peek. Above lg they sit side by side; below lg exactly one
-             is on screen, because 16rem + 20rem cannot fit a 375px phone. */
+          /* Main + peek. Above xl they sit side by side; below xl exactly one
+             is on screen. Between lg and xl the sidebar leaves 792px, short of
+             the 18rem + 32rem the split needs, and both halves came out
+             clipped. */
           <div className="flex min-h-0 flex-1">
             <main
               className={cx(
                 // Horizontal padding is `pad-safe-x`'s alone — `p-4` sets the
                 // same property and lost to it, which flattened every tab
                 // against both screen edges below `sm`.
-                "pad-safe-x min-w-0 flex-1 lg:min-w-[18rem]",
+                "pad-safe-x min-w-0 flex-1 xl:min-w-[18rem]",
                 // Today and Prayer are reading pages and pad themselves; the
                 // working surfaces keep the old gutter.
                 tab === "today" || tab === "prayer"
@@ -413,8 +415,9 @@ export default function App() {
                 tab === "tree"
                   ? "scroll-contain overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden"
                   : "scroll-contain overflow-y-auto",
-                // The entity takes the whole viewport on a phone.
-                selected && "max-lg:hidden"
+                // The entity takes the whole surface below xl. Important, so
+                // the tree pane's `lg:flex` can't put the split back.
+                selected && "max-xl:hidden!"
               )}
             >
               {(tab === "circles" || tab === "tree" || tab === "table") && <PeopleHeader />}

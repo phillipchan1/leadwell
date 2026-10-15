@@ -59,7 +59,7 @@ export function HealthSelect({
            touch floors itself: 16px keeps iOS from zooming the page on focus,
            and min-h-11 makes a 26px row control a real target. */
         className={cx(
-          "w-full max-w-[9.5rem] cursor-pointer appearance-none rounded-full border-0 px-2.5 py-1 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500/40 touch:min-h-11 touch:text-md",
+          "w-auto max-w-[9.5rem] shrink-0 cursor-pointer appearance-none rounded-full border-0 px-2.5 py-1 text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500/40 touch:min-h-11 touch:text-md",
           value ? HEALTH_PILL[value] : "bg-transparent text-quaternary",
           className
         )}

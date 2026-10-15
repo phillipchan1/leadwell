@@ -334,6 +334,16 @@ function driftGraceDays(rhythm: MeetingRhythm, floorDays?: number): number | nul
   return Math.round(CADENCE_DAYS[rhythm] * 1.5);
 }
 
+/** "Mon, Oct 12" — a date as a sentence says it, not as the data stores it. */
+export function dayName(iso: string): string {
+  return new Date(toUTC(iso)).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 /** Short human form: "Tue · 2d", "~Tue · 5d", "3d late". */
 export function formatCountdown(r: Readiness): string {
   if (r.daysUntil === null) {
@@ -525,7 +535,7 @@ export function meetingReadiness(
           : `${RHYTHM_LABEL[rhythm]} rhythm on track`,
       done: rhythmOnTrack,
       detail: missed
-        ? `${missed} came and went unlogged`
+        ? `${dayName(missed)} came and went unlogged`
         : overdue
           ? `${daysSince} days since the last one`
           : undefined,
@@ -541,7 +551,7 @@ export function meetingReadiness(
         ? "Kept outside LeadWell — not checked here"
         : writtenUp
           ? undefined
-          : `${lastSession!.date} has no notes`,
+          : `${dayName(lastSession!.date)} has no notes`,
       fix: "writeUp",
       sessionId: lastSession?.id,
     },

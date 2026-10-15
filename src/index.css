@@ -1070,7 +1070,7 @@ label:focus-within > .field-label,
 }
 
 .session-editor-mode-hint {
-  @apply text-[10px] tracking-wide text-stone-500 uppercase dark:text-stone-400;
+  @apply shrink-0 text-[10px] tracking-wide whitespace-nowrap text-stone-500 uppercase max-sm:hidden dark:text-stone-400;
 }
 
 /* Tiptap block editor */
@@ -1251,24 +1251,38 @@ label:focus-within > .field-label,
   cursor: pointer;
 }
 
+/* The track is the progress bar: filled to the thumb. A separate bar under
+   it drew the same value twice. `--goal-pct` is set inline. */
+.goal-range {
+  --goal-fill: var(--color-teal-600);
+  --goal-rest: rgb(216 226 226);
+}
+
+.dark .goal-range {
+  --goal-fill: var(--color-teal-500);
+  --goal-rest: rgb(34 49 51);
+}
+
 .goal-range::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
-  background: rgb(216 226 226);
-}
-
-.dark .goal-range::-webkit-slider-runnable-track {
-  background: rgb(34 49 51);
+  background: linear-gradient(
+    to right,
+    var(--goal-fill) var(--goal-pct, 0%),
+    var(--goal-rest) var(--goal-pct, 0%)
+  );
 }
 
 .goal-range::-moz-range-track {
   height: 4px;
   border-radius: 999px;
-  background: rgb(216 226 226);
+  background: var(--goal-rest);
 }
 
-.dark .goal-range::-moz-range-track {
-  background: rgb(34 49 51);
+.goal-range::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--goal-fill);
 }
 
 .goal-range::-webkit-slider-thumb {
@@ -1433,16 +1447,33 @@ label:focus-within > .field-label,
 
 @media (pointer: coarse) {
   /* iOS zooms the viewport when a focused control renders under 16px and never
-     zooms back out. `max()` raises only what is under the floor, so a control
-     that is deliberately larger keeps its size.
+     zooms back out. `max()` raises only what is under the floor.
+
+     But `em` in `font-size` is the *parent's* size, so `max(16px, 1em)` can't
+     see a control's own size: a 28px name field came out at about 17px, and
+     a 13px one at 16. Controls whose own class already sets 16px or more are
+     left alone; anything else is under the floor or inherits its size, which
+     `1em` does see.
 
      Range, checkbox and radio are excluded: they have no text to zoom, and the
      goal slider is styled against an exact track height. */
   :is(input, textarea, select, [contenteditable="true"]):not(
       [type="range"], [type="checkbox"], [type="radio"]
+    ):not(
+      [class*="text-base"], [class*="text-md"], [class*="text-lg"],
+      [class*="text-xl"], [class*="text-2xl"], [class*="text-3xl"],
+      [class*="text-display"], [class*="text-[16"], [class*="text-[17"],
+      [class*="text-[18"], [class*="text-[19"], [class*="text-[2"],
+      [class*="text-[3"], [class*="text-[4"]
     ),
   :is(input, textarea, select, [contenteditable="true"]):not(
       [type="range"], [type="checkbox"], [type="radio"]
+    ):not(
+      [class*="text-base"], [class*="text-md"], [class*="text-lg"],
+      [class*="text-xl"], [class*="text-2xl"], [class*="text-3xl"],
+      [class*="text-display"], [class*="text-[16"], [class*="text-[17"],
+      [class*="text-[18"], [class*="text-[19"], [class*="text-[2"],
+      [class*="text-[3"], [class*="text-[4"]
     )[class] {
     font-size: max(16px, 1em);
   }

@@ -4,6 +4,7 @@ import {
   Tabs,
 } from "@/components/application/tabs/tabs";
 import { PrayerIcon } from "./Prayer";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { modeTabs, type EntityMode, type ModeSubject } from "../lib/entityModes";
 
 /**
@@ -27,6 +28,13 @@ export function EntityModeTabs({
   counts?: Partial<Record<EntityMode, number>>;
 }) {
   const tabs = modeTabs(subject);
+  /*
+   * Five labels and their counts need ~460px; a phone has 330. The strip
+   * scrolled, and the last tab sat sliced at the edge. On a phone the counts
+   * go and the tabs share the width out, which fits every kind's labels down
+   * to a 360px screen. Scrolling stays as the fallback below that.
+   */
+  const phone = useMediaQuery("(max-width: 639px)");
 
   return (
     <Tabs
@@ -37,7 +45,9 @@ export function EntityModeTabs({
          left of everything it labels. */
       className="scroll-contain scrollbar-hide shrink-0 overflow-x-auto border-b border-secondary px-4 sm:px-6"
     >
-      <TabList type="underline" size="sm" items={tabs}>
+      {/* The strip's own border runs edge to edge; the list's underline drew
+          a second line over it that stopped short at both ends. */}
+      <TabList type="underline" size="sm" items={tabs} className="before:hidden max-sm:mx-0! max-sm:gap-0!">
         {(t) => {
           const id = t.id as EntityMode;
           const count = counts?.[id];
@@ -46,7 +56,8 @@ export function EntityModeTabs({
               id={id}
               label={t.label}
               icon={id === "prayer" ? PrayerIcon : undefined}
-              badge={count ? count : undefined}
+              badge={count && !phone ? count : undefined}
+              className="max-sm:flex-1 max-sm:px-1!"
             />
           );
         }}

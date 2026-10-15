@@ -339,8 +339,9 @@ function FollowUps({ meeting }: { meeting: TrackedMeeting }) {
         className="flex h-10 items-center gap-2 rounded-[10px] border border-dashed border-primary px-3 focus-within:border-solid focus-within:border-teal-300 dark:focus-within:border-teal-700"
       >
         <input
-          className="min-w-0 flex-1 bg-transparent text-[13.5px] outline-none placeholder:text-quaternary"
-          placeholder="Someone owes something? Add a follow-up…"
+          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-ellipsis outline-none placeholder:text-quaternary"
+          // The verb first: where the field is narrow, it's the tail that goes.
+          placeholder="Add a follow-up — who owes what?"
           aria-label="Add a follow-up"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

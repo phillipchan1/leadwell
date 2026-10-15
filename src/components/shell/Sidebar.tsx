@@ -315,7 +315,7 @@ function MeRow() {
           {...menuProps}
           role="menu"
           aria-label="Settings and theme"
-          className="absolute bottom-full left-0 z-50 mb-2 w-56 overflow-hidden rounded-xl border border-secondary bg-primary py-1 text-primary shadow-xl"
+          className="absolute inset-x-0 bottom-full z-50 mb-2 overflow-hidden rounded-xl border border-secondary bg-primary py-1 text-primary shadow-xl"
         >
           <MenuItem
             icon={dark ? Sun : Moon01}

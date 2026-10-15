@@ -204,13 +204,24 @@ function TeamCard({
       <div className="flex items-start gap-3">
         <Avatar name={team.name} size={34} className="!rounded-[10px]" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <button
-            type="button"
-            onClick={onOpenTeam}
-            className="truncate text-left font-serif text-[18px] leading-6 text-primary hover:underline hover:decoration-1 hover:underline-offset-4"
-          >
-            {team.name}
-          </button>
+          {/* The state rides on the name's line, so the line under it gets
+              the card's full width instead of truncating beside an empty
+              column. */}
+          <span className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={onOpenTeam}
+              className="min-w-0 flex-1 truncate text-left font-serif text-[18px] leading-6 text-primary hover:underline hover:decoration-1 hover:underline-offset-4"
+            >
+              {team.name}
+            </button>
+            {readiness && (
+              <span className={cx("inline-flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold", STATE_TEXT[readiness.state])}>
+                <RhythmRing reading={readiness} size={18} />
+                {STATE_LABEL[readiness.state]}
+              </span>
+            )}
+          </span>
           <span className="flex min-w-0 items-center gap-1.5 font-mono text-[10.5px] text-quaternary uppercase">
             {domain && (
               <i aria-hidden className="size-2 shrink-0 rounded-[2px]" style={{ backgroundColor: domain.color }} />
@@ -220,12 +231,6 @@ function TeamCard({
             </span>
           </span>
         </div>
-        {readiness && (
-          <span className={cx("inline-flex shrink-0 items-center gap-1.5 text-[12.5px] font-semibold", STATE_TEXT[readiness.state])}>
-            <RhythmRing reading={readiness} size={18} />
-            {STATE_LABEL[readiness.state]}
-          </span>
-        )}
       </div>
 
       {meeting && readiness ? (

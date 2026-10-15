@@ -254,7 +254,9 @@ export function MeetingEditor({
    */
   return (
     <div className="meeting-editor-fullscreen bg-secondary">
-      <header className="pad-safe-top flex shrink-0 flex-wrap items-center gap-3 bg-leather px-3 pb-2.5 text-leather-fg [--pad-safe-top:0.625rem] sm:px-5">
+      {/* One row: the title gives way before Done does. It used to wrap, and
+          on a phone Done fell onto a line of its own under a long 1:1 name. */}
+      <header className="pad-safe-top flex shrink-0 items-center gap-2 bg-leather px-3 pb-2.5 text-leather-fg [--pad-safe-top:0.625rem] sm:gap-3 sm:px-5">
         <button
           type="button"
           onClick={onClose}
@@ -264,19 +266,18 @@ export function MeetingEditor({
           <ArrowLeft className="size-4" />
         </button>
         <Avatar name={subjectName} photo={subjectPhoto} size={36} className={team ? "!rounded-[10px]" : undefined} />
-        <div className="flex min-w-0 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate font-serif text-[19px] leading-6">{runTitle}</span>
-          <span className="font-mono text-[11px] tracking-[0.02em] text-leather-ink">
+          <span className="truncate font-mono text-[11px] tracking-[0.02em] text-leather-ink">
             {dayLine}
             {nextDate && ` · NEXT ${new Date(`${nextDate}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }).toUpperCase()}`}
           </span>
         </div>
-        <div className="flex-1" />
         <button
           type="button"
           onClick={() => setShowTools((v) => !v)}
           aria-pressed={showTools}
-          className={`h-9 rounded-[9px] border px-3 text-[13px] font-medium transition-colors max-sm:hidden ${
+          className={`h-9 shrink-0 rounded-[9px] border px-3 text-[13px] font-medium transition-colors max-sm:hidden ${
             showTools ? "border-leather-hi bg-leather-hi text-leather-fg" : "border-leather-line text-leather-ink hover:text-leather-fg"
           }`}
         >
@@ -298,7 +299,7 @@ export function MeetingEditor({
         <button
           type="button"
           onClick={onClose}
-          className="h-9 rounded-[9px] bg-gilt px-4 text-[13.5px] font-semibold text-[#013133] transition-[filter] hover:brightness-105"
+          className="h-9 shrink-0 rounded-[9px] bg-gilt px-4 text-[13.5px] font-semibold text-[#013133] transition-[filter] hover:brightness-105"
         >
           Done
         </button>
@@ -454,7 +455,7 @@ function EntryMenu({ onDelete }: { onDelete: () => void }) {
   const { triggerProps, menuProps, close } = useMenu(open, setOpen);
 
   return (
-    <div className="relative">
+    <div className="relative shrink-0">
       <button
         {...triggerProps}
         type="button"

@@ -130,7 +130,9 @@ export function MeetingsTable() {
 
   return (
     <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
-      <div className="flex flex-col gap-4 p-4 sm:p-6">
+      {/* The route already pads its pane; padding here too set Meetings in
+          from every other place's gutter. */}
+      <div className="flex flex-col gap-4">
         <MeetingsSwitch current="meetings" />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -264,23 +266,23 @@ export function MeetingsTable() {
                           <span className="truncate text-[12.5px] text-quaternary">{kindLabel(r)}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 text-xs text-quaternary">
+                      <td className="px-4 py-2 text-xs text-quaternary">
                         {RHYTHM_LABEL[r.meeting.rhythm]}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-4 py-2">
                         <span
                           className={cx("font-mono text-xs uppercase tabular-nums", STATE_TEXT[r.readiness.state])}
                         >
                           {formatCountdown(r.readiness)}
                         </span>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-4 py-2">
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-quaternary">
                           <span className="tabular-nums">{r.open}</span>
                           {r.loose > 0 && <LooseBadge count={r.loose} />}
                         </div>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-4 py-2">
                         <span className={cx("inline-flex items-center gap-2 text-[13px] font-medium", STATE_TEXT[r.readiness.state])}>
                           <RhythmRing reading={r.readiness} size={18} />
                           {STATE_LABEL[r.readiness.state]}

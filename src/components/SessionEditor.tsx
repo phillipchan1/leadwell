@@ -6,6 +6,7 @@ import {
 } from "@/components/application/tabs/tabs";
 import { FullScreenMarkdown } from "./FullScreenMarkdown";
 import { NotionBlockEditor } from "./NotionBlockEditor";
+import { formatChord } from "@/lib/keys";
 
 export type EditorMode = "blocks" | "markdown";
 
@@ -87,13 +88,14 @@ export function SessionEditor({
           <Tabs
             selectedKey={mode}
             onSelectionChange={(key) => switchMode(key as EditorMode)}
+            className="w-auto"
           >
             <TabList type="button-border" size="sm">
               <TabItem id="blocks" label="Blocks" />
               <TabItem id="markdown" label="Markdown" />
             </TabList>
           </Tabs>
-          <span className="session-editor-mode-hint">⌘⇧M to toggle</span>
+          <span className="session-editor-mode-hint">{formatChord("mod+shift+m")} to toggle</span>
         </div>
       )}
 
