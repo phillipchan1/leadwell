@@ -884,7 +884,7 @@ export function DomainsModal({ onClose }: { onClose: () => void }) {
             size="md"
             value={newName}
             onChange={setNewName}
-            placeholder="e.g. SCE, Frontier, Family…"
+            placeholder="e.g. Work, Frontier, Family…"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
