@@ -334,11 +334,11 @@ export const seedPeople: Person[] = [
     },
   },
   {
-    id: "p-sce",
+    id: "p-field-ops",
     teamId: "team-work-leaders",
-    // Placeholder name — rename to your actual SCE job manager.
+    // Placeholder name — rename to your actual job manager.
     name: "Ray Delgado",
-    role: "Job Manager · SCE",
+    role: "Job Manager · Field Operations",
     assessments: {},
     strengths: [],
     watchOuts: [],
@@ -901,14 +901,14 @@ export const seedTeamNotes: TeamNote[] = [
 export const seedWins: Win[] = [
   {
     id: "w-1",
-    personId: "p-sce",
+    personId: "p-field-ops",
     date: "2026-07-10",
     text: "Cleared the inspection backlog two weeks early",
     impact: "Queue stayed full and groomed the whole sprint — zero idle days",
   },
   {
     id: "w-2",
-    personId: "p-sce",
+    personId: "p-field-ops",
     date: "2026-07-18",
     text: "Every artifact passed review first-pass this cycle",
     impact: "No rework, nothing bounced back up the chain",
