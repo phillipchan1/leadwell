@@ -11,8 +11,13 @@
  * plain flow and each chapter paints its own background color. Under
  * prefers-reduced-motion nothing pins and nothing drifts: the water is one
  * still frame per chapter, each sequence shows its finished state, and the
- * controls still work. */
-(() => {
+ * controls still work.
+ *
+ * Startup is split so no task runs long on a slow phone: this file only
+ * compiles in the parser's task, sets up in the next one, draws the hero once
+ * the first frame is out, lays the chapters out one per task, and starts the
+ * water last. */
+setTimeout(() => {
   "use strict";
 
   const root = document.documentElement;
@@ -33,8 +38,14 @@
     if (parent) parent.appendChild(el);
     return el;
   };
-  let W = window.innerWidth;
-  let H = window.innerHeight;
+  // Read in the first task after this one: reading them now would force the
+  // first layout into the script's own task.
+  let W = 0;
+  let H = 0;
+  // Set once every chapter has been laid out (see the warm-up at the end).
+  let warm = false;
+  let wantChart = false;
+  let nightClear = 0;
 
   /* ── Headings: split into words just before they're needed ───────── */
 
@@ -110,12 +121,14 @@
   const pal = (bg, base, lite, acc, prm, glow) => ({ bg: hex(bg), base: hex(base), lite: hex(lite), acc: hex(acc), prm, glow });
   const PAL = {
     dawn: pal("#013133", "#013133", "#3f9a91", "#e1b34d", [0.3, 0.9, 0.7], 0.3),
-    morning: pal("#eef3f1", "#e6eeeb", "#ffffff", "#e8c470", [0.85, 0.5, 0.35], 0.14),
+    // The day's light chapters sit a shade deeper than their paper, so the
+    // caustics, the light pool and every ring read as moving light around the cards.
+    morning: pal("#eef3f1", "#dde8e4", "#ffffff", "#e8c470", [1.0, 0.9, 0.45], 0.24),
     forenoon: pal("#023436", "#023436", "#46a399", "#e1b34d", [0.28, 0.9, 0.6], 0.16),
-    "late-morning": pal("#eef3f1", "#e6eeeb", "#ffffff", "#e8c470", [0.85, 0.5, 0.35], 0.14),
-    noon: pal("#f3f5f1", "#ebefe9", "#ffffff", "#f0d590", [0.9, 0.5, 0.4], 0.16),
-    afternoon: pal("#f0f2ec", "#e8ebe3", "#ffffff", "#ebc77c", [0.85, 0.5, 0.4], 0.16),
-    late: pal("#f4f0e6", "#ede7da", "#fffaf0", "#e8b964", [0.85, 0.5, 0.4], 0.2),
+    "late-morning": pal("#eef3f1", "#dce7e3", "#ffffff", "#e8c470", [1.05, 0.9, 0.45], 0.26),
+    noon: pal("#f3f5f1", "#e3e9e2", "#ffffff", "#f0d590", [1.05, 0.9, 0.5], 0.28),
+    afternoon: pal("#f0f2ec", "#dfe5da", "#ffffff", "#ebc77c", [1.1, 0.95, 0.5], 0.32),
+    late: pal("#f4f0e6", "#e7dfcf", "#fffbf2", "#e8b964", [1.1, 0.95, 0.5], 0.34),
     golden: pal("#0b2e30", "#0b2e30", "#7a9a78", "#eaa64e", [0.28, 0.9, 0.8], 0.3),
     dusk: pal("#15122b", "#15122b", "#4b3f7a", "#f0a868", [0.2, 0.8, 0.6], 0.1),
     night: pal("#15122b", "#15122b", "#463c84", "#c3b3f6", [0.22, 0.8, 0.5], 0.08),
@@ -161,6 +174,8 @@
   function measure() {
     W = window.innerWidth;
     H = window.innerHeight;
+    keepOut();
+    if (!warm) return;
     chapters = chapterEls.map((el, i) => {
       const top = docTop(el);
       const [cTop, cBottom] = contentEdges(el);
@@ -184,7 +199,88 @@
       c.edge = { c: (prev.cBottom + c.cTop) / 2, half: clamp(gap / 2, H * 0.1, H * 0.16) };
     });
     measureLocal();
+    measureClock();
+    const nt = $(".nightfall__title");
+    const ns = nt && nt.closest(".pin__stage");
+    nightClear = ns && !still ? nt.getBoundingClientRect().bottom - ns.getBoundingClientRect().top + 18 : 0;
     dirty = true;
+  }
+
+  /* ── One clock: the header and every chapter's eyebrow read it ─────── */
+  // Each eyebrow time is a stop. The clock reaches a stop's hour as its
+  // eyebrow comes fully on screen, and runs to the stop's end hour (the next
+  // stop's, or the chapter's own `data-hour-end`) as you read on, so an
+  // eyebrow on screen never shows a later hour than the header.
+  const fmt = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const stamps = $$(".eyebrow__t");
+  stamps.forEach((el) => (el.dataset.t = el.textContent.trim()));
+  let stops = [];
+  function measureClock() {
+    const HDR = 50; // an eyebrow whose top is this far down is under the header
+    const list = [{ y: 0, out: 0, h0: toMin(chapters[0].el.dataset.hour || "06:30"), el: null, sec: chapters[0].el }];
+    for (const el of stamps) {
+      const sec = el.closest("main > section");
+      const stage = !still && el.closest(".pin__stage");
+      const h0 = toMin(el.dataset.t);
+      if (!el.getClientRects().length) {
+        // Not shown at this width (People on a phone): the stop is where the chapter takes the screen.
+        const y = docTop(sec) - H * 0.6;
+        list.push({ y, out: y, h0, el, sec });
+        continue;
+      }
+      // `y`: the scroll at which the eyebrow is fully on screen; `out`: at which it has gone under the header.
+      let top;
+      let out;
+      if (stage) {
+        const pin = stage.parentElement;
+        const off = el.getBoundingClientRect().top - stage.getBoundingClientRect().top;
+        top = docTop(pin) + off;
+        out = docTop(pin) + Math.max(0, pin.offsetHeight - H) + off - HDR;
+      } else {
+        // From offsets, not the box on screen: a reveal may still be sliding it in.
+        top = 0;
+        for (let n = el; n; n = n.offsetParent) top += n.offsetTop;
+        out = top - HDR;
+      }
+      list.push({ y: top + el.offsetHeight - 2 - H, out, h0, el, sec });
+    }
+    const ct = chapterBy("cta");
+    if (ct) list.push({ y: ct.top - H * 0.5, out: ct.top - H * 0.5, h0: ct.h0, el: null, sec: ct.el });
+    list.sort((a, b) => a.y - b.y);
+    list.forEach((s, i) => {
+      s.y = Math.max(s.y, i ? list[i - 1].y + 1 : 0);
+      const next = list[i + 1];
+      const first = s.el && s.sec && $(".eyebrow__t", s.sec) === s.el;
+      if (s.sec && "hold" in s.sec.dataset) s.h1 = s.h0;
+      else if (first && s.sec.dataset.hourEnd) s.h1 = toMin(s.sec.dataset.hourEnd);
+      else s.h1 = next ? next.h0 : 22 * 60 + 50;
+      // Shown up to the next stop's hour, so a passed eyebrow still on screen reads what the header does.
+      s.cap = Math.max(s.h1, next ? next.h0 : s.h1);
+    });
+    const end = Math.max(1, document.documentElement.scrollHeight - H);
+    list.forEach((s, i) => {
+      s.y2 = i + 1 < list.length ? list[i + 1].y : Math.max(s.y + 1, end);
+      // The hour holds until the last eyebrow has gone under the header, then runs.
+      s.run = i ? clamp(list[i - 1].out, s.y, s.y2 - 1) : s.y;
+    });
+    stops = list;
+    lastStamp = -1;
+  }
+  function clockAt(y) {
+    if (!stops.length) return 390;
+    let s = stops[0];
+    for (const x of stops) if (y >= x.y) s = x;
+    return Math.round(lerp(s.h0, s.h1, clamp((y - s.run) / Math.max(1, s.y2 - s.run))));
+  }
+  let lastStamp = -1;
+  function paintStamps(m) {
+    if (m === lastStamp) return;
+    lastStamp = m;
+    for (const s of stops) {
+      if (!s.el) continue;
+      const t = fmt(clamp(m, s.h0, s.cap));
+      if (s.el.textContent !== t) s.el.textContent = t;
+    }
   }
   function contentEdges(el) {
     let lo = Infinity;
@@ -250,11 +346,7 @@
     day.s2 = next ? next.edge.c - y : 1e5;
     day.soft2 = next ? next.edge.half : 1;
 
-    // Clock: the page's own, not a feature.
-    const probe = y + H * 0.35;
-    let cc = chapters[0];
-    for (const x of chapters) if (probe >= x.top) cc = x;
-    day.minute = Math.round(lerp(cc.h0, cc.h1, clamp((probe - cc.top) / Math.max(1, cc.bottom - cc.top))));
+    day.minute = clockAt(y);
 
     // Light pool: the sun crosses the page from the right in the morning to the left by evening.
     const frac = clamp((day.minute - 390) / (1370 - 390));
@@ -277,12 +369,12 @@
     day.stars = 0;
     const moonX = (W < 700 ? 0.88 : 0.78) * W;
     day.moon = [moonX, 0, 0];
-    day.sun = [0.5 * W, 0, Math.min(W, H) * 0.075, 0];
+    day.sun = [0.5 * W, 0, Math.min(W, H) * 0.062, 0];
     day.night = day.minute >= 21 * 60 + 5;
     if (!nf) return;
     const r = day.sun[2];
     let p = -1;
-    let hzF = 0.62;
+    const hzF = 0.66;
     if (still) {
       // One still frame: the sun just gone, the afterglow on the water, the first stars.
       if (y + H > nf.top && y < (pr ? pr.bottom : nf.bottom)) {
@@ -290,7 +382,7 @@
         day.tilt = 1;
         day.skyTop = nf.top - y;
         day.waterBottom = nf.bottom - y;
-        day.hz = day.skyTop + (nf.bottom - nf.top) * 0.62;
+        day.hz = day.skyTop + (nf.bottom - nf.top) * hzF;
       }
     } else if (y >= nf.top - 1) {
       p = pinProgress("night", y);
@@ -307,16 +399,20 @@
     if (p >= 0) {
       const s = skyAt(still ? p : Math.min(1, p));
       day.sky = s;
-      const h = s.sh;
+      // The sun never climbs into the headline: its disc and the brightest of
+      // its glow stay under the copy, however tall the copy wraps.
+      const cap = still ? 9 : (day.hz - nightClear) / r - 1.9;
+      const h = Math.min(s.sh, cap);
       day.sun = [0.5 * W, day.hz - h * r, r, clamp((h + 2.4) / 1.4)];
       day.stars = clamp((-1 - h) / 0.7);
       day.night = h < -1;
       const ma = clamp((p - 0.74) / 0.2);
-      day.moon = [moonX, day.hz - lerp(0.05, 0.3, ma) * H, still ? 0.8 : ma];
+      const rise = still ? 0.3 * H : clamp(day.hz - nightClear - 30, 0.08 * H, 0.3 * H);
+      day.moon = [moonX, day.hz - lerp(0.05 * H, rise, ma), still ? 0.8 : ma];
       if (pr && y > pr.top - H) {
         day.stars = 1;
         day.moon[2] = 1;
-        day.moon[1] = day.hz - 0.3 * H;
+        day.moon[1] = day.hz - rise;
       }
     }
     if (ct && y + H * 0.5 > ct.top) {
@@ -418,6 +514,7 @@ void main(){
       if (dr.w <= 0.0) continue;
       vec2 v = w - dr.xy; float r = length(v) + 0.001;
       float x = r - dr.z * 230.0;
+      if (abs(x) > 200.0) continue; // a ring is a band: past 200px its envelope is under 1e-4
       float env = exp(-x * x / 4200.0) * dr.w * exp(-dr.z * 0.55) * smoothstep(0.0, 40.0, r);
       float ph = x * 0.085;
       g += env * (cos(ph) * 0.085 - sin(ph) * x / 2100.0) * (v / r) * 6.0;
@@ -475,19 +572,25 @@ void main(){
     } catch (e) {
       gl = null;
     }
-    if (gl && initGL(gl)) {
+    if (gl) {
+      // The context is this task; compiling is the next one.
       water.mode = "gl";
-    } else {
-      water.ctx = canvas.getContext("2d");
-      water.mode = water.ctx ? "2d" : "";
-      water.scale = 0.5;
-      if (water.mode) resizeWater();
-      water.ready = !!water.mode;
-    }
+      water.gl = gl;
+      setTimeout(() => initGL(gl), 0);
+    } else fallback2D(canvas);
+  }
+  function fallback2D(canvas) {
+    water.ctx = canvas.getContext("2d");
+    water.mode = water.ctx ? "2d" : "";
+    water.scale = 0.5;
+    if (water.mode) resizeWater();
+    water.ready = !!water.mode;
     kick();
   }
 
   function initGL(gl) {
+    // Asked for before compiling, so the link can be polled without blocking.
+    water.ext = gl.getExtension("KHR_parallel_shader_compile");
     const hi = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
     const src = hi && hi.precision > 0 ? FRAG : FRAG.replace("precision highp", "precision mediump");
     const sh = (type, s) => {
@@ -502,11 +605,9 @@ void main(){
     gl.attachShader(prog, vs);
     gl.attachShader(prog, fs);
     gl.linkProgram(prog);
-    water.gl = gl;
     water.prog = prog;
     water.vs = vs;
     water.fs = fs;
-    water.ext = gl.getExtension("KHR_parallel_shader_compile");
     const info = gl.getExtension("WEBGL_debug_renderer_info");
     const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
     const soft = /swiftshader|llvmpipe|software|basic render/i.test(renderer);
@@ -519,7 +620,7 @@ void main(){
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     canvas_lost(gl);
-    return true;
+    kick();
   }
 
   function canvas_lost(gl) {
@@ -533,6 +634,13 @@ void main(){
 
   function linkDone() {
     const { gl, prog, ext } = water;
+    if (!prog) return false;
+    if (water.primeAt) {
+      if (performance.now() - water.primeAt < 180) return false;
+      resizeWater();
+      water.ready = true;
+      return true;
+    }
     if (ext && !gl.getProgramParameter(prog, ext.COMPLETION_STATUS_KHR)) return false;
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
       // No shader on this device: fall back to the 2D water.
@@ -558,8 +666,28 @@ void main(){
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     resizeWater();
-    water.ready = true;
-    return true;
+    prime(gl);
+    water.primeAt = performance.now();
+    return false;
+  }
+
+  // One draw into a 1×1 target off screen. A software renderer compiles the
+  // shader for real on its first draw; done here, nothing on screen waits for
+  // it, and the first visible frame a few frames later is an ordinary one.
+  function prime(gl) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    // RGB, like the canvas (no alpha), so a software renderer builds the routine the screen will use.
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.viewport(0, 0, 1, 1);
+    drawGL(0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fb);
+    gl.deleteTexture(tex);
+    gl.viewport(0, 0, water.canvas.width, water.canvas.height);
   }
 
   function resizeWater() {
@@ -600,7 +728,8 @@ void main(){
     const tn = now();
     drops.forEach((d, i) => {
       const age = tn - d.t0;
-      dropData.set([d.x, d.y - Math.floor(day.S / 26000) * 26000, age, age < 7 ? d.s : 0], i * 4);
+      // Retired at 4.5s, when a ring is down to a tenth of its strength: every live ring costs every pixel.
+      dropData.set([d.x, d.y - Math.floor(day.S / 26000) * 26000, age, age < 4.5 ? d.s : 0], i * 4);
     });
     gl.uniform4fv(u.uD, dropData);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -737,9 +866,9 @@ void main(){
     if (!clockEl) return;
     if (day.minute !== lastMinute) {
       lastMinute = day.minute;
-      const m = day.minute;
-      clockTime.textContent = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      clockTime.textContent = fmt(day.minute);
     }
+    paintStamps(day.minute);
     // The moon comes out the moment the sun's top edge goes under the water.
     if (day.night !== lastNight) {
       lastNight = day.night;
@@ -769,21 +898,64 @@ void main(){
 
   function sizeHero() {
     const c = heroWell.canvas;
-    if (!c) return;
-    const r = c.getBoundingClientRect();
+    if (!c || !heroWell.wrap) return;
+    const r = heroWell.wrap.getBoundingClientRect();
     if (!r.width) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    heroWell.w = r.width;
-    heroWell.h = r.height;
-    c.width = Math.round(r.width * dpr);
-    c.height = Math.round(r.height * dpr);
-    heroWell.ctx = c.getContext("2d");
-    heroWell.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const wide = r.width > 900;
     heroWell.cx = wide ? r.width * 0.7 : r.width * 0.56;
     heroWell.cy = wide ? r.height * 0.52 : r.height * 0.25;
     heroWell.R = wide ? Math.min(r.height * 0.44, r.width * 0.3) : Math.min(r.width * 0.5, r.height * 0.23);
     heroWell.sc = clamp(heroWell.R / 300, 0.72, 1.25);
+    // On a phone the well is the top of the screen, so the canvas stops just
+    // under it: half the pixels to fill and hand over every frame.
+    const h = wide ? r.height : Math.min(r.height, Math.ceil(heroWell.cy + heroWell.R + 48));
+    c.style.height = `${h}px`;
+    heroWell.w = r.width;
+    heroWell.h = h;
+    c.width = Math.round(r.width * dpr);
+    c.height = Math.round(h * dpr);
+    heroWell.ctx = c.getContext("2d");
+    heroWell.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    keepOut();
+  }
+
+  // Keep-out zones: the hero's copy, each padded by 24px. A node that drifts
+  // toward one dips under the water (it shrinks and fades) and is gone before
+  // it could touch a letter; it surfaces again on the far side.
+  const PAD = 24;
+  const heroKeep = [];
+  const inked = document.createRange();
+  const boxIn = (el, rootEl) => {
+    // Across: what's actually set (a row of buttons, not the full-width block it sits in);
+    // the parallax only moves things up and down, so the screen is right for this.
+    inked.selectNodeContents(el);
+    const ink = inked.getBoundingClientRect();
+    const x = ink.left - rootEl.getBoundingClientRect().left;
+    // Down: from offsets, which no animation or parallax has moved.
+    let y = 0;
+    for (let n = el; n && n !== rootEl; n = n.offsetParent) y += n.offsetTop;
+    // The last entry: whether it rides with the copy's parallax (the caption doesn't).
+    return [x - PAD, y - PAD, ink.width + 2 * PAD, el.offsetHeight + 2 * PAD, !!(heroCopy && heroCopy.contains(el))];
+  };
+  function keepOut() {
+    heroKeep.length = 0;
+    if (!heroEl) return;
+    $$(".hero__eyebrow, .hero__title, .hero__lede, .hero__actions, .hero__note, .hero__caption", heroEl).forEach((el) => {
+      if (el.offsetWidth) heroKeep.push(boxIn(el, heroEl));
+    });
+  }
+  // 0 inside a zone, 1 once a circle is 28px clear of every zone.
+  function clearOf(x, y, r, y0) {
+    let d = Infinity;
+    for (const [kx, ky, kw, kh, moves] of heroKeep) {
+      // In the canvas's frame the well drifts down by (1 - K)·y and the copy up by 0.12·y.
+      const top = ky - (moves ? 1.12 - K : 1 - K) * y0;
+      const dx = Math.max(kx - x, 0, x - (kx + kw));
+      const dy = Math.max(top - y, 0, y - (top + kh));
+      d = Math.min(d, Math.hypot(dx, dy) - r);
+    }
+    return smooth(clamp(d / 28));
   }
 
   function stepHero(dt) {
@@ -874,13 +1046,21 @@ void main(){
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    const sy = still ? 0 : day.y;
+    const seen = hw.canvas.__nodes || (hw.canvas.__nodes = []);
+    seen.length = 0;
     HERO_NODES.forEach((n, i) => {
-      const appear = show(1.15 + n.ring * 0.45 + i * 0.04, 0.9);
-      if (appear <= 0) return;
       const x = cx + Math.cos(n.a) * R * n.ring + n.dx;
       const y = cy + Math.sin(n.a) * R * n.ring + n.dy;
       const far = n.ring > 0.8;
-      const rad = (far ? 12 : n.ring > 0.5 ? 17 : 20) * sc * (0.6 + 0.4 * appear);
+      const full = (far ? 12 : n.ring > 0.5 ? 17 : 20) * sc;
+      const gx = x + full * 0.55;
+      const gy = y - full * 1.55;
+      const clear = Math.min(clearOf(x + 3, y + 3, full * 1.1, sy), n.g ? clearOf(gx, gy, 13 * sc, sy) : 1);
+      const appear = show(1.15 + n.ring * 0.45 + i * 0.04, 0.9) * clear;
+      if (appear <= 0.01) return;
+      const rad = full * (0.6 + 0.4 * appear);
+      seen.push({ ini: n.ini, x, y, r: full * 1.1, gx: n.g ? gx : null, gy, a: appear });
       ctx.globalAlpha = appear * 0.5;
       ctx.fillStyle = "rgba(0,12,14,.6)";
       ctx.beginPath();
@@ -900,9 +1080,10 @@ void main(){
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = far ? "#acc3c1" : "#eef3f1";
-      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "Instrument Sans", system-ui, sans-serif`;
+      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "Instrument Sans", sans-serif`;
       ctx.fillText(n.ini, x, y + 0.5);
       if (n.g) glyph(ctx, n.g, x + rad * 0.55, y - rad * 1.55, sc, n.v);
+      ctx.globalAlpha = 1;
     });
 
     const landed = show(0.9, 0.5);
@@ -912,13 +1093,21 @@ void main(){
     ctx.beginPath();
     ctx.arc(cx, cy, R * 0.15 * (0.7 + 0.3 * landed), 0, TAU);
     ctx.stroke();
+    // The glow is a gradient, not shadowBlur: a blur every frame is costly on phones.
+    const gr = R * 0.062 * landed;
+    if (gr > 0.5) {
+      const glow = ctx.createRadialGradient(cx, cy, gr * 0.6, cx, cy, gr + 22);
+      glow.addColorStop(0, `rgba(${gilt},.55)`);
+      glow.addColorStop(1, `rgba(${gilt},0)`);
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(cx, cy, gr + 22, 0, TAU);
+      ctx.fill();
+    }
     ctx.fillStyle = `rgb(${gilt})`;
-    ctx.shadowColor = `rgba(${gilt},.7)`;
-    ctx.shadowBlur = 22;
     ctx.beginPath();
-    ctx.arc(cx, cy, R * 0.062 * landed, 0, TAU);
+    ctx.arc(cx, cy, gr, 0, TAU);
     ctx.fill();
-    ctx.shadowBlur = 0;
     if (!still && t < 0.9) {
       const k = t / 0.9;
       const y = lerp(-40, cy, k * k);
@@ -980,7 +1169,6 @@ void main(){
   }
 
   if (heroWell.canvas && heroWell.canvas.getContext) {
-    sizeHero();
     if (still) heroWell.splashed = true;
     if ("IntersectionObserver" in window) new IntersectionObserver(([e]) => (heroWell.visible = e.isIntersecting)).observe(heroWell.canvas);
   }
@@ -1013,7 +1201,7 @@ void main(){
   });
   let sheenKey = "";
   function paintSheen(t) {
-    if (!sheen || still) return;
+    if (!sheen || still || !W) return;
     // The highlight follows the light on the water: the well's glow, or the moon.
     const lx = day.moon[2] > 0.2 ? day.moon[0] : day.glow[0];
     const x = ((lx / W - 0.5) * 0.8 + Math.sin(t * 0.4) * 0.25).toFixed(3);
@@ -1358,6 +1546,7 @@ void main(){
   // The chart is built just before it's needed, to keep the first load light.
   function ensureChart() {
     if (chart || !chartSvg) return;
+    if (!warm) return void (wantChart = true);
     chart = buildChart(chartSvg);
     sizeChart();
     paintScan();
@@ -1521,14 +1710,16 @@ void main(){
     const tw = tok._w || 120;
     const th = tok._h || 34;
     const at = (s, scale = 1) => ({ x: s.x + 8, y: s.y + (s.h - th) / 2, sx: scale, sy: scale, o: 1 });
-    const center = (s) => {
-      return { x: s.x, y: s.y, sx: s.w / tw, sy: s.h / th, o: 0 };
-    };
+    // A chip never shrinks below 0.6 and is never half-transparent: it lands
+    // on the week's cell at 0.6 and drops into it (the cell fills, the water
+    // rings), and comes back out of the cell at 0.6, whole.
+    const MIN = 0.6;
+    const center = (s) => ({ x: s.x + s.w / 2 - (tw * MIN) / 2, y: s.y + s.h / 2 - (th * MIN) / 2, sx: MIN, sy: MIN, o: 1 });
     const A = at(idea);
     const B = center(plan);
     const fly = (a, b, k, lift) => {
       const e = smooth(k);
-      return { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e) - Math.sin(e * Math.PI) * lift, sx: lerp(a.sx, b.sx, e), sy: lerp(a.sy, b.sy, e), o: lerp(a.o, b.o, clamp((k - 0.6) / 0.4)) };
+      return { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e) - Math.sin(e * Math.PI) * lift, sx: lerp(a.sx, b.sx, e), sy: lerp(a.sy, b.sy, e), o: k >= 1 ? 0 : 1 };
     };
     let s;
     if (i === 0) {
@@ -1548,18 +1739,38 @@ void main(){
         R.y = run.y + (run.h - th) / 2;
         const k = clamp((p - back) / 0.14);
         const e = smooth(k);
-        const from = { ...B, o: 1 };
-        s = { x: lerp(from.x, R.x, e), y: lerp(from.y, R.y, e) - Math.sin(e * Math.PI) * 36, sx: lerp(from.sx, 1, e), sy: lerp(from.sy, 1, e), o: clamp(k * 3) };
+        s = { x: lerp(B.x, R.x, e), y: lerp(B.y, R.y, e) - Math.sin(e * Math.PI) * 36, sx: lerp(MIN, 1, e), sy: lerp(MIN, 1, e), o: 1 };
       }
     }
     return s;
   }
 
+  // Where each chip comes to rest: [progress it lands at, slot it lands in].
+  const LANDS = ROUTE.map(([ideaK, planK, runK], i) => [
+    ...(i === 0 ? [[0.36, ideaK]] : []),
+    [0.38 + i * 0.06 + 0.15, planK],
+    ...(runK ? [[0.66 + (i === 1 ? 0 : 0.07) + 0.14, runK]] : []),
+  ]);
+  const landedAt = ROUTE.map(() => 0);
+  // Every landing, going forward, sends one ring into the water from where it lands.
+  // (`__rings` is a tally a test can read; nothing on the page uses it.)
+  function ringFrom(el, s = 0.9) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < H) drop(r.left + r.width / 2, r.top + r.height / 2, s);
+    (flow.__rings || (flow.__rings = [])).push(el.dataset.slot);
+  }
   function paintFlow(p) {
     if (!flow) return;
     if (still) p = 1;
     if (Math.abs(p - flowP) < 0.0005) return;
+    const forward = p > flowP && flowP >= 0;
     flowP = p;
+    LANDS.forEach((lands, i) => {
+      let n = 0;
+      while (n < lands.length && p >= lands[n][0]) n++;
+      if (forward && n > landedAt[i] && slots[lands[n - 1][1]]) ringFrom(slots[lands[n - 1][1]].el);
+      landedAt[i] = n;
+    });
     const n = p < 0.28 ? Math.round((CAPTURE.length * p) / 0.26) : p < 0.36 ? CAPTURE.length : 0;
     typerOut.innerHTML = renderCapture(CAPTURE.slice(0, Math.min(CAPTURE.length, n)));
     const wn = Math.round(WRITEUP.length * clamp((p - 0.84) / 0.14));
@@ -1570,7 +1781,7 @@ void main(){
       tok.style.opacity = s.o.toFixed(3);
       tok.style.transform = `translate3d(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px, 0) scale(${s.sx.toFixed(3)}, ${s.sy.toFixed(3)})`;
       const planK = ROUTE[i][1];
-      const landed = p >= 0.38 + i * 0.06 + 0.13;
+      const landed = p >= 0.38 + i * 0.06 + 0.15;
       if (slots[planK]) slots[planK].el.classList.toggle("is-hit", landed);
     });
   }
@@ -1660,6 +1871,7 @@ void main(){
   const palList = $("[data-palette-list]");
   const palFoot = $("[data-palette-foot]");
   let palN = -1;
+  let palOrder = "";
   const quality = (text, q) => {
     const t = text.toLowerCase();
     if (t.startsWith(q)) return [4, 0];
@@ -1701,6 +1913,14 @@ void main(){
     }).filter((x) => x.s >= 0);
     scored.sort((a, b) => b.s - a.s);
     const rowH = W <= 420 ? 62 : 76;
+    // A re-rank touches the water: one ring from the row that's now on top.
+    const order = scored.slice(0, 4).map((x) => x.d.name).join("|");
+    if (palOrder && order !== palOrder && q) {
+      const r = palList.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < H) drop(r.left + r.width * 0.3, r.top + rowH / 2, 0.85);
+      (palList.__rings || (palList.__rings = [])).push(q);
+    }
+    palOrder = order;
     DOCS.forEach((d) => {
       const rank = scored.findIndex((x) => x.d === d);
       const li = d.li;
@@ -1724,22 +1944,16 @@ void main(){
 
   const nightCopy = $("[data-night-copy]");
   let nightC = -1;
-  function paintNight(y) {
+  // The headline never fades: its words rise into place at full strength as
+  // the chapter arrives, and a dusk scrim behind it deepens while the sun is
+  // up, so the light never washes it out. Once the stars are out the scrim
+  // thins to let them through.
+  function paintNight() {
     if (!nightCopy) return;
-    if (still) {
-      if (nightC !== 1) {
-        nightC = 1;
-        nightCopy.style.opacity = "";
-        nightCopy.style.transform = "";
-      }
-      return;
-    }
-    const p = pinProgress("night", y);
-    const c = clamp((p - 0.5) / 0.18);
-    if (Math.abs(c - nightC) < 0.001) return;
+    const c = still ? 0.5 : clamp(0.42 + 0.5 * day.sun[3] * (1 - day.stars));
+    if (Math.abs(c - nightC) < 0.002) return;
     nightC = c;
-    nightCopy.style.opacity = c.toFixed(3);
-    nightCopy.style.transform = `translate3d(0, ${((1 - c) * 36).toFixed(1)}px, 0)`;
+    nightCopy.style.setProperty("--scrim", c.toFixed(3));
   }
 
   // The sun meets the water: rings go out from where its light touches.
@@ -1803,14 +2017,18 @@ void main(){
       computeDay(y);
       paintHeader();
       paintClock();
+    }
+    if (moved && warm) {
       paintToday(y);
       paintPieces(y);
       paintDial(pinProgress("ready", y));
       paintFlow(pinProgress("flow", y));
       paintUp(y);
       paintPalette(y);
-      paintNight(y);
+      paintNight();
       lightChart();
+    }
+    if (moved) {
       if (heroWellEl && !still && y < H * 1.3) {
         const hp = clamp(y / H);
         heroWellEl.style.transform = `translate3d(0, ${(y * (1 - K)).toFixed(1)}px, 0)`;
@@ -1826,8 +2044,9 @@ void main(){
       }
       sunDrops(t);
       paintSheen(t);
-      // Water: every frame while something moves, every other frame at rest.
-      const live = moved || drops.some((d) => t - d.t0 < 4);
+      // Water: every frame while something moves, every other frame at rest
+      // (rings still spreading count as moving, except on a software renderer).
+      const live = moved || (!water.soft && drops.some((d) => t - d.t0 < 4));
       if (live || frames % 2 === 0) renderWater(t);
       raf = requestAnimationFrame(tick);
     } else {
@@ -1890,13 +2109,72 @@ void main(){
     if (motionQuery.matches !== still) kick();
   }, 1500);
 
-  measure();
-  kick();
+  // The hero is sized and drawn only once the first frame (and its layout) is out.
+  requestAnimationFrame(() => setTimeout(() => {
+    measure();
+    sizeHero();
+    kick();
+  }, 0));
 
-  // The water starts after the first paint and the largest one, when the page is idle.
-  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
-  const begin = () => idle(() => startWater(), { timeout: 1500 });
-  if (document.readyState === "complete") setTimeout(begin, 300);
-  else window.addEventListener("load", () => setTimeout(begin, 300), { once: true });
+  /* ── Warm-up: the page is laid out one chapter per task ───────────── */
+  // Below the hero every chapter starts as `content-visibility: hidden`, so the
+  // first layout is the first screen alone. Once the stylesheet and the fonts
+  // are in, each chapter is laid out in its own short task (none near 50ms on
+  // a 4× slowed phone), and only then is the page measured.
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 50));
+  const cold = $$("main > section:not(.hero), .foot");
+  let loaded = document.readyState === "complete";
+  function warmUp() {
+    let i = 0;
+    const next = () => {
+      if (i < cold.length) {
+        const el = cold[i++];
+        el.classList.add("is-warm");
+        void el.offsetHeight;
+        return setTimeout(next, 0);
+      }
+      warm = true;
+      measure();
+      if (wantChart) setTimeout(ensureChart, 0);
+      kick();
+      if (loaded) setTimeout(begin, 120);
+    };
+    next();
+  }
+  const cssLink = $('link[href$="landing.css"]');
+  const cssIn = new Promise((ok) => {
+    if (!cssLink || cssLink.media === "all") return ok();
+    cssLink.addEventListener("load", ok, { once: true });
+    cssLink.addEventListener("error", ok, { once: true });
+  });
+  const later = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  // `fonts.ready` flushes layout when read, so it's read after the first frame.
+  // On a slow connection nobody waits on it: past 1.5s, or at the first
+  // scroll, the chapters are laid out anyway.
+  let warming = false;
+  const startWarm = () => {
+    if (warming) return;
+    warming = true;
+    setTimeout(warmUp, 0);
+  };
+  window.addEventListener("scroll", startWarm, { once: true, passive: true });
+  requestAnimationFrame(() => setTimeout(() => {
+    const fontsIn = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+    Promise.race([Promise.all([cssIn, fontsIn]), later(1500)]).then(() => requestAnimationFrame(startWarm));
+  }, 0));
+
+  // The water starts after the page is measured and loaded, when it's idle:
+  // the context in one task, the shader compiled in parallel in the next, and
+  // polled each frame until it's linked.
+  let begun = false;
+  function begin() {
+    if (begun || !warm) return;
+    begun = true;
+    idle(() => startWater(), { timeout: 1500 });
+  }
+  if (!loaded) window.addEventListener("load", () => {
+    loaded = true;
+    setTimeout(begin, 300);
+  }, { once: true });
   clock0 = performance.now();
-})();
+}, 0);

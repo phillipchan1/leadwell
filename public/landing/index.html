@@ -91,9 +91,11 @@
       --teal: #0b6a66; --gilt: #e1b34d; --gilt-hi: #f3d58a; --gilt-lo: #c99a35; --gilt-ink: #7a5710;
       --night: #15122b; --night-fg: #ece8f7; --night-ink: #bfb6de; --vesper: #8d74e0; --vesper-hi: #c3b3f6;
       --thriving: #2e8b57; --solid: #5d8f86; --watch: #b98014; --strained: #cc5f2f; --critical: #b8323a; --meter-off: #cfd9d6;
-      --serif: "Newsreader", "Iowan Old Style", Georgia, serif;
-      --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-      --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+      /* Generic fallbacks only: the faces are self-hosted, and every named
+         fallback a device lacks costs a font lookup in the first layout. */
+      --serif: "Newsreader", serif;
+      --sans: "Instrument Sans", sans-serif;
+      --mono: "IBM Plex Mono", monospace;
       --wrap: 1180px; --gutter: clamp(20px, 5vw, 48px); --ease: cubic-bezier(.2, .7, .1, 1);
       --fg: var(--ink); --fg-2: var(--ink-2); --fg-3: var(--ink-3); --hair: var(--line); --focus: var(--teal);
     }
@@ -129,6 +131,11 @@
     
     /* Everything in a chapter sits above the water; the chapter's own background sits below it. */
     main > section > *, .foot > * { position: relative; }
+    /* Below the first screen nothing is laid out until landing.js warms it, one chapter per task.
+       The chapter right under the hero holds its content back entirely (`auto` would lay it out
+       with the first screen, it's so close); it starts below the fold, so nothing seen moves. */
+    html.js main > section:not(.hero):not(.is-warm), html.js .foot:not(.is-warm) { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
+    html.js main > .hero + section:not(.is-warm) > * { display: none; }
     main { overflow-x: clip; }
     .water { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.4s ease; }
     .water.is-on { opacity: 1; }
@@ -613,8 +620,8 @@
         <div class="pin__stage nightfall__stage">
           <div class="nightfall__still" aria-hidden="true"></div>
           <div class="wrap nightfall__copy" data-night-copy>
-            <p class="eyebrow"><span class="eyebrow__t">21:00</span>Evening</p>
-            <h2 id="nightfall-title" class="nightfall__title">The last place in the day is the only one <em>that isn’t about them.</em></h2>
+            <p class="eyebrow"><span class="eyebrow__t">19:40</span>Evening</p>
+            <h2 id="nightfall-title" class="nightfall__title" data-split>The last place in the day is the only one <em>that isn’t about them.</em></h2>
           </div>
         </div>
       </div>
