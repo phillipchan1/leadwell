@@ -22,7 +22,7 @@ These are load-bearing. If a task seems to require changing one, stop and ask.
 
 1. **The routing model stays.** URL is the source of truth for selection (`src/lib/routes.ts`, `useRouteSync` in `App.tsx:69`). Selection setters navigate; `applyRoute` writes back. One direction only. Peek↔focus is a route change, not a mode flag. Every entity stays deep-linkable and back-button-safe.
 2. **`EntityChrome` stays.** One breadcrumb + sibling pager + close + promote for every entity kind (`src/components/EntityChrome.tsx`). Do not fork it per entity.
-3. **`src/lib/storage.ts` stays the only module that touches localStorage.** Everything persisted goes through that seam. (Phil's explicit architectural rule.)
+3. **`src/lib/storage.ts` stays the only module that touches localStorage.** Everything persisted goes through that seam. (an explicit architectural rule.)
 4. **The five-mode contract in `src/lib/entityModes.ts` is extended, never abandoned.** If a mode set must change, change the contract and its doc comment — don't add a fourth vocabulary.
 5. **`PrepPanel`'s "the checklist *is* the score."** No hidden weights, no composite number. Four named checks, each one click from fixed.
 6. **`ConfirmDialog`'s API stays** (`await confirmAction({...})`, single `<ConfirmHost/>` at root). Use it more, don't replace it.
@@ -35,7 +35,7 @@ These are load-bearing. If a task seems to require changing one, stop and ask.
 ## Working agreement
 
 - **Verify per phase, not per file.** Run `npm run build` (`tsc -b && vite build`) — it must pass clean before any commit.
-- **Drive the real app to check behavior.** Start the dev server via the preview tooling (`.claude/launch.json` exists; port 5173 with fallback). Sign in with the dev-only **"Continue as test user (dev)"** button on the sign-in screen — it appears when `VITE_DEV_TEST_EMAIL` / `VITE_DEV_TEST_PASSWORD` are set in gitignored `.env.local`. If the button is missing, ask Phil to add them. **Never attempt Google sign-in.** `window.useStore` is exposed in dev for reading/driving store state from the console.
+- **Drive the real app to check behavior.** Start the dev server via the preview tooling (`.claude/launch.json` exists; port 5173 with fallback). Sign in with the dev-only **"Continue as test user (dev)"** button on the sign-in screen — it appears when `VITE_DEV_TEST_EMAIL` / `VITE_DEV_TEST_PASSWORD` are set in gitignored `.env.local`. If the button is missing, ask the maintainer to add them. **Never attempt Google sign-in.** `window.useStore` is exposed in dev for reading/driving store state from the console.
 - **Check both themes and both viewports on every visual change.** Light + dark, 375×667 and 1440×900. Dark mode is where this codebase breaks most often.
 - **One commit per phase**, message given at the end of each phase. Branch off `master` first — do not commit to `master` directly.
 - **Report honestly.** If a task turns out to be wrong, or bigger than described, say so and stop rather than half-doing it.
