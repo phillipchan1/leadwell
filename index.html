@@ -5,9 +5,10 @@
     <script>
       /* Signed-out visitors to `/` see the static marketing page. Signed-in
          users and OAuth callbacks stay here so the existing redirect URLs
-         keep working. Demo builds skip this (`/*LEADWELL_DEMO*/false`). */
+         keep working. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
       (function () {
-        if (/*LEADWELL_DEMO*/false) return;
+        var LEADWELL_DEMO = false;
+        if (LEADWELL_DEMO) return;
         var path = location.pathname.replace(/\/$/, "") || "/";
         if (path !== "/") return;
         var q = location.search;

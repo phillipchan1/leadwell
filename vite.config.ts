@@ -13,7 +13,7 @@ export default defineConfig({
       name: "leadwell-demo-html",
       transformIndexHtml(html) {
         if (process.env.VITE_DEMO === "1") {
-          return html.replace("/*LEADWELL_DEMO*/false", "true");
+          return html.replace("var LEADWELL_DEMO = false;", "var LEADWELL_DEMO = true;");
         }
         return html;
       },
