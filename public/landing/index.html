@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <script>
+    /* Signed-in visitors belong in the app. OAuth also returns to `/`, so a
+       code on this URL is sent there too — the React client picks it up. */
+    (function () {
+      var SUPABASE_REF = "";
+      var q = location.search;
+      var h = location.hash;
+      function hasSession() {
+        if (!SUPABASE_REF) return false;
+        try {
+          var raw = localStorage.getItem("sb-" + SUPABASE_REF + "-auth-token");
+          if (!raw) return false;
+          var v = JSON.parse(raw);
+          var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+          return Boolean(token);
+        } catch (e) {}
+        return false;
+      }
+      function hop() {
+        try { return sessionStorage.getItem("lw-boot") || ""; } catch (e) { return ""; }
+      }
+      function setHop(v) {
+        try { sessionStorage.setItem("lw-boot", v); } catch (e) {}
+      }
+      function clearHop() {
+        try { sessionStorage.removeItem("lw-boot"); } catch (e) {}
+      }
+      function fromParam(search) {
+        try {
+          return new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search).get("from") || "";
+        } catch (e) { return ""; }
+      }
+      function stripFrom(search) {
+        try {
+          var p = new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search);
+          p.delete("from");
+          var s = p.toString();
+          return s ? "?" + s : "";
+        } catch (e) { return search; }
+      }
+      function withFrom(search, value) {
+        try {
+          var p = new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search);
+          p.set("from", value);
+          return "?" + p.toString();
+        } catch (e) { return (search ? search + "&" : "?") + "from=" + value; }
+      }
+      var callback = /(?:^|[?&])(?:code|error|error_description)=/.test(q) || /access_token|refresh_token/.test(h);
+      var came = fromParam(q) || hop();
+      var cleanQ = stripFrom(q);
+      var signedIn = hasSession();
+      if (callback || (signedIn && came !== "root")) {
+        setHop("landing");
+        location.replace("/" + withFrom(cleanQ, "landing") + h);
+        return;
+      }
+      clearHop();
+      /* Keep the public URL at `/` so the marketing page is what `/` is. */
+      if (location.pathname.indexOf("/landing") === 0) {
+        history.replaceState(null, "", "/" + cleanQ + h);
+      }
+    })();
+  </script>
+  <title>LeadWell — A quiet instrument for leading people well</title>
+  <meta name="description" content="LeadWell keeps the teams and people you lead in one place: their profiles, your meetings, how they're doing and who you're carrying. At work, at church and at home." />
+  <meta name="theme-color" content="#013133" />
+  <meta property="og:title" content="LeadWell — A quiet instrument for leading people well" />
+  <meta property="og:description" content="Your people, your meetings and your prayer list, in one private workspace. At work, at church and at home." />
+  <link rel="icon" type="image/svg+xml" href="/landing/assets/mark.svg" />
+  <link rel="preload" href="/landing/assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/landing/assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin />
+  <script>
+    document.documentElement.classList.add("js");
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");
+  </script>
+  <!-- Critical CSS (tokens, header, hero) is inline so the first screen paints without a round trip. -->
+  <style>
+    @font-face { font-family: "Newsreader"; src: url("/landing/assets/fonts/newsreader.woff2") format("woff2"); font-weight: 400 500; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Newsreader"; src: url("/landing/assets/fonts/newsreader-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+    @font-face { font-family: "Instrument Sans"; src: url("/landing/assets/fonts/instrument-sans.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
+    @font-face { font-family: "IBM Plex Mono"; src: url("/landing/assets/fonts/plex-mono-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "IBM Plex Mono"; src: url("/landing/assets/fonts/plex-mono-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+    :root {
+      --leather: #013133; --leather-hi: #114143; --leather-deep: #04191b; --leather-fg: #eef3f1; --leather-ink: #acc3c1; --leather-line: rgba(172, 195, 193, .22);
+      --paper: #eef3f1; --paper-card: #fbfcfc; --paper-2: #e3eae8; --ink: #102322; --ink-2: #3a4e4c; --ink-3: #50625f; --line: #d3dcd9;
+      --teal: #0b6a66; --gilt: #e1b34d; --gilt-hi: #f3d58a; --gilt-lo: #c99a35; --gilt-ink: #7a5710;
+      --night: #15122b; --night-fg: #ece8f7; --night-ink: #bfb6de; --vesper: #8d74e0; --vesper-hi: #c3b3f6;
+      --thriving: #2e8b57; --solid: #5d8f86; --watch: #b98014; --strained: #cc5f2f; --critical: #b8323a; --meter-off: #cfd9d6;
+      /* Generic fallbacks only: the faces are self-hosted, and every named
+         fallback a device lacks costs a font lookup in the first layout. */
+      --serif: "Newsreader", serif;
+      --sans: "Instrument Sans", sans-serif;
+      --mono: "IBM Plex Mono", monospace;
+      --wrap: 1180px; --gutter: clamp(20px, 5vw, 48px); --ease: cubic-bezier(.2, .7, .1, 1);
+      --fg: var(--ink); --fg-2: var(--ink-2); --fg-3: var(--ink-3); --hair: var(--line); --focus: var(--teal);
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; scroll-padding-top: 76px; background: var(--leather); }
+    body { margin: 0; background: var(--leather); color: var(--ink); font: 400 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; }
+    h1, h2, h3, p, ul, ol, dl, dd, figure, blockquote { margin: 0; }
+    ul, ol { padding: 0; list-style: none; }
+    a { color: inherit; }
+    svg { display: block; }
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .defs { position: absolute; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    .skip { position: absolute; left: 12px; top: -80px; z-index: 100; background: var(--gilt); color: var(--leather); padding: 12px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; }
+    .skip:focus { top: 12px; }
+    :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
+    .wrap { width: min(100% - 2 * var(--gutter), var(--wrap)); margin-inline: auto; }
+    
+    /* Tones. Each chapter's background is the water's base color for that hour,
+       so the page reads the same with or without the water layer. */
+    .tone-dark { --fg: var(--leather-fg); --fg-2: var(--leather-ink); --fg-3: var(--leather-ink); --hair: var(--leather-line); --focus: var(--gilt); color: var(--fg); }
+    .tone-night { --fg: var(--night-fg); --fg-2: var(--night-ink); --fg-3: var(--night-ink); --hair: rgba(191, 182, 222, .2); --focus: var(--gilt); color: var(--fg); }
+    .tone-light { color: var(--fg); }
+    [data-pal="dawn"] { background-color: #013133; }
+    [data-pal="morning"], [data-pal="late-morning"] { background-color: #eef3f1; }
+    [data-pal="forenoon"] { background-color: #023436; }
+    [data-pal="noon"] { background-color: #f3f5f1; }
+    [data-pal="afternoon"] { background-color: #f0f2ec; }
+    [data-pal="late"] { background-color: #f4f0e6; }
+    [data-pal="golden"] { background-color: #0b2e30; }
+    [data-pal="dusk"], [data-pal="night"] { background-color: #15122b; }
+    [data-pal="deep"] { background-color: #0f1427; }
+    
+    /* Everything in a chapter sits above the water; the chapter's own background sits below it. */
+    main > section > *, .foot > * { position: relative; }
+    /* Below the first screen nothing is laid out until landing.js warms it, one chapter per task.
+       The chapter right under the hero holds its content back entirely (`auto` would lay it out
+       with the first screen, it's so close); it starts below the fold, so nothing seen moves. */
+    html.js main > section:not(.hero):not(.is-warm), html.js .foot:not(.is-warm) { content-visibility: auto; contain-intrinsic-size: auto 1100px; }
+    html.js main > .hero + section:not(.is-warm) > * { display: none; }
+    main { overflow-x: clip; }
+    .water { position: fixed; left: 0; top: 0; width: 100%; height: 100vh; height: 100lvh; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 1.4s ease; }
+    .water.is-on { opacity: 1; }
+    
+    .eyebrow { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; font: 500 12px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+    .eyebrow::before { content: ""; width: 22px; height: 1px; background: currentColor; opacity: .7; }
+    
+    /* Header: translucent, tinted by the hour under it. */
+    .top { position: fixed; inset: 0 0 auto; z-index: 50; padding-top: env(safe-area-inset-top); color: var(--hdr-fg, var(--leather-fg)); background: var(--hdr-bg, rgba(1, 49, 51, .5)); -webkit-backdrop-filter: blur(14px) saturate(1.25); backdrop-filter: blur(14px) saturate(1.25); box-shadow: 0 1px 0 var(--hdr-line, rgba(172, 195, 193, .16)); transition: color .5s, box-shadow .5s; }
+    .top { --hdr-fg2: #c3d4d2; }
+    .top.is-light { --hdr-fg: #102322; --hdr-fg2: #33474a; --hdr-line: rgba(16, 35, 34, .1); }
+    .top__inner { width: min(100% - 2 * var(--gutter), var(--wrap)); margin-inline: auto; height: 68px; display: flex; align-items: center; gap: 24px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; font-size: 21px; }
+    .brand__mark { border-radius: 9px; }
+    .wordmark { display: inline-flex; align-items: baseline; line-height: 1; }
+    .wordmark__lead { font: 600 1em/1 var(--sans); letter-spacing: -.01em; }
+    .wordmark__well { font: italic 400 1.08em/1 var(--serif); color: var(--gilt); }
+    .top.is-light .wordmark__well { color: #8a6514; }
+    .top__nav { margin-left: auto; }
+    .top__nav ul { display: flex; gap: 4px; }
+    .top__nav a { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 999px; font-size: 14.5px; text-decoration: none; color: var(--hdr-fg2); transition: color .2s, background-color .2s; }
+    .top__nav a:hover { color: var(--hdr-fg, #fff); background: rgba(128, 150, 148, .14); }
+    .top :focus-visible { outline-color: var(--gilt); }
+    .top.is-light :focus-visible { outline-color: var(--teal); }
+    .clock { display: inline-flex; align-items: center; gap: 8px; margin-left: 20px; height: 30px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid var(--hdr-line, rgba(172, 195, 193, .22)); color: var(--hdr-fg2); font-size: 13px; letter-spacing: .04em; }
+    .clock__sun { width: 10px; height: 10px; border-radius: 50%; background: var(--gilt); box-shadow: 0 0 10px rgba(225, 179, 77, .6); transition: background-color .6s, box-shadow .6s; }
+    .clock.is-night .clock__sun { background: transparent; box-shadow: inset -3px -1px 0 0 var(--vesper-hi); }
+    html:not(.js) .clock { display: none; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 22px; border-radius: 12px; font: 600 15.5px/1 var(--sans); text-decoration: none; white-space: nowrap; transition: transform .25s var(--ease), box-shadow .25s, background-color .2s, color .2s, border-color .2s; }
+    .btn--gilt { min-height: 44px; min-width: 44px; padding: 0 18px; font-size: 14.5px; color: #013133; background: var(--gilt); }
+    .btn--gilt:hover { background: var(--gilt-hi); transform: translateY(-1px); }
+    .btn--google { background: #fff; color: #1f2a29; box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .55), 0 0 0 1px rgba(0, 0, 0, .06); }
+    .btn--google:hover { transform: translateY(-2px); box-shadow: 0 16px 36px -12px rgba(0, 0, 0, .6), 0 0 0 3px rgba(225, 179, 77, .55); }
+    .btn--line { color: var(--leather-fg); border: 1px solid rgba(172, 195, 193, .5); }
+    .btn--line:hover { border-color: var(--gilt); color: #fff; }
+    .top__cta { margin-left: 8px; }
+    @media (max-width: 860px) { .top__nav { display: none; } .clock { margin-left: auto; } .top__cta { margin-left: 10px; } .top__inner { gap: 12px; } }
+    
+    /* Hero */
+    /* The hero is positioned for its overlays, so it leaves its color to the body
+       (the same dawn) and lets the water show through. */
+    .hero[data-pal] { background-color: transparent; }
+    .hero { position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-items: center; padding: calc(104px + env(safe-area-inset-top)) 0 96px; overflow: hidden; }
+    .hero__well { position: absolute; inset: 0; pointer-events: none; }
+    .hero__well::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(1, 40, 42, .78) 0%, rgba(1, 40, 42, .4) 36%, rgba(1, 40, 42, 0) 60%); }
+    .well-canvas { display: block; width: 100%; height: 100%; }
+    .hero__stitch { position: absolute; inset: 14px; border-radius: 22px; pointer-events: none; border: 1.5px dashed rgba(172, 195, 193, .22); }
+    .hero__eyebrow { color: var(--leather-ink); }
+    .hero__title { font: 400 clamp(48px, min(7.2vw, 12.5vh), 118px)/.95 var(--serif); letter-spacing: -.03em; max-width: 10.5ch; color: var(--leather-fg); }
+    .hero__words { display: inline; }
+    .letter { display: inline-block; height: .98em; width: auto; vertical-align: -.2em; overflow: visible; margin-left: .04em; }
+    .letter--well { aspect-ratio: 3600 / 1940; }
+    .letter path { fill: url(#gilt-sheen); stroke: #e1b34d; stroke-width: 12; stroke-linejoin: round; }
+    .letter__drop { fill: #f6dc97; }
+    html.motion .letter path { stroke-dasharray: 1 1; stroke-dashoffset: 1; fill-opacity: 0; }
+    html.motion .letter.is-drawn path { animation: letter-draw 1.6s cubic-bezier(.45, .1, .2, 1) forwards, letter-fill .9s ease forwards; animation-delay: calc(var(--g, 0) * 120ms + 250ms), calc(var(--g, 0) * 120ms + 1250ms); }
+    html.motion .letter .letter__drop { transform-box: fill-box; transform-origin: 50% 50%; transform: translateY(-900%) scale(.6); opacity: 0; }
+    html.motion .letter.is-drawn .letter__drop { animation: letter-drop .7s cubic-bezier(.55, 0, .9, .4) 1.55s forwards; }
+    @keyframes letter-draw { to { stroke-dashoffset: 0; } }
+    @keyframes letter-fill { to { fill-opacity: 1; stroke-opacity: 0; } }
+    @keyframes letter-drop { 0% { opacity: 0; transform: translateY(-900%) scale(.6); } 15% { opacity: 1; } 80% { transform: translateY(0) scale(.85, 1.15); } 100% { opacity: 1; transform: none; } }
+    .hero__lede { margin-top: 28px; font-size: clamp(17px, 1.5vw, 20px); line-height: 1.6; color: var(--leather-ink); max-width: 33em; }
+    .hero__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+    .hero__note { margin-top: 18px; font: 400 13px/1.5 var(--mono); color: var(--leather-ink); }
+    .hero__caption { position: absolute; right: var(--gutter); bottom: 34px; max-width: 26ch; display: grid; gap: 6px; text-align: right; font: italic 400 15px/1.4 var(--serif); color: var(--leather-ink); }
+    .hero__hint { font: 500 11.5px/1 var(--mono); font-style: normal; letter-spacing: .08em; text-transform: uppercase; color: var(--gilt); }
+    html:not(.motion) [data-motion-only] { display: none; }
+    html.motion [data-hero-in] { animation: hero-in 1.1s var(--ease) both; animation-delay: calc(var(--i, 0) * 110ms + 350ms); }
+    html.motion .hero__words { display: inline-block; animation: hero-words 1.3s var(--ease) both .1s; }
+    @keyframes hero-in { from { opacity: .001; transform: translateY(22px); } }
+    @keyframes hero-words { from { transform: translateY(.14em); letter-spacing: -.01em; } }
+    @media (max-width: 900px) {
+      .hero { align-items: end; padding-top: calc(42vh + env(safe-area-inset-top)); padding-bottom: 64px; }
+      .hero__well::after { background: linear-gradient(180deg, rgba(1, 40, 42, 0) 22%, rgba(1, 40, 42, .55) 46%, rgba(1, 40, 42, .82) 64%); }
+      .hero__caption { left: var(--gutter); right: auto; top: calc(84px + env(safe-area-inset-top)); bottom: auto; text-align: left; max-width: 20ch; font-size: 14px; }
+    }
+    @media (max-width: 480px) { .hero__stitch { inset: 8px; border-radius: 16px; } .hero__actions .btn { width: 100%; } .top__inner { height: 60px; } .brand { font-size: 19px; } .clock { padding: 0 9px; } }
+    @media (prefers-reduced-transparency: reduce) { .top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--hdr-solid, #013133); } }
+  </style>
+  <link rel="stylesheet" href="/landing/landing.css" media="print" onload="this.media='all'" />
+  <noscript><link rel="stylesheet" href="/landing/landing.css" /></noscript>
+  <script src="/landing/landing.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <svg width="0" height="0" class="defs" aria-hidden="true" focusable="false">
+    <defs>
+      <path id="flame" d="M12 3.2c2.7 3.2 4.8 5.8 4.8 9a4.8 4.8 0 0 1-9.6 0c0-3.2 2.1-5.8 4.8-9z" />
+      <symbol id="mark" viewBox="0 0 48 48">
+        <rect width="48" height="48" rx="13" fill="#114143" />
+        <circle cx="24" cy="24" r="15" fill="none" stroke="#ACC3C1" stroke-opacity=".45" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="72 22.25" transform="rotate(-20 24 24)" />
+        <circle cx="24" cy="24" r="9" fill="none" stroke="#ACC3C1" stroke-width="2.4" />
+        <circle cx="24" cy="24" r="3.8" fill="#E1B34D" />
+      </symbol>
+      <symbol id="google" viewBox="0 0 18 18">
+        <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+        <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
+        <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z" />
+        <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+      </symbol>
+      <!-- The gilt on the lettering; landing.js moves its highlight with the water's light. -->
+      <linearGradient id="gilt-sheen" x1="0" y1="0" x2="1" y2=".25" data-sheen>
+        <stop offset="0" stop-color="#c99a35" />
+        <stop offset=".38" stop-color="#e1b34d" />
+        <stop offset=".5" stop-color="#fbe7b0" />
+        <stop offset=".62" stop-color="#e1b34d" />
+        <stop offset="1" stop-color="#b8892a" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <header class="top" data-top>
+    <div class="top__inner">
+      <a class="brand" href="#top" aria-label="LeadWell, back to top">
+        <svg class="brand__mark" width="30" height="30" aria-hidden="true"><use href="#mark" /></svg>
+        <span class="wordmark"><span class="wordmark__lead">Lead</span><span class="wordmark__well">Well</span></span>
+      </a>
+      <!-- The page is one day. This is only the page's clock, not a feature. -->
+      <p class="clock" aria-hidden="true" data-clock><i class="clock__sun"></i><span class="mono" data-clock-time>06:30</span></p>
+      <nav class="top__nav" aria-label="Sections">
+        <ul>
+          <li><a href="#places">The five places</a></li>
+          <li><a href="#people">People</a></li>
+          <li><a href="#meetings">Meetings</a></li>
+          <li><a href="#prayer">Prayer</a></li>
+        </ul>
+      </nav>
+      <a class="btn btn--gilt top__cta" href="/signin">Sign in</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ── 06:30 The well ── -->
+    <section class="hero tone-dark" id="top" aria-labelledby="hero-title" data-hour="06:30" data-pal="dawn">
+      <div class="hero__well" aria-hidden="true" data-hero-well><canvas class="well-canvas" data-well></canvas></div>
+      <div class="hero__stitch" aria-hidden="true"></div>
+      <div class="wrap hero__inner" data-hero-copy>
+        <p class="eyebrow hero__eyebrow" data-hero-in>At work, at church and at home</p>
+        <h1 id="hero-title" class="hero__title" aria-label="A quiet instrument for leading people well.">
+          <span class="hero__words">A quiet instrument for leading people</span>
+          <svg class="letter letter--well" viewBox="-20 -1560 3600 1940" aria-hidden="true" focusable="false" data-letter><path pathLength="1" d="M855 -1024H996L822 -284Q812 -242 806 -208Q799 -175 799 -149Q799 -112 817 -94Q835 -77 878 -77Q941 -77 1002 -113Q1062 -149 1116 -210Q1171 -272 1212 -350Q1253 -429 1276 -515Q1300 -601 1300 -684Q1300 -756 1278 -791Q1256 -826 1226 -845Q1197 -864 1175 -884Q1153 -905 1153 -948Q1153 -988 1177 -1015Q1201 -1042 1247 -1042Q1284 -1042 1311 -1022Q1338 -1003 1352 -960Q1367 -916 1367 -845Q1367 -703 1332 -574Q1298 -445 1240 -337Q1183 -229 1111 -148Q1039 -68 963 -24Q887 20 817 20Q733 20 692 -14Q652 -48 652 -119Q652 -144 658 -173Q663 -202 672 -236L736 -469H740Q697 -344 642 -252Q587 -161 526 -100Q466 -39 406 -10Q345 20 291 20Q218 20 177 -16Q136 -51 136 -130Q136 -199 168 -298L347 -868Q354 -889 350 -902Q345 -915 328 -915Q307 -915 270 -890Q232 -866 178 -801Q125 -736 56 -612L45 -617Q98 -739 145 -822Q192 -904 237 -952Q282 -1001 328 -1022Q374 -1043 424 -1043Q448 -1043 466 -1040Q484 -1037 500 -1032Q517 -1027 535 -1019L315 -312Q298 -257 290 -217Q282 -177 282 -150Q282 -108 302 -92Q322 -77 359 -77Q421 -77 498 -137Q576 -197 647 -314Q718 -430 759 -603Z"/><path pathLength="1" d="M2002 -1006Q1935 -1006 1875 -958Q1815 -910 1766 -832Q1717 -754 1682 -660Q1646 -565 1626 -472Q1607 -379 1607 -304Q1607 -193 1646 -147Q1685 -101 1759 -101Q1818 -101 1875 -128Q1932 -155 1990 -220Q2048 -284 2108 -397L2119 -395Q2054 -233 1987 -142Q1920 -52 1850 -16Q1780 20 1706 20Q1625 20 1568 -10Q1511 -40 1480 -100Q1450 -159 1450 -246Q1450 -356 1480 -470Q1509 -583 1564 -686Q1618 -789 1692 -870Q1765 -950 1853 -997Q1941 -1044 2038 -1044Q2107 -1044 2149 -1022Q2191 -1000 2212 -962Q2232 -925 2232 -879Q2232 -835 2220 -791Q2207 -747 2178 -705Q2146 -686 2083 -660Q2020 -633 1939 -604Q1858 -575 1768 -548Q1678 -520 1592 -498L1597 -527Q1712 -564 1796 -598Q1879 -632 1936 -666Q1992 -699 2026 -734Q2060 -768 2076 -804Q2092 -841 2094 -881Q2098 -918 2088 -946Q2079 -975 2057 -990Q2035 -1006 2002 -1006Z"/><path pathLength="1" d="M2633 -1314Q2615 -1325 2590 -1339Q2564 -1353 2536 -1370Q2507 -1387 2478 -1404L2479 -1411L2830 -1484H2834L2385 -77L2364 -115Q2382 -103 2424 -114Q2466 -125 2534 -174Q2603 -222 2698 -323L2707 -316Q2621 -196 2549 -122Q2477 -48 2419 -14Q2361 20 2317 20Q2257 20 2240 -4Q2223 -28 2242 -88Z"/><path pathLength="1" d="M3153 -1314Q3135 -1325 3110 -1339Q3084 -1353 3056 -1370Q3027 -1387 2998 -1404L2999 -1411L3350 -1484H3354L2905 -77L2884 -115Q2902 -103 2944 -114Q2986 -125 3054 -174Q3123 -222 3218 -323L3227 -316Q3141 -196 3069 -122Q2997 -48 2939 -14Q2881 20 2837 20Q2777 20 2760 -4Q2743 -28 2762 -88Z"/><path class="letter__swash" pathLength="1" d="M3338 -36C3060 214 2010 300 980 262C560 246 300 206 96 150L92 166C300 236 566 292 980 316C2030 362 3092 272 3366 -14Z"/><circle class="letter__drop" cx="3380" cy="-114" r="145"/></svg>
+        </h1>
+        <p class="hero__lede" data-hero-in style="--i:2">LeadWell keeps the teams and people you lead in one place: who they are, how they’re doing, whether you’re ready for the next time you sit down, and who you’re carrying in prayer.</p>
+        <div class="hero__actions" data-hero-in style="--i:3">
+          <a class="btn btn--google" href="/signin?google=1"><svg width="18" height="18" aria-hidden="true"><use href="#google" /></svg>Continue with Google</a>
+          <a class="btn btn--line" href="#today">Walk through a day</a>
+        </div>
+        <p class="hero__note" data-hero-in style="--i:4">Your own private workspace, synced across every device.</p>
+      </div>
+      <p class="hero__caption" data-hero-in style="--i:5"><span>You, at the center. The people you lead, in rings around you.</span><span class="hero__hint" data-motion-only>Touch the water.</span></p>
+    </section>
+
+    <!-- ── 06:45 Today, and the five places ── -->
+    <section class="today tone-light" id="today" aria-labelledby="today-title" data-hour="06:45" data-pal="morning">
+      <i class="tide" aria-hidden="true"></i>
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">06:45</span>Today · the front door</p>
+          <h2 id="today-title" class="h2" data-split>It opens on one question: <em>what needs me?</em></h2>
+          <p class="lede" data-reveal>The next move, the week ahead, ideas waiting for a home, who you’re carrying and anyone you haven’t made a decision about yet. Every row is a door to where the work actually happens.</p>
+        </header>
+
+        <div class="today__stage" data-scrub="today">
+          <div class="app-window" role="img" aria-label="An example of the Today page: two of three meetings ready this week, one relationship drifting, a next move to write up a one-to-one, the coming week, and three people being carried in prayer.">
+            <div class="app-window__side" aria-hidden="true"><svg width="26" height="26"><use href="#mark" /></svg><i class="is-on"></i><i></i><i></i><i></i><i class="v"></i></div>
+            <div class="app-window__body" aria-hidden="true">
+              <div class="t-head">
+                <div>
+                  <p class="mono t-date">THURSDAY, OCTOBER 22 · ALL OF LIFE</p>
+                  <p class="t-greet">Good morning.</p>
+                  <p class="t-sum">Three meetings this week. One loose end to close before Thursday.</p>
+                </div>
+                <dl class="t-stats">
+                  <div><dt>ready this week</dt><dd class="mono">2<span>/3</span></dd></div>
+                  <div><dt>drifting</dt><dd class="mono is-crit">1</dd></div>
+                  <div><dt>undecided</dt><dd class="mono">3</dd></div>
+                </dl>
+              </div>
+              <div class="t-grid">
+                <div class="t-col">
+                  <div class="t-card t-next">
+                    <p class="t-label">The next move</p>
+                    <div class="t-next__row">
+                      <svg class="glyph" width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-t" /><circle cx="12" cy="12" r="9" class="rr-a rr--strained" stroke-dasharray="40 57" transform="rotate(-90 12 12)" /></svg>
+                      <div><p class="t-next__title">Write up Tuesday’s 1:1 with Tavi</p><p class="t-small"><span class="ink-strained">Loose end</span> · weekly · next ~Tue</p></div>
+                      <span class="chip">Write it up</span>
+                    </div>
+                  </div>
+                  <div class="t-card">
+                    <p class="t-label">Coming up</p>
+                    <ul class="t-rows">
+                      <li><span class="t-day mono"><b>THU</b>22</span><svg class="glyph" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-t" /><circle cx="12" cy="12" r="9" class="rr-a rr--watch" stroke-dasharray="44 57" transform="rotate(-90 12 12)" /></svg><span class="t-row__name">Design crit<small>Work 2 · Develop 1 · Check-in 0</small></span><span class="mono ink-watch t-cd">~Thu · 0d</span></li>
+                      <li><span class="t-day mono"><b>FRI</b>23</span><svg class="glyph" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-t" /><circle cx="12" cy="12" r="9" class="rr-a rr--thriving" stroke-dasharray="48 57" transform="rotate(-90 12 12)" /><circle cx="12" cy="12" r="3.5" class="rr-dot" /></svg><span class="t-row__name">Maya<small>1:1 · agenda set · notes from last time</small></span><span class="mono ink-thriving t-cd">Fri · 1d</span></li>
+                      <li><span class="t-day mono"><b>MON</b>26</span><svg class="glyph" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-t" /><circle cx="12" cy="12" r="9" class="rr-a rr--thriving" stroke-dasharray="52 57" transform="rotate(-90 12 12)" /><circle cx="12" cy="12" r="3.5" class="rr-dot" /></svg><span class="t-row__name">Quarterly planning<small>Product team · pre-read out</small></span><span class="mono ink-thriving t-cd">~Mon · 4d</span></li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="t-col">
+                  <div class="t-card">
+                    <p class="t-label">Carrying</p>
+                    <ul class="t-carry">
+                      <li><svg width="16" height="16" viewBox="0 0 24 24"><use href="#flame" class="fl fl--fresh" /></svg>Mirel<span class="mono">2d</span></li>
+                      <li><svg width="16" height="16" viewBox="0 0 24 24"><use href="#flame" class="fl fl--carrying" /></svg>Welcome team<span class="mono">9d</span></li>
+                      <li><svg width="16" height="16" viewBox="0 0 24 24"><use href="#flame" class="fl fl--quiet" /></svg>Owen<span class="mono">gone quiet</span></li>
+                    </ul>
+                  </div>
+                  <div class="t-card">
+                    <p class="t-label">How they’re doing</p>
+                    <div class="mixbar"><i style="--w:22%;--c:var(--thriving)"></i><i style="--w:44%;--c:var(--solid)"></i><i style="--w:18%;--c:var(--watch)"></i><i style="--w:11%;--c:var(--strained)"></i><i style="--w:5%;--c:var(--critical)"></i></div>
+                    <p class="t-small">Product team · <span class="ink-strained">strained</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="places" id="places">
+          <h3 class="places__title" data-reveal><span class="eyebrow__t mono">07:30</span>Five places. Each answers one thing, and only that.</h3>
+          <ol class="places__list">
+            <li class="place" data-reveal style="--i:0"><span class="place__n mono">01</span><b class="place__name">Today</b><span class="place__q">What needs me?</span></li>
+            <li class="place" data-reveal style="--i:1"><span class="place__n mono">02</span><b class="place__name">People</b><span class="place__q">Who do I lead, and how are they?</span></li>
+            <li class="place" data-reveal style="--i:2"><span class="place__n mono">03</span><b class="place__name">Meetings</b><span class="place__q">Am I ready to sit down?</span></li>
+            <li class="place" data-reveal style="--i:3"><span class="place__n mono">04</span><b class="place__name">Ideas</b><span class="place__q">What do I want to raise?</span></li>
+            <li class="place place--prayer" data-reveal style="--i:4"><span class="place__n mono">05</span><b class="place__name">Prayer</b><span class="place__q">Who am I carrying?</span></li>
+          </ol>
+          <p class="places__scope" data-reveal>A life-area scope sits above all five: <span class="scope"><i style="--c:#0B6A66"></i>All of life</span> <span class="scope"><i style="--c:#7C3B8B"></i>Day job</span> <span class="scope"><i style="--c:#2D78BD"></i>Church</span> <span class="scope"><i style="--c:#DD7B2B"></i>Family</span>. Pick one and every place follows.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 09:00 People: pinned ── -->
+    <section class="people tone-dark" id="people" aria-labelledby="people-title" data-hour="09:00" data-hour-end="10:40" data-pal="forenoon">
+      <i class="tide" aria-hidden="true"></i>
+      <div class="pin pin--people" data-pin="people">
+        <div class="pin__stage people__stage">
+          <div class="wrap people__grid">
+            <div class="people__copy">
+              <p class="eyebrow"><span class="eyebrow__t">09:00</span>People · who you lead</p>
+              <h2 id="people-title" class="h2 h2--pin">Nobody opens the chart wanting everything. <em class="gilt-text">You open it in a mode.</em></h2>
+              <ol class="steps" data-steps>
+                <li class="step" data-step="0"><p class="step__k mono">View · Circles</p><h3 class="step__t">Rings around you.</h3><p class="step__d">Everyone you lead, drawn as rings around you: the teams, and the people on them.</p></li>
+                <li class="step" data-step="1"><p class="step__k mono">View · Tree</p><h3 class="step__t">Or as the org tree.</h3><p class="step__d">An infinite canvas you can pan, zoom and rearrange. Whoever you report to sits above you, and a table view sits beside it for comparing.</p></li>
+                <li class="step" data-step="2"><p class="step__k mono"><kbd>1</kbd> Plan</p><h3 class="step__t">What is each team for, and what’s next?</h3><p class="step__d">Mandate and next step are team-level answers, so Plan leaves the roster off.</p></li>
+                <li class="step" data-step="3"><p class="step__k mono"><kbd>2</kbd> Prep</p><h3 class="step__t">Am I ready for the next 1:1?</h3><p class="step__d">A rhythm ring on every person and a countdown on every meeting, worst first.</p></li>
+                <li class="step" data-step="4"><p class="step__k mono"><kbd>3</kbd> Assess</p><h3 class="step__t">Is this going well? Only you can say.</h3><p class="step__d">Health is one call you make yourself, with a line of evidence behind it. It’s never derived, and after ninety days it says <em>stale</em>. Scan for one level and everything else dims, so the strain shows up inside the shape of the org.</p></li>
+                <li class="step" data-step="5"><p class="step__k mono"><kbd>4</kbd> Pray</p><h3 class="step__t">Who am I carrying?</h3><p class="step__d">A flame on everyone you’re praying for, dashed on the ones who’ve gone quiet.</p></li>
+              </ol>
+            </div>
+
+            <div class="people__vis" data-modes data-mode="plan">
+              <div class="modes__tabs" role="tablist" aria-label="Org tree mode">
+                <button role="tab" id="tab-plan" aria-controls="tree-panel" aria-selected="true" data-mode-tab="plan"><kbd>1</kbd>Plan</button>
+                <button role="tab" id="tab-prep" aria-controls="tree-panel" aria-selected="false" tabindex="-1" data-mode-tab="prep"><kbd>2</kbd>Prep</button>
+                <button role="tab" id="tab-assess" aria-controls="tree-panel" aria-selected="false" tabindex="-1" data-mode-tab="assess"><kbd>3</kbd>Assess</button>
+                <button role="tab" id="tab-pray" aria-controls="tree-panel" aria-selected="false" tabindex="-1" data-mode-tab="pray"><kbd>4</kbd>Pray</button>
+              </div>
+              <div class="chart-wrap" id="tree-panel" role="tabpanel" aria-labelledby="tab-plan" tabindex="0">
+                <svg class="chart" data-chart aria-hidden="true" focusable="false"></svg>
+                <div class="scanbar">
+                  <p data-lens="circles">Circles · you at the center</p>
+                  <p data-lens="tree">Tree · whoever you report to sits above you</p>
+                  <p data-lens="plan">Mandate and next step. The roster stays off.</p>
+                  <p data-lens="prep"><b class="mono">5 of 7</b> ready · <b class="mono">2</b> need prep · <b class="mono">3</b> undecided</p>
+                  <div data-lens="assess" class="scan">
+                    <div class="scan__chips" role="group" aria-label="Health scan: light one level">
+                      <button type="button" aria-pressed="false" data-scan-level="thriving"><i class="dot" style="--c:#6fcf97"></i>Thriving</button>
+                      <button type="button" aria-pressed="false" data-scan-level="solid"><i class="dot" style="--c:#8fc1b7"></i>Solid</button>
+                      <button type="button" aria-pressed="false" data-scan-level="watch"><i class="dot" style="--c:#e9b54c"></i>Watch</button>
+                      <button type="button" aria-pressed="true" data-scan-level="strained"><i class="dot" style="--c:#f08a5b"></i>Strained</button>
+                    </div>
+                    <p class="scan__note" aria-live="polite" data-scan-note>Strained: Product team and Owen stay lit. Nothing is hidden.</p>
+                  </div>
+                  <p data-lens="pray">Carrying <b class="mono">7</b> · prayed this week <b class="mono">3</b> · gone quiet <b class="mono">2</b></p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <ol class="pin__rail" aria-hidden="true" data-rail><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 10:45 Profiles ── -->
+    <section class="profile tone-light" aria-labelledby="profile-title" data-hour="10:45" data-pal="late-morning">
+      <i class="tide" aria-hidden="true"></i>
+      <div class="wrap profile__grid">
+        <div class="profile__copy">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">10:45</span>Profiles</p>
+          <h2 id="profile-title" class="h2" data-split>Read each person the way the assessments already do.</h2>
+          <p class="lede" data-reveal>Record someone’s CliftonStrengths top five, Enneagram and MBTI. Strengths show in Gallup’s own domain colors, so a chip here matches every report your people already have. Teams show their domain balance and their blind spots.</p>
+          <p class="lede" data-reveal>Alongside the profile: strengths, watch-outs, how to lead them, goals, dated notes and a topic board. There’s also an AI coach for each person.</p>
+          <ul class="domains" aria-label="The four CliftonStrengths domains" data-reveal>
+            <li style="--c:#7C3B8B">Executing</li><li style="--c:#DD7B2B">Influencing</li><li style="--c:#2D78BD">Relationship Building</li><li style="--c:#269364">Strategic Thinking</li>
+          </ul>
+        </div>
+
+        <figure class="pcard" data-assemble data-tilt aria-labelledby="pcard-cap">
+          <div class="pcard__head" data-piece="0">
+            <span class="avatar avatar--lg" aria-hidden="true">M</span>
+            <div><p class="pcard__name">Maya</p><p class="pcard__role">Design lead · Day job</p></div>
+            <span class="pill pill--thriving"><span class="meter meter--sm" data-level="5" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Thriving</span>
+          </div>
+          <p class="pcard__label">CliftonStrengths · top 5</p>
+          <ul class="strengths" aria-label="Top five strengths">
+            <li style="--c:#269364" data-piece="1">Strategic</li>
+            <li style="--c:#2D78BD" data-piece="2">Empathy</li>
+            <li style="--c:#269364" data-piece="3">Ideation</li>
+            <li style="--c:#DD7B2B" data-piece="4">Communication</li>
+            <li style="--c:#7C3B8B" data-piece="5">Achiever</li>
+          </ul>
+          <div class="pcard__row">
+            <div data-piece="6"><p class="pcard__label">Enneagram</p><p class="pcard__val">3w2</p></div>
+            <div data-piece="7"><p class="pcard__label">MBTI</p><p class="pcard__val">ENTJ</p></div>
+            <div data-piece="8"><p class="pcard__label">Domain mix</p><div class="donut" aria-hidden="true"><svg viewBox="0 0 36 36" width="44" height="44"><circle cx="18" cy="18" r="14" stroke="#269364" stroke-dasharray="35.2 52.8" /><circle cx="18" cy="18" r="14" stroke="#2D78BD" stroke-dasharray="17.6 70.4" stroke-dashoffset="-35.2" /><circle cx="18" cy="18" r="14" stroke="#DD7B2B" stroke-dasharray="17.6 70.4" stroke-dashoffset="-52.8" /><circle cx="18" cy="18" r="14" stroke="#7C3B8B" stroke-dasharray="17.6 70.4" stroke-dashoffset="-70.4" /></svg></div></div>
+          </div>
+          <div data-piece="9"><p class="pcard__label">How to lead her</p><p class="pcard__serif">Give her the why before the what. She’ll carry the room if she’s been heard first.</p></div>
+          <figcaption id="pcard-cap" class="sr-only">An example profile: five strengths in Gallup's domain colors, an Enneagram type, an MBTI type, a domain mix and a note on how to lead her.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ── 11:56 Readiness: pinned ── -->
+    <section class="ready tone-light" id="meetings" aria-labelledby="ready-title" data-hour="11:56" data-hold data-pal="noon">
+      <div class="pin pin--ready" data-pin="ready">
+        <div class="pin__stage ready__stage">
+          <div class="wrap ready__grid">
+            <div class="ready__copy">
+              <p class="eyebrow"><span class="eyebrow__t">11:56</span>Readiness · meetings</p>
+              <h2 id="ready-title" class="h2 h2--pin">You’re sitting down in four minutes. <em>Do you know what this meeting is for?</em></h2>
+              <ul class="checks" data-checks aria-label="The four readiness checks">
+                <li data-at="0"><span class="checks__box" aria-hidden="true"></span>On the books<small>a next one exists, booked or projected</small></li>
+                <li data-at="0.8"><span class="checks__box" aria-hidden="true"></span>Last one written up</li>
+                <li data-at="5.6"><span class="checks__box" aria-hidden="true"></span>Agenda has something queued</li>
+                <li data-at="6.2"><span class="checks__box" aria-hidden="true"></span>No overdue commitments</li>
+              </ul>
+              <p class="ready__lede">Give a meeting a rhythm and LeadWell projects the next one from the last, so nothing has to be on a calendar for the signal to work.</p>
+            </div>
+
+            <figure class="dial" data-dial data-state="loose" aria-labelledby="dial-cap">
+              <svg viewBox="0 0 320 320" class="dial__svg" aria-hidden="true" focusable="false">
+                <circle cx="160" cy="160" r="124" class="dial__track" />
+                <circle cx="160" cy="160" r="124" class="dial__window" transform="rotate(-90 160 160)" />
+                <circle cx="160" cy="160" r="124" class="dial__arc" data-dial-arc transform="rotate(-90 160 160)" />
+                <g data-dial-ticks></g>
+                <g class="dial__hand" data-dial-hand><circle cx="160" cy="36" r="9" /></g>
+                <circle cx="160" cy="160" r="98" class="dial__fill" />
+              </svg>
+              <div class="dial__read" aria-hidden="true">
+                <p class="mono dial__cd" data-dial-cd>~Thu · 7d</p>
+                <p class="dial__state" data-dial-state>Loose end</p>
+                <p class="dial__why" data-dial-why>Last Thursday’s 1:1 was never written up.</p>
+              </div>
+              <figcaption id="dial-cap" class="dial__cap">
+                <span class="mono">prep window = max(2 days, 25% of the rhythm)</span>
+                <span class="dial__cap-long">One week of a weekly 1:1. It starts as a loose end until the last one is written up, rests, turns to Prep due when the gold prep window opens, and reads Ready once all four checks pass.</span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+      <div class="wrap ready__after">
+        <ol class="ladder" data-reveal aria-label="The six readiness states, worst first">
+          <li><span class="ring-ico ring-ico--critical ring-ico--dot" aria-hidden="true"></span><b>Drifting</b><span>Past the rhythm, nothing next.</span></li>
+          <li><span class="ring-ico ring-ico--strained" aria-hidden="true"></span><b>Loose end</b><span>Met, never written up.</span></li>
+          <li><span class="ring-ico ring-ico--watch" aria-hidden="true"></span><b>Prep due</b><span>Window open, checklist not done.</span></li>
+          <li><span class="ring-ico ring-ico--thriving ring-ico--fill" aria-hidden="true"></span><b>Ready</b><span>Nothing to do. Show up.</span></li>
+          <li><span class="ring-ico ring-ico--solid" aria-hidden="true"></span><b>Resting</b><span>Met recently. Nothing owed.</span></li>
+          <li><span class="ring-ico ring-ico--dormant" aria-hidden="true"></span><b>Dormant</b><span>As-needed, floor not crossed.</span></li>
+        </ol>
+        <p class="ready__aside" data-reveal>Worst first, on purpose: not having seen someone outranks not having filed the notes. Cards roll up worst-of, never an average.</p>
+      </div>
+    </section>
+
+    <!-- ── 13:30 Ideas → Plan → Run: pinned ── -->
+    <section class="flow tone-light" aria-labelledby="flow-title" data-hour="13:30" data-hour-end="16:40" data-pal="afternoon">
+      <div class="pin pin--flow" data-pin="flow">
+        <div class="pin__stage flow__stage">
+          <div class="wrap">
+            <header class="flow__head">
+              <p class="eyebrow"><span class="eyebrow__t">13:30</span>A meeting · Ideas → Plan → Run</p>
+              <h2 id="flow-title" class="h2 h2--pin">Capture now. Place it on a week. <em>Run it beside them.</em></h2>
+            </header>
+            <p class="sr-only">An example: an idea captured as “Roadmap risks, tagged work, for the 1:1 with Tavi, flagged important” joins two waiting ideas. All three are dragged onto the eight-week plan for the 1:1, whose bands are Check-in, Work and Develop. The two placed on this week become Thursday’s agenda, beside the write-up.</p>
+            <div class="flow__grid" data-flow aria-hidden="true">
+              <article class="fcol">
+                <p class="fcol__k mono">Capture · <kbd>C</kbd></p>
+                <h3 class="fcol__t">Ideas</h3>
+                <p class="capture__field"><span data-typer-out></span><span class="caret"></span></p>
+                <p class="capture__legend"><span class="tok tok--tag">#tag</span><span class="tok tok--at">@meeting</span><span class="tok tok--bang">!</span></p>
+                <ul class="ideas" data-ideas><li data-slot="idea-0"></li><li data-slot="idea-1"></li><li data-slot="idea-2"></li></ul>
+              </article>
+              <article class="fcol">
+                <p class="fcol__k mono">Plan ahead · 8 weeks</p>
+                <h3 class="fcol__t">Plan</h3>
+                <div class="board" data-board>
+                  <div class="board__wk mono"><span></span><b>THU 22</b><b>29</b><b>5</b><b>12</b><b>19</b><b>26</b><b>3</b><b>10</b></div>
+                  <div class="board__row"><span>Check-in</span><i class="b" data-slot="plan-0"></i><i class="b"></i><i class="b"></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i></div>
+                  <div class="board__row"><span>Work</span><i class="b" data-slot="plan-1"></i><i class="o"></i><i class="s"></i><i class="o"></i><i class="e"></i><i class="o"></i><i class="e"></i><i class="o"></i></div>
+                  <div class="board__row"><span>Develop</span><i class="o"></i><i class="o"></i><i class="b" data-slot="plan-2"></i><i class="b"></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i></div>
+                </div>
+                <p class="fcol__d">Booked weeks are solid, weeks the rhythm only expects are dashed, and the coverage strip shows which bands keep getting skipped.</p>
+              </article>
+              <article class="fcol">
+                <p class="fcol__k mono">Run · Thu 22</p>
+                <h3 class="fcol__t">Run</h3>
+                <div class="run">
+                  <div class="run__agenda"><b>Agenda · Tavi</b><span class="run__band">Check-in</span><i class="run__slot" data-slot="run-0"></i><span class="run__band">Work</span><i class="run__slot" data-slot="run-1"></i><span class="run__band">Develop · next week</span></div>
+                  <div class="run__notes"><b>Write-up</b><p data-writeup></p></div>
+                </div>
+                <p class="fcol__d">If your notes already live in Notion or a shared doc, link it and they stay there.</p>
+              </article>
+              <span class="token token--new" data-token="0">Roadmap risks<em>#work</em></span>
+              <span class="token" data-token="1">30-day check-in<em>#check-in</em></span>
+              <span class="token" data-token="2">Offsite date<em>#develop</em></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 17:00 Leading up ── -->
+    <section class="up tone-light" aria-labelledby="up-title" data-hour="17:00" data-pal="late" data-scrub="up">
+      <div class="wrap up__grid">
+        <div>
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">17:00</span>Leading up</p>
+          <h2 id="up-title" class="h2" data-split>Leading down, you track their growth. <em>Leading up, you track your value.</em></h2>
+          <p class="lede" data-reveal>A board, a leadership team, the one leader you answer to: they sit above you in the tree, with the same check-ins, notes and topic board as everyone else. A topic for your boss is an ask, an escalation or a decision you need.</p>
+        </div>
+        <div class="up__cards">
+          <article class="sheet" data-up-card="0">
+            <h3 class="sheet__title">Operating manual</h3>
+            <dl class="sheet__dl">
+              <div data-up-row><dt>What they reward</dt><dd>Clarity before the meeting, not in it.</dd></div>
+              <div data-up-row><dt>Their anxieties</dt><dd>Surprises in front of the board.</dd></div>
+              <div data-up-row><dt>Their currency</dt><dd>Fewer moving parts.</dd></div>
+              <div data-up-row><dt>What their boss measures</dt><dd>Customer retention.</dd></div>
+            </dl>
+          </article>
+          <article class="sheet sheet--gilt" data-up-card="1">
+            <h3 class="sheet__title">Wins ledger</h3>
+            <ul class="wins">
+              <li data-up-win><span class="mono">Sep</span>Cut release prep from two days to one.</li>
+              <li data-up-win><span class="mono">Jul</span>Two new team leads trained and running on their own.</li>
+              <li data-up-win><span class="mono">May</span>Rebuilt the new-hire onboarding checklist.</li>
+            </ul>
+            <p class="sheet__foot">In their currency, ready before a review or an ask.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 18:20 Anywhere ── -->
+    <section class="anywhere tone-dark" aria-labelledby="anywhere-title" data-hour="18:20" data-pal="golden" data-scrub="search">
+      <i class="tide" aria-hidden="true"></i>
+      <div class="wrap anywhere__grid">
+        <div class="anywhere__copy">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">18:20</span>A basement, a plane, a hallway with two bars</p>
+          <h2 id="anywhere-title" class="h2" data-split>Walking in with ninety seconds to spare? <em class="gilt-text">Press ⌘K.</em></h2>
+          <p class="lede" data-reveal>One field over the whole workspace. Search lands you in the write-up, note or prayer entry where something was said, not on a profile you then have to dig through. It never touches the network.</p>
+          <ul class="feats" data-reveal>
+            <li><h3>Works offline</h3><p>Fonts, shell and your data are already on the device.</p></li>
+            <li><h3>Synced everywhere</h3><p>Sign in with Google and your workspace follows you.</p></li>
+            <li><h3>Private by design</h3><p>Every account is its own workspace, isolated by row-level security.</p></li>
+            <li><h3>Keyboard first</h3><p><kbd>C</kbd> to capture, <kbd>G</kbd> then a letter to jump, <kbd>?</kbd> for the rest.</p></li>
+          </ul>
+        </div>
+        <div class="palette" data-palette aria-hidden="true">
+          <p class="palette__field"><span class="mono palette__k">⌘K</span><span class="palette__q" data-palette-q></span><span class="caret caret--light"></span></p>
+          <ol class="palette__list" data-palette-list></ol>
+          <p class="palette__foot mono" data-palette-foot>prefix › word-start › mid-word › initials</p>
+        </div>
+        <p class="sr-only">An example search: typing “roadmap” letter by letter re-ranks the results, from people whose names start with R to the Roadmap review meeting, a Roadmap risks topic, and the write-up where the roadmap was discussed.</p>
+      </div>
+    </section>
+
+    <!-- ── 19:40 Nightfall: pinned ── -->
+    <section class="nightfall tone-night" aria-labelledby="nightfall-title" data-hour="19:40" data-hour-end="21:20" data-pal="dusk" data-pal-end="night">
+      <i class="tide" aria-hidden="true"></i>
+      <div class="pin pin--night" data-pin="night">
+        <div class="pin__stage nightfall__stage">
+          <div class="nightfall__still" aria-hidden="true"></div>
+          <div class="wrap nightfall__copy" data-night-copy>
+            <p class="eyebrow"><span class="eyebrow__t">19:40</span>Evening</p>
+            <h2 id="nightfall-title" class="nightfall__title" data-split>The last place in the day is the only one <em>that isn’t about them.</em></h2>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 21:30 Prayer ── -->
+    <section class="prayer tone-night" id="prayer" aria-labelledby="prayer-title" data-hour="21:30" data-pal="night">
+      <div class="wrap prayer__grid">
+        <div class="prayer__copy">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">21:30</span>Prayer · who you’re carrying</p>
+          <h2 id="prayer-title" class="h2" data-split>There is no scale, <em>and there is no score.</em></h2>
+          <p class="lede" data-reveal>Taking someone up in prayer is a deliberate act, and so is laying them down. LeadWell only measures the one honest thing it can: how long it’s been.</p>
+          <ul class="flames" data-reveal>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--fresh" /></svg><b>Prayed this week</b><span>Filled.</span></li>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--carrying" /></svg><b>Carrying</b><span>Outlined.</span></li>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--quiet" /></svg><b>Gone quiet</b><span>Dashed, after 21 days. The only one that asks anything of you.</span></li>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--answered" /><path d="M9.6 13.2l1.7 1.7 3.2-3.4" fill="none" stroke="#15122b" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg><b>Answered</b><span>Gilt. Never “done”.</span></li>
+          </ul>
+        </div>
+
+        <figure class="log" data-reveal="rise" data-tilt aria-labelledby="log-cap">
+          <div class="log__head">
+            <span class="avatar avatar--night" aria-hidden="true">M</span>
+            <div><p class="log__name">Mirel</p><p class="log__meta mono">carrying since March · prayed 2d ago</p></div>
+            <span class="log__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--fresh" /></svg>Mark prayed</span>
+          </div>
+          <ol class="log__entries">
+            <li><p class="log__kind mono">Burden · Oct 18</p><p class="log__text">Wisdom as she starts the new role, and rest after the move.</p></li>
+            <li><p class="log__kind mono">Burden · Oct 2</p><p class="log__text">Her dad’s surgery on the ninth.</p></li>
+            <li class="is-answered"><p class="log__kind mono"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--answered" /></svg>Answered · Sep 12</p><p class="log__text">A job close to home for her dad.</p><p class="log__answer">He started at the hospital in August.</p></li>
+          </ol>
+          <figcaption id="log-cap" class="log__cap">Written down, not checked off. Every entry is dated, so you can see what you carried and when.</figcaption>
+        </figure>
+      </div>
+      <blockquote class="pull wrap" data-reveal><p>Praying for four people out of forty is a true answer. Not carrying is never counted as a gap.</p></blockquote>
+    </section>
+
+    <!-- ── 22:40 The well, again ── -->
+    <section class="cta tone-night" aria-labelledby="cta-title" data-hour="22:40" data-pal="deep">
+      <div class="wrap cta__inner">
+        <h2 id="cta-title" class="cta__title" aria-label="Your people, your meetings, your prayer list. One quiet place.">
+          <span class="cta__words" data-split>Your people, your meetings, your prayer list.</span>
+          <svg class="letter letter--place" viewBox="60 -1560 12960 1940" aria-hidden="true" focusable="false" data-letter><path pathLength="1" d="M306 -456Q306 -242 400 -133Q494 -24 662 -24Q769 -24 862 -66Q955 -108 1032 -181Q1109 -254 1168 -348Q1228 -443 1270 -550Q1311 -656 1332 -765Q1354 -874 1354 -974Q1354 -1188 1260 -1297Q1167 -1406 998 -1406Q891 -1406 798 -1364Q705 -1322 628 -1249Q551 -1176 492 -1082Q432 -987 390 -880Q349 -774 328 -665Q306 -556 306 -456ZM1523 -908Q1523 -770 1482 -635Q1440 -500 1363 -382Q1286 -265 1180 -174Q1075 -83 947 -32Q819 20 675 20Q507 20 386 -46Q266 -111 202 -233Q137 -355 137 -522Q137 -660 178 -795Q220 -930 297 -1048Q374 -1165 480 -1256Q585 -1347 713 -1398Q841 -1450 986 -1450Q1154 -1450 1274 -1384Q1394 -1319 1458 -1198Q1523 -1076 1523 -908Z"/><path pathLength="1" d="M1610 -612 1599 -617Q1669 -780 1730 -873Q1791 -966 1852 -1004Q1912 -1043 1978 -1043Q2003 -1043 2022 -1040Q2040 -1038 2057 -1033Q2074 -1028 2092 -1020L1958 -592L1942 -588Q2026 -726 2094 -815Q2161 -904 2218 -954Q2276 -1004 2328 -1024Q2380 -1044 2433 -1044Q2523 -1044 2561 -1004Q2599 -963 2599 -904Q2599 -870 2588 -829Q2577 -788 2539 -697L2287 -78L2264 -108Q2294 -101 2343 -116Q2392 -132 2461 -182Q2530 -232 2619 -326L2628 -319Q2540 -196 2466 -122Q2392 -47 2330 -14Q2269 20 2219 20Q2157 20 2136 -6Q2114 -31 2139 -90L2387 -693Q2416 -763 2426 -794Q2437 -825 2437 -844Q2437 -878 2413 -896Q2389 -913 2342 -913Q2277 -913 2212 -871Q2148 -829 2092 -766Q2035 -702 1994 -636Q1954 -571 1936 -523L1761 0H1610L1901 -868Q1908 -887 1904 -901Q1900 -915 1882 -915Q1861 -915 1824 -890Q1786 -866 1732 -801Q1679 -736 1610 -612Z"/><path pathLength="1" d="M3258 -1006Q3191 -1006 3131 -958Q3071 -910 3022 -832Q2973 -754 2938 -660Q2902 -565 2882 -472Q2863 -379 2863 -304Q2863 -193 2902 -147Q2941 -101 3015 -101Q3074 -101 3131 -128Q3188 -155 3246 -220Q3304 -284 3364 -397L3375 -395Q3310 -233 3243 -142Q3176 -52 3106 -16Q3036 20 2962 20Q2881 20 2824 -10Q2767 -40 2736 -100Q2706 -159 2706 -246Q2706 -356 2736 -470Q2765 -583 2820 -686Q2874 -789 2948 -870Q3021 -950 3109 -997Q3197 -1044 3294 -1044Q3363 -1044 3405 -1022Q3447 -1000 3468 -962Q3488 -925 3488 -879Q3488 -835 3476 -791Q3463 -747 3434 -705Q3402 -686 3339 -660Q3276 -633 3195 -604Q3114 -575 3024 -548Q2934 -520 2848 -498L2853 -527Q2968 -564 3052 -598Q3135 -632 3192 -666Q3248 -699 3282 -734Q3316 -768 3332 -804Q3348 -841 3350 -881Q3354 -918 3344 -946Q3335 -975 3313 -990Q3291 -1006 3258 -1006Z"/><path pathLength="1" d="M4347 392 4602 -443H4613Q4515 -295 4440 -203Q4364 -111 4307 -63Q4250 -15 4206 2Q4163 20 4127 20Q4074 20 4034 -2Q3993 -23 3970 -64Q3947 -105 3947 -165Q3947 -264 3984 -382Q4021 -499 4085 -615Q4149 -731 4231 -828Q4313 -924 4405 -982Q4497 -1041 4589 -1041Q4651 -1041 4704 -1001Q4756 -961 4791 -882L4783 -851Q4754 -926 4716 -953Q4677 -980 4627 -980Q4554 -980 4480 -926Q4407 -872 4341 -784Q4275 -695 4223 -593Q4171 -491 4142 -392Q4112 -293 4112 -219Q4112 -155 4139 -128Q4166 -102 4209 -102Q4239 -102 4276 -118Q4313 -135 4360 -174Q4407 -213 4466 -280Q4525 -348 4598 -451L4753 -928L4785 -1024H4930L4498 392L4634 420L4627 445H4169L4176 420Z"/><path pathLength="1" d="M5491 -65 5589 -377 5600 -382Q5533 -272 5478 -196Q5422 -119 5372 -72Q5322 -24 5274 -2Q5225 20 5172 20Q5082 20 5045 -22Q5008 -64 5008 -125Q5008 -155 5016 -188Q5024 -222 5038 -261L5298 -946L5323 -912Q5303 -923 5258 -911Q5213 -899 5144 -849Q5075 -799 4984 -696L4975 -703Q5062 -826 5134 -901Q5207 -976 5268 -1010Q5329 -1044 5381 -1044Q5437 -1044 5457 -1019Q5477 -994 5454 -936L5200 -287Q5185 -249 5178 -223Q5171 -197 5171 -179Q5171 -141 5196 -126Q5220 -111 5266 -111Q5315 -111 5368 -144Q5420 -178 5469 -230Q5518 -282 5554 -340Q5591 -397 5609 -444L5804 -1024H5955L5635 -77L5616 -110Q5644 -101 5690 -117Q5735 -133 5797 -183Q5859 -233 5936 -324L5945 -318Q5824 -128 5728 -54Q5632 20 5560 20Q5513 20 5496 -2Q5478 -23 5491 -65Z"/><path pathLength="1" d="M6042 -90 6359 -947 6379 -915Q6352 -923 6308 -908Q6265 -893 6201 -844Q6137 -795 6046 -698L6037 -705Q6122 -826 6192 -900Q6263 -975 6324 -1010Q6384 -1044 6436 -1044Q6493 -1044 6508 -1016Q6523 -989 6504 -938L6186 -78L6161 -115Q6184 -102 6224 -112Q6265 -123 6332 -172Q6399 -222 6499 -326L6508 -319Q6422 -197 6350 -122Q6278 -47 6218 -14Q6159 20 6110 20Q6053 20 6037 -6Q6021 -31 6042 -90ZM6431 -1350Q6431 -1380 6446 -1406Q6460 -1432 6486 -1448Q6513 -1463 6550 -1463Q6605 -1463 6635 -1429Q6665 -1395 6665 -1350Q6665 -1318 6652 -1290Q6638 -1263 6612 -1246Q6587 -1228 6550 -1228Q6495 -1228 6463 -1266Q6431 -1303 6431 -1350Z"/><path pathLength="1" d="M7145 -1006Q7078 -1006 7018 -958Q6958 -910 6909 -832Q6860 -754 6824 -660Q6789 -565 6770 -472Q6750 -379 6750 -304Q6750 -193 6789 -147Q6828 -101 6902 -101Q6961 -101 7018 -128Q7075 -155 7133 -220Q7191 -284 7251 -397L7262 -395Q7197 -233 7130 -142Q7063 -52 6993 -16Q6923 20 6849 20Q6768 20 6711 -10Q6654 -40 6624 -100Q6593 -159 6593 -246Q6593 -356 6622 -470Q6652 -583 6706 -686Q6761 -789 6834 -870Q6908 -950 6996 -997Q7084 -1044 7181 -1044Q7250 -1044 7292 -1022Q7334 -1000 7354 -962Q7375 -925 7375 -879Q7375 -835 7362 -791Q7350 -747 7321 -705Q7289 -686 7226 -660Q7163 -633 7082 -604Q7001 -575 6911 -548Q6821 -520 6735 -498L6740 -527Q6855 -564 6938 -598Q7022 -632 7078 -666Q7135 -699 7169 -734Q7203 -768 7219 -804Q7235 -841 7237 -881Q7241 -918 7232 -946Q7222 -975 7200 -990Q7178 -1006 7145 -1006Z"/><path pathLength="1" d="M7507 -975 7523 -1024H8079L8066 -975ZM7615 -237Q7608 -213 7604 -196Q7599 -178 7597 -166Q7595 -155 7595 -146Q7595 -124 7607 -115Q7619 -106 7643 -106Q7667 -106 7704 -122Q7742 -139 7798 -188Q7854 -237 7930 -335L7939 -328Q7866 -216 7807 -147Q7748 -78 7700 -42Q7651 -6 7611 7Q7571 20 7538 20Q7493 20 7463 -6Q7433 -32 7433 -93Q7433 -114 7438 -148Q7444 -183 7467 -257L7792 -1270H7946Z"/><path pathLength="1" d="M8775 -256Q8768 -233 8764 -210Q8761 -186 8761 -165Q8761 -102 8790 -58Q8819 -15 8881 -15Q8940 -15 9005 -61Q9070 -107 9132 -186Q9193 -266 9242 -366Q9292 -467 9322 -576Q9351 -686 9351 -791Q9351 -868 9324 -902Q9297 -935 9248 -935Q9199 -935 9150 -908Q9102 -882 9056 -838Q9009 -794 8969 -738Q8929 -682 8898 -622Q8867 -562 8849 -505ZM8662 -122 8729 -95 8584 392 8747 420 8740 445H8283L8290 420L8432 392L8815 -868Q8822 -891 8817 -903Q8812 -915 8796 -915Q8775 -915 8738 -890Q8700 -866 8646 -801Q8593 -736 8524 -612L8513 -617Q8582 -780 8644 -873Q8705 -966 8766 -1004Q8826 -1043 8892 -1043Q8928 -1043 8954 -1038Q8979 -1032 9007 -1020L8877 -602H8863Q8955 -773 9036 -869Q9117 -965 9188 -1004Q9260 -1044 9323 -1044Q9419 -1044 9470 -990Q9520 -935 9520 -823Q9520 -702 9480 -581Q9441 -460 9374 -352Q9308 -244 9224 -160Q9141 -77 9052 -28Q8964 20 8881 20Q8786 20 8734 -20Q8682 -61 8662 -122Z"/><path pathLength="1" d="M9952 -1314Q9934 -1325 9908 -1339Q9883 -1353 9854 -1370Q9826 -1387 9797 -1404L9798 -1411L10149 -1484H10153L9704 -77L9683 -115Q9701 -103 9743 -114Q9785 -125 9854 -174Q9922 -222 10017 -323L10026 -316Q9940 -196 9868 -122Q9796 -48 9738 -14Q9680 20 9636 20Q9576 20 9559 -4Q9542 -28 9561 -88Z"/><path pathLength="1" d="M10592 -65 10714 -443H10725Q10630 -302 10558 -212Q10485 -121 10428 -70Q10371 -20 10326 0Q10280 20 10238 20Q10186 20 10145 -2Q10104 -23 10082 -64Q10059 -105 10059 -165Q10059 -271 10097 -391Q10135 -511 10201 -626Q10267 -741 10350 -834Q10432 -928 10522 -984Q10612 -1041 10699 -1041Q10756 -1041 10805 -1008Q10854 -975 10889 -910L10880 -885Q10853 -939 10818 -960Q10783 -980 10739 -980Q10673 -980 10602 -929Q10531 -878 10464 -794Q10396 -709 10342 -608Q10288 -506 10256 -404Q10224 -303 10224 -219Q10224 -156 10250 -129Q10277 -102 10321 -102Q10351 -102 10388 -118Q10425 -135 10472 -174Q10519 -213 10578 -280Q10637 -348 10709 -451L10872 -923L10907 -1024H11058L10740 -77L10718 -110Q10746 -101 10792 -117Q10837 -133 10899 -183Q10961 -233 11038 -324L11047 -318Q10926 -128 10830 -54Q10734 20 10662 20Q10615 20 10596 -2Q10578 -23 10592 -65Z"/><path pathLength="1" d="M11685 -1010Q11601 -1010 11528 -945Q11455 -880 11399 -774Q11343 -669 11312 -546Q11280 -422 11280 -304Q11280 -193 11316 -147Q11353 -101 11425 -101Q11480 -101 11536 -128Q11592 -155 11650 -220Q11707 -284 11766 -397L11777 -395Q11714 -234 11650 -144Q11585 -53 11516 -16Q11448 20 11373 20Q11254 20 11188 -47Q11123 -114 11123 -246Q11123 -400 11170 -543Q11218 -686 11301 -799Q11384 -912 11492 -978Q11600 -1044 11719 -1044Q11816 -1044 11860 -1006Q11904 -967 11904 -910Q11904 -866 11874 -830Q11844 -795 11792 -795Q11746 -795 11730 -818Q11714 -842 11729 -905Q11745 -968 11734 -989Q11724 -1010 11685 -1010Z"/><path pathLength="1" d="M12454 -1006Q12387 -1006 12327 -958Q12267 -910 12218 -832Q12169 -754 12134 -660Q12098 -565 12078 -472Q12059 -379 12059 -304Q12059 -193 12098 -147Q12137 -101 12211 -101Q12270 -101 12327 -128Q12384 -155 12442 -220Q12500 -284 12560 -397L12571 -395Q12506 -233 12439 -142Q12372 -52 12302 -16Q12232 20 12158 20Q12077 20 12020 -10Q11963 -40 11932 -100Q11902 -159 11902 -246Q11902 -356 11932 -470Q11961 -583 12016 -686Q12070 -789 12144 -870Q12217 -950 12305 -997Q12393 -1044 12490 -1044Q12559 -1044 12601 -1022Q12643 -1000 12664 -962Q12684 -925 12684 -879Q12684 -835 12672 -791Q12659 -747 12630 -705Q12598 -686 12535 -660Q12472 -633 12391 -604Q12310 -575 12220 -548Q12130 -520 12044 -498L12049 -527Q12164 -564 12248 -598Q12331 -632 12388 -666Q12444 -699 12478 -734Q12512 -768 12528 -804Q12544 -841 12546 -881Q12550 -918 12540 -946Q12531 -975 12509 -990Q12487 -1006 12454 -1006Z"/><path class="letter__swash" pathLength="1" d="M12620 -40C12350 220 11120 300 9900 276C9060 260 8600 236 8250 196L8246 212C8610 272 9070 310 9900 330C11150 362 12380 280 12650 -18Z"/><circle class="letter__drop" cx="12792" cy="-114" r="145"/></svg>
+        </h2>
+        <p class="lede" data-reveal>A new workspace starts with sample teams and people, so there’s something to look at on the first morning.</p>
+        <div class="cta__actions" data-reveal>
+          <a class="btn btn--google" href="/signin?google=1"><svg width="18" height="18" aria-hidden="true"><use href="#google" /></svg>Continue with Google</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot tone-night" data-pal="deep">
+    <div class="wrap foot__inner">
+      <a class="brand" href="#top" aria-label="LeadWell, back to top">
+        <svg class="brand__mark" width="24" height="24" aria-hidden="true"><use href="#mark" /></svg>
+        <span class="wordmark"><span class="wordmark__lead">Lead</span><span class="wordmark__well">Well</span></span>
+      </a>
+      <p>A quiet instrument for leading people well. At work, at church and at home.</p>
+      <a class="foot__link" href="/signin">Sign in</a>
+    </div>
+  </footer>
+</body>
+</html>

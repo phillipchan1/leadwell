@@ -99,6 +99,8 @@ function useRouteSync() {
 
   useEffect(() => {
     const path = location.pathname.replace(/\/$/, "");
+    // Sign-in is a door, not a place — don't treat it as Today.
+    if (path === "/signin") return;
     // `/people` is now a saved filter on the table. Old links, bookmarks and
     // anything already in someone's history keep working.
     if (path === LEGACY_PEOPLE_PATH) {
@@ -291,7 +293,16 @@ export default function App() {
   });
 
   const location = useLocation();
+  const navigate = useNavigate();
   const phase = useStore((s) => s.phase);
+  const signInPath = location.pathname.replace(/\/$/, "") === "/signin";
+
+  // `/signin` is only a door. Once there's a session, the app is Today.
+  useEffect(() => {
+    if (phase === "ready" && signInPath) {
+      navigate("/", { replace: true });
+    }
+  }, [phase, signInPath, navigate]);
   const tab = useStore((s) => s.tab);
   const setTab = useStore((s) => s.setTab);
   const focused = useStore((s) => s.focused);
@@ -360,7 +371,28 @@ export default function App() {
   if (phase === "loading") return <LoadingSplash />;
   // A network failure is not a sign-out — keep the session and offer a retry.
   if (phase === "error") return <LoadErrorScreen />;
-  if (phase === "anon") return <Login />;
+  if (phase === "anon") {
+    const path = location.pathname.replace(/\/$/, "") || "/";
+    const params = new URLSearchParams(location.search);
+    const isCallback =
+      params.has("code") ||
+      params.has("error") ||
+      params.has("error_description") ||
+      /access_token|refresh_token/.test(location.hash);
+    // Belt-and-suspenders: the index.html trampoline already sent `/` to
+    // `/landing/`. If React still mounted on `/` without an OAuth callback,
+    // send them there so the marketing page is what signed-out visitors see.
+    if ((path === "/" || path === "/landing") && !isCallback) {
+      const dest = "/landing/" + location.search + location.hash;
+      if (window.location.pathname + window.location.search + window.location.hash !== dest) {
+        window.location.replace(dest);
+      }
+      return null;
+    }
+    return (
+      <Login autoStartGoogle={path === "/signin" && params.get("google") === "1"} />
+    );
+  }
 
   const inSessionEditor = Boolean(sessionId);
   const inFocus = focused && Boolean(selected) && !inSessionEditor;

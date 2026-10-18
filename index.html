@@ -2,6 +2,79 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* Signed-out visitors to `/` go to the static landing without downloading
+         the app bundle. Signed-in users, every other route, and OAuth callbacks
+         load the app. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
+      (function () {
+        var LEADWELL_DEMO = false;
+        var SUPABASE_REF = "";
+        function loadApp() {
+          // LEADWELL_LOAD_APP
+        }
+        function isCallback(q, h) {
+          return (
+            /(?:^|[?&])(?:code|error|error_description)=/.test(q) ||
+            /access_token|refresh_token/.test(h)
+          );
+        }
+        function hasSession() {
+          if (!SUPABASE_REF) return false;
+          try {
+            var raw = localStorage.getItem("sb-" + SUPABASE_REF + "-auth-token");
+            if (!raw) return false;
+            var v = JSON.parse(raw);
+            var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+            return Boolean(token);
+          } catch (e) {}
+          return false;
+        }
+        function setHop(v) {
+          try { sessionStorage.setItem("lw-boot", v); } catch (e) {}
+        }
+        function clearHop() {
+          try { sessionStorage.removeItem("lw-boot"); } catch (e) {}
+        }
+        function fromParam(q) {
+          try {
+            return new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q).get("from") || "";
+          } catch (e) { return ""; }
+        }
+        function stripFrom(q) {
+          try {
+            var p = new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q);
+            p.delete("from");
+            var s = p.toString();
+            return s ? "?" + s : "";
+          } catch (e) { return q; }
+        }
+        function withFrom(q, value) {
+          try {
+            var p = new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q);
+            p.set("from", value);
+            return "?" + p.toString();
+          } catch (e) { return (q ? q + (q.indexOf("?") >= 0 ? "&" : "?") : "?") + "from=" + value; }
+        }
+        if (LEADWELL_DEMO) {
+          loadApp();
+          return;
+        }
+        var path = location.pathname.replace(/\/$/, "") || "/";
+        var q = location.search;
+        var h = location.hash;
+        var cleanQ = stripFrom(q);
+        if (path !== "/" || isCallback(cleanQ, h) || hasSession()) {
+          if (fromParam(q)) history.replaceState(null, "", location.pathname + cleanQ + h);
+          clearHop();
+          loadApp();
+          return;
+        }
+        /* No matching session. Show the landing. `from=root` / hop=root tell
+           the landing boot not to send us back if a foreign-ref token is present. */
+        setHop("root");
+        location.replace("/landing/" + withFrom(cleanQ, "root") + h);
+      })();
+    </script>
     <!-- viewport-fit=cover exposes env(safe-area-inset-*) on notched iPhones;
          interactive-widget makes the Android keyboard resize the layout
          instead of overlaying it. -->

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>LeadWell</title>
+  <rect width="48" height="48" rx="13" fill="#114143"/>
+  <circle cx="24" cy="24" r="15" fill="none" stroke="#ACC3C1" stroke-opacity="0.45" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="72 22.25" transform="rotate(-20 24 24)"/>
+  <circle cx="24" cy="24" r="9" fill="none" stroke="#ACC3C1" stroke-width="2.4"/>
+  <circle cx="24" cy="24" r="3.8" fill="#E1B34D"/>
+</svg>

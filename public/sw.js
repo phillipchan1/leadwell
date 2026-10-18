@@ -8,13 +8,22 @@
  *
  * Bump CACHE_VERSION to evict every cache on the next deploy.
  */
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v6";
 const SHELL_CACHE = `leadwell-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `leadwell-assets-${CACHE_VERSION}`;
 const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE];
 
 const SHELL_URLS = [
   "/",
+  "/landing/",
+  "/landing/index.html",
+  "/landing/landing.css",
+  "/landing/landing.js",
+  "/landing/assets/fonts/newsreader.woff2",
+  "/landing/assets/fonts/newsreader-italic.woff2",
+  "/landing/assets/fonts/instrument-sans.woff2",
+  "/landing/assets/fonts/plex-mono-400.woff2",
+  "/landing/assets/fonts/plex-mono-500.woff2",
   "/offline.html",
   "/manifest.webmanifest",
   "/icon-192.png",
@@ -61,11 +70,13 @@ async function shellFirst(request) {
   const cache = await caches.open(SHELL_CACHE);
   try {
     const response = await fetch(request);
-    if (response.ok) cache.put("/", response.clone());
+    if (response.ok) cache.put(request, response.clone());
     return response;
   } catch {
     return (
+      (await cache.match(request)) ??
       (await cache.match("/")) ??
+      (await cache.match("/landing/")) ??
       (await cache.match("/offline.html")) ??
       new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } })
     );
