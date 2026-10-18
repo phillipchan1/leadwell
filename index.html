@@ -8,6 +8,7 @@
          load the app. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
       (function () {
         var LEADWELL_DEMO = false;
+        var SUPABASE_REF = "";
         function loadApp() {
           // LEADWELL_LOAD_APP
         }
@@ -18,17 +19,41 @@
           );
         }
         function hasSession() {
+          if (!SUPABASE_REF) return false;
           try {
-            for (var i = 0; i < localStorage.length; i++) {
-              var k = localStorage.key(i);
-              if (!k || k.indexOf("sb-") !== 0 || k.indexOf("-auth-token") === -1) continue;
-              if (k.indexOf("code-verifier") !== -1) continue;
-              var v = JSON.parse(localStorage.getItem(k) || "null");
-              var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
-              if (token) return true;
-            }
+            var raw = localStorage.getItem("sb-" + SUPABASE_REF + "-auth-token");
+            if (!raw) return false;
+            var v = JSON.parse(raw);
+            var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+            return Boolean(token);
           } catch (e) {}
           return false;
+        }
+        function setHop(v) {
+          try { sessionStorage.setItem("lw-boot", v); } catch (e) {}
+        }
+        function clearHop() {
+          try { sessionStorage.removeItem("lw-boot"); } catch (e) {}
+        }
+        function fromParam(q) {
+          try {
+            return new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q).get("from") || "";
+          } catch (e) { return ""; }
+        }
+        function stripFrom(q) {
+          try {
+            var p = new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q);
+            p.delete("from");
+            var s = p.toString();
+            return s ? "?" + s : "";
+          } catch (e) { return q; }
+        }
+        function withFrom(q, value) {
+          try {
+            var p = new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q);
+            p.set("from", value);
+            return "?" + p.toString();
+          } catch (e) { return (q ? q + (q.indexOf("?") >= 0 ? "&" : "?") : "?") + "from=" + value; }
         }
         if (LEADWELL_DEMO) {
           loadApp();
@@ -37,11 +62,17 @@
         var path = location.pathname.replace(/\/$/, "") || "/";
         var q = location.search;
         var h = location.hash;
-        if (path !== "/" || isCallback(q, h) || hasSession()) {
+        var cleanQ = stripFrom(q);
+        if (path !== "/" || isCallback(cleanQ, h) || hasSession()) {
+          if (fromParam(q)) history.replaceState(null, "", location.pathname + cleanQ + h);
+          clearHop();
           loadApp();
           return;
         }
-        location.replace("/landing/" + q + h);
+        /* No matching session. Show the landing. `from=root` / hop=root tell
+           the landing boot not to send us back if a foreign-ref token is present. */
+        setHop("root");
+        location.replace("/landing/" + withFrom(cleanQ, "root") + h);
       })();
     </script>
     <!-- viewport-fit=cover exposes env(safe-area-inset-*) on notched iPhones;

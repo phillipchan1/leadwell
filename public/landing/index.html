@@ -7,27 +7,62 @@
     /* Signed-in visitors belong in the app. OAuth also returns to `/`, so a
        code on this URL is sent there too — the React client picks it up. */
     (function () {
+      var SUPABASE_REF = "";
       var q = location.search;
       var h = location.hash;
-      var callback = /(?:^|[?&])(?:code|error|error_description)=/.test(q) || /access_token|refresh_token/.test(h);
-      var signedIn = false;
-      try {
-        for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i);
-          if (!k || k.indexOf("sb-") !== 0 || k.indexOf("-auth-token") === -1) continue;
-          if (k.indexOf("code-verifier") !== -1) continue;
-          var v = JSON.parse(localStorage.getItem(k) || "null");
+      function hasSession() {
+        if (!SUPABASE_REF) return false;
+        try {
+          var raw = localStorage.getItem("sb-" + SUPABASE_REF + "-auth-token");
+          if (!raw) return false;
+          var v = JSON.parse(raw);
           var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
-          if (token) { signedIn = true; break; }
-        }
-      } catch (e) {}
-      if (signedIn || callback) {
-        location.replace("/" + q + h);
+          return Boolean(token);
+        } catch (e) {}
+        return false;
+      }
+      function hop() {
+        try { return sessionStorage.getItem("lw-boot") || ""; } catch (e) { return ""; }
+      }
+      function setHop(v) {
+        try { sessionStorage.setItem("lw-boot", v); } catch (e) {}
+      }
+      function clearHop() {
+        try { sessionStorage.removeItem("lw-boot"); } catch (e) {}
+      }
+      function fromParam(search) {
+        try {
+          return new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search).get("from") || "";
+        } catch (e) { return ""; }
+      }
+      function stripFrom(search) {
+        try {
+          var p = new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search);
+          p.delete("from");
+          var s = p.toString();
+          return s ? "?" + s : "";
+        } catch (e) { return search; }
+      }
+      function withFrom(search, value) {
+        try {
+          var p = new URLSearchParams(search.charAt(0) === "?" ? search.slice(1) : search);
+          p.set("from", value);
+          return "?" + p.toString();
+        } catch (e) { return (search ? search + "&" : "?") + "from=" + value; }
+      }
+      var callback = /(?:^|[?&])(?:code|error|error_description)=/.test(q) || /access_token|refresh_token/.test(h);
+      var came = fromParam(q) || hop();
+      var cleanQ = stripFrom(q);
+      var signedIn = hasSession();
+      if (callback || (signedIn && came !== "root")) {
+        setHop("landing");
+        location.replace("/" + withFrom(cleanQ, "landing") + h);
         return;
       }
+      clearHop();
       /* Keep the public URL at `/` so the marketing page is what `/` is. */
       if (location.pathname.indexOf("/landing") === 0) {
-        history.replaceState(null, "", "/" + q + h);
+        history.replaceState(null, "", "/" + cleanQ + h);
       }
     })();
   </script>
