@@ -453,6 +453,7 @@ html:not(.js) .token { display: none; }
 .feats p { font-size: 15px; color: var(--fg-2); }
 .feats kbd { font-size: 11px; }
 .palette { border-radius: 18px; overflow: hidden; background: rgba(3, 26, 28, .82); border: 1px solid rgba(225, 179, 77, .22); box-shadow: 0 50px 90px -40px rgba(0, 0, 0, .85), 0 0 0 6px rgba(225, 179, 77, .04); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+@media (prefers-reduced-transparency: reduce) { .palette { -webkit-backdrop-filter: none; backdrop-filter: none; } }
 .palette__field { display: flex; align-items: center; gap: 12px; padding: 18px 20px; font-size: 19px; border-bottom: 1px solid var(--leather-line); color: var(--leather-fg); }
 .palette__k { padding: 3px 7px; border-radius: 6px; border: 1px solid var(--leather-line); font-size: 12px; color: var(--leather-ink); }
 .palette__q { min-width: 1px; }
