@@ -479,12 +479,13 @@ html.motion .nightfall__stage { align-items: start; }
 .nightfall__still { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(9vmin 9vmin at 50% 66%, #ffcf86, rgba(255, 160, 96, .5) 60%, rgba(255, 160, 96, 0)) , radial-gradient(60% 12% at 50% 63%, rgba(232, 135, 92, .55), rgba(232, 135, 92, 0)), repeating-linear-gradient(180deg, rgba(255, 196, 120, .16) 0 2px, rgba(0, 0, 0, 0) 2px 11px) 50% 63% / 22vmin 37% no-repeat, linear-gradient(180deg, #1c1a44 0%, #3a2d5e 40%, #b9587a 62.6%, #2a2350 62.7%, #1b1736 100%); }
 .nightfall__copy { position: relative; isolation: isolate; display: grid; justify-items: center; margin: 120px auto; text-align: center; }
 html.motion .nightfall__copy { margin: 12vh auto 0; }
-/* A dusk scrim behind the copy. landing.js deepens it while the sun is up and
-   thins it once the stars are out, so the headline holds 4.5:1 in every frame. */
-.nightfall__copy::before { content: ""; position: absolute; z-index: -1; left: 50%; top: 50%; width: min(1180px, 160%); height: 230%; translate: -50% -50%; pointer-events: none; background: radial-gradient(closest-side, rgba(14, 11, 32, .94), rgba(14, 11, 32, .8) 45%, rgba(14, 11, 32, .35) 75%, rgba(14, 11, 32, 0)); opacity: var(--scrim, .5); }
+/* A dusk scrim behind the copy. Tight feathered core (~0.6–0.7 while the sun
+   is up), not a rectangular halo. landing.js follows the sun and thins it
+   once the stars are out; the core stays dark enough for 4.5:1. */
+.nightfall__copy::before { content: ""; position: absolute; z-index: -1; left: 50%; top: 46%; width: min(42em, 108%); height: 155%; translate: -50% -50%; pointer-events: none; background: radial-gradient(ellipse 48% 38% at 50% 46%, rgba(14, 11, 32, .88) 0%, rgba(14, 11, 32, .55) 32%, rgba(14, 11, 32, .22) 58%, rgba(14, 11, 32, 0) 100%); opacity: var(--scrim, .55); }
 .nightfall .eyebrow { color: #dcd6f0; }
 .nightfall .eyebrow::before { display: none; }
-.nightfall__title { max-width: 17ch; font: 400 clamp(32px, 4.2vw, 60px)/1.06 var(--serif); letter-spacing: -.02em; text-wrap: balance; color: var(--night-fg); text-shadow: 0 2px 24px rgba(14, 11, 32, .7); }
+.nightfall__title { max-width: 17ch; font: 400 clamp(32px, 4.2vw, 60px)/1.06 var(--serif); letter-spacing: -.02em; text-wrap: balance; color: var(--night-fg); text-shadow: 0 1px 8px rgba(14, 11, 32, .9), 0 2px 28px rgba(14, 11, 32, .55); }
 .nightfall__title em { color: #d9cffb; }
 
 /* ── Prayer ─────────────────────────────────────────────────────────── */

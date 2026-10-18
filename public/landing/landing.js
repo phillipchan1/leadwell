@@ -370,7 +370,7 @@ setTimeout(() => {
     const moonX = (W < 700 ? 0.88 : 0.78) * W;
     day.moon = [moonX, 0, 0];
     day.sun = [0.5 * W, 0, Math.min(W, H) * 0.062, 0];
-    day.night = day.minute >= 21 * 60 + 5;
+    day.night = false;
     if (!nf) return;
     const r = day.sun[2];
     let p = -1;
@@ -399,25 +399,37 @@ setTimeout(() => {
     if (p >= 0) {
       const s = skyAt(still ? p : Math.min(1, p));
       day.sky = s;
-      // The sun never climbs into the headline: its disc and the brightest of
-      // its glow stay under the copy, however tall the copy wraps.
+      // Astronomical height (radii above the horizon) decides night, stars and
+      // the header pill. The headline cap only limits how high the disc rides —
+      // it must not report the sun as set while the disc is still in the sky.
+      // (R3 used the capped height for all four, so the tilt-up at ~20:25 read
+      // as night, then the sun set at 20:50, then night again.)
+      const astro = s.sh;
       const cap = still ? 9 : (day.hz - nightClear) / r - 1.9;
-      const h = Math.min(s.sh, cap);
-      day.sun = [0.5 * W, day.hz - h * r, r, clamp((h + 2.4) / 1.4)];
-      day.stars = clamp((-1 - h) / 0.7);
-      day.night = h < -1;
-      const ma = clamp((p - 0.74) / 0.2);
+      const under = astro < -1;
+      let visH = astro;
+      if (day.tilt > 0.92 && cap < astro) visH = under ? astro : Math.max(cap, -0.92);
+      day.sun = [0.5 * W, day.hz - visH * r, r, clamp((astro + 2.4) / 1.4)];
+      day.stars = under ? clamp((-1 - astro) / 0.7) : 0;
+      day.night = under;
+      const ma = under ? (still ? 0.8 : clamp((p - 0.74) / 0.2)) : 0;
       const rise = still ? 0.3 * H : clamp(day.hz - nightClear - 30, 0.08 * H, 0.3 * H);
-      day.moon = [moonX, day.hz - lerp(0.05 * H, rise, ma), still ? 0.8 : ma];
-      if (pr && y > pr.top - H) {
-        day.stars = 1;
-        day.moon[2] = 1;
-        day.moon[1] = day.hz - rise;
+      day.moon = [moonX, day.hz - lerp(0.05 * H, rise, ma), ma];
+      if (pr) {
+        // Kill the last of the sun's glint before Prayer takes the screen.
+        const gone = clamp((y + H - pr.top) / Math.max(1, H * 0.8));
+        day.sun[3] *= 1 - gone;
+        if (y > pr.top - H) {
+          day.stars = 1;
+          day.moon[2] = 1;
+          day.moon[1] = day.hz - rise;
+        }
       }
     }
     if (ct && y + H * 0.5 > ct.top) {
       day.stars = 1;
       day.night = true;
+      day.sun[3] = 0;
     }
   }
 
@@ -520,7 +532,9 @@ void main(){
       g += env * (cos(ph) * 0.085 - sin(ph) * x / 2100.0) * (v / r) * 6.0;
     }
     vec3 top = base;
-    if (tilt < 0.999) {
+    // Once the view has tilted to the horizon, this water is mixed away.
+    // Skip the caustic loop on those frames (Nightfall is the heavy path).
+    if (tilt < 0.62) {
       float c = caustic((w + g * 46.0) / 620.0, uT * 0.33);
       top = base + (lite - base) * c * prm.x;
       float sl = dot(g, vec2(-0.6, -0.8));
@@ -545,7 +559,8 @@ void main(){
       float sunVis = uSun.w * clamp((hz - uSun.y + uSun.z) / (2.0 * uSun.z), 0.0, 1.0);
       float n1 = sin(w.x * 0.07 + sin(w.y * 0.05 + uT) * 2.0 + uT * 1.3) * sin(w.y * 0.13 - uT * 1.1 + sin(w.x * 0.03) * 2.0);
       float gl = smoothstep(0.5, 0.95, n1 + g.y * 10.0);
-      hor += uSunC * gl * exp(-pow((p.x - uSun.x) / colW, 2.0)) * (0.4 + 1.2 * sunVis) * (0.45 + 0.55 * (1.0 - near));
+      // No floor: a 0.4 leftover kept a warm glint column under Prayer after the sun was gone.
+      hor += uSunC * gl * exp(-pow((p.x - uSun.x) / colW, 2.0)) * (1.6 * sunVis) * (0.45 + 0.55 * (1.0 - near));
       hor += vec3(0.85, 0.85, 1.0) * gl * exp(-pow((p.x - uNt.z) / (colW * 0.55), 2.0)) * uNt.y * 0.55;
     }
     col = mix(top, hor, smoothstep(0.0, 1.0, tilt));
@@ -613,8 +628,8 @@ void main(){
     const soft = /swiftshader|llvmpipe|software|basic render/i.test(renderer);
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     water.soft = soft;
-    water.scale = soft ? 0.3 : coarse ? 0.5 : 0.6;
-    water.minScale = soft ? 0.2 : 0.3;
+    water.scale = soft ? 0.22 : coarse ? 0.45 : 0.55;
+    water.minScale = soft ? 0.16 : 0.28;
     water.q = soft ? 2 : 3;
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -822,10 +837,10 @@ void main(){
   // frames gets smaller still (a few late frames in a second is enough).
   function adapt(dt) {
     if (!water.ready || still || dt > 250) return;
-    if (dt > 20) water.slow++;
-    if (++water.n < 60) return;
-    if (water.slow > 3 && water.scale > water.minScale) {
-      water.scale = Math.max(water.minScale, water.scale * 0.85);
+    if (dt > 18) water.slow++;
+    if (++water.n < 24) return;
+    if (water.slow > 1 && water.scale > water.minScale) {
+      water.scale = Math.max(water.minScale, water.scale * 0.8);
       resizeWater();
     }
     water.n = 0;
@@ -869,7 +884,7 @@ void main(){
       clockTime.textContent = fmt(day.minute);
     }
     paintStamps(day.minute);
-    // The moon comes out the moment the sun's top edge goes under the water.
+    // The moon comes out the moment the sun's disc is under the horizon.
     if (day.night !== lastNight) {
       lastNight = day.night;
       clockEl.classList.toggle("is-night", day.night);
@@ -1249,6 +1264,18 @@ void main(){
     { id: "a", kind: "person", ini: "A", name: "Ana", parent: "p", rr: ["thriving", 0.64, true], h: "solid", lv: 4 },
     { id: "r", kind: "person", ini: "R", name: "Ravi", parent: "p", rr: ["thriving", 0.7, true], h: "thriving", lv: 5, fl: "fresh" },
   ];
+  // Every named persona's glyph is the first letter of their name.
+  PEOPLE.forEach((n) => {
+    const src = (n.name || n.lbl || "").trim();
+    if (src) n.ini = src.charAt(0);
+  });
+  $$(".avatar").forEach((el) => {
+    const box = el.closest(".pcard__head, .log__head");
+    const name = box && box.querySelector(".pcard__name, .log__name");
+    if (!name) return;
+    const want = name.textContent.trim().charAt(0);
+    if (want) el.textContent = want;
+  });
   const LV = { thriving: 5, solid: 4, watch: 3, strained: 2 };
   const CIRCLE_ANGLE = { up: -90, w: 0, p: 90, d: 180, m: 166, t: 194, i: -13, l: 13, o: 74, a: 90, r: 106 };
 
@@ -1950,7 +1977,11 @@ void main(){
   // thins to let them through.
   function paintNight() {
     if (!nightCopy) return;
-    const c = still ? 0.5 : clamp(0.42 + 0.5 * day.sun[3] * (1 - day.stars));
+    // Follow the sun: ~0.66 while the disc is up, ~0.4 once the stars are out.
+    // The gradient itself is a tight feathered core (not a rectangle); this is
+    // only how strongly that core sits.
+    const up = clamp(day.sun[3] * (1 - day.stars));
+    const c = still ? 0.52 : clamp(0.40 + 0.26 * up);
     if (Math.abs(c - nightC) < 0.002) return;
     nightC = c;
     nightCopy.style.setProperty("--scrim", c.toFixed(3));
@@ -2046,7 +2077,10 @@ void main(){
       paintSheen(t);
       // Water: every frame while something moves, every other frame at rest
       // (rings still spreading count as moving, except on a software renderer).
-      const live = moved || (!water.soft && drops.some((d) => t - d.t0 < 4));
+      // SwiftShader also skips alternate scroll frames: the fragment shader is
+      // the stall, and a 30fps water layer still reads as continuous.
+      const rings = !water.soft && drops.some((d) => t - d.t0 < 4);
+      const live = water.soft ? frames % 2 === 0 : moved || rings;
       if (live || frames % 2 === 0) renderWater(t);
       raf = requestAnimationFrame(tick);
     } else {
@@ -2177,4 +2211,14 @@ void main(){
     setTimeout(begin, 300);
   }, { once: true });
   clock0 = performance.now();
+  window.__leadwellDay = () => ({
+    minute: day.minute,
+    clock: fmt(day.minute),
+    night: !!day.night,
+    stars: +day.stars.toFixed(3),
+    sun: +day.sun[3].toFixed(3),
+    moon: +day.moon[2].toFixed(3),
+    tilt: +day.tilt.toFixed(3),
+    scrim: +nightC.toFixed(3),
+  });
 }, 0);
