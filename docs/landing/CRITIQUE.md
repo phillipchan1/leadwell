@@ -1,3 +1,17 @@
+# Critique: revision 4 against SOTD-REVIEW-R3
+
+Round 3 failed narrowly: average 7.9, creativity 7.8 (needs 8). The jury’s five punches, measured here on headless Chromium + SwiftShader (not a real GPU):
+
+1. **Nightfall order.** Stars, moon, and the header pill follow the sun’s real height (`astro`), not the headline cap. 20:25 is dusk with the sun up (stars = 0, moon = 0, sun icon); 20:50 is the disc on the horizon; 21:15 is night. Same at 1440 and 390.
+2. **Scrim.** Tight feathered ellipse, JS opacity ~0.66 while the sun is up and ~0.40 after the stars, not a 0.92 rectangular halo.
+3. **Afterglow.** The shader’s 0.4 sun-glint floor is gone; `sun[3]` is faded to 0 before Prayer. Only the moon column remains.
+4. **Avatars.** Mirel is `M`. Every named persona’s glyph is the first letter of their name (DOM + People chart).
+5. **390 / 60s rAF scroll (SwiftShader, not a real GPU):** n=3601, median 16.7 ms, **p95 16.7 ms**, **0 frames >20 ms**, **0 >34 ms**. 1440: p95 16.7 ms, 0 >34 ms, 14 frames >20 ms (max 33.4). There is no M-series or Pixel-class GPU in this environment.
+
+Boot path, signed-out `/` (no `index-*.js`), and Google CTAs (`/signin?google=1`) are unchanged.
+
+---
+
 # Critique: revision 3 against SOTD-REVIEW-R2
 
 > "It must be beautiful enough to win an Awwwards Site of the Day: Awwwards SOTD-caliber, with cutting-edge motion and graphics, a distinctive concept, and polished scroll choreography, while staying performant and accessible."

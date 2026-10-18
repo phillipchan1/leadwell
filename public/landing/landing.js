@@ -386,7 +386,9 @@ setTimeout(() => {
       }
     } else if (y >= nf.top - 1) {
       p = pinProgress("night", y);
-      const down = smooth(clamp(p / 0.16));
+      // Finish the tilt before 20:25 (early in the pin) so the sun is on
+      // screen while it is still up, instead of a dark empty sky.
+      const down = smooth(clamp(p / 0.04));
       day.tilt = down;
       day.hz = lerp(-0.04, hzF, down) * H;
       if (ct && y + H > ct.top) {
@@ -560,7 +562,7 @@ void main(){
       float n1 = sin(w.x * 0.07 + sin(w.y * 0.05 + uT) * 2.0 + uT * 1.3) * sin(w.y * 0.13 - uT * 1.1 + sin(w.x * 0.03) * 2.0);
       float gl = smoothstep(0.5, 0.95, n1 + g.y * 10.0);
       // No floor: a 0.4 leftover kept a warm glint column under Prayer after the sun was gone.
-      hor += uSunC * gl * exp(-pow((p.x - uSun.x) / colW, 2.0)) * (1.6 * sunVis) * (0.45 + 0.55 * (1.0 - near));
+      if (sunVis > 0.001) hor += uSunC * gl * exp(-pow((p.x - uSun.x) / colW, 2.0)) * (1.6 * sunVis) * (0.45 + 0.55 * (1.0 - near));
       hor += vec3(0.85, 0.85, 1.0) * gl * exp(-pow((p.x - uNt.z) / (colW * 0.55), 2.0)) * uNt.y * 0.55;
     }
     col = mix(top, hor, smoothstep(0.0, 1.0, tilt));
@@ -795,12 +797,14 @@ void main(){
       wg.addColorStop(1, css(day.p1.base));
       ctx.fillStyle = wg;
       ctx.fillRect(0, hz, w, Math.max(0, bottom - hz));
-      for (let i = 0; i < 22; i++) {
-        const y = hz + 4 + Math.pow(i / 22, 1.6) * (bottom - hz) * 0.8;
-        const jitter = Math.sin(i * 12.9 + t * 1.3) * (6 + i * 1.5);
-        const len = (14 + i * 4) * (0.6 + 0.4 * Math.sin(i * 3.1 + t));
-        ctx.fillStyle = css(day.sky.s, (0.5 - i / 50) * (0.35 + 0.65 * day.sun[3]));
-        ctx.fillRect(day.sun[0] - len / 2 + jitter, y, len, 2);
+      if (day.sun[3] > 0.02) {
+        for (let i = 0; i < 22; i++) {
+          const y = hz + 4 + Math.pow(i / 22, 1.6) * (bottom - hz) * 0.8;
+          const jitter = Math.sin(i * 12.9 + t * 1.3) * (6 + i * 1.5);
+          const len = (14 + i * 4) * (0.6 + 0.4 * Math.sin(i * 3.1 + t));
+          ctx.fillStyle = css(day.sky.s, (0.5 - i / 50) * day.sun[3]);
+          ctx.fillRect(day.sun[0] - len / 2 + jitter, y, len, 2);
+        }
       }
       ctx.globalAlpha = 1;
     }
