@@ -22,7 +22,7 @@ import type {
 } from "../types";
 
 export const seedMe: Me = {
-  name: "Phil Chan",
+  name: "Alex Rivera",
   title: "Leader",
   assessments: {},
   strengths: [],
@@ -770,7 +770,7 @@ Feeling stretched thin. We talked about delegating Sunday setup so she can focus
 - Sarah keeps final call on song selection
 
 ## Commitments
-- Phil: Affirm Elena publicly when she takes setup
+- Alex: Affirm Elena publicly when she takes setup
 - Sarah: Draft a simple setup checklist by next 1:1
 
 ## Personal notes
