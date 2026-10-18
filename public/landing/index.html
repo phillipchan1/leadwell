@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>LeadWell — A quiet instrument for leading people well</title>
+  <meta name="description" content="LeadWell keeps the teams and people you lead in one place — their profiles, your meetings, how they're doing and who you're praying for. At work, at church and at home." />
+  <meta name="theme-color" content="#013133" />
+  <meta property="og:title" content="LeadWell — A quiet instrument for leading people well" />
+  <meta property="og:description" content="Your people, your meetings and your prayer list, in one private workspace. At work, at church and at home." />
+  <link rel="icon" type="image/svg+xml" href="assets/mark.svg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400..700&family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="landing.css" />
+  <script>
+    /* Signed-in visitors belong in the app. OAuth also returns to `/`, so a
+       code on this URL is sent there too — the React client picks it up. */
+    (function () {
+      var q = location.search;
+      var h = location.hash;
+      var callback = /(?:^|[?&])(?:code|error|error_description)=/.test(q) || /access_token|refresh_token/.test(h);
+      var signedIn = false;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (!k || k.indexOf("sb-") !== 0 || k.indexOf("-auth-token") === -1) continue;
+          if (k.indexOf("code-verifier") !== -1) continue;
+          var v = JSON.parse(localStorage.getItem(k) || "null");
+          var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+          if (token) { signedIn = true; break; }
+        }
+      } catch (e) {}
+      if (signedIn || callback) {
+        location.replace("/" + q + h);
+        return;
+      }
+      /* Keep the public URL at `/` so the marketing page is what `/` is. */
+      if (location.pathname.indexOf("/landing") === 0) {
+        history.replaceState(null, "", "/" + q + h);
+      }
+    })();
+  </script>
+  <script>
+    document.documentElement.classList.add("js");
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");
+  </script>
+  <script src="landing.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- Reusable glyphs, drawn once. -->
+  <svg width="0" height="0" class="defs" aria-hidden="true" focusable="false">
+    <defs>
+      <path id="flame" d="M12 3.2c2.7 3.2 4.8 5.8 4.8 9a4.8 4.8 0 0 1-9.6 0c0-3.2 2.1-5.8 4.8-9z" />
+      <symbol id="mark" viewBox="0 0 48 48">
+        <rect width="48" height="48" rx="13" fill="#114143" />
+        <circle cx="24" cy="24" r="15" fill="none" stroke="#ACC3C1" stroke-opacity=".45" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="72 22.25" transform="rotate(-20 24 24)" />
+        <circle cx="24" cy="24" r="9" fill="none" stroke="#ACC3C1" stroke-width="2.4" />
+        <circle cx="24" cy="24" r="3.8" fill="#E1B34D" />
+      </symbol>
+      <symbol id="google" viewBox="0 0 18 18">
+        <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
+        <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z" />
+        <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z" />
+        <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <header class="top" data-top>
+    <div class="top__inner">
+      <a class="brand" href="#top" aria-label="LeadWell, back to top">
+        <svg class="brand__mark" width="30" height="30" aria-hidden="true"><use href="#mark" /></svg>
+        <span class="wordmark"><span class="wordmark__lead">Lead</span><span class="wordmark__well">Well</span></span>
+      </a>
+      <!-- The page is one day. This is only the page's clock, not a feature. -->
+      <p class="clock" aria-hidden="true" data-clock><i class="clock__sun"></i><span class="mono" data-clock-time>06:30</span></p>
+      <nav class="top__nav" aria-label="Sections">
+        <ul>
+          <li><a href="#places">The five places</a></li>
+          <li><a href="#people">People</a></li>
+          <li><a href="#meetings">Meetings</a></li>
+          <li><a href="#prayer">Prayer</a></li>
+        </ul>
+      </nav>
+      <a class="btn btn--ghost top__cta" href="/signin">Sign in</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ───────────────────────── Hero: the well ───────────────────────── -->
+    <section class="hero leather" id="top" aria-labelledby="hero-title" data-hour="06:30">
+      <div class="hero__well" aria-hidden="true" data-hero-well>
+        <canvas class="well-canvas" data-well="hero"></canvas>
+      </div>
+      <div class="hero__stitch" aria-hidden="true"></div>
+      <div class="wrap hero__inner" data-hero-copy>
+        <p class="eyebrow eyebrow--leather hero__eyebrow" data-reveal>At work, at church and at home</p>
+        <h1 id="hero-title" class="hero__title" data-split>A quiet instrument for leading people <em class="gilt-text">well.</em></h1>
+        <p class="hero__lede" data-reveal style="--i:3">
+          LeadWell keeps the teams and people you lead in one place: who they are, how they’re doing, whether you’re ready for the next time you sit down, and who you’re carrying in prayer.
+        </p>
+        <div class="hero__actions" data-reveal style="--i:4">
+          <a class="btn btn--google" href="/signin?google=1">
+            <svg width="18" height="18" aria-hidden="true"><use href="#google" /></svg>
+            Continue with Google
+          </a>
+          <a class="btn btn--line" href="#today">Walk through a day</a>
+        </div>
+        <p class="hero__note" data-reveal style="--i:5">Your own private workspace, synced across every device.</p>
+      </div>
+      <p class="hero__caption" data-reveal style="--i:6">
+        <span>You, at the center. The people you lead, in rings around you.</span>
+        <span class="hero__hint" data-motion-only>Touch the water.</span>
+      </p>
+      <a class="hero__scroll" href="#today" aria-label="Scroll to the morning"><span aria-hidden="true"></span></a>
+    </section>
+
+    <!-- ───────────────────────── 06:45 Today ───────────────────────── -->
+    <section class="today paper" id="today" aria-labelledby="today-title" data-hour="06:45">
+      <div class="wrap">
+        <header class="section-head">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">06:45</span>Today · the front door</p>
+          <h2 id="today-title" class="h2" data-split>It opens on one question: <em>what needs me?</em></h2>
+          <p class="lede" data-reveal style="--i:2">The next move, the week ahead, ideas waiting for a home, who you’re carrying and anyone you haven’t made a decision about yet. Every row is a door to where the work actually happens.</p>
+        </header>
+
+        <div class="today__stage" data-reveal="rise">
+          <div class="app-window" role="img" aria-label="An example of the Today page: two of three meetings ready this week, one relationship drifting, a next move to write up a 1:1, the coming week, and three people being carried in prayer.">
+            <div class="app-window__side" aria-hidden="true">
+              <svg width="26" height="26"><use href="#mark" /></svg>
+              <span class="side__item is-on"></span><span class="side__item"></span><span class="side__item"></span><span class="side__item"></span><span class="side__item side__item--v"></span>
+            </div>
+            <div class="app-window__body" aria-hidden="true">
+              <div class="t-head">
+                <div>
+                  <p class="mono t-date">THURSDAY, OCTOBER 22 · ALL OF LIFE</p>
+                  <p class="t-greet">Good morning.</p>
+                  <p class="t-sum">Three meetings this week. One loose end to close before Thursday.</p>
+                </div>
+                <dl class="t-stats">
+                  <div><dt>ready this week</dt><dd class="mono">2<span>/3</span></dd></div>
+                  <div><dt>drifting</dt><dd class="mono is-crit">1</dd></div>
+                  <div><dt>undecided</dt><dd class="mono">3</dd></div>
+                </dl>
+              </div>
+              <div class="t-grid">
+                <div class="t-main">
+                  <div class="t-card t-next" data-stagger>
+                    <p class="t-label">The next move</p>
+                    <div class="t-next__row">
+                      <svg class="glyph" width="26" height="26" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-track-p" /><circle cx="12" cy="12" r="9" class="rr-arc-strained" stroke-dasharray="40 57" transform="rotate(-90 12 12)" /></svg>
+                      <div><p class="t-next__title">Write up Tuesday’s 1:1 with Theo</p><p class="t-small"><span class="ink-strained">Loose end</span> · weekly · next ~Tue</p></div>
+                      <span class="chip chip--teal">Write it up</span>
+                    </div>
+                  </div>
+                  <div class="t-card" data-stagger>
+                    <p class="t-label">Coming up</p>
+                    <ul class="t-rows">
+                      <li><span class="t-day mono"><b>THU</b>22</span><svg class="glyph" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-track-p" /><circle cx="12" cy="12" r="9" class="rr-arc-watch" stroke-dasharray="44 57" transform="rotate(-90 12 12)" /></svg><span class="t-row__name">Staff meeting<small>Prayer 2 · Training 0 · Discussion 3</small></span><span class="mono ink-watch t-cd">~Thu · 0d</span></li>
+                      <li><span class="t-day mono"><b>FRI</b>23</span><svg class="glyph" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-track-p" /><circle cx="12" cy="12" r="9" class="rr-arc-thriving" stroke-dasharray="48 57" transform="rotate(-90 12 12)" /><circle cx="12" cy="12" r="3.5" class="rr-fill-thriving" /></svg><span class="t-row__name">Naomi<small>1:1 · agenda set · notes from last time</small></span><span class="mono ink-thriving t-cd">Fri · 1d</span></li>
+                      <li><span class="t-day mono"><b>SUN</b>25</span><svg class="glyph" width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-track-p" /><circle cx="12" cy="12" r="9" class="rr-arc-thriving" stroke-dasharray="52 57" transform="rotate(-90 12 12)" /><circle cx="12" cy="12" r="3.5" class="rr-fill-thriving" /></svg><span class="t-row__name">Worship team<small>Practice · set list in</small></span><span class="mono ink-thriving t-cd">~Sun · 3d</span></li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="t-aside">
+                  <div class="t-card" data-stagger>
+                    <p class="t-label">Carrying</p>
+                    <ul class="t-carry">
+                      <li><svg width="16" height="16" viewBox="0 0 24 24"><use href="#flame" class="flame--fresh" /></svg>Grace<span class="mono">2d</span></li>
+                      <li><svg width="16" height="16" viewBox="0 0 24 24"><use href="#flame" class="flame--carrying" /></svg>Student ministry<span class="mono">9d</span></li>
+                      <li><svg width="16" height="16" viewBox="0 0 24 24"><use href="#flame" class="flame--cold" /></svg>Owen<span class="mono">gone quiet</span></li>
+                    </ul>
+                  </div>
+                  <div class="t-card" data-stagger>
+                    <p class="t-label">How they’re doing</p>
+                    <div class="mixbar"><i style="--w:22%;--c:var(--thriving)"></i><i style="--w:44%;--c:var(--solid)"></i><i style="--w:18%;--c:var(--watch)"></i><i style="--w:11%;--c:var(--strained)"></i><i style="--w:5%;--c:var(--critical)"></i></div>
+                    <p class="t-small">Product team · <span class="ink-strained">strained</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 07:30 Five places ───────────────────────── -->
+    <section class="places paper" id="places" aria-labelledby="places-title" data-hour="07:30">
+      <div class="wrap">
+        <header class="section-head section-head--split">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">07:30</span>Five places, five questions</p>
+          <h2 id="places-title" class="h2" data-split>Each place answers one thing, and only that.</h2>
+        </header>
+        <ol class="places__list">
+          <li class="place" data-reveal style="--i:0">
+            <span class="place__n mono">01</span>
+            <h3 class="place__name">Today</h3>
+            <p class="place__q">What needs me?</p>
+            <p class="place__d">The next move, the week, ideas waiting, who you’re carrying.</p>
+          </li>
+          <li class="place" data-reveal style="--i:1">
+            <span class="place__n mono">02</span>
+            <h3 class="place__name">People</h3>
+            <p class="place__q">Who do I lead, and how are they?</p>
+            <p class="place__d">Circles, an org tree and a table. Three views, four modes.</p>
+          </li>
+          <li class="place" data-reveal style="--i:2">
+            <span class="place__n mono">03</span>
+            <h3 class="place__name">Meetings</h3>
+            <p class="place__q">Am I ready to sit down?</p>
+            <p class="place__d">Every recurring meeting gets a page: its agenda, its weeks, its write-ups.</p>
+          </li>
+          <li class="place" data-reveal style="--i:3">
+            <span class="place__n mono">04</span>
+            <h3 class="place__name">Ideas</h3>
+            <p class="place__q">What do I want to raise?</p>
+            <p class="place__d">Everything not yet on a week, by meeting or by tag.</p>
+          </li>
+          <li class="place place--prayer" data-reveal style="--i:4">
+            <span class="place__n mono">05</span>
+            <h3 class="place__name">Prayer</h3>
+            <p class="place__q">Who am I carrying?</p>
+            <p class="place__d">A list of names, a written log, and nothing scored.</p>
+          </li>
+        </ol>
+        <p class="places__scope" data-reveal>
+          A life-area scope sits above all five: <span class="scope"><i style="--c:#0B6A66"></i>All of life</span> <span class="scope"><i style="--c:#7C3B8B"></i>Day job</span> <span class="scope"><i style="--c:#2D78BD"></i>Church</span> <span class="scope"><i style="--c:#DD7B2B"></i>Family</span>. Pick one and every place follows.
+        </p>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 09:00 People: pinned sequence ───────────────────────── -->
+    <section class="people leather" id="people" aria-labelledby="people-title" data-hour="09:00" data-hour-end="10:40">
+      <div class="pin pin--people" data-pin="people">
+        <div class="pin__stage people__stage">
+          <div class="wrap people__grid">
+            <div class="people__copy">
+              <p class="eyebrow eyebrow--leather"><span class="eyebrow__t">09:00</span>People · who you lead</p>
+              <h2 id="people-title" class="h2 h2--pin">Nobody opens the chart wanting everything. <em class="gilt-text">You open it in a mode.</em></h2>
+              <ol class="steps" data-steps>
+                <li class="step" data-step="0">
+                  <p class="step__k mono">View · Circles</p>
+                  <h3 class="step__t">Rings around you.</h3>
+                  <p class="step__d">Everyone you lead, drawn as rings around you: the teams, and the people on them.</p>
+                </li>
+                <li class="step" data-step="1">
+                  <p class="step__k mono">View · Tree</p>
+                  <h3 class="step__t">Or as the org tree.</h3>
+                  <p class="step__d">An infinite canvas you can pan, zoom and rearrange. Whoever you report to sits above you. A table view sits beside it for comparing.</p>
+                </li>
+                <li class="step" data-step="2">
+                  <p class="step__k mono"><kbd>1</kbd> Plan</p>
+                  <h3 class="step__t">What is each team for, and what’s next?</h3>
+                  <p class="step__d">Mandate and next step are team-level answers, so Plan leaves the roster off.</p>
+                </li>
+                <li class="step" data-step="3">
+                  <p class="step__k mono"><kbd>2</kbd> Prep</p>
+                  <h3 class="step__t">Am I ready for the next 1:1?</h3>
+                  <p class="step__d">A rhythm ring on every person and a countdown on every meeting, worst first.</p>
+                </li>
+                <li class="step" data-step="4">
+                  <p class="step__k mono"><kbd>3</kbd> Assess</p>
+                  <h3 class="step__t">Is this going well?</h3>
+                  <p class="step__d">Your own read on each team and person. Scan for Strained and everything else dims, so the strain shows up inside the shape of the org.</p>
+                </li>
+                <li class="step" data-step="5">
+                  <p class="step__k mono"><kbd>4</kbd> Pray</p>
+                  <h3 class="step__t">Who am I carrying?</h3>
+                  <p class="step__d">A flame on everyone you’re praying for, dashed on the ones who’ve gone quiet.</p>
+                </li>
+              </ol>
+            </div>
+
+            <div class="people__vis" data-modes data-mode="plan">
+              <div class="modes__tabs" role="tablist" aria-label="Org tree mode">
+                <button role="tab" id="tab-plan" aria-controls="tree-panel" aria-selected="true" data-mode-tab="plan"><kbd>1</kbd>Plan</button>
+                <button role="tab" id="tab-prep" aria-controls="tree-panel" aria-selected="false" tabindex="-1" data-mode-tab="prep"><kbd>2</kbd>Prep</button>
+                <button role="tab" id="tab-assess" aria-controls="tree-panel" aria-selected="false" tabindex="-1" data-mode-tab="assess"><kbd>3</kbd>Assess</button>
+                <button role="tab" id="tab-pray" aria-controls="tree-panel" aria-selected="false" tabindex="-1" data-mode-tab="pray"><kbd>4</kbd>Pray</button>
+              </div>
+              <div class="chart-wrap" id="tree-panel" role="tabpanel" aria-labelledby="tab-plan" tabindex="0">
+                <svg class="chart" data-chart data-view="tree" aria-hidden="true" focusable="false"></svg>
+                <p class="scanbar">
+                  <span data-lens="circles">Circles · you at the center</span>
+                  <span data-lens="tree">Tree · the people you report to sit above you</span>
+                  <span data-lens="plan">Mandate and next step. The roster stays off.</span>
+                  <span data-lens="prep"><b class="mono">5 of 7</b> ready · <b class="mono">2</b> need prep · <b class="mono">3</b> undecided</span>
+                  <span data-lens="assess">Scan · <b>Strained</b>: Product team and Owen stay lit. Nothing is hidden.</span>
+                  <span data-lens="pray">Carrying <b class="mono">7</b> · prayed this week <b class="mono">3</b> · gone quiet <b class="mono">2</b></span>
+                </p>
+              </div>
+            </div>
+          </div>
+          <ol class="pin__rail" aria-hidden="true" data-rail><li></li><li></li><li></li><li></li><li></li><li></li></ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 10:45 Profiles ───────────────────────── -->
+    <section class="profile paper" aria-labelledby="profile-title" data-hour="10:45">
+      <div class="wrap profile__grid">
+        <div class="profile__copy">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">10:45</span>Profiles</p>
+          <h2 id="profile-title" class="h2" data-split>Read each person the way the assessments already do.</h2>
+          <p class="lede" data-reveal>Record someone’s CliftonStrengths top five, Enneagram and MBTI. Strengths show in Gallup’s own domain colors, so a chip here matches every report your people already have. Teams show their domain balance and their blind spots.</p>
+          <p class="lede" data-reveal>Alongside the profile: strengths, watch-outs, how to lead them, goals, dated notes and a topic board. There’s also an AI coach for each person.</p>
+        </div>
+
+        <figure class="pcard" data-reveal="rise" data-tilt aria-labelledby="pcard-cap">
+          <div class="pcard__head">
+            <span class="avatar avatar--lg" aria-hidden="true">N</span>
+            <div><p class="pcard__name">Naomi</p><p class="pcard__role">Worship leader · Church</p></div>
+            <span class="pill pill--thriving"><span class="meter meter--sm" data-level="5" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Thriving</span>
+          </div>
+          <p class="pcard__label">CliftonStrengths · top 5</p>
+          <ul class="strengths">
+            <li style="--c:#2D78BD" data-stagger>Empathy</li>
+            <li style="--c:#269364" data-stagger>Ideation</li>
+            <li style="--c:#2D78BD" data-stagger>Developer</li>
+            <li style="--c:#DD7B2B" data-stagger>Communication</li>
+            <li style="--c:#7C3B8B" data-stagger>Responsibility</li>
+          </ul>
+          <div class="pcard__row">
+            <div><p class="pcard__label">Enneagram</p><p class="pcard__val">2w3</p></div>
+            <div><p class="pcard__label">MBTI</p><p class="pcard__val">ENFJ</p></div>
+            <div><p class="pcard__label">Domain mix</p>
+              <div class="donut" aria-hidden="true"><svg viewBox="0 0 36 36" width="44" height="44"><circle cx="18" cy="18" r="14" stroke="#2D78BD" stroke-dasharray="35.2 52.8" /><circle cx="18" cy="18" r="14" stroke="#269364" stroke-dasharray="17.6 70.4" stroke-dashoffset="-35.2" /><circle cx="18" cy="18" r="14" stroke="#DD7B2B" stroke-dasharray="17.6 70.4" stroke-dashoffset="-52.8" /><circle cx="18" cy="18" r="14" stroke="#7C3B8B" stroke-dasharray="17.6 70.4" stroke-dashoffset="-70.4" /></svg></div>
+            </div>
+          </div>
+          <p class="pcard__label">How to lead her</p>
+          <p class="pcard__serif">Give her the why before the what. She’ll carry the room if she’s been heard first.</p>
+          <figcaption id="pcard-cap" class="sr-only">An example profile with five strengths in Gallup's domain colors, an Enneagram type, an MBTI type, a domain mix and a note on how to lead her.</figcaption>
+        </figure>
+      </div>
+      <ul class="domains" data-reveal aria-label="The four CliftonStrengths domains">
+        <li style="--c:#7C3B8B">Executing</li>
+        <li style="--c:#DD7B2B">Influencing</li>
+        <li style="--c:#2D78BD">Relationship Building</li>
+        <li style="--c:#269364">Strategic Thinking</li>
+      </ul>
+    </section>
+
+    <!-- ───────────────────────── 11:56 Readiness: pinned week ───────────────────────── -->
+    <section class="ready paper" id="meetings" aria-labelledby="ready-title" data-hour="11:56" data-hold>
+      <div class="pin pin--ready" data-pin="ready">
+        <div class="pin__stage ready__stage">
+          <div class="wrap ready__grid">
+            <div class="ready__copy">
+              <p class="eyebrow"><span class="eyebrow__t">11:56</span>Readiness · meetings</p>
+              <h2 id="ready-title" class="h2 h2--pin">You’re sitting down in four minutes. <em>Do you know what this meeting is for?</em></h2>
+              <ul class="checks" data-checks aria-label="The four readiness checks">
+                <li data-at="0"><span class="checks__box" aria-hidden="true"></span>On the books<small>a next one exists, booked or projected</small></li>
+                <li data-at="0.8"><span class="checks__box" aria-hidden="true"></span>Last one written up</li>
+                <li data-at="5.6"><span class="checks__box" aria-hidden="true"></span>Agenda has something queued</li>
+                <li data-at="6.2"><span class="checks__box" aria-hidden="true"></span>No overdue commitments</li>
+              </ul>
+            </div>
+
+            <figure class="dial" data-dial data-state="loose" aria-labelledby="dial-cap">
+              <svg viewBox="0 0 320 320" class="dial__svg" aria-hidden="true" focusable="false">
+                <circle cx="160" cy="160" r="124" class="dial__track" />
+                <circle cx="160" cy="160" r="124" class="dial__window" transform="rotate(-90 160 160)" />
+                <circle cx="160" cy="160" r="124" class="dial__arc" data-dial-arc transform="rotate(-90 160 160)" />
+                <g data-dial-ticks></g>
+                <g class="dial__hand" data-dial-hand><circle cx="160" cy="36" r="9" /></g>
+                <circle cx="160" cy="160" r="98" class="dial__fill" />
+              </svg>
+              <div class="dial__read" aria-hidden="true">
+                <p class="mono dial__cd" data-dial-cd>~Thu · 7d</p>
+                <p class="dial__state" data-dial-state>Loose end</p>
+                <p class="dial__why" data-dial-why>Last Thursday’s 1:1 was never written up.</p>
+              </div>
+              <figcaption id="dial-cap" class="dial__cap">
+                <span class="mono">prep window = max(2 days, 25% of the rhythm)</span>
+                <span class="dial__cap-long">A weekly 1:1, one week of it. It starts as a loose end until the last one is written up, rests, turns to Prep due when the gold prep window opens, and fills in as Ready once all four checks pass.</span>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+
+      <div class="wrap ready__after">
+        <p class="lede ready__lede" data-reveal>Give a meeting a rhythm and LeadWell projects the next one from the last, so nothing has to be on a calendar for the signal to work. A 1:1, a staff meeting, a practice and a check-in with your boss all prep the same way.</p>
+        <ol class="ladder" data-reveal aria-label="The six readiness states, worst first">
+          <li><span class="ring-ico ring-ico--critical ring-ico--dot" aria-hidden="true"></span><b>Drifting</b><span>Past the rhythm, nothing next. Get it on the calendar.</span></li>
+          <li><span class="ring-ico ring-ico--strained" aria-hidden="true"></span><b>Loose end</b><span>A meeting happened and was never written up.</span></li>
+          <li><span class="ring-ico ring-ico--watch" aria-hidden="true"></span><b>Prep due</b><span>The window is open and the checklist isn’t done.</span></li>
+          <li><span class="ring-ico ring-ico--thriving ring-ico--fill" aria-hidden="true"></span><b>Ready</b><span>Nothing to do. Show up.</span></li>
+          <li><span class="ring-ico ring-ico--solid" aria-hidden="true"></span><b>Resting</b><span>Met recently. Nothing owed, and that’s a good state.</span></li>
+          <li><span class="ring-ico ring-ico--dormant" aria-hidden="true"></span><b>Dormant</b><span>As-needed, and the floor hasn’t been crossed.</span></li>
+        </ol>
+        <p class="ready__aside" data-reveal>Worst first, on purpose: not having seen someone outranks not having filed the notes. Cards roll up worst-of, never an average, and nothing is measured until you opt in.</p>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 13:30 Ideas → Plan → Run ───────────────────────── -->
+    <section class="flow paper" aria-labelledby="flow-title" data-hour="13:30">
+      <div class="wrap">
+        <header class="section-head section-head--split">
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">13:30</span>A meeting · Ideas → Plan → Run</p>
+          <h2 id="flow-title" class="h2" data-split>Capture now. Place it on a week. Write it up beside them.</h2>
+        </header>
+
+        <div class="flow__grid">
+          <article class="flow__step" data-reveal style="--i:0">
+            <p class="flow__n mono">Capture · <kbd>C</kbd></p>
+            <h3>Ideas</h3>
+            <p>Anything you want to raise goes in one field from anywhere, with a small grammar for where it belongs.</p>
+            <div class="capture" data-typer>
+              <span class="sr-only">Example capture: Rota for Advent, tagged training, for the staff meeting, flagged important.</span>
+              <p class="capture__field" aria-hidden="true"><span data-typer-out></span><span class="caret"></span></p>
+              <p class="capture__legend" aria-hidden="true"><span class="tok tok--tag">#tag</span><span class="tok tok--at">@meeting</span><span class="tok tok--bang">!</span></p>
+            </div>
+          </article>
+
+          <article class="flow__step" data-reveal style="--i:1">
+            <p class="flow__n mono">Plan ahead · 8 weeks</p>
+            <h3>Plan</h3>
+            <p>Drag an idea onto a week. Booked weeks are solid, weeks the rhythm only expects are dashed, and the coverage strip shows which sections keep getting skipped.</p>
+            <div class="weeks" aria-hidden="true">
+              <div class="weeks__row"><span>Prayer</span><i class="b"></i><i class="b"></i><i class="b"></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i></div>
+              <div class="weeks__row"><span>Training</span><i class="b"></i><i class="o"></i><i class="s"></i><i class="o"></i><i class="e"></i><i class="o"></i><i class="e"></i><i class="o"></i></div>
+              <div class="weeks__row"><span>Discussion</span><i class="b"></i><i class="b"></i><i class="s"></i><i class="b"></i><i class="e"></i><i class="e"></i><i class="e"></i><i class="e"></i></div>
+            </div>
+          </article>
+
+          <article class="flow__step" data-reveal style="--i:2">
+            <p class="flow__n mono">Run</p>
+            <h3>Run</h3>
+            <p>The agenda, your write-up and the person’s context side by side. If your notes already live in Notion or a shared doc, link it and they stay there.</p>
+            <div class="run" aria-hidden="true">
+              <div class="run__agenda"><b>Agenda</b><span class="done">Prayer</span><span class="done">Rota for Advent</span><span>Sunday setup</span></div>
+              <div class="run__notes"><b>Write-up</b><p>Agreed the Advent rota. She’ll ask two new volunteers by Sunday<span class="caret caret--ink"></span></p></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 15:30 Health ───────────────────────── -->
+    <section class="health paper" aria-labelledby="health-title" data-hour="15:30">
+      <div class="wrap health__grid">
+        <div>
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">15:30</span>Health · your own read</p>
+          <h2 id="health-title" class="h2" data-split>Is this going well? <em>Only you can say.</em></h2>
+          <p class="lede" data-reveal>Health is one call you make yourself, on any team or person, with one line of evidence behind it. It’s never derived, and after ninety days it says <em>stale</em> rather than pretending.</p>
+          <ul class="levels" data-reveal>
+            <li><span class="meter" data-level="5" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Thriving</li>
+            <li><span class="meter" data-level="4" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Solid</li>
+            <li><span class="meter" data-level="3" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Watch</li>
+            <li><span class="meter" data-level="2" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Strained</li>
+            <li><span class="meter" data-level="1" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>Critical</li>
+          </ul>
+        </div>
+
+        <div class="scan" data-scan data-reveal="rise">
+          <div class="scan__chips" role="group" aria-label="Health scan: show one level">
+            <button type="button" aria-pressed="false" data-scan-level="thriving"><i class="dot" style="--c:var(--thriving)"></i>Thriving <span class="mono">2</span></button>
+            <button type="button" aria-pressed="false" data-scan-level="solid"><i class="dot" style="--c:var(--solid)"></i>Solid <span class="mono">5</span></button>
+            <button type="button" aria-pressed="false" data-scan-level="watch"><i class="dot" style="--c:var(--watch)"></i>Watch <span class="mono">2</span></button>
+            <button type="button" aria-pressed="true" data-scan-level="strained"><i class="dot" style="--c:var(--strained)"></i>Strained <span class="mono">2</span></button>
+          </div>
+          <ul class="scan__field" data-scan-field data-active="strained" aria-label="People and teams, with the selected level lit">
+            <li data-h="solid"><span class="avatar">N</span>Naomi<span class="meter meter--sm" data-level="4" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="thriving"><span class="avatar">L</span>Lydia<span class="meter meter--sm" data-level="5" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="watch"><span class="avatar">T</span>Theo<span class="meter meter--sm" data-level="3" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="strained"><span class="avatar avatar--sq">P</span>Product team<span class="meter meter--sm" data-level="2" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="solid"><span class="avatar">G</span>Grace<span class="meter meter--sm" data-level="4" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="solid"><span class="avatar">I</span>Isaac<span class="meter meter--sm" data-level="4" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="strained"><span class="avatar">O</span>Owen<span class="meter meter--sm" data-level="2" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="thriving"><span class="avatar avatar--sq">S</span>Student ministry<span class="meter meter--sm" data-level="5" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="watch"><span class="avatar avatar--sq">W</span>Worship team<span class="meter meter--sm" data-level="3" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="solid"><span class="avatar">A</span>Ana<span class="meter meter--sm" data-level="4" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+            <li data-h="solid"><span class="avatar">R</span>Ruth<span class="meter meter--sm" data-level="4" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></li>
+          </ul>
+          <p class="scan__note" aria-live="polite" data-scan-note>Strained: Product team and Owen stay lit. Everything else dims, but nothing is hidden.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 17:00 Leading up ───────────────────────── -->
+    <section class="up paper" aria-labelledby="up-title" data-hour="17:00">
+      <div class="wrap up__grid">
+        <div>
+          <p class="eyebrow" data-reveal><span class="eyebrow__t">17:00</span>Leading up</p>
+          <h2 id="up-title" class="h2" data-split>Leading down, you track their growth. <em>Leading up, you track your value.</em></h2>
+          <p class="lede" data-reveal>A board, an elders group, the one leader you answer to at work: they sit above you in the tree, with the same check-ins, notes and topic board as everyone else. A topic for your boss is an ask, an escalation or a decision you need.</p>
+        </div>
+        <div class="up__cards">
+          <article class="sheet" data-reveal style="--i:0">
+            <h3 class="sheet__title">Operating manual</h3>
+            <dl class="sheet__dl">
+              <div><dt>What they reward</dt><dd>Clarity before the meeting, not in it.</dd></div>
+              <div><dt>Their anxieties</dt><dd>Surprises in front of the board.</dd></div>
+              <div><dt>Their currency</dt><dd>Fewer moving parts.</dd></div>
+              <div><dt>What their boss measures</dt><dd>Volunteer retention.</dd></div>
+            </dl>
+          </article>
+          <article class="sheet sheet--gilt" data-reveal style="--i:1">
+            <h3 class="sheet__title">Wins ledger</h3>
+            <ul class="wins">
+              <li><span class="mono">Sep</span>Rebuilt the Sunday setup rota: 40 minutes saved each week.</li>
+              <li><span class="mono">Jul</span>Two new team leads trained and running on their own.</li>
+              <li><span class="mono">May</span>Closed the gap in the nursery check-in process.</li>
+            </ul>
+            <p class="sheet__foot">In their currency, ready before a review or an ask.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 18:20 Anywhere ───────────────────────── -->
+    <section class="anywhere leather" aria-labelledby="anywhere-title" data-hour="18:20">
+      <div class="wrap anywhere__grid">
+        <div class="anywhere__copy">
+          <header>
+            <p class="eyebrow eyebrow--leather" data-reveal><span class="eyebrow__t">18:20</span>A basement, a plane, a church hallway with two bars</p>
+            <h2 id="anywhere-title" class="h2" data-split>Walking in with ninety seconds to spare? <em class="gilt-text">Press ⌘K.</em></h2>
+            <p class="lede" data-reveal>One field over the whole workspace. Search lands you in the write-up, note or prayer entry where something was said, not on a profile you then have to dig through. It never touches the network.</p>
+          </header>
+          <div class="palette" data-reveal="rise" data-palette aria-hidden="true">
+            <p class="palette__field"><span class="mono palette__k">⌘K</span><span data-palette-q>sunday setup</span><span class="caret caret--light"></span></p>
+            <ul>
+              <li><b>Staff meeting</b> · write-up, Oct 15<span>…moved <mark>Sunday setup</mark> to the welcome team…</span></li>
+              <li><b>Topic</b> · Worship team<span><mark>Sunday setup</mark> runs long when two volunteers are out</span></li>
+              <li><b>Wins ledger</b> · Elders<span>Rebuilt the <mark>Sunday setup</mark> rota</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="anywhere__side">
+          <div class="phone" data-reveal="rise" aria-hidden="true" data-depth-y="-.06">
+            <div class="phone__screen">
+              <p class="phone__date mono">THU · OCT 22</p>
+              <p class="phone__greet">Good evening.</p>
+              <div class="phone__card"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="rr-track-p" /><circle cx="12" cy="12" r="9" class="rr-arc-thriving" stroke-dasharray="48 57" transform="rotate(-90 12 12)" /><circle cx="12" cy="12" r="3.5" class="rr-fill-thriving" /></svg>Naomi<span class="mono">Fri · 1d</span></div>
+              <div class="phone__card"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#flame" class="flame--fresh" /></svg>Grace<span class="mono">2d</span></div>
+              <div class="phone__card"><svg width="18" height="18" viewBox="0 0 24 24"><use href="#flame" class="flame--cold" /></svg>Owen<span class="mono">quiet</span></div>
+              <nav class="phone__tabs"><i class="on"></i><i></i><b>+</b><i></i><i class="v"></i></nav>
+            </div>
+          </div>
+          <ul class="feats" data-reveal>
+            <li><h3>Works offline</h3><p>Fonts, shell and your data are already on the device.</p></li>
+            <li><h3>Synced everywhere</h3><p>Sign in with Google and your workspace follows you to every device.</p></li>
+            <li><h3>Private by design</h3><p>Every account is its own workspace, isolated by row-level security.</p></li>
+            <li><h3>Keyboard first</h3><p><kbd>C</kbd> to capture, <kbd>G</kbd> then a letter to jump, <kbd>?</kbd> for the rest.</p></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 19:40 Nightfall ───────────────────────── -->
+    <section class="nightfall" aria-labelledby="nightfall-title" data-hour="19:40" data-hour-end="21:20">
+      <div class="pin pin--night" data-pin="night">
+        <div class="pin__stage nightfall__stage">
+          <div class="nightfall__sky" aria-hidden="true" data-night-sky>
+            <span class="star" style="--x:8%;--y:14%;--d:.3s"></span><span class="star" style="--x:22%;--y:40%;--d:1.4s"></span><span class="star" style="--x:38%;--y:8%;--d:2.2s"></span><span class="star" style="--x:57%;--y:22%;--d:.9s"></span><span class="star" style="--x:74%;--y:10%;--d:1.9s"></span><span class="star" style="--x:90%;--y:30%;--d:2.8s"></span><span class="star" style="--x:84%;--y:58%;--d:.1s"></span><span class="star" style="--x:5%;--y:70%;--d:2.4s"></span><span class="star" style="--x:31%;--y:66%;--d:1.1s"></span><span class="star" style="--x:64%;--y:48%;--d:2.6s"></span><span class="star" style="--x:48%;--y:84%;--d:.5s"></span><span class="star" style="--x:16%;--y:88%;--d:1.6s"></span>
+          </div>
+          <div class="nightfall__horizon" aria-hidden="true" data-night-horizon>
+            <div class="nightfall__sunclip"><div class="nightfall__sun" data-night-sun></div></div>
+            <div class="nightfall__water"><i class="nightfall__glint" data-night-glint></i></div>
+          </div>
+          <div class="wrap nightfall__copy" data-night-copy>
+            <p class="eyebrow eyebrow--night"><span class="eyebrow__t">21:00</span>Evening</p>
+            <h2 id="nightfall-title" class="nightfall__title">The last place in the day is the only one <em>that isn’t about them.</em></h2>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 21:30 Prayer ───────────────────────── -->
+    <section class="prayer night" id="prayer" aria-labelledby="prayer-title" data-hour="21:30">
+      <div class="wrap prayer__grid">
+        <div class="prayer__copy">
+          <p class="eyebrow eyebrow--night" data-reveal><span class="eyebrow__t">21:30</span>Prayer · who you’re carrying</p>
+          <h2 id="prayer-title" class="h2" data-split>There is no scale, <em>and there is no score.</em></h2>
+          <p class="lede" data-reveal>Taking someone up in prayer is a deliberate act, and so is laying them down. LeadWell only measures the one honest thing it can: how long it’s been.</p>
+          <ul class="flames" data-reveal>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="flame--fresh-n" /></svg><b>Prayed this week</b><span>Filled.</span></li>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="flame--carrying-n" /></svg><b>Carrying</b><span>Outlined.</span></li>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="flame--cold-n" /></svg><b>Gone quiet</b><span>Dashed, after 21 days. The only one that asks anything of you.</span></li>
+            <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="flame--answered" /><path d="M9.6 13.2l1.7 1.7 3.2-3.4" fill="none" stroke="#013133" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg><b>Answered</b><span>Gilt. Never “done”.</span></li>
+          </ul>
+          <blockquote class="pull" data-reveal>
+            <p>Praying for four people out of forty is a true answer. Not carrying is never counted as a gap.</p>
+          </blockquote>
+        </div>
+
+        <figure class="log" data-reveal="rise" aria-labelledby="log-cap">
+          <div class="log__head">
+            <span class="avatar avatar--night" aria-hidden="true">G</span>
+            <div><p class="log__name">Grace</p><p class="log__meta mono">carrying since March · prayed 2d ago</p></div>
+            <span class="log__mark"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="flame--fresh-n" /></svg>Mark prayed</span>
+          </div>
+          <ol class="log__entries">
+            <li data-stagger><p class="log__kind mono">Burden · Oct 18</p><p class="log__text">Wisdom as she takes on the youth retreat, and rest after it.</p></li>
+            <li data-stagger><p class="log__kind mono">Scripture · Sep 30</p><p class="log__text">“Let us not grow weary of doing good.” — Galatians 6:9</p></li>
+            <li data-stagger class="is-answered"><p class="log__kind mono"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="flame--answered" /></svg>Answered · Sep 12</p><p class="log__text">A job close to home for her dad.</p><p class="log__answer">He started at the hospital in August.</p></li>
+          </ol>
+          <figcaption id="log-cap" class="log__cap">The log is written down, not checked off. A burden and a scripture are the only two kinds of entry.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── 22:40 The well, again ───────────────────────── -->
+    <section class="cta" aria-labelledby="cta-title" data-hour="22:40">
+      <div class="cta__well" aria-hidden="true">
+        <canvas class="well-canvas" data-well="cta"></canvas>
+      </div>
+      <div class="wrap cta__inner">
+        <svg class="cta__mark" width="64" height="64" aria-hidden="true" data-reveal><use href="#mark" /></svg>
+        <h2 id="cta-title" class="cta__title" data-split>Your people, your meetings, your prayer list. <em class="gilt-text">One quiet place.</em></h2>
+        <p class="lede" data-reveal>A new workspace starts with sample teams and people, so there’s something to look at on the first morning.</p>
+        <div class="hero__actions hero__actions--center" data-reveal>
+          <a class="btn btn--google" href="/signin?google=1">
+            <svg width="18" height="18" aria-hidden="true"><use href="#google" /></svg>
+            Continue with Google
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot leather">
+    <div class="wrap foot__inner">
+      <a class="brand" href="#top" aria-label="LeadWell, back to top">
+        <svg class="brand__mark" width="24" height="24" aria-hidden="true"><use href="#mark" /></svg>
+        <span class="wordmark"><span class="wordmark__lead">Lead</span><span class="wordmark__well">Well</span></span>
+      </a>
+      <p>A quiet instrument for leading people well. At work, at church and at home.</p>
+      <a class="foot__link" href="/signin">Sign in</a>
+    </div>
+  </footer>
+</body>
+</html>

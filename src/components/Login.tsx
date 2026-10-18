@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   devTestUserConfigured,
   signInAsTestUser,
@@ -9,9 +9,10 @@ import { Button } from "@/components/base/buttons/button";
 import { Mark, Wordmark } from "./brand/glyphs";
 
 /** Full-screen sign-in gate shown when there's no authenticated session. */
-export function Login() {
+export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const startedGoogle = useRef(false);
 
   const onSignIn = async () => {
     setError(null);
@@ -24,6 +25,14 @@ export function Login() {
       setBusy(false);
     }
   };
+
+  // Landing "Continue with Google" lands here so OAuth starts on this origin
+  // (the same redirect URLs as the in-app button). StrictMode remounts; once.
+  useEffect(() => {
+    if (!autoStartGoogle || !supabaseConfigured || startedGoogle.current) return;
+    startedGoogle.current = true;
+    void onSignIn();
+  }, [autoStartGoogle]);
 
   const onTestSignIn = async () => {
     setError(null);

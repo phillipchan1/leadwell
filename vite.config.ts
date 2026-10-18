@@ -6,7 +6,19 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   // The demo build is served from wherever it's hosted, not a site root.
   base: process.env.VITE_DEMO === "1" ? "./" : "/",
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: "leadwell-demo-html",
+      transformIndexHtml(html) {
+        if (process.env.VITE_DEMO === "1") {
+          return html.replace("/*LEADWELL_DEMO*/false", "true");
+        }
+        return html;
+      },
+    },
+  ],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
   },

@@ -2,6 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* Signed-out visitors to `/` see the static marketing page. Signed-in
+         users and OAuth callbacks stay here so the existing redirect URLs
+         keep working. Demo builds skip this (`/*LEADWELL_DEMO*/false`). */
+      (function () {
+        if (/*LEADWELL_DEMO*/false) return;
+        var path = location.pathname.replace(/\/$/, "") || "/";
+        if (path !== "/") return;
+        var q = location.search;
+        var h = location.hash;
+        if (/(?:^|[?&])(?:code|error|error_description)=/.test(q) || /access_token|refresh_token/.test(h)) return;
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (!k || k.indexOf("sb-") !== 0 || k.indexOf("-auth-token") === -1) continue;
+            if (k.indexOf("code-verifier") !== -1) continue;
+            var v = JSON.parse(localStorage.getItem(k) || "null");
+            var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+            if (token) return;
+          }
+        } catch (e) {}
+        location.replace("/landing/" + q + h);
+      })();
+    </script>
     <!-- viewport-fit=cover exposes env(safe-area-inset-*) on notched iPhones;
          interactive-widget makes the Android keyboard resize the layout
          instead of overlaying it. -->
