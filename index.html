@@ -3,27 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      /* Signed-out visitors to `/` see the static marketing page. Signed-in
-         users and OAuth callbacks stay here so the existing redirect URLs
-         keep working. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
+      /* Signed-out visitors to `/` go to the static landing without downloading
+         the app bundle. Signed-in users, every other route, and OAuth callbacks
+         load the app. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
       (function () {
         var LEADWELL_DEMO = false;
-        if (LEADWELL_DEMO) return;
+        function loadApp() {
+          // LEADWELL_LOAD_APP
+        }
+        function isCallback(q, h) {
+          return (
+            /(?:^|[?&])(?:code|error|error_description)=/.test(q) ||
+            /access_token|refresh_token/.test(h)
+          );
+        }
+        function hasSession() {
+          try {
+            for (var i = 0; i < localStorage.length; i++) {
+              var k = localStorage.key(i);
+              if (!k || k.indexOf("sb-") !== 0 || k.indexOf("-auth-token") === -1) continue;
+              if (k.indexOf("code-verifier") !== -1) continue;
+              var v = JSON.parse(localStorage.getItem(k) || "null");
+              var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
+              if (token) return true;
+            }
+          } catch (e) {}
+          return false;
+        }
+        if (LEADWELL_DEMO) {
+          loadApp();
+          return;
+        }
         var path = location.pathname.replace(/\/$/, "") || "/";
-        if (path !== "/") return;
         var q = location.search;
         var h = location.hash;
-        if (/(?:^|[?&])(?:code|error|error_description)=/.test(q) || /access_token|refresh_token/.test(h)) return;
-        try {
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (!k || k.indexOf("sb-") !== 0 || k.indexOf("-auth-token") === -1) continue;
-            if (k.indexOf("code-verifier") !== -1) continue;
-            var v = JSON.parse(localStorage.getItem(k) || "null");
-            var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
-            if (token) return;
-          }
-        } catch (e) {}
+        if (path !== "/" || isCallback(q, h) || hasSession()) {
+          loadApp();
+          return;
+        }
         location.replace("/landing/" + q + h);
       })();
     </script>

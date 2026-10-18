@@ -8,7 +8,7 @@
  *
  * Bump CACHE_VERSION to evict every cache on the next deploy.
  */
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4";
 const SHELL_CACHE = `leadwell-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `leadwell-assets-${CACHE_VERSION}`;
 const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE];
