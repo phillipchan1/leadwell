@@ -1,15 +1,17 @@
 /* LeadWell landing — vanilla, no dependencies.
  *
- * The page is one day at the well. The mark (ripples in a well, a gilt drop at
- * the center) is drawn live on a canvas in the hero and again at night; the
- * People and Meetings chapters are pinned sequences the scroll drives; the
- * page keeps its own clock from first light to night.
+ * The page is one day at the well, 06:30 to 22:50. One water surface sits
+ * behind the whole page (WebGL, with a 2D canvas fallback). Its color, light
+ * and reflections come from the hour of the chapter in view; it ripples where
+ * a drop lands, where you tap and where the pointer passes; at nightfall the
+ * view tilts up to a horizon, the sun sets into its own reflection, and at the
+ * end it tilts back down into the well.
  *
- * Everything here is an enhancement. With no script the page is complete and
- * every section is plain flow. Under prefers-reduced-motion nothing pins and
- * nothing drifts: each piece shows its finished state, and the controls still
- * work. Only transforms and opacity move on HTML; SVG and canvas geometry
- * moves inside two contained charts. */
+ * Everything here is an enhancement. With no script the page is complete
+ * plain flow and each chapter paints its own background color. Under
+ * prefers-reduced-motion nothing pins and nothing drifts: the water is one
+ * still frame per chapter, each sequence shows its finished state, and the
+ * controls still work. */
 (() => {
   "use strict";
 
@@ -21,19 +23,23 @@
   const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const smooth = (t) => t * t * (3 - 2 * t);
-  const SVG = "http://www.w3.org/2000/svg";
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const SVGNS = "http://www.w3.org/2000/svg";
   const TAU = Math.PI * 2;
-
+  const K = 0.35; // the water scrolls at this fraction of the page: it's deeper than the paper
   const svgEl = (tag, attrs = {}, parent) => {
-    const el = document.createElementNS(SVG, tag);
+    const el = document.createElementNS(SVGNS, tag);
     for (const k in attrs) el.setAttribute(k, attrs[k]);
     if (parent) parent.appendChild(el);
     return el;
   };
+  let W = window.innerWidth;
+  let H = window.innerHeight;
 
-  /* ── Split headings into words that rise out of a mask ────────────── */
+  /* ── Headings: split into words just before they're needed ───────── */
 
   function split(el) {
+    if (el.classList.contains("is-split")) return;
     let n = 0;
     const walk = (node) => {
       for (const child of Array.from(node.childNodes)) {
@@ -64,480 +70,1051 @@
     walk(el);
     el.classList.add("is-split");
   }
-  $$("[data-split]").forEach(split);
 
-  /* ── Reveal on scroll ─────────────────────────────────────────────── */
-
-  const heroTitle = $(".hero__title");
-  const revealables = $$("[data-reveal], [data-split]").filter((el) => el !== heroTitle);
+  const revealables = $$("[data-reveal], [data-split]");
+  const placeEls = $$(".place");
   if ("IntersectionObserver" in window) {
+    const pre = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          if (!still) split(e.target);
+          pre.unobserve(e.target);
+        }
+      },
+      { rootMargin: "0px 0px 60% 0px" }
+    );
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           if (!e.isIntersecting) continue;
+          if (!still && e.target.hasAttribute("data-split")) split(e.target);
           e.target.classList.add("is-in");
           io.unobserve(e.target);
         }
       },
       { rootMargin: "0px 0px -10% 0px", threshold: 0.06 }
     );
+    $$("[data-split]").forEach((el) => pre.observe(el));
     revealables.forEach((el) => io.observe(el));
   } else {
     revealables.forEach((el) => el.classList.add("is-in"));
+    placeEls.forEach((el) => el.classList.add("is-in"));
   }
-  // The hero doesn't wait for a scroll; two frames so the words have a start to leave from.
-  requestAnimationFrame(() => requestAnimationFrame(() => heroTitle && heroTitle.classList.add("is-in")));
 
-  /* ── The well: a live drawing of the mark ─────────────────────────── */
-
-  const FLAME = typeof Path2D === "function" ? new Path2D("M12 3.2c2.7 3.2 4.8 5.8 4.8 9a4.8 4.8 0 0 1-9.6 0c0-3.2 2.1-5.8 4.8-9z") : null;
-  const PALETTES = {
-    leather: { line: "172,195,193", gilt: "225,179,77", disc: "#1a4f51", discFar: "#0f3e40", ink: "#eef3f1", inkFar: "#acc3c1", vesper: "#c3b3f6", vesperFill: "#8d74e0" },
-    night: { line: "185,176,217", gilt: "225,179,77", disc: "#2a2350", discFar: "#1d1838", ink: "#ece8f7", inkFar: "#b9b0d9", vesper: "#c3b3f6", vesperFill: "#8d74e0" },
+  /* ── Palettes: one per hour ───────────────────────────────────────── */
+  // [chapter background, water base, light, accent, [caustics, ripple light, glints], light-pool]
+  // Light chapters render their water a shade under the paper so the caustics
+  // can brighten toward white; the average stays on the chapter's color.
+  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+  const pal = (bg, base, lite, acc, prm, glow) => ({ bg: hex(bg), base: hex(base), lite: hex(lite), acc: hex(acc), prm, glow });
+  const PAL = {
+    dawn: pal("#013133", "#013133", "#3f9a91", "#e1b34d", [0.3, 0.9, 0.7], 0.3),
+    morning: pal("#eef3f1", "#e6eeeb", "#ffffff", "#e8c470", [0.85, 0.5, 0.35], 0.14),
+    forenoon: pal("#023436", "#023436", "#46a399", "#e1b34d", [0.28, 0.9, 0.6], 0.16),
+    "late-morning": pal("#eef3f1", "#e6eeeb", "#ffffff", "#e8c470", [0.85, 0.5, 0.35], 0.14),
+    noon: pal("#f3f5f1", "#ebefe9", "#ffffff", "#f0d590", [0.9, 0.5, 0.4], 0.16),
+    afternoon: pal("#f0f2ec", "#e8ebe3", "#ffffff", "#ebc77c", [0.85, 0.5, 0.4], 0.16),
+    late: pal("#f4f0e6", "#ede7da", "#fffaf0", "#e8b964", [0.85, 0.5, 0.4], 0.2),
+    golden: pal("#0b2e30", "#0b2e30", "#7a9a78", "#eaa64e", [0.28, 0.9, 0.8], 0.3),
+    dusk: pal("#15122b", "#15122b", "#4b3f7a", "#f0a868", [0.2, 0.8, 0.6], 0.1),
+    night: pal("#15122b", "#15122b", "#463c84", "#c3b3f6", [0.22, 0.8, 0.5], 0.08),
+    deep: pal("#0f1427", "#0f1427", "#33427a", "#c3b3f6", [0.24, 0.85, 0.5], 0.08),
   };
-  const LEVEL = { thriving: "#6fcf97", solid: "#8fc1b7", watch: "#e9b54c", strained: "#f08a5b" };
+  const mixPal = (a, b, t) => {
+    if (t <= 0 || a === b) return a;
+    if (t >= 1) return b;
+    const m = (x, y) => x.map((v, i) => lerp(v, y[i], t));
+    return { bg: m(a.bg, b.bg), base: m(a.base, b.base), lite: m(a.lite, b.lite), acc: m(a.acc, b.acc), prm: m(a.prm, b.prm), glow: lerp(a.glow, b.glow, t) };
+  };
 
-  class Well {
-    constructor(canvas, opts) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext("2d");
-      this.opts = opts;
-      this.pal = PALETTES[opts.palette];
-      this.ripples = [];
-      this.t = opts.intro ? 0 : 3;
-      this.nextAmbient = opts.intro ? 2.6 : 0.4;
-      this.splashed = !opts.intro;
-      this.raf = 0;
-      this.visible = false;
-      this.nodes = opts.nodes.map((n) => ({ ...n, a: (n.a * Math.PI) / 180, dx: 0, dy: 0 }));
-      this.frame = this.frame.bind(this);
-      this.resize();
-      if ("ResizeObserver" in window) {
-        new ResizeObserver(() => {
-          this.resize();
-          if (!this.raf) this.draw();
-        }).observe(canvas);
-      }
-      if ("IntersectionObserver" in window) {
-        new IntersectionObserver(([e]) => {
-          this.visible = e.isIntersecting;
-          if (this.visible) {
-            if (opts.dropOnEnter && !this.entered && !still) {
-              this.entered = true;
-              this.drop(this.cx, this.cy, 1.3, true);
-            }
-            this.start();
-          } else this.stop();
-        }).observe(canvas);
+  // The sky at nightfall, keyed by the pinned sequence's progress.
+  const SKY = [
+    { p: 0, z: hex("#2b3b68"), h: hex("#f0ad6c"), s: hex("#ffd98a"), sh: 4.2 },
+    { p: 0.3, z: hex("#25245a"), h: hex("#e8875c"), s: hex("#ffbe66"), sh: 1.9 },
+    { p: 0.55, z: hex("#1c1842"), h: hex("#b9587a"), s: hex("#ff9d5c"), sh: 0.15 },
+    { p: 0.7, z: hex("#17132f"), h: hex("#62406f"), s: hex("#ff8f5a"), sh: -1.5 },
+    { p: 0.86, z: hex("#141128"), h: hex("#3a2c5e"), s: hex("#ff8f5a"), sh: -2.2 },
+    { p: 1, z: hex("#120f25"), h: hex("#2b2551"), s: hex("#ff8f5a"), sh: -2.6 },
+  ];
+  function skyAt(p) {
+    let i = 0;
+    while (i < SKY.length - 2 && p > SKY[i + 1].p) i++;
+    const a = SKY[i];
+    const b = SKY[i + 1];
+    const t = smooth(clamp((p - a.p) / (b.p - a.p)));
+    const m = (x, y) => x.map((v, k) => lerp(v, y[k], t));
+    return { z: m(a.z, b.z), h: m(a.h, b.h), s: m(a.s, b.s), sh: lerp(a.sh, b.sh, t) };
+  }
+
+  /* ── Chapters, measured once per layout ───────────────────────────── */
+
+  const chapterEls = $$("main > section, .foot");
+  const pins = {};
+  $$("[data-pin]").forEach((el) => (pins[el.dataset.pin] = { el, top: 0, h: 0 }));
+  let chapters = [];
+  const toMin = (s) => {
+    const [h, m] = s.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const docTop = (el) => el.getBoundingClientRect().top + window.scrollY;
+  function measure() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    chapters = chapterEls.map((el, i) => {
+      const top = docTop(el);
+      const [cTop, cBottom] = contentEdges(el);
+      const next = chapterEls[i + 1];
+      const hour = el.dataset.hour;
+      const h0 = hour ? toMin(hour) : 22 * 60 + 50;
+      const nextHour = next && next.dataset.hour;
+      const h1 = "hold" in el.dataset ? h0 : el.dataset.hourEnd ? toMin(el.dataset.hourEnd) : nextHour ? toMin(nextHour) : 22 * 60 + 50;
+      return { el, top, bottom: top + el.offsetHeight, cTop, cBottom, pal: PAL[el.dataset.pal] || PAL.deep, palEnd: PAL[el.dataset.palEnd || el.dataset.pal] || PAL.deep, h0, h1, name: el.classList[0] };
+    });
+    for (const k in pins) {
+      pins[k].top = docTop(pins[k].el);
+      pins[k].h = pins[k].el.offsetHeight;
+    }
+    // Where one hour gives way to the next: in the gap between their content,
+    // never over text, and never faster than 20% of the screen.
+    chapters.forEach((c, i) => {
+      if (!i) return (c.edge = { c: -1e5, half: 1 });
+      const prev = chapters[i - 1];
+      const gap = Math.max(0, c.cTop - prev.cBottom);
+      c.edge = { c: (prev.cBottom + c.cTop) / 2, half: clamp(gap / 2, H * 0.1, H * 0.16) };
+    });
+    measureLocal();
+    dirty = true;
+  }
+  function contentEdges(el) {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const kid of el.children) {
+      if (kid.getAttribute("aria-hidden") === "true" || kid.classList.contains("sr-only")) continue;
+      let a;
+      let b;
+      const stage = kid.classList.contains("pin") && !still && $(".pin__stage", kid);
+      if (stage) {
+        const sr = stage.getBoundingClientRect();
+        const ir = stage.firstElementChild.getBoundingClientRect();
+        const pt = docTop(kid);
+        a = pt + (ir.top - sr.top);
+        b = pt + kid.offsetHeight - (sr.bottom - ir.bottom);
       } else {
-        this.visible = true;
-        this.start();
+        const r = kid.getBoundingClientRect();
+        a = r.top + window.scrollY;
+        b = r.bottom + window.scrollY;
+      }
+      lo = Math.min(lo, a);
+      hi = Math.max(hi, b);
+    }
+    const top = docTop(el);
+    return lo === Infinity ? [top, top + el.offsetHeight] : [lo, hi];
+  }
+  if ("IntersectionObserver" in window) {
+    const near = new IntersectionObserver((es) => es.forEach((e) => e.target.classList.toggle("is-near", e.isIntersecting)), { rootMargin: "50% 0px" });
+    for (const k in pins) near.observe(pins[k].el);
+  }
+  const pinProgress = (k, y) => {
+    const p = pins[k];
+    if (!p || still) return still ? 1 : 0;
+    const travel = p.h - H;
+    return travel > 0 ? clamp((y - p.top) / travel) : 1;
+  };
+  const chapterBy = (name) => chapters.find((c) => c.name === name);
+
+  /* ── The day: everything the water and the header need, from scroll ─ */
+
+  const day = {
+    y: 0, S: 0, p0: PAL.dawn, p1: PAL.dawn, p2: PAL.dawn, s1: -1e5, s2: 1e5, soft: 100, soft2: 100,
+    hz: -1, tilt: 0, skyTop: -1e5, waterBottom: 1e5,
+    sun: [0, 0, 60, 0], sky: SKY[0], stars: 0, moon: [0, 0, 0], glow: [0, 0, 1, 0], night: false, minute: 390,
+  };
+
+  function computeDay(y) {
+    day.y = y;
+    day.S = y * K;
+    if (!chapters.length) return;
+    const c = y + H / 2;
+    let i = 0;
+    for (let k = 0; k < chapters.length; k++) if (c >= chapters[k].edge.c) i = k;
+    const ch = chapters[i];
+    const prev = chapters[i - 1];
+    const next = chapters[i + 1];
+    const prog = clamp((c - ch.top) / Math.max(1, ch.bottom - ch.top));
+    day.p1 = still ? ch.pal : mixPal(ch.pal, ch.palEnd, prog);
+    day.p0 = prev ? prev.palEnd : day.p1;
+    day.p2 = next ? next.pal : day.p1;
+    day.s1 = ch.edge.c - y;
+    day.soft = ch.edge.half;
+    day.s2 = next ? next.edge.c - y : 1e5;
+    day.soft2 = next ? next.edge.half : 1;
+
+    // Clock: the page's own, not a feature.
+    const probe = y + H * 0.35;
+    let cc = chapters[0];
+    for (const x of chapters) if (probe >= x.top) cc = x;
+    day.minute = Math.round(lerp(cc.h0, cc.h1, clamp((probe - cc.top) / Math.max(1, cc.bottom - cc.top))));
+
+    // Light pool: the sun crosses the page from the right in the morning to the left by evening.
+    const frac = clamp((day.minute - 390) / (1370 - 390));
+    day.glow = [lerp(0.92, 0.08, frac) * W, -0.25 * H, 0.95 * H, 1];
+    if (heroWell.cx != null && y < H * 1.2) {
+      const hp = clamp(y / H);
+      const hx = heroWell.cx;
+      const hy = heroWell.cy - y * K;
+      day.glow = [lerp(hx, day.glow[0], hp), lerp(hy, day.glow[1], hp), lerp(heroWell.R * 0.6, day.glow[2], hp), 1];
+    }
+
+    // Nightfall, prayer, the end: a horizon comes down, then lifts away.
+    const nf = chapterBy("nightfall");
+    const pr = chapterBy("prayer");
+    const ct = chapterBy("cta");
+    day.hz = -1;
+    day.tilt = 0;
+    day.skyTop = -1e5;
+    day.waterBottom = 1e5;
+    day.stars = 0;
+    const moonX = (W < 700 ? 0.88 : 0.78) * W;
+    day.moon = [moonX, 0, 0];
+    day.sun = [0.5 * W, 0, Math.min(W, H) * 0.075, 0];
+    day.night = day.minute >= 21 * 60 + 5;
+    if (!nf) return;
+    const r = day.sun[2];
+    let p = -1;
+    let hzF = 0.62;
+    if (still) {
+      // One still frame: the sun just gone, the afterglow on the water, the first stars.
+      if (y + H > nf.top && y < (pr ? pr.bottom : nf.bottom)) {
+        p = 0.72;
+        day.tilt = 1;
+        day.skyTop = nf.top - y;
+        day.waterBottom = nf.bottom - y;
+        day.hz = day.skyTop + (nf.bottom - nf.top) * 0.62;
+      }
+    } else if (y >= nf.top - 1) {
+      p = pinProgress("night", y);
+      const down = smooth(clamp(p / 0.16));
+      day.tilt = down;
+      day.hz = lerp(-0.04, hzF, down) * H;
+      if (ct && y + H > ct.top) {
+        const e = clamp(1 - (ct.top - y) / H);
+        day.hz = lerp(hzF, -0.06, smooth(e)) * H;
+        day.tilt = 1 - smooth(clamp((e - 0.35) / 0.65));
+      }
+      if (ct && y > ct.top) day.tilt = 0;
+    }
+    if (p >= 0) {
+      const s = skyAt(still ? p : Math.min(1, p));
+      day.sky = s;
+      const h = s.sh;
+      day.sun = [0.5 * W, day.hz - h * r, r, clamp((h + 2.4) / 1.4)];
+      day.stars = clamp((-1 - h) / 0.7);
+      day.night = h < -1;
+      const ma = clamp((p - 0.74) / 0.2);
+      day.moon = [moonX, day.hz - lerp(0.05, 0.3, ma) * H, still ? 0.8 : ma];
+      if (pr && y > pr.top - H) {
+        day.stars = 1;
+        day.moon[2] = 1;
+        day.moon[1] = day.hz - 0.3 * H;
       }
     }
-
-    resize() {
-      const r = this.canvas.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      this.w = r.width;
-      this.h = r.height;
-      this.canvas.width = Math.round(r.width * dpr);
-      this.canvas.height = Math.round(r.height * dpr);
-      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const c = this.opts.center(this.w, this.h);
-      this.cx = c.x;
-      this.cy = c.y;
-      this.R = c.R;
-      this.scale = clamp(c.R / 300, 0.72, 1.25);
-      const g = this.ctx.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, this.R * 1.1);
-      g.addColorStop(0, `rgba(${this.pal.gilt},.2)`);
-      g.addColorStop(0.5, `rgba(${this.pal.gilt},.035)`);
-      g.addColorStop(1, `rgba(${this.pal.gilt},0)`);
-      this.glow = g;
+    if (ct && y + H * 0.5 > ct.top) {
+      day.stars = 1;
+      day.night = true;
     }
+  }
 
-    start() {
-      if (still) {
-        this.draw();
-        return;
-      }
-      if (this.raf) return;
-      this.last = performance.now();
-      this.raf = requestAnimationFrame(this.frame);
+  /* ── Drops: the water's memory of where it was touched ────────────── */
+
+  const drops = [];
+  let clock0 = performance.now();
+  const now = () => (performance.now() - clock0) / 1000;
+  function toWater(x, y) {
+    let tilt = day.tilt;
+    if (!(y > day.skyTop && y < day.waterBottom)) tilt = 0;
+    const yy = Math.max(y - day.hz, 1.5);
+    const d = Math.min((0.3 * H) / yy, 40);
+    const ps = lerp(1, d, tilt);
+    return [(x - W / 2) * ps + W / 2, lerp(y, 0.3 * H * d * 2, tilt) + day.S];
+  }
+  function drop(x, y, s) {
+    if (still) return;
+    const [wx, wy] = toWater(x, y);
+    drops.push({ x: wx, y: wy, t0: now(), s });
+    if (drops.length > 10) drops.shift();
+    kick();
+  }
+  const dropAtWater = (wx, wy, s) => {
+    if (still) return;
+    drops.push({ x: wx, y: wy, t0: now(), s });
+    if (drops.length > 10) drops.shift();
+  };
+
+  /* ── The water: WebGL ──────────────────────────────────────────────── */
+
+  const FRAG = `
+precision highp float;
+uniform vec2 uR; uniform float uK, uT, uS;
+uniform vec3 uA[4]; uniform vec3 uB[4]; uniform vec3 uC[4];
+uniform vec4 uSp; uniform vec4 uHz; uniform vec4 uSun; uniform vec3 uSky0, uSky1, uSunC;
+uniform vec4 uNt; uniform vec4 uGlow; uniform vec4 uD[10]; uniform float uQ;
+float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float caustic(vec2 uv, float t){
+  vec2 p = mod(uv * 6.28318, 6.28318) - 250.0; vec2 i = p; float c = 1.0;
+  for (int n = 0; n < 3; n++) {
+    if (float(n) >= uQ) break;
+    float tt = t * (1.0 - (3.5 / float(n + 1)));
+    i = p + vec2(cos(tt - i.x) + sin(tt + i.y), sin(tt - i.y) + cos(tt + i.x));
+    c += 1.0 / length(vec2(p.x / (sin(i.x + tt) / 0.005), p.y / (cos(i.y + tt) / 0.005)));
+  }
+  c = 1.17 - pow(c / uQ, 1.4);
+  return clamp(pow(abs(c), 8.0), 0.0, 1.0);
+}
+float stars(vec2 q, float cell){
+  vec2 g = floor(q / cell); vec2 f = fract(q / cell) - 0.5; float h = hash(g);
+  if (h < 0.8) return 0.0;
+  vec2 o = vec2(hash(g + 3.7), hash(g + 9.1)) - 0.5;
+  float d = length(f - o * 0.7) * cell;
+  float rr = max(1.6, uK * 0.9);
+  return smoothstep(rr, rr * 0.2, d) * (0.6 + 0.4 * sin(uT * 1.7 + h * 50.0)) * (h - 0.8) * 5.0;
+}
+vec3 sky(vec2 q, float hz){
+  float t = clamp((hz - q.y) / max(hz, 60.0), 0.0, 1.0);
+  vec3 c = mix(uSky1, uSky0, smoothstep(0.0, 1.0, pow(t, 0.6)));
+  float ds = length(q - uSun.xy);
+  float core = smoothstep(uSun.z + uK, uSun.z - uK, ds);
+  c = mix(c, uSunC * (1.05 - 0.25 * ds / uSun.z) + vec3(0.12, 0.08, 0.0), core * uSun.w);
+  c += uSunC * uSun.w * (exp(-ds / (uSun.z * 1.2)) * 0.32 + exp(-ds / (uSun.z * 5.0)) * 0.2);
+  c += uSky1 * exp(-(hz - q.y) / 16.0) * 0.2;
+  vec2 mq = q - uNt.zw;
+  float md = length(mq);
+  float disc = smoothstep(15.0 + uK, 15.0 - uK, md) * (1.0 - 0.94 * smoothstep(15.0 + uK, 15.0 - uK, length(mq - vec2(-7.0, -3.5))));
+  c += (vec3(0.96, 0.94, 0.86) * disc + vec3(0.55, 0.52, 0.8) * exp(-md / 70.0) * 0.2) * uNt.y;
+  if (uNt.x > 0.001) c += vec3(0.92, 0.9, 1.0) * stars(q, 30.0) * uNt.x * smoothstep(0.04, 0.3, t);
+  return c;
+}
+void main(){
+  vec2 p = vec2(gl_FragCoord.x * uK, uR.y - gl_FragCoord.y * uK);
+  float m1 = smoothstep(uSp.x - uSp.z, uSp.x + uSp.z, p.y);
+  float m2 = smoothstep(uSp.y - uSp.w, uSp.y + uSp.w, p.y);
+  vec3 base = mix(mix(uA[0], uB[0], m1), uC[0], m2);
+  vec3 lite = mix(mix(uA[1], uB[1], m1), uC[1], m2);
+  vec3 acc = mix(mix(uA[2], uB[2], m1), uC[2], m2);
+  vec3 prm = mix(mix(uA[3], uB[3], m1), uC[3], m2);
+  float hz = uHz.x;
+  float band = 0.18 * uR.y;
+  float tilt = uHz.y * smoothstep(uHz.z, uHz.z + band, p.y) * (1.0 - smoothstep(uHz.w - band, uHz.w, p.y));
+  vec3 col;
+  {
+    float yy = max(p.y - hz, 1.5);
+    float d = min(0.3 * uR.y / yy, 40.0);
+    float ps = mix(1.0, d, tilt);
+    vec2 w = vec2((p.x - 0.5 * uR.x) * ps + 0.5 * uR.x, mix(p.y, 0.6 * uR.y * d, tilt) + uS);
+    vec2 k1 = vec2(0.018, 0.011); vec2 k2 = vec2(-0.012, 0.02); vec2 k3 = vec2(0.031, -0.024);
+    vec2 g = cos(dot(k1, w) + uT * 0.8) * k1 + cos(dot(k2, w) - uT * 0.6) * k2 * 0.9 + cos(dot(k3, w) + uT * 1.3) * k3 * 0.45;
+    for (int i = 0; i < 10; i++) {
+      vec4 dr = uD[i];
+      if (dr.w <= 0.0) continue;
+      vec2 v = w - dr.xy; float r = length(v) + 0.001;
+      float x = r - dr.z * 230.0;
+      float env = exp(-x * x / 4200.0) * dr.w * exp(-dr.z * 0.55) * smoothstep(0.0, 40.0, r);
+      float ph = x * 0.085;
+      g += env * (cos(ph) * 0.085 - sin(ph) * x / 2100.0) * (v / r) * 6.0;
     }
-
-    stop() {
-      cancelAnimationFrame(this.raf);
-      this.raf = 0;
+    vec3 top = base;
+    if (tilt < 0.999) {
+      float c = caustic((w + g * 46.0) / 620.0, uT * 0.33);
+      top = base + (lite - base) * c * prm.x;
+      float sl = dot(g, vec2(-0.6, -0.8));
+      top += (lite * 0.5 + 0.18) * sl * prm.y * 0.55;
+      vec3 n = normalize(vec3(-g * 1.5, 1.0));
+      top += acc * pow(max(dot(n, normalize(vec3(-0.35, -0.5, 0.8))), 0.0), 90.0) * prm.z;
+      float gd = length(p - uGlow.xy);
+      top += acc * uGlow.w * exp(-gd / max(uGlow.z, 1.0)) * (0.55 + 0.45 * c);
+      if (uNt.x > 0.001) top += vec3(0.9, 0.88, 1.0) * stars(w + g * 30.0, 36.0) * uNt.x * 0.6;
     }
-
-    setStill() {
-      this.stop();
-      this.t = 3;
-      this.splashed = true;
-      this.ripples.length = 0;
-      this.nodes.forEach((n) => (n.dx = n.dy = 0));
-      this.draw();
+    vec3 hor = base;
+    if (tilt > 0.001 && p.y < hz) {
+      hor = sky(p, hz);
+    } else if (tilt > 0.001) {
+      float near = clamp(yy / (uR.y * 0.42), 0.0, 1.0);
+      float wob = sin(w.y * 0.045 + uT * 1.6) * 0.6 + sin(w.y * 0.11 - uT * 2.3 + w.x * 0.004) * 0.4;
+      vec2 pm = vec2(p.x + g.x * 150.0 / max(ps, 1.0) + wob * (4.0 + yy * 0.09), hz - yy * 0.62 + g.y * 260.0 / sqrt(max(ps, 1.0)));
+      pm.y = min(pm.y, hz - 0.5);
+      vec3 refl = sky(pm, hz);
+      hor = mix(base * 0.8, refl, mix(0.94, 0.55, near));
+      float colW = 12.0 + yy * 0.55;
+      float sunVis = uSun.w * clamp((hz - uSun.y + uSun.z) / (2.0 * uSun.z), 0.0, 1.0);
+      float n1 = sin(w.x * 0.07 + sin(w.y * 0.05 + uT) * 2.0 + uT * 1.3) * sin(w.y * 0.13 - uT * 1.1 + sin(w.x * 0.03) * 2.0);
+      float gl = smoothstep(0.5, 0.95, n1 + g.y * 10.0);
+      hor += uSunC * gl * exp(-pow((p.x - uSun.x) / colW, 2.0)) * (0.4 + 1.2 * sunVis) * (0.45 + 0.55 * (1.0 - near));
+      hor += vec3(0.85, 0.85, 1.0) * gl * exp(-pow((p.x - uNt.z) / (colW * 0.55), 2.0)) * uNt.y * 0.55;
     }
+    col = mix(top, hor, smoothstep(0.0, 1.0, tilt));
+  }
+  col += (hash(gl_FragCoord.xy + fract(uT * 7.0)) - 0.5) * 0.02;
+  gl_FragColor = vec4(col, 1.0);
+}`;
+  const VERT = "attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}";
 
-    drop(x, y, strength, gilt) {
-      this.ripples.push({ x, y, t0: this.t, s: strength, gilt });
-      if (this.ripples.length > 28) this.ripples.shift();
+  const water = {
+    canvas: null, gl: null, prog: null, u: {}, ext: null, ready: false, mode: "", scale: 0.6, minScale: 0.24,
+    ft: 0, lastFrame: 0, slow: 0, n: 0,
+  };
+
+  function startWater() {
+    const canvas = document.createElement("canvas");
+    canvas.className = "water";
+    canvas.setAttribute("aria-hidden", "true");
+    document.body.insertBefore(canvas, document.body.firstChild);
+    water.canvas = canvas;
+    let gl = null;
+    try {
+      gl = canvas.getContext("webgl", { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, powerPreference: "low-power" });
+    } catch (e) {
+      gl = null;
     }
-
-    frame(now) {
-      if (motionQuery.matches !== still) {
-        this.raf = 0;
-        request();
-        return;
-      }
-      const dt = Math.min(0.05, (now - this.last) / 1000);
-      this.last = now;
-      this.t += dt;
-      this.step(dt);
-      this.draw();
-      this.raf = requestAnimationFrame(this.frame);
+    if (gl && initGL(gl)) {
+      water.mode = "gl";
+    } else {
+      water.ctx = canvas.getContext("2d");
+      water.mode = water.ctx ? "2d" : "";
+      water.scale = 0.5;
+      if (water.mode) resizeWater();
+      water.ready = !!water.mode;
     }
+    kick();
+  }
 
-    step(dt) {
-      const t = this.t;
-      if (!this.splashed && t >= 0.9) {
-        this.splashed = true;
-        this.drop(this.cx, this.cy, 1.5, true);
-        this.queued = [1.08, 1.32];
-      }
-      if (this.queued && this.queued.length && t >= this.queued[0]) {
-        this.queued.shift();
-        this.drop(this.cx, this.cy, 0.9, true);
-      }
-      if (t >= this.nextAmbient) {
-        this.nextAmbient = t + (this.opts.ambient || 2.8);
-        this.drop(this.cx, this.cy, 0.55, this.opts.palette === "night");
-      }
-      const speed = this.R * 0.36;
-      this.ripples = this.ripples.filter((r) => (t - r.t0) * speed < this.R * 2.6);
-      for (const n of this.nodes) {
-        n.a += n.w * dt;
-        const rr = this.R * n.ring;
-        const x = this.cx + Math.cos(n.a) * rr;
-        const y = this.cy + Math.sin(n.a) * rr;
-        let tx = 0;
-        let ty = 0;
-        for (const r of this.ripples) {
-          const age = t - r.t0;
-          const k = 1 - clamp((age * speed) / (this.R * 2.6));
-          const dx = x - r.x;
-          const dy = y - r.y;
-          const d = Math.hypot(dx, dy) || 1;
-          const delta = d - age * speed;
-          if (Math.abs(delta) > 40) continue;
-          const push = Math.cos((delta / 40) * (Math.PI / 2)) * 9 * r.s * k;
-          tx += (dx / d) * push;
-          ty += (dy / d) * push;
-        }
-        n.dx += (tx - n.dx) * Math.min(1, dt * 9);
-        n.dy += (ty - n.dy) * Math.min(1, dt * 9);
-      }
+  function initGL(gl) {
+    const hi = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+    const src = hi && hi.precision > 0 ? FRAG : FRAG.replace("precision highp", "precision mediump");
+    const sh = (type, s) => {
+      const o = gl.createShader(type);
+      gl.shaderSource(o, s);
+      gl.compileShader(o);
+      return o;
+    };
+    const vs = sh(gl.VERTEX_SHADER, VERT);
+    const fs = sh(gl.FRAGMENT_SHADER, src);
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vs);
+    gl.attachShader(prog, fs);
+    gl.linkProgram(prog);
+    water.gl = gl;
+    water.prog = prog;
+    water.vs = vs;
+    water.fs = fs;
+    water.ext = gl.getExtension("KHR_parallel_shader_compile");
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
+    const soft = /swiftshader|llvmpipe|software|basic render/i.test(renderer);
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    water.soft = soft;
+    water.scale = soft ? 0.3 : coarse ? 0.5 : 0.6;
+    water.minScale = soft ? 0.2 : 0.3;
+    water.q = soft ? 2 : 3;
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    canvas_lost(gl);
+    return true;
+  }
+
+  function canvas_lost(gl) {
+    water.canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      water.ready = false;
+      water.mode = "";
+      water.canvas.classList.remove("is-on");
+    });
+  }
+
+  function linkDone() {
+    const { gl, prog, ext } = water;
+    if (ext && !gl.getProgramParameter(prog, ext.COMPLETION_STATUS_KHR)) return false;
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      // No shader on this device: fall back to the 2D water.
+      water.mode = "";
+      water.canvas.remove();
+      water.canvas = null;
+      const c2 = document.createElement("canvas");
+      c2.className = "water";
+      c2.setAttribute("aria-hidden", "true");
+      document.body.insertBefore(c2, document.body.firstChild);
+      water.canvas = c2;
+      water.ctx = c2.getContext("2d");
+      water.mode = water.ctx ? "2d" : "";
+      water.scale = 0.5;
+      resizeWater();
+      water.ready = !!water.mode;
+      return false;
     }
+    gl.useProgram(prog);
+    const names = ["uQ", "uR", "uK", "uT", "uS", "uA", "uB", "uC", "uSp", "uHz", "uSun", "uSky0", "uSky1", "uSunC", "uNt", "uGlow", "uD"];
+    for (const n of names) water.u[n] = gl.getUniformLocation(prog, n);
+    const loc = gl.getAttribLocation(prog, "a");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    resizeWater();
+    water.ready = true;
+    return true;
+  }
 
-    draw() {
-      const { ctx, w, h, cx, cy, R, pal, t } = this;
-      if (!w) return;
-      ctx.clearRect(0, 0, w, h);
-      const show = (delay, dur = 0.8) => smooth(clamp((t - delay) / dur));
+  function resizeWater() {
+    const c = water.canvas;
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    water.cssW = r.width || W;
+    water.cssH = r.height || H;
+    c.width = Math.max(2, Math.round(water.cssW * water.scale));
+    c.height = Math.max(2, Math.round(water.cssH * water.scale));
+    if (water.gl && water.mode === "gl") water.gl.viewport(0, 0, c.width, c.height);
+    water.k = water.cssW / c.width;
+  }
 
-      // Depth: a warm glow where the drop lands.
-      ctx.globalAlpha = show(0.9, 1.2);
-      ctx.fillStyle = this.glow;
-      ctx.fillRect(0, 0, w, h);
+  const dropData = new Float32Array(40);
+  const palArr = (p) => new Float32Array([...p.base, ...p.lite, ...p.acc, ...p.prm]);
 
-      // The three rings of the mark, turning very slowly.
-      const ringA = show(1.0, 1.2);
-      ctx.lineCap = "round";
+  function drawGL(t) {
+    const { gl, u } = water;
+    gl.uniform1f(u.uQ, water.q || 3);
+    gl.uniform2f(u.uR, water.cssW, water.cssH);
+    gl.uniform1f(u.uK, water.k);
+    gl.uniform1f(u.uT, t);
+    gl.uniform1f(u.uS, day.S % 26000);
+    gl.uniform3fv(u.uA, palArr(day.p0));
+    gl.uniform3fv(u.uB, palArr(day.p1));
+    gl.uniform3fv(u.uC, palArr(day.p2));
+    gl.uniform4f(u.uSp, day.s1, day.s2, day.soft, day.soft2);
+    gl.uniform4f(u.uHz, day.hz, day.tilt, day.skyTop, day.waterBottom);
+    gl.uniform4f(u.uSun, day.sun[0], day.sun[1], day.sun[2], day.sun[3]);
+    gl.uniform3fv(u.uSky0, day.sky.z);
+    gl.uniform3fv(u.uSky1, day.sky.h);
+    gl.uniform3fv(u.uSunC, day.sky.s);
+    gl.uniform4f(u.uNt, day.stars, day.moon[2], day.moon[0], day.moon[1]);
+    const gs = day.p1.glow * day.glow[3];
+    gl.uniform4f(u.uGlow, day.glow[0], day.glow[1], day.glow[2], gs);
+    dropData.fill(0);
+    const tn = now();
+    drops.forEach((d, i) => {
+      const age = tn - d.t0;
+      dropData.set([d.x, d.y - Math.floor(day.S / 26000) * 26000, age, age < 7 ? d.s : 0], i * 4);
+    });
+    gl.uniform4fv(u.uD, dropData);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // The 2D water: the same day, drawn plainly.
+  const css = (c, a = 1) => `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${a})`;
+  function draw2D(t) {
+    const ctx = water.ctx;
+    const s = 1 / water.k;
+    const w = water.cssW;
+    const h = water.cssH;
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    const stop = (y, c) => g.addColorStop(clamp(y / h), css(c));
+    stop(day.s1 - day.soft, day.p0.base);
+    stop(day.s1 + day.soft, day.p1.base);
+    stop(day.s2 - day.soft2, day.p1.base);
+    stop(day.s2 + day.soft2, day.p2.base);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    const rg = ctx.createRadialGradient(day.glow[0], day.glow[1], 0, day.glow[0], day.glow[1], day.glow[2] * 1.6);
+    rg.addColorStop(0, css(day.p1.acc, 0.28 * day.p1.glow / 0.3));
+    rg.addColorStop(1, css(day.p1.acc, 0));
+    ctx.fillStyle = rg;
+    ctx.fillRect(0, 0, w, h);
+    if (day.tilt > 0.01) {
+      const top = Math.max(0, day.skyTop);
+      const bottom = Math.min(h, day.waterBottom);
+      const hz = day.hz;
+      ctx.globalAlpha = day.tilt;
+      const sg = ctx.createLinearGradient(0, Math.min(top, hz), 0, hz);
+      sg.addColorStop(0, css(day.sky.z));
+      sg.addColorStop(1, css(day.sky.h));
+      ctx.fillStyle = sg;
+      ctx.fillRect(0, top, w, Math.max(0, hz - top));
       ctx.save();
-      ctx.translate(cx, cy);
-      ctx.globalAlpha = ringA;
-      ctx.strokeStyle = `rgba(${pal.line},.42)`;
-      ctx.lineWidth = 2.2 * this.scale;
-      ctx.rotate(-0.35 + t * 0.02);
       ctx.beginPath();
-      ctx.arc(0, 0, R * 0.36, 0, TAU * 0.76);
-      ctx.stroke();
-      ctx.rotate(-t * 0.02);
-      ctx.lineWidth = 1.1;
-      ctx.strokeStyle = `rgba(${pal.line},.2)`;
+      ctx.rect(0, top, w, Math.max(0, hz - top));
+      ctx.clip();
+      ctx.fillStyle = css(day.sky.s, day.sun[3]);
       ctx.beginPath();
-      ctx.arc(0, 0, R * 0.62, 0, TAU);
-      ctx.stroke();
-      ctx.setLineDash([2, 7]);
-      ctx.strokeStyle = `rgba(${pal.line},.18)`;
-      ctx.beginPath();
-      ctx.arc(0, 0, R * 0.9, 0, TAU);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.arc(day.sun[0], day.sun[1], day.sun[2], 0, TAU);
+      ctx.fill();
       ctx.restore();
-
-      // Ripples, each from wherever its drop fell.
-      const speed = R * 0.36;
-      const ripples = still ? this.stillRipples() : this.ripples;
-      for (const r of ripples) {
-        const age = r.age != null ? r.age : t - r.t0;
-        const rad = age * speed;
-        if (rad <= 0) continue;
-        const k = 1 - clamp(rad / (R * 2.6));
-        const a = r.s * k * k * 0.55;
-        if (a < 0.01) continue;
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = r.gilt ? `rgba(${pal.gilt},${a.toFixed(3)})` : `rgba(${pal.line},${(a * 0.8).toFixed(3)})`;
-        ctx.lineWidth = 0.8 + 1.6 * k * r.s;
-        ctx.beginPath();
-        ctx.arc(r.x, r.y, rad, 0, TAU);
-        ctx.stroke();
-        if (rad > 18) {
-          ctx.strokeStyle = r.gilt ? `rgba(${pal.gilt},${(a * 0.4).toFixed(3)})` : `rgba(${pal.line},${(a * 0.3).toFixed(3)})`;
-          ctx.lineWidth = 0.8;
-          ctx.beginPath();
-          ctx.arc(r.x, r.y, rad * 0.86, 0, TAU);
-          ctx.stroke();
-        }
-      }
-
-      // The people, in rings around you.
-      const sc = this.scale;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      this.nodes.forEach((n, i) => {
-        const appear = show(1.15 + n.ring * 0.45 + i * 0.04, 0.9);
-        if (appear <= 0) return;
-        const rr = R * n.ring;
-        const x = cx + Math.cos(n.a) * rr + n.dx;
-        const y = cy + Math.sin(n.a) * rr + n.dy;
-        const far = n.ring > 0.8;
-        const rad = (far ? 12 : n.ring > 0.5 ? 17 : 20) * sc * (0.6 + 0.4 * appear);
-        ctx.globalAlpha = appear;
-        ctx.fillStyle = far ? pal.discFar : pal.disc;
-        ctx.strokeStyle = `rgba(${pal.line},${far ? 0.3 : 0.6})`;
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.arc(x, y, rad, 0, TAU);
-        ctx.fill();
-        ctx.stroke();
-        if (n.ini) {
-          ctx.fillStyle = far ? pal.inkFar : pal.ink;
-          ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "Instrument Sans", system-ui, sans-serif`;
-          ctx.fillText(n.ini, x, y + 0.5);
-        }
-        if (n.g) this.glyph(n.g, x + rad * 0.55, y - rad * 1.55, sc, n.v);
-      });
-
-      // You, at the center: the ring and the gilt drop.
-      if (this.opts.center !== null && this.opts.showCenter !== false) {
-        const landed = show(0.9, 0.5);
-        ctx.globalAlpha = landed;
-        ctx.strokeStyle = `rgba(${pal.line},.95)`;
-        ctx.lineWidth = 3 * sc;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.15 * (0.7 + 0.3 * landed), 0, TAU);
-        ctx.stroke();
-        ctx.fillStyle = `rgb(${pal.gilt})`;
-        ctx.shadowColor = `rgba(${pal.gilt},.7)`;
-        ctx.shadowBlur = 22;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.062 * landed, 0, TAU);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-
-      // The drop, falling.
-      if (!still && this.opts.intro && t < 0.9) {
-        const k = t / 0.9;
-        const y = lerp(-40, cy, k * k);
-        ctx.globalAlpha = 1;
-        const tail = ctx.createLinearGradient(cx, y - 90 * k, cx, y);
-        tail.addColorStop(0, `rgba(${pal.gilt},0)`);
-        tail.addColorStop(1, `rgba(${pal.gilt},.6)`);
-        ctx.strokeStyle = tail;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx, y - 90 * k);
-        ctx.lineTo(cx, y);
-        ctx.stroke();
-        ctx.fillStyle = `rgb(${pal.gilt})`;
-        ctx.beginPath();
-        ctx.arc(cx, y, R * 0.04, 0, TAU);
-        ctx.fill();
+      const wg = ctx.createLinearGradient(0, hz, 0, bottom);
+      wg.addColorStop(0, css(day.sky.h, 0.9));
+      wg.addColorStop(1, css(day.p1.base));
+      ctx.fillStyle = wg;
+      ctx.fillRect(0, hz, w, Math.max(0, bottom - hz));
+      for (let i = 0; i < 22; i++) {
+        const y = hz + 4 + Math.pow(i / 22, 1.6) * (bottom - hz) * 0.8;
+        const jitter = Math.sin(i * 12.9 + t * 1.3) * (6 + i * 1.5);
+        const len = (14 + i * 4) * (0.6 + 0.4 * Math.sin(i * 3.1 + t));
+        ctx.fillStyle = css(day.sky.s, (0.5 - i / 50) * (0.35 + 0.65 * day.sun[3]));
+        ctx.fillRect(day.sun[0] - len / 2 + jitter, y, len, 2);
       }
       ctx.globalAlpha = 1;
     }
-
-    stillRipples() {
-      return [0.3, 0.62, 0.98, 1.4].map((f, i) => ({ x: this.cx, y: this.cy, age: (this.R * f) / (this.R * 0.36), s: 0.8 - i * 0.1, gilt: i === 0 }));
+    const tn = now();
+    for (const d of drops) {
+      const age = tn - d.t0;
+      const rad = age * 230;
+      const a = d.s * Math.exp(-age * 0.55) * 0.5;
+      if (a < 0.01 || day.tilt > 0.5) continue;
+      ctx.strokeStyle = css(day.p1.lite, a);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y - day.S, rad, 0, TAU);
+      ctx.stroke();
     }
+  }
 
-    glyph(kind, x, y, sc, v) {
-      const { ctx, pal } = this;
-      const s = 0.85 * sc;
-      if (kind.startsWith("flame") && FLAME) {
-        ctx.save();
-        ctx.translate(x - 12 * s, y - 12 * s);
-        ctx.scale(s, s);
-        ctx.lineWidth = 1.9;
-        if (kind === "flame") {
-          ctx.fillStyle = pal.vesperFill;
-          ctx.fill(FLAME);
-        } else if (kind === "flame-answered") {
-          ctx.fillStyle = `rgb(${pal.gilt})`;
-          ctx.fill(FLAME);
-        } else {
-          ctx.strokeStyle = pal.vesper;
-          if (kind === "flame-quiet") ctx.setLineDash([2.5, 2.5]);
-          ctx.stroke(FLAME);
-          ctx.setLineDash([]);
-        }
-        ctx.restore();
-      } else if (kind === "meter") {
-        const [level, on] = v;
-        ctx.fillStyle = "rgba(4,25,27,.85)";
+  function renderWater(t) {
+    if (!water.mode) return;
+    if (water.mode === "gl") {
+      if (!water.ready) {
+        if (!linkDone()) return;
+      }
+      if (water.mode === "gl") drawGL(t);
+      else draw2D(t);
+    } else draw2D(t);
+    if (!water.canvas.classList.contains("is-on")) {
+      water.canvas.classList.add("is-on");
+      root.classList.add("has-water");
+    }
+  }
+
+  // Software renderers get a smaller buffer; a device that keeps missing
+  // frames gets smaller still (a few late frames in a second is enough).
+  function adapt(dt) {
+    if (!water.ready || still || dt > 250) return;
+    if (dt > 20) water.slow++;
+    if (++water.n < 60) return;
+    if (water.slow > 3 && water.scale > water.minScale) {
+      water.scale = Math.max(water.minScale, water.scale * 0.85);
+      resizeWater();
+    }
+    water.n = 0;
+    water.slow = 0;
+  }
+
+  /* ── The header: tinted by the hour under it ──────────────────────── */
+
+  const top = $("[data-top]");
+  let hdrKey = "";
+  function paintHeader() {
+    if (!top) return;
+    const y = 34;
+    let c;
+    if (day.tilt > 0.5 && y < day.hz && y > day.skyTop) c = day.sky.z;
+    else {
+      const m1 = smooth(clamp((y - (day.s1 - day.soft)) / (2 * day.soft)));
+      const m2 = smooth(clamp((y - (day.s2 - day.soft2)) / (2 * day.soft2)));
+      const a = day.p0.bg;
+      const b = day.p1.bg;
+      const d = day.p2.bg;
+      c = a.map((v, i) => lerp(lerp(v, b[i], m1), d[i], m2));
+    }
+    const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const key = c.map((v) => Math.round(v * 255)).join(",");
+    if (key === hdrKey) return;
+    hdrKey = key;
+    top.style.setProperty("--hdr-bg", `rgba(${key},.74)`);
+    top.style.setProperty("--hdr-solid", `rgb(${key})`);
+    top.classList.toggle("is-light", lum > 0.45);
+  }
+
+  const clockEl = $("[data-clock]");
+  const clockTime = $("[data-clock-time]");
+  let lastMinute = -1;
+  let lastNight = null;
+  function paintClock() {
+    if (!clockEl) return;
+    if (day.minute !== lastMinute) {
+      lastMinute = day.minute;
+      const m = day.minute;
+      clockTime.textContent = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    }
+    // The moon comes out the moment the sun's top edge goes under the water.
+    if (day.night !== lastNight) {
+      lastNight = day.night;
+      clockEl.classList.toggle("is-night", day.night);
+    }
+  }
+
+  /* ── Hero: the people on the rings, over the water ────────────────── */
+
+  const FLAME = typeof Path2D === "function" ? new Path2D("M12 3.2c2.7 3.2 4.8 5.8 4.8 9a4.8 4.8 0 0 1-9.6 0c0-3.2 2.1-5.8 4.8-9z") : null;
+  const LEVEL = { thriving: "#6fcf97", solid: "#8fc1b7", watch: "#e9b54c", strained: "#f08a5b" };
+  const heroWell = { canvas: $("[data-well]"), wrap: $("[data-hero-well]"), raf: 0, visible: true, t: 0 };
+  const heroEl = $(".hero");
+  const heroCopy = $("[data-hero-copy]");
+  const HERO_NODES = [
+    { ring: 0.36, a: -90, w: 0.05, ini: "M", g: "flame-carrying" },
+    { ring: 0.36, a: 30, w: 0.05, ini: "O" },
+    { ring: 0.36, a: 150, w: 0.05, ini: "L", g: "flame-answered" },
+    { ring: 0.62, a: -150, w: -0.034, ini: "T", g: "meter", v: ["watch", 3] },
+    { ring: 0.62, a: -20, w: -0.034, ini: "G", g: "flame" },
+    { ring: 0.62, a: 90, w: -0.034, ini: "A", g: "ring", v: 0.72 },
+    { ring: 0.9, a: -95, w: 0.021, ini: "R" },
+    { ring: 0.9, a: 140, w: 0.021, ini: "I" },
+    { ring: 0.9, a: 35, w: 0.021, ini: "J" },
+    { ring: 0.9, a: 200, w: 0.021, ini: "N" },
+  ].map((n) => ({ ...n, a: (n.a * Math.PI) / 180, dx: 0, dy: 0 }));
+
+  function sizeHero() {
+    const c = heroWell.canvas;
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    if (!r.width) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    heroWell.w = r.width;
+    heroWell.h = r.height;
+    c.width = Math.round(r.width * dpr);
+    c.height = Math.round(r.height * dpr);
+    heroWell.ctx = c.getContext("2d");
+    heroWell.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const wide = r.width > 900;
+    heroWell.cx = wide ? r.width * 0.7 : r.width * 0.56;
+    heroWell.cy = wide ? r.height * 0.52 : r.height * 0.25;
+    heroWell.R = wide ? Math.min(r.height * 0.44, r.width * 0.3) : Math.min(r.width * 0.5, r.height * 0.23);
+    heroWell.sc = clamp(heroWell.R / 300, 0.72, 1.25);
+  }
+
+  function stepHero(dt) {
+    const hw = heroWell;
+    hw.t += dt;
+    if (!hw.splashed && hw.t >= 0.9) {
+      hw.splashed = true;
+      dropAtWater(hw.cx, hw.cy, 1.4);
+      setTimeout(() => dropAtWater(hw.cx, hw.cy, 0.8), 260);
+      hw.nextAmbient = hw.t + 2.8;
+    }
+    if (hw.splashed && hw.t >= hw.nextAmbient) {
+      hw.nextAmbient = hw.t + 3.2;
+      if (day.y < H) dropAtWater(hw.cx, hw.cy, 0.55);
+    }
+    const tn = now();
+    for (const n of HERO_NODES) {
+      n.a += n.w * dt;
+      const x = hw.cx + Math.cos(n.a) * hw.R * n.ring;
+      const y = hw.cy + Math.sin(n.a) * hw.R * n.ring;
+      let tx = 0;
+      let ty = 0;
+      for (const r of drops) {
+        const age = tn - r.t0;
+        const dx = x - r.x;
+        const dy = y - r.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const delta = d - age * 230;
+        if (Math.abs(delta) > 50) continue;
+        const push = Math.cos((delta / 50) * (Math.PI / 2)) * 10 * r.s * Math.exp(-age * 0.55);
+        tx += (dx / d) * push;
+        ty += (dy / d) * push;
+      }
+      n.dx += (tx - n.dx) * Math.min(1, dt * 9);
+      n.dy += (ty - n.dy) * Math.min(1, dt * 9);
+    }
+  }
+
+  function drawHero() {
+    const hw = heroWell;
+    const ctx = hw.ctx;
+    if (!ctx) return;
+    const { w, h, cx, cy, R, sc } = hw;
+    const t = still ? 4 : hw.t;
+    ctx.clearRect(0, 0, w, h);
+    const show = (delay, dur = 0.8) => smooth(clamp((t - delay) / dur));
+    const line = "172,195,193";
+    const gilt = "225,179,77";
+    ctx.lineCap = "round";
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = show(1.0, 1.2);
+    ctx.strokeStyle = `rgba(${line},.42)`;
+    ctx.lineWidth = 2.2 * sc;
+    ctx.rotate(-0.35 + t * 0.02);
+    ctx.beginPath();
+    ctx.arc(0, 0, R * 0.36, 0, TAU * 0.76);
+    ctx.stroke();
+    ctx.rotate(-t * 0.02);
+    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = `rgba(${line},.2)`;
+    ctx.beginPath();
+    ctx.arc(0, 0, R * 0.62, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([2, 7]);
+    ctx.strokeStyle = `rgba(${line},.2)`;
+    ctx.beginPath();
+    ctx.arc(0, 0, R * 0.9, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Without the shader, the rings are drawn here instead.
+    if (water.mode !== "gl" || !water.ready) {
+      const tn = now();
+      for (const r of drops) {
+        const age = tn - r.t0;
+        const a = r.s * Math.exp(-age * 0.55) * 0.5;
+        if (a < 0.01) continue;
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = `rgba(${gilt},${a.toFixed(3)})`;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(x - 13 * s, y - 9 * s, 27 * s, 18 * s, 4 * s);
-        else ctx.rect(x - 13 * s, y - 9 * s, 27 * s, 18 * s);
-        ctx.fill();
-        for (let i = 0; i < 5; i++) {
-          const bh = (4 + i * 2) * s;
-          ctx.fillStyle = i < on ? LEVEL[level] : "rgba(172,195,193,.28)";
-          ctx.fillRect(x - 10 * s + i * 4.4 * s, y + 6 * s - bh, 2.6 * s, bh);
-        }
-      } else if (kind === "ring") {
-        ctx.lineWidth = 2.4 * s;
-        ctx.strokeStyle = "rgba(172,195,193,.28)";
-        ctx.beginPath();
-        ctx.arc(x, y, 7 * s, 0, TAU);
+        ctx.arc(r.x, r.y, age * 230, 0, TAU);
         ctx.stroke();
-        ctx.strokeStyle = LEVEL.thriving;
-        ctx.beginPath();
-        ctx.arc(x, y, 7 * s, -Math.PI / 2, -Math.PI / 2 + TAU * v);
-        ctx.stroke();
-        ctx.fillStyle = LEVEL.thriving;
-        ctx.beginPath();
-        ctx.arc(x, y, 2.6 * s, 0, TAU);
-        ctx.fill();
       }
     }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    HERO_NODES.forEach((n, i) => {
+      const appear = show(1.15 + n.ring * 0.45 + i * 0.04, 0.9);
+      if (appear <= 0) return;
+      const x = cx + Math.cos(n.a) * R * n.ring + n.dx;
+      const y = cy + Math.sin(n.a) * R * n.ring + n.dy;
+      const far = n.ring > 0.8;
+      const rad = (far ? 12 : n.ring > 0.5 ? 17 : 20) * sc * (0.6 + 0.4 * appear);
+      ctx.globalAlpha = appear * 0.5;
+      ctx.fillStyle = "rgba(0,12,14,.6)";
+      ctx.beginPath();
+      ctx.ellipse(x + 3, y + 5, rad * 1.05, rad * 0.95, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = appear;
+      const pg = ctx.createRadialGradient(x - rad * 0.4, y - rad * 0.5, rad * 0.1, x, y, rad);
+      pg.addColorStop(0, far ? "#2a5a5a" : "#3d7d72");
+      pg.addColorStop(1, far ? "#0f3e40" : "#16483f");
+      ctx.fillStyle = pg;
+      ctx.strokeStyle = `rgba(${line},${far ? 0.3 : 0.55})`;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, rad, n.a + 0.2, n.a + TAU - 0.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = far ? "#acc3c1" : "#eef3f1";
+      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "Instrument Sans", system-ui, sans-serif`;
+      ctx.fillText(n.ini, x, y + 0.5);
+      if (n.g) glyph(ctx, n.g, x + rad * 0.55, y - rad * 1.55, sc, n.v);
+    });
+
+    const landed = show(0.9, 0.5);
+    ctx.globalAlpha = landed;
+    ctx.strokeStyle = `rgba(${line},.95)`;
+    ctx.lineWidth = 3 * sc;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.15 * (0.7 + 0.3 * landed), 0, TAU);
+    ctx.stroke();
+    ctx.fillStyle = `rgb(${gilt})`;
+    ctx.shadowColor = `rgba(${gilt},.7)`;
+    ctx.shadowBlur = 22;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.062 * landed, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if (!still && t < 0.9) {
+      const k = t / 0.9;
+      const y = lerp(-40, cy, k * k);
+      ctx.globalAlpha = 1;
+      const tail = ctx.createLinearGradient(cx, y - 90 * k, cx, y);
+      tail.addColorStop(0, `rgba(${gilt},0)`);
+      tail.addColorStop(1, `rgba(${gilt},.6)`);
+      ctx.strokeStyle = tail;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, y - 90 * k);
+      ctx.lineTo(cx, y);
+      ctx.stroke();
+      ctx.fillStyle = `rgb(${gilt})`;
+      ctx.beginPath();
+      ctx.arc(cx, y, R * 0.04, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
-  const wells = [];
-  const heroCanvas = $('[data-well="hero"]');
-  if (heroCanvas && heroCanvas.getContext) {
-    wells.push(
-      new Well(heroCanvas, {
-        palette: "leather",
-        intro: !still,
-        center: (w, h) =>
-          w > 900
-            ? { x: w * 0.7, y: h * 0.52, R: Math.min(h * 0.44, w * 0.3) }
-            : { x: w * 0.56, y: h * 0.27, R: Math.min(w * 0.52, h * 0.25) },
-        nodes: [
-          { ring: 0.36, a: -90, w: 0.05, ini: "N", g: "flame-carrying" },
-          { ring: 0.36, a: 30, w: 0.05, ini: "O" },
-          { ring: 0.36, a: 150, w: 0.05, ini: "L", g: "flame-answered" },
-          { ring: 0.62, a: -150, w: -0.034, ini: "T", g: "meter", v: ["watch", 3] },
-          { ring: 0.62, a: -20, w: -0.034, ini: "G", g: "flame" },
-          { ring: 0.62, a: 90, w: -0.034, ini: "S", g: "ring", v: 0.72 },
-          { ring: 0.9, a: -95, w: 0.021, ini: "M" },
-          { ring: 0.9, a: 140, w: 0.021, ini: "E" },
-          { ring: 0.9, a: 35, w: 0.021, ini: "J" },
-          { ring: 0.9, a: 200, w: 0.021, ini: "R" },
-        ],
-      })
-    );
-  }
-  const ctaCanvas = $('[data-well="cta"]');
-  if (ctaCanvas && ctaCanvas.getContext) {
-    wells.push(
-      new Well(ctaCanvas, {
-        palette: "night",
-        intro: false,
-        dropOnEnter: true,
-        showCenter: false,
-        ambient: 3.4,
-        center: (w, h) => ({ x: w / 2, y: h / 2, R: Math.min(w * 0.62, h * 0.5) }),
-        nodes: [
-          { ring: 0.9, a: -60, w: 0.014, ini: "G", g: "flame" },
-          { ring: 0.9, a: 15, w: 0.014, ini: "S", g: "flame-carrying" },
-          { ring: 0.9, a: 120, w: 0.014, ini: "O", g: "flame-quiet" },
-          { ring: 0.9, a: 200, w: 0.014, ini: "L", g: "flame-answered" },
-          { ring: 1.12, a: 250, w: -0.012, ini: "N", g: "flame" },
-          { ring: 1.12, a: 70, w: -0.012, ini: "I", g: "flame-carrying" },
-        ],
-      })
-    );
+  function glyph(ctx, kind, x, y, sc, v) {
+    const s = 0.85 * sc;
+    if (kind.startsWith("flame") && FLAME) {
+      ctx.save();
+      ctx.translate(x - 12 * s, y - 12 * s);
+      ctx.scale(s, s);
+      ctx.lineWidth = 1.9;
+      if (kind === "flame") {
+        ctx.fillStyle = "#8d74e0";
+        ctx.fill(FLAME);
+      } else if (kind === "flame-answered") {
+        ctx.fillStyle = "#e1b34d";
+        ctx.fill(FLAME);
+      } else {
+        ctx.strokeStyle = "#c3b3f6";
+        ctx.stroke(FLAME);
+      }
+      ctx.restore();
+    } else if (kind === "meter") {
+      ctx.fillStyle = "rgba(4,25,27,.85)";
+      ctx.fillRect(x - 13 * s, y - 9 * s, 27 * s, 18 * s);
+      for (let i = 0; i < 5; i++) {
+        const bh = (4 + i * 2) * s;
+        ctx.fillStyle = i < v[1] ? LEVEL[v[0]] : "rgba(172,195,193,.28)";
+        ctx.fillRect(x - 10 * s + i * 4.4 * s, y + 6 * s - bh, 2.6 * s, bh);
+      }
+    } else if (kind === "ring") {
+      ctx.lineWidth = 2.4 * s;
+      ctx.strokeStyle = "rgba(172,195,193,.28)";
+      ctx.beginPath();
+      ctx.arc(x, y, 7 * s, 0, TAU);
+      ctx.stroke();
+      ctx.strokeStyle = LEVEL.thriving;
+      ctx.beginPath();
+      ctx.arc(x, y, 7 * s, -Math.PI / 2, -Math.PI / 2 + TAU * v);
+      ctx.stroke();
+    }
   }
 
-  // Touch the water: a tap drops gold; a moving mouse leaves faint rings.
-  const bindWater = (section, well) => {
-    if (!section || !well) return;
-    let lastAt = 0;
-    let lx = -1e3;
-    let ly = -1e3;
-    const local = (e) => {
-      const r = well.canvas.getBoundingClientRect();
-      return [e.clientX - r.left, e.clientY - r.top];
+  if (heroWell.canvas && heroWell.canvas.getContext) {
+    sizeHero();
+    if (still) heroWell.splashed = true;
+    if ("IntersectionObserver" in window) new IntersectionObserver(([e]) => (heroWell.visible = e.isIntersecting)).observe(heroWell.canvas);
+  }
+
+  /* ── Lettering: drawn on load, the drop lands, the water answers ──── */
+
+  const sheen = $("[data-sheen]");
+  const letters = $$("[data-letter]");
+  letters.forEach((svg) => {
+    $$("path", svg).forEach((p, i) => p.style.setProperty("--g", i));
+    const fire = () => {
+      svg.classList.add("is-drawn");
+      if (still) return;
+      setTimeout(() => {
+        const d = $(".letter__drop", svg);
+        if (!d) return;
+        const r = d.getBoundingClientRect();
+        if (r.bottom > 0 && r.top < H) drop(r.left + r.width / 2, r.top + r.height / 2, 0.9);
+      }, 2150);
     };
-    section.addEventListener("pointermove", (e) => {
-      if (still || e.pointerType !== "mouse") return;
-      const now = performance.now();
-      const [x, y] = local(e);
-      if (now - lastAt < 150 || Math.hypot(x - lx, y - ly) < 36) return;
-      lastAt = now;
-      lx = x;
-      ly = y;
-      well.drop(x, y, 0.32, false);
-    });
-    section.addEventListener("pointerdown", (e) => {
-      if (still || e.target.closest("a, button")) return;
-      const [x, y] = local(e);
-      well.drop(x, y, 1.1, true);
-    });
-  };
-  bindWater($(".hero"), wells[0]);
-  bindWater($(".cta"), wells[1]);
+    if (svg.closest(".hero")) requestAnimationFrame(fire);
+    else if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver(([e]) => {
+        if (!e.isIntersecting) return;
+        io.disconnect();
+        fire();
+      }, { threshold: 0.6 });
+      io.observe(svg);
+    } else fire();
+  });
+  let sheenKey = "";
+  function paintSheen(t) {
+    if (!sheen || still) return;
+    // The highlight follows the light on the water: the well's glow, or the moon.
+    const lx = day.moon[2] > 0.2 ? day.moon[0] : day.glow[0];
+    const x = ((lx / W - 0.5) * 0.8 + Math.sin(t * 0.4) * 0.25).toFixed(3);
+    if (x === sheenKey) return;
+    sheenKey = x;
+    sheen.setAttribute("gradientTransform", `translate(${x} 0)`);
+  }
 
-  /* ── People: circles → tree → four modes ──────────────────────────── */
+  /* ── Touch the water ──────────────────────────────────────────────── */
+
+  let lastPtr = 0;
+  let lpx = -1e3;
+  let lpy = -1e3;
+  document.addEventListener("pointermove", (e) => {
+    if (still || e.pointerType !== "mouse" || !water.ready) return;
+    const t = performance.now();
+    if (t - lastPtr < 140 || Math.hypot(e.clientX - lpx, e.clientY - lpy) < 40) return;
+    lastPtr = t;
+    lpx = e.clientX;
+    lpy = e.clientY;
+    drop(e.clientX, e.clientY, 0.32);
+  }, { passive: true });
+  document.addEventListener("pointerdown", (e) => {
+    if (still || e.target.closest("a, button, input, [role='tab'], .app-window, .pcard, .log, .palette, .fcol, .sheet")) return;
+    drop(e.clientX, e.clientY, 1.1);
+  }, { passive: true });
+
+  /* ── People: lily pads on the water ───────────────────────────────── */
 
   const MODES = ["plan", "prep", "assess", "pray"];
-  const STEP_AT = [0, 0.17, 0.34, 0.5, 0.66, 0.82];
-  const MORPH = [0.09, 0.26];
-
+  const STEP_AT = [0, 0.16, 0.32, 0.49, 0.66, 0.83];
+  const MORPH = [0.08, 0.24];
+  const DOM = { job: "#7C3B8B", church: "#2D78BD" };
   const PEOPLE = [
     { id: "me", kind: "me" },
-    { id: "up", kind: "up", ini: "E", lbl: "Elders", parent: "me", plan: ["I report up", "Operating manual"], prep: ["Mon · 4d · ready", "good"], assess: ["solid", 4, "Solid"], pray: ["carrying 2 of 5", "carrying"] },
-    { id: "w", kind: "team", ini: "W", lbl: "Worship team", dom: "#2D78BD", parent: "me", plan: ["Lead the room in worship", "Next · new vocalists"], prep: ["~Thu · 3d · prep due", "warm"], assess: ["watch", 3, "Watch"], pray: ["carrying 3 of 8", "fresh"] },
-    { id: "s", kind: "team", ini: "S", lbl: "Student ministry", dom: "#2D78BD", parent: "me", plan: ["Every student known", "Next · spring retreat"], prep: ["Sun · 5d · ready", "good"], assess: ["thriving", 5, "Thriving"], pray: ["carrying 2 of 6", "carrying"] },
-    { id: "p", kind: "team", ini: "P", lbl: "Product team", dom: "#7C3B8B", parent: "me", plan: ["Ship without heroics", "Next · on-call rota"], prep: ["6w · drifting", "hot"], assess: ["strained", 2, "Strained"], pray: ["gone quiet · 5w", "quiet"], lit: true },
-    { id: "n", kind: "person", ini: "N", parent: "w", rr: ["thriving", 0.86, true], h: ["solid", 4], fl: "fresh" },
-    { id: "t", kind: "person", ini: "T", parent: "w", rr: ["strained", 0.96, false], h: ["watch", 3] },
-    { id: "g", kind: "person", ini: "G", parent: "w", rr: ["thriving", 0.72, true], h: ["solid", 4], fl: "fresh" },
-    { id: "l", kind: "person", ini: "L", parent: "s", rr: ["solid", 0.3, false], h: ["thriving", 5] },
-    { id: "i", kind: "person", ini: "I", parent: "s", rr: ["watch", 0.82, false], h: ["solid", 4], fl: "carrying" },
-    { id: "o", kind: "person", ini: "O", parent: "p", rr: ["solid", 0.4, false], h: ["strained", 2], fl: "quiet", lit: true },
-    { id: "a", kind: "person", ini: "A", parent: "p", rr: ["thriving", 0.64, true], h: ["solid", 4] },
+    { id: "up", kind: "up", ini: "L", lbl: "Leadership team", parent: "me", h: "solid", plan: ["Where the company goes next", "Operating manual"], prep: ["Mon · 4d · ready", "good"], assess: [4, "Solid"], pray: ["carrying 1 of 4", "carrying"] },
+    { id: "d", kind: "team", ini: "D", name: "Design team", lbl: "Design team", dom: DOM.job, parent: "me", h: "watch", plan: ["Make the hard thing obvious", "Next · design crit"], prep: ["~Thu · 0d · prep due", "warm"], assess: [3, "Watch"], pray: ["carrying 2 of 3", "fresh"] },
+    { id: "w", kind: "team", ini: "W", name: "Welcome team", lbl: "Welcome team", dom: DOM.church, parent: "me", h: "thriving", plan: ["Every newcomer known by name", "Next · train two hosts"], prep: ["Sun · 3d · ready", "good"], assess: [5, "Thriving"], pray: ["carrying 2 of 2", "carrying"] },
+    { id: "p", kind: "team", ini: "P", name: "Product team", lbl: "Product team", dom: DOM.job, parent: "me", h: "strained", plan: ["Ship without heroics", "Next · on-call rota"], prep: ["6w · drifting", "hot"], assess: [2, "Strained"], pray: ["gone quiet · 5w", "quiet"] },
+    { id: "m", kind: "person", ini: "M", name: "Maya", parent: "d", rr: ["thriving", 0.86, true], h: "solid", lv: 4, fl: "fresh" },
+    { id: "t", kind: "person", ini: "T", name: "Tavi", parent: "d", rr: ["strained", 0.96, false], h: "watch", lv: 3 },
+    { id: "i", kind: "person", ini: "I", name: "Iris", parent: "w", rr: ["solid", 0.3, false], h: "thriving", lv: 5 },
+    { id: "l", kind: "person", ini: "L", name: "Leo", parent: "w", rr: ["watch", 0.82, false], h: "solid", lv: 4, fl: "carrying" },
+    { id: "o", kind: "person", ini: "O", name: "Owen", parent: "p", rr: ["solid", 0.4, false], h: "strained", lv: 2, fl: "quiet" },
+    { id: "a", kind: "person", ini: "A", name: "Ana", parent: "p", rr: ["thriving", 0.64, true], h: "solid", lv: 4 },
+    { id: "r", kind: "person", ini: "R", name: "Ravi", parent: "p", rr: ["thriving", 0.7, true], h: "thriving", lv: 5, fl: "fresh" },
   ];
-  const CIRCLE_ANGLE = { up: -90, s: 0, p: 90, w: 180, n: 162, t: 180, g: 198, l: -13, i: 13, o: 78, a: 102 };
+  const LV = { thriving: 5, solid: 4, watch: 3, strained: 2 };
+  const CIRCLE_ANGLE = { up: -90, w: 0, p: 90, d: 180, m: 166, t: 194, i: -13, l: 13, o: 74, a: 90, r: 106 };
+
+  // A seeded wobble, so the hand-drawn shapes are the same on every visit.
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const padPath = (r, a) => {
+    const g = 0.36;
+    const p = (ang) => `${(Math.cos(ang) * r).toFixed(1)} ${(Math.sin(ang) * r).toFixed(1)}`;
+    return `M0 0L${p(a + g / 2)}A${r} ${r} 0 1 1 ${p(a - g / 2)}Z`;
+  };
+  const stonePath = (r) => {
+    const n = 8;
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      const rr = r * (0.9 + rnd() * 0.18);
+      pts.push([Math.cos(a) * rr * 1.08, Math.sin(a) * rr * 0.94]);
+    }
+    let d = "";
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n];
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      const p3 = pts[(i + 2) % n];
+      if (!i) d += `M${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;
+      const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+      const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+      d += `C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+    }
+    return d + "Z";
+  };
 
   function buildChart(svg) {
-    const rings = svgEl("g", {}, svg);
-    const ringEls = [
-      svgEl("circle", { class: "sc-ring sc-ring--near", "stroke-dasharray": "1 0" }, rings),
-      svgEl("circle", { class: "sc-ring" }, rings),
-      svgEl("circle", { class: "sc-ring sc-ring--far" }, rings),
+    const defs = svgEl("defs", {}, svg);
+    const grad = (id, stops, attrs = {}) => {
+      const g = svgEl("radialGradient", { id, ...attrs }, defs);
+      stops.forEach(([o, c, a = 1]) => svgEl("stop", { offset: o, "stop-color": c, "stop-opacity": a }, g));
+      return g;
+    };
+    const lights = [
+      grad("pad-fill", [[0, "#5aa88f"], [0.55, "#22604f"], [1, "#123c34"]], { cx: ".4", cy: ".35", fx: ".3", fy: ".25", r: ".75" }),
+      grad("stone-fill", [[0, "#86a39e"], [0.5, "#3d605c"], [1, "#1b3533"]], { cx: ".42", cy: ".38", fx: ".3", fy: ".25", r: ".8" }),
+      grad("you-fill", [[0, "#ffffff"], [0.7, "#eef3f1"], [1, "#cbd8d4"]], { fx: ".35", fy: ".3" }),
     ];
+    grad("pad-shadow", [[0, "#000", 0.5], [0.6, "#000", 0.22], [1, "#000", 0]]);
+    const rings = svgEl("g", {}, svg);
+    const ringEls = [svgEl("circle", { class: "sc-ring sc-ring--near" }, rings), svgEl("circle", { class: "sc-ring" }, rings), svgEl("circle", { class: "sc-ring" }, rings)];
     const edges = svgEl("g", {}, svg);
     const nodesG = svgEl("g", {}, svg);
     const byId = {};
     const flame = (cls, x, y, s, parent) => {
       const g = svgEl("g", { transform: `translate(${x} ${y}) scale(${s})` }, parent);
       svgEl("use", { href: "#flame", class: `fl-${cls}` }, g);
-      return g;
     };
     const meter = (level, on, x, y, parent) => {
       const g = svgEl("g", { transform: `translate(${x} ${y})` }, parent);
@@ -545,107 +1122,112 @@
         const h = 5 + i * 2.6;
         svgEl("rect", { x: i * 4.6, y: 16 - h, width: 3, height: h, rx: 1, class: i < on ? `c-${level}` : "bar-off" }, g);
       }
-      return g;
     };
     for (const d of PEOPLE) {
-      const g = svgEl("g", { class: `node node--${d.kind}${d.lit ? " is-lit" : ""}` }, nodesG);
+      const g = svgEl("g", { class: `node node--${d.kind}` }, nodesG);
       const node = { d, g, x: 0, y: 0 };
       byId[d.id] = node;
+      const r = d.kind === "me" ? 28 : d.kind === "person" ? 20 : 27;
+      node.r = r;
+      svgEl("ellipse", { class: "shadow", cx: 5, cy: 8, rx: r * 1.18, ry: r * 1.05 }, g);
       if (d.kind === "me") {
-        svgEl("circle", { r: 27, class: "disc" }, g);
+        svgEl("circle", { r, class: "pad" }, g);
         svgEl("text", { class: "ini", y: 1 }, g).textContent = "You";
         continue;
       }
       if (d.kind === "person") {
-        svgEl("circle", { r: 19, class: "disc" }, g);
+        const a = rnd() * TAU;
+        svgEl("path", { d: padPath(r, a), class: "pad" }, g);
+        const v = [a + 2.2, a + 3.14, a + 4.1].map((x) => `M0 0L${(Math.cos(x) * r * 0.8).toFixed(1)} ${(Math.sin(x) * r * 0.8).toFixed(1)}`).join("");
+        svgEl("path", { d: v, class: "vein" }, g);
         svgEl("text", { class: "ini", y: 1 }, g).textContent = d.ini;
         const prep = svgEl("g", { class: "lay lay-prep" }, g);
-        const C = TAU * 26;
-        svgEl("circle", { r: 26, class: "rr-t" }, prep);
-        svgEl("circle", { r: 26, class: `rr-a c-${d.rr[0]}`, fill: "none", "stroke-dasharray": `${(C * d.rr[1]).toFixed(1)} ${C.toFixed(1)}`, transform: "rotate(-90)" }, prep);
-        if (d.rr[2]) svgEl("circle", { r: 5, cx: 18, cy: 18, class: "c-thriving" }, prep);
+        const C = TAU * 27;
+        svgEl("circle", { r: 27, class: "rr-t" }, prep);
+        svgEl("circle", { r: 27, class: `rr-a c-${d.rr[0]}`, fill: "none", "stroke-dasharray": `${(C * d.rr[1]).toFixed(1)} ${C.toFixed(1)}`, transform: "rotate(-90)" }, prep);
+        if (d.rr[2]) svgEl("circle", { r: 5, cx: 19, cy: 19, class: "c-thriving" }, prep);
         const assess = svgEl("g", { class: "lay lay-assess" }, g);
-        svgEl("circle", { r: 24, class: `halo c-${d.h[0]}`, fill: "none" }, assess);
-        meter(d.h[0], d.h[1], 18, 12, assess);
-        if (d.fl) flame(d.fl, 8, -40, 0.85, svgEl("g", { class: "lay lay-pray" }, g));
+        svgEl("circle", { r: 25, class: `halo c-${d.h}`, fill: "none" }, assess);
+        meter(d.h, d.lv, 18, 12, assess);
+        if (d.fl) flame(d.fl, 8, -42, 0.85, svgEl("g", { class: "lay lay-pray" }, g));
         continue;
       }
-      // Teams, and the group above you.
-      svgEl("rect", { x: -24, y: -24, width: 48, height: 48, rx: 13, class: "disc" }, g);
+      svgEl("path", { d: stonePath(r), class: "pad" }, g);
       svgEl("text", { class: "ini", y: 1 }, g).textContent = d.ini;
-      if (d.dom) svgEl("rect", { x: -20, y: -20, width: 8, height: 8, rx: 2, fill: d.dom }, g);
+      if (d.dom) svgEl("rect", { x: -21, y: -21, width: 8, height: 8, rx: 2, fill: d.dom }, g);
       const up = d.kind === "up";
-      // The group above you labels to its right, so the line down to you stays clear.
-      const lx = up ? 36 : 0;
+      const lx = up ? 40 : 0;
       const ly = (y) => (up ? y - 50 : y);
-      svgEl("text", { class: "lbl", x: lx, y: ly(46) }, g).textContent = d.lbl;
+      svgEl("text", { class: "lbl", x: lx, y: ly(50) }, g).textContent = d.lbl;
       const plan = svgEl("g", { class: "lay lay-plan" }, g);
-      const p1 = svgEl("text", { class: "sub", x: lx, y: ly(66) }, plan);
-      p1.textContent = d.plan[0];
-      p1.setAttribute("style", "font-family: var(--serif); font-style: italic; font-size: 14px; fill: var(--leather-fg)");
-      svgEl("text", { class: "sub", x: lx, y: ly(84) }, plan).textContent = d.plan[1];
+      svgEl("text", { class: "sub sub--plan", x: lx, y: ly(70) }, plan).textContent = d.plan[0];
+      svgEl("text", { class: "sub", x: lx, y: ly(88) }, plan).textContent = d.plan[1];
       const prep = svgEl("g", { class: "lay lay-prep" }, g);
-      svgEl("text", { class: `sub sub--${d.prep[1]}`, x: lx, y: ly(66) }, prep).textContent = d.prep[0];
+      svgEl("text", { class: `sub sub--${d.prep[1]}`, x: lx, y: ly(70) }, prep).textContent = d.prep[0];
       const assess = svgEl("g", { class: "lay lay-assess" }, g);
-      meter(d.assess[0], d.assess[1], 28, -22, assess);
-      svgEl("text", { class: "sub", x: lx, y: ly(66) }, assess).textContent = d.assess[2];
+      meter(d.h, d.assess[0], 30, -24, assess);
+      svgEl("text", { class: "sub", x: lx, y: ly(70) }, assess).textContent = d.assess[1];
       const pray = svgEl("g", { class: "lay lay-pray" }, g);
-      flame(d.pray[1], up ? -48 : 18, -50, 0.95, pray);
-      svgEl("text", { class: "sub", x: lx, y: ly(66) }, pray).textContent = d.pray[0];
+      flame(d.pray[1], up ? -50 : 20, -54, 0.95, pray);
+      svgEl("text", { class: "sub", x: lx, y: ly(70) }, pray).textContent = d.pray[0];
     }
-    const edgeEls = PEOPLE.filter((d) => d.parent).map((d) => ({
+    const edgeEls = PEOPLE.filter((d) => d.parent).map((d, i) => ({
       from: byId[d.parent],
       to: byId[d.id],
+      seed: rnd() * TAU,
+      bend: (rnd() - 0.5) * 10,
       el: svgEl("path", { class: `sc-edge${d.kind === "up" ? " sc-edge--up" : ""}` }, edges),
+      i,
     }));
-    return { svg, rings: ringEls, ringsG: rings, edgesG: edges, edges: edgeEls, byId };
+    return { svg, lights, rings: ringEls, ringsG: rings, edgesG: edges, edges: edgeEls, byId };
   }
 
-  function chartLayouts(W, H) {
-    const cx = W / 2;
-    const cy = H / 2;
-    const R = Math.min(W, H) / 2 - 46;
+  function chartLayouts(Wc, Hc) {
+    const cx = Wc / 2;
+    const cy = Hc / 2;
+    const R = Math.min(Wc, Hc) / 2 - 46;
     const circles = { me: [cx, cy] };
     for (const id in CIRCLE_ANGLE) {
       const d = PEOPLE.find((p) => p.id === id);
-      const r = d.kind === "person" ? R * 0.94 : R * 0.48;
+      const r = d.kind === "person" ? R * 0.94 : R * 0.5;
       const a = (CIRCLE_ANGLE[id] * Math.PI) / 180;
       circles[id] = [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
     }
-    const portrait = W / H < 0.95;
+    const portrait = Wc / Hc < 0.95;
     const row = portrait ? [0.1, 0.27, 0.47, 0.83] : [0.11, 0.3, 0.5, 0.84];
     const cols = portrait ? [0.17, 0.5, 0.83] : [0.18, 0.5, 0.82];
-    const gap = Math.min(76, W * (portrait ? 0.105 : 0.085));
-    const tree = { up: [cx, H * row[0]], me: [cx, H * row[1]] };
-    ["w", "s", "p"].forEach((id, i) => {
-      tree[id] = [W * cols[i], H * row[2]];
+    const gap = Math.min(70, Wc * (portrait ? 0.1 : 0.075));
+    const tree = { up: [cx, Hc * row[0]], me: [cx, Hc * row[1]] };
+    ["d", "w", "p"].forEach((id, i) => {
+      tree[id] = [Wc * cols[i], Hc * row[2]];
       const kids = PEOPLE.filter((d) => d.parent === id);
-      kids.forEach((k, j) => (tree[k.id] = [W * cols[i] + (j - (kids.length - 1) / 2) * gap, H * row[3]]));
+      kids.forEach((k, j) => (tree[k.id] = [Wc * cols[i] + (j - (kids.length - 1) / 2) * gap, Hc * row[3]]));
     });
-    return { circles, tree, ring: [R * 0.48, R * 0.94, R * 1.2], cx, cy };
+    return { circles, tree, ring: [R * 0.5, R * 0.94, R * 1.18], cx, cy };
   }
 
   const peopleVis = $("[data-modes]");
   const chartSvg = $("[data-chart]");
-  const peoplePin = $('[data-pin="people"]');
   const steps = $$("[data-step]");
   const rail = $$("[data-rail] li");
   const tabs = $$("[data-mode-tab]");
   const treePanel = $("#tree-panel");
   let chart = null;
   let layout = null;
-  let peopleState = { view: "", mode: "", step: -1, t: -1 };
+  let peopleState = { step: -1, t: -1 };
   let manualMode = "plan";
+  let settle = { t0: -10 };
+  let morphT = 1;
 
   function sizeChart() {
-    if (!chartSvg) return;
+    if (!chartSvg || !chart) return;
     const r = chartSvg.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    const s = clamp(r.width / 760, 0.7, 1.1);
-    const W = r.width / s;
-    const H = r.height / s;
-    chartSvg.setAttribute("viewBox", `0 0 ${W.toFixed(1)} ${H.toFixed(1)}`);
-    layout = chartLayouts(W, H);
+    const s = clamp(r.width / 760, 0.62, 1.1);
+    const Wc = r.width / s;
+    const Hc = r.height / s;
+    chartSvg.setAttribute("viewBox", `0 0 ${Wc.toFixed(1)} ${Hc.toFixed(1)}`);
+    layout = chartLayouts(Wc, Hc);
     chart.rings.forEach((c, i) => {
       c.setAttribute("cx", layout.cx);
       c.setAttribute("cy", layout.cy);
@@ -654,14 +1236,39 @@
     peopleState.t = -1;
   }
 
+  function drawEdges(force) {
+    if (!chart || morphT < 0.5) return false;
+    const age = (performance.now() - settle.t0) / 1000;
+    const live = !still && age < 1.6;
+    if (!live && !force && !settle.last) return false;
+    settle.last = live;
+    for (const ed of chart.edges) {
+      const { from, to } = ed;
+      const up = to.d.kind === "up";
+      const a = up ? to : from;
+      const b = up ? from : to;
+      const x0 = a.x;
+      const y0 = a.y + a.r + (a.d.kind === "team" ? 72 : 4);
+      const x1 = b.x;
+      const y1 = b.y - b.r - 4;
+      const dy = y1 - y0;
+      // Hand-drawn: a slight bend of its own, and a ripple that settles each time a new mode opens.
+      const wob = ed.bend + (live ? Math.exp(-age * 3.2) * Math.sin(age * 13 + ed.seed) * 16 : 0);
+      const c1x = x0 + (x1 - x0) * 0.08 + wob;
+      const c2x = x1 - (x1 - x0) * 0.12 - wob * 0.6;
+      ed.el.setAttribute("d", `M${x0.toFixed(1)} ${y0.toFixed(1)}C${c1x.toFixed(1)} ${(y0 + dy * 0.62).toFixed(1)} ${c2x.toFixed(1)} ${(y1 - dy * 0.55).toFixed(1)} ${x1.toFixed(1)} ${y1.toFixed(1)}`);
+    }
+    return live;
+  }
+
   function placeChart(t) {
     if (!layout) return;
     const e = smooth(t);
+    morphT = e;
     for (const id in chart.byId) {
       const n = chart.byId[id];
       const a = layout.circles[id];
       const b = layout.tree[id];
-      // People travel on a slight arc rather than a straight line.
       const lift = Math.sin(e * Math.PI) * (n.d.kind === "person" ? 26 : 12);
       n.x = lerp(a[0], b[0], e);
       n.y = lerp(a[1], b[1], e) - lift;
@@ -669,22 +1276,36 @@
     }
     chart.ringsG.style.opacity = (1 - e).toFixed(3);
     chart.edgesG.style.opacity = clamp((e - 0.55) / 0.45).toFixed(3);
-    if (e > 0.5) {
-      for (const ed of chart.edges) {
-        const { from, to } = ed;
-        const up = to.d.kind === "up";
-        const y0 = up ? to.y + 26 : from.y + (from.d.kind === "me" ? 28 : 94);
-        const y1 = up ? from.y - 28 : to.y - (to.d.kind === "person" ? 20 : 26);
-        const x0 = up ? to.x : from.x;
-        const x1 = up ? from.x : to.x;
-        const mid = to.d.kind === "person" ? (y0 + y1) / 2 : (y0 + y1) / 2;
-        ed.el.setAttribute("d", `M${x0.toFixed(1)} ${y0.toFixed(1)}V${mid.toFixed(1)}H${x1.toFixed(1)}V${y1.toFixed(1)}`);
-      }
-    }
+    drawEdges(true);
   }
 
+  let scanLevel = "strained";
+  const scanNote = $("[data-scan-note]");
+  const scanButtons = $$("[data-scan-level]");
+  function paintScan() {
+    if (!chart) return;
+    const lit = [];
+    for (const id in chart.byId) {
+      const n = chart.byId[id];
+      const on = !!scanLevel && n.d.h === scanLevel && n.d.kind !== "up";
+      n.g.classList.toggle("is-lit", on || !scanLevel);
+      if (on) lit.push(n.d.name);
+    }
+    if (scanNote) {
+      const names = lit.length > 1 ? `${lit.slice(0, -1).join(", ")} and ${lit[lit.length - 1]}` : lit[0];
+      scanNote.textContent = scanLevel ? `${scanLevel[0].toUpperCase() + scanLevel.slice(1)}: ${names} stay lit. Nothing is hidden.` : "No level picked: everything is lit.";
+    }
+  }
+  scanButtons.forEach((b) =>
+    b.addEventListener("click", () => {
+      const on = b.getAttribute("aria-pressed") !== "true";
+      scanButtons.forEach((o) => o.setAttribute("aria-pressed", String(o === b && on)));
+      scanLevel = on ? b.dataset.scanLevel : "";
+      paintScan();
+    })
+  );
+
   function setMode(mode) {
-    // mode is one of circles, tree, or one of the four.
     if (peopleVis) peopleVis.dataset.mode = mode;
     if (chartSvg) chartSvg.dataset.mode = mode;
     const sel = MODES.includes(mode) ? mode : manualMode;
@@ -694,6 +1315,7 @@
       tab.tabIndex = on ? 0 : -1;
       if (on && treePanel) treePanel.setAttribute("aria-labelledby", tab.id);
     });
+    settle.t0 = performance.now();
   }
 
   function paintPeople(p) {
@@ -720,28 +1342,50 @@
       steps.forEach((s, i) => s.classList.toggle("is-on", i === step));
       rail.forEach((r, i) => r.classList.toggle("is-on", i === step));
     }
+    return drawEdges();
   }
 
-  if (chartSvg && peopleVis) {
+  let chartLight = "";
+  function lightChart() {
+    if (!chart) return;
+    // The pads are lit from wherever the light on the water is.
+    const fx = clamp(0.2 + (day.glow[0] / W) * 0.45, 0.15, 0.7).toFixed(2);
+    if (fx === chartLight) return;
+    chartLight = fx;
+    chart.lights.forEach((g) => g.setAttribute("fx", fx));
+  }
+
+  // The chart is built just before it's needed, to keep the first load light.
+  function ensureChart() {
+    if (chart || !chartSvg) return;
     chart = buildChart(chartSvg);
     sizeChart();
-    if ("ResizeObserver" in window) new ResizeObserver(() => { sizeChart(); request(); }).observe(chartSvg);
-
+    paintScan();
+    peopleState = { step: -1, t: -1 };
+    if ("ResizeObserver" in window) new ResizeObserver(() => { sizeChart(); dirty = true; kick(); }).observe(chartSvg);
+    kick();
+  }
+  if (chartSvg && peopleVis) {
+    if ("IntersectionObserver" in window) {
+      const io = new IntersectionObserver(([e]) => {
+        if (!e.isIntersecting) return;
+        io.disconnect();
+        ensureChart();
+      }, { rootMargin: "150% 0px" });
+      io.observe(peopleVis);
+    } else ensureChart();
     const choose = (mode, focusTab) => {
       if (focusTab) focusTab.focus({ preventScroll: true });
-      if (still || !peoplePin) {
-        manualMode = mode;
+      ensureChart();
+      manualMode = mode;
+      if (still || !pins.people) {
         peopleState.step = -1;
-        paintPeople(0);
+        paintPeople(1);
         return;
       }
-      // Scroll is the source of truth while the sequence is pinned: go to where this mode lives.
       const i = 2 + MODES.indexOf(mode);
-      const r = peoplePin.getBoundingClientRect();
-      const travel = peoplePin.offsetHeight - window.innerHeight;
-      const target = window.scrollY + r.top + (STEP_AT[i] + 0.06) * travel;
-      manualMode = mode;
-      window.scrollTo({ top: target, behavior: "smooth" });
+      const travel = pins.people.h - H;
+      window.scrollTo({ top: pins.people.top + (STEP_AT[i] + 0.06) * travel, behavior: "smooth" });
     };
     tabs.forEach((tab, i) => {
       tab.addEventListener("click", () => choose(tab.dataset.modeTab));
@@ -758,17 +1402,13 @@
         }
       });
     });
-
-    // The app's own keys: 1–4 pick a mode while the chart is on screen.
     let inView = false;
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(([e]) => (inView = e.isIntersecting), { threshold: 0.5 }).observe(peopleVis);
-    }
+    if ("IntersectionObserver" in window) new IntersectionObserver(([e]) => (inView = e.isIntersecting), { threshold: 0.5 }).observe(peopleVis);
     document.addEventListener("keydown", (e) => {
       if (!inView || e.metaKey || e.ctrlKey || e.altKey || !/^[1-4]$/.test(e.key)) return;
       const t = e.target;
       if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      if (peopleVis.contains(t)) return; // the tablist handles its own
+      if (peopleVis.contains(t)) return;
       choose(MODES[Number(e.key) - 1]);
     });
   }
@@ -776,43 +1416,38 @@
   /* ── Readiness: one week of a weekly 1:1 ──────────────────────────── */
 
   const dial = $("[data-dial]");
-  const readyPin = $('[data-pin="ready"]');
   const DIAL_C = TAU * 124;
-  const WINDOW_OPENS = 5; // max(2 days, 25% of 7) before the meeting
+  const WINDOW_OPENS = 5;
   let dialState = "";
   let dialDay = -1;
+  let dialP = -1;
   const checks = $$("[data-checks] li");
-  const dialOut = dial && {
-    arc: $("[data-dial-arc]", dial),
-    hand: $("[data-dial-hand]", dial),
-    cd: $("[data-dial-cd]", dial),
-    state: $("[data-dial-state]", dial),
-    why: $("[data-dial-why]", dial),
-  };
+  const dialOut = dial && { arc: $("[data-dial-arc]", dial), hand: $("[data-dial-hand]", dial), cd: $("[data-dial-cd]", dial), state: $("[data-dial-state]", dial), why: $("[data-dial-why]", dial) };
   if (dial) {
     const win = $(".dial__window", dial);
     win.setAttribute("stroke-dasharray", `${((DIAL_C * (7 - WINDOW_OPENS)) / 7).toFixed(2)} ${DIAL_C.toFixed(2)}`);
     win.setAttribute("stroke-dashoffset", (-(DIAL_C * WINDOW_OPENS) / 7).toFixed(2));
     const ticks = $("[data-dial-ticks]", dial);
-    ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"].forEach((day, k) => {
+    ["Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"].forEach((dname, k) => {
       const a = (k / 7) * TAU - Math.PI / 2;
       const c = Math.cos(a);
       const s = Math.sin(a);
       svgEl("line", { class: "dial__tick", x1: 160 + c * 102, y1: 160 + s * 102, x2: 160 + c * 108, y2: 160 + s * 108 }, ticks);
-      svgEl("text", { class: "dial__day", x: (160 + c * 150).toFixed(1), y: (160 + s * 150).toFixed(1) }, ticks).textContent = day;
+      svgEl("text", { class: "dial__day", x: (160 + c * 150).toFixed(1), y: (160 + s * 150).toFixed(1) }, ticks).textContent = dname;
     });
   }
-
   function paintDial(p) {
     if (!dial) return;
     if (still) p = 1;
+    if (Math.abs(p - dialP) < 0.0004) return;
+    dialP = p;
     const d = p * 7;
     dialOut.arc.setAttribute("stroke-dasharray", `${Math.max(0.1, p * DIAL_C).toFixed(1)} ${DIAL_C.toFixed(1)}`);
     dialOut.hand.setAttribute("transform", `rotate(${(p * 360).toFixed(2)} 160 160)`);
-    const day = p >= 0.985 ? 7 : Math.floor(d);
-    if (day !== dialDay) {
-      dialDay = day;
-      dialOut.cd.textContent = day >= 7 ? "Thu · today" : `~Thu · ${7 - day}d`;
+    const dd = p >= 0.985 ? 7 : Math.floor(d);
+    if (dd !== dialDay) {
+      dialDay = dd;
+      dialOut.cd.textContent = dd >= 7 ? "Thu · today" : `~Thu · ${7 - dd}d`;
     }
     let done = 0;
     checks.forEach((li) => {
@@ -822,250 +1457,446 @@
     });
     const state = d < 0.8 ? "loose" : d < WINDOW_OPENS ? "rest" : done === checks.length ? "ready" : "prep";
     const key = state + done;
-    if (key !== dialState) {
-      dialState = key;
-      dial.dataset.state = state;
-      dialOut.state.textContent = { loose: "Loose end", rest: "Resting", prep: "Prep due", ready: "Ready" }[state];
-      const left = checks.length - done;
-      dialOut.why.textContent = {
-        loose: "Last Thursday’s 1:1 was never written up.",
-        rest: "Met this week. Nothing owed, and that’s good.",
-        prep: `The prep window is open. ${left === 1 ? "One check" : `${left} checks`} to go.`,
-        ready: "All four checks pass. Show up.",
-      }[state];
-    }
+    if (key === dialState) return;
+    dialState = key;
+    dial.dataset.state = state;
+    dialOut.state.textContent = { loose: "Loose end", rest: "Resting", prep: "Prep due", ready: "Ready" }[state];
+    const left = checks.length - done;
+    dialOut.why.textContent = {
+      loose: "Last Thursday’s 1:1 was never written up.",
+      rest: "Met this week. Nothing owed, and that’s good.",
+      prep: `The prep window is open. ${left === 1 ? "One check" : `${left} checks`} to go.`,
+      ready: "All four checks pass. Show up.",
+    }[state];
   }
 
-  /* ── Nightfall ────────────────────────────────────────────────────── */
+  /* ── Ideas → Plan → Run: the ideas travel ─────────────────────────── */
 
-  const nightPin = $('[data-pin="night"]');
-  const nightSky = $("[data-night-sky]");
-  const nightSun = $("[data-night-sun]");
+  const flow = $("[data-flow]");
+  const typerOut = $("[data-typer-out]");
+  const writeup = $("[data-writeup]");
+  const tokens = $$("[data-token]");
+  const CAPTURE = "Roadmap risks #work @tavi !";
+  const WRITEUP = "Agreed to cut the export from v1. Tavi owns the risk list by Friday.";
+  const ROUTE = [
+    ["idea-0", "plan-1", "run-1"],
+    ["idea-1", "plan-0", "run-0"],
+    ["idea-2", "plan-2", null],
+  ];
+  let slots = {};
+  let flowP = -1;
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  const renderCapture = (s) =>
+    esc(s)
+      .replace(/(#[\w-]+)/g, '<span class="tok tok--tag">$1</span>')
+      .replace(/(@[\w-]+)/g, '<span class="tok tok--at">$1</span>')
+      .replace(/(\s)!$/, '$1<span class="tok tok--bang">!</span>');
+
+  function measureLocal() {
+    if (flow) {
+      const base = flow.getBoundingClientRect();
+      slots = {};
+      $$("[data-slot]", flow).forEach((el) => {
+        const r = el.getBoundingClientRect();
+        slots[el.dataset.slot] = { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height, el };
+      });
+      const f = $(".capture__field", flow).getBoundingClientRect();
+      slots.field = { x: f.left - base.left + 10, y: f.top - base.top + 8, w: 120, h: f.height - 16 };
+      tokens.forEach((t) => {
+        t.style.transform = "none";
+        t._w = t.offsetWidth;
+        t._h = t.offsetHeight;
+      });
+      flowP = -1;
+    }
+    measureScrubs();
+  }
+
+  function tokenAt(tok, i, p) {
+    const [ideaK, planK, runK] = ROUTE[i];
+    const idea = slots[ideaK];
+    const plan = slots[planK];
+    const run = runK && slots[runK];
+    if (!idea || !plan) return null;
+    const tw = tok._w || 120;
+    const th = tok._h || 34;
+    const at = (s, scale = 1) => ({ x: s.x + 8, y: s.y + (s.h - th) / 2, sx: scale, sy: scale, o: 1 });
+    const center = (s) => {
+      return { x: s.x, y: s.y, sx: s.w / tw, sy: s.h / th, o: 0 };
+    };
+    const A = at(idea);
+    const B = center(plan);
+    const fly = (a, b, k, lift) => {
+      const e = smooth(k);
+      return { x: lerp(a.x, b.x, e), y: lerp(a.y, b.y, e) - Math.sin(e * Math.PI) * lift, sx: lerp(a.sx, b.sx, e), sy: lerp(a.sy, b.sy, e), o: lerp(a.o, b.o, clamp((k - 0.6) / 0.4)) };
+    };
+    let s;
+    if (i === 0) {
+      const F = { x: slots.field.x, y: slots.field.y, sx: 1, sy: 1, o: 0 };
+      if (p < 0.28) s = F;
+      else if (p < 0.36) s = fly({ ...F, o: 1 }, A, (p - 0.28) / 0.08, 10);
+      else s = A;
+      if (p < 0.29) s.o = 0;
+    } else s = A;
+    const go = 0.38 + i * 0.06;
+    if (p >= go) s = fly(A, B, clamp((p - go) / 0.15), 46);
+    if (run) {
+      const back = 0.66 + (i === 1 ? 0 : 0.07);
+      if (p >= back) {
+        const R = at(run);
+        R.x = run.x;
+        R.y = run.y + (run.h - th) / 2;
+        const k = clamp((p - back) / 0.14);
+        const e = smooth(k);
+        const from = { ...B, o: 1 };
+        s = { x: lerp(from.x, R.x, e), y: lerp(from.y, R.y, e) - Math.sin(e * Math.PI) * 36, sx: lerp(from.sx, 1, e), sy: lerp(from.sy, 1, e), o: clamp(k * 3) };
+      }
+    }
+    return s;
+  }
+
+  function paintFlow(p) {
+    if (!flow) return;
+    if (still) p = 1;
+    if (Math.abs(p - flowP) < 0.0005) return;
+    flowP = p;
+    const n = p < 0.28 ? Math.round((CAPTURE.length * p) / 0.26) : p < 0.36 ? CAPTURE.length : 0;
+    typerOut.innerHTML = renderCapture(CAPTURE.slice(0, Math.min(CAPTURE.length, n)));
+    const wn = Math.round(WRITEUP.length * clamp((p - 0.84) / 0.14));
+    writeup.textContent = WRITEUP.slice(0, wn);
+    tokens.forEach((tok, i) => {
+      const s = tokenAt(tok, i, p);
+      if (!s) return;
+      tok.style.opacity = s.o.toFixed(3);
+      tok.style.transform = `translate3d(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px, 0) scale(${s.sx.toFixed(3)}, ${s.sy.toFixed(3)})`;
+      const planK = ROUTE[i][1];
+      const landed = p >= 0.38 + i * 0.06 + 0.13;
+      if (slots[planK]) slots[planK].el.classList.toggle("is-hit", landed);
+    });
+  }
+  tokens.forEach((t) => (t.style.transformOrigin = "0 0"));
+
+  /* ── Scroll-scrubbed pieces: profile, leading up, ⌘K ──────────────── */
+
+  const pcard = $("[data-assemble]");
+  const pieces = pcard ? $$("[data-piece]", pcard) : [];
+  const upSec = $('[data-scrub="up"]');
+  const upCards = $$("[data-up-card]");
+  const upRows = $$("[data-up-row], [data-up-win]");
+  const today = $('[data-scrub="today"]');
+  const todayWin = today && $(".app-window", today);
+  const paletteEl = $("[data-palette]");
+  const scrubTops = {};
+  function measureScrubs() {
+    const m = (k, el) => el && (scrubTops[k] = { top: docTop(el), h: el.offsetHeight });
+    m("pcard", pcard);
+    m("up", upSec);
+    m("today", today);
+    m("palette", paletteEl);
+  }
+  // 0 as the element's top meets the bottom of the screen, 1 after `span` screens more.
+  const enter = (k, y, span = 0.6, at = 0.95) => {
+    const s = scrubTops[k];
+    if (!s) return 1;
+    return clamp((y + H * at - s.top) / (H * span));
+  };
+  const PIECE = pieces.map((_, i) => [((i * 61) % 11) - 5, 40 + ((i * 37) % 70), ((i * 53) % 13) - 6]);
+  let pieceE = -1;
+  function paintPieces(y) {
+    if (!pieces.length) return;
+    // Once a piece has landed it stays: the card assembles once.
+    const e = still || pieceE >= 1 ? 1 : easeOut(enter("pcard", y, 0.75, 1));
+    if (Math.abs(e - pieceE) < 0.001) return;
+    pieceE = e;
+    pieces.forEach((el, i) => {
+      const k = clamp(e * 1.6 - i * 0.06);
+      if (k >= 1) {
+        el.style.transform = "";
+        return;
+      }
+      const [dx, dy, rot] = PIECE[i];
+      const q = 1 - smooth(k);
+      el.style.transform = `translate3d(${(dx * 14 * q).toFixed(1)}px, ${(dy * q).toFixed(1)}px, 0) rotate(${(rot * q).toFixed(2)}deg)`;
+    });
+  }
+  let upE = -1;
+  function paintUp(y) {
+    if (!upSec) return;
+    const e = still || upE >= 1 ? 1 : enter("up", y, 0.9, 1);
+    if (Math.abs(e - upE) < 0.001) return;
+    upE = e;
+    upCards.forEach((el, i) => {
+      const k = smooth(clamp(e * 1.5 - i * 0.25));
+      el.style.transform = k >= 1 ? "" : `translate3d(${((1 - k) * (i ? 70 : -40)).toFixed(1)}px, ${((1 - k) * 50).toFixed(1)}px, 0)`;
+    });
+    upRows.forEach((el, i) => {
+      const k = smooth(clamp(e * 2.2 - 0.4 - i * 0.12));
+      el.style.transform = k >= 1 ? "" : `translate3d(${((1 - k) * 36).toFixed(1)}px, 0, 0) rotate(${((1 - k) * 1.5).toFixed(2)}deg)`;
+    });
+  }
+  let todayE = -1;
+  function paintToday(y) {
+    if (!todayWin) return;
+    const e = still || todayE >= 1 ? 1 : easeOut(enter("today", y, 0.7, 1));
+    if (Math.abs(e - todayE) < 0.001) return;
+    todayE = e;
+    todayWin.style.transform = e >= 1 ? "" : `perspective(1600px) rotateX(${((1 - e) * 16).toFixed(2)}deg) translate3d(0, ${((1 - e) * 60).toFixed(1)}px, 0) scale(${(0.94 + 0.06 * e).toFixed(3)})`;
+  }
+
+  // ⌘K: the query types itself as you scroll, and the results re-rank live,
+  // with the app's own ranking: prefix > word-start > mid-word > initials,
+  // then which field matched (a name > where it lives > the prose), then recency.
+  const DOCS = [
+    { kind: "Person", name: "Ravi", where: "Product team", text: "Engineer · 1:1 every other Tuesday", rec: 0.6 },
+    { kind: "Person", name: "Rosa", where: "Design team", text: "Researcher · joined in August", rec: 0.3 },
+    { kind: "Meeting", name: "Roadmap review", where: "Product team · monthly", text: "Next ~Nov 3 · two topics queued", rec: 0.8 },
+    { kind: "Topic", name: "Roadmap risks", where: "Tavi · 1:1", text: "The export is the long pole; decide by Friday", rec: 0.9 },
+    { kind: "Write-up", name: "Tavi · 1:1, Oct 15", where: "Design team", text: "…agreed to cut the export from the roadmap…", rec: 0.7 },
+    { kind: "Note", name: "Owen", where: "Product team", text: "Wants to own the road to launch", rec: 0.5 },
+    { kind: "Win", name: "Wins ledger", where: "Leadership team", text: "Shipped the Q3 roadmap a week early", rec: 0.4 },
+  ];
+  const QUERY = "roadmap";
+  const palQ = $("[data-palette-q]");
+  const palList = $("[data-palette-list]");
+  const palFoot = $("[data-palette-foot]");
+  let palN = -1;
+  const quality = (text, q) => {
+    const t = text.toLowerCase();
+    if (t.startsWith(q)) return [4, 0];
+    const m = t.search(new RegExp(`\\b${q}`));
+    if (m >= 0) return [3, m];
+    const k = t.indexOf(q);
+    if (k >= 0) return [2, k];
+    const ini = t.split(/\W+/).map((w) => w[0] || "").join("");
+    if (ini.startsWith(q)) return [1, -1];
+    return [0, -1];
+  };
+  const hl = (text, q, at) => (at < 0 || !q ? esc(text) : `${esc(text.slice(0, at))}<mark>${esc(text.slice(at, at + q.length))}</mark>${esc(text.slice(at + q.length))}`);
+  function paintPalette(y) {
+    if (!palList) return;
+    if (!DOCS[0].li) {
+      if (scrubTops.palette && y + H * 2.5 < scrubTops.palette.top && !still) return;
+      DOCS.forEach((d) => {
+        const li = document.createElement("li");
+        palList.append(li);
+        d.li = li;
+      });
+    }
+    const e = still ? 1 : enter("palette", y, 0.6, 0.9);
+    const n = Math.round(QUERY.length * e);
+    if (n === palN) return;
+    palN = n;
+    const q = QUERY.slice(0, n);
+    palQ.textContent = q;
+    const scored = DOCS.map((d) => {
+      if (!q) return { d, s: d.rec, f: -1, at: -1 };
+      let best = { s: -1, f: -1, at: -1 };
+      [["name", 3], ["where", 2], ["text", 1]].forEach(([f, wgt]) => {
+        const [qq, at] = quality(d[f], q);
+        if (!qq) return;
+        const s = qq * 10 + wgt * 2 + d.rec;
+        if (s > best.s) best = { s, f, at };
+      });
+      return { d, ...best };
+    }).filter((x) => x.s >= 0);
+    scored.sort((a, b) => b.s - a.s);
+    const rowH = W <= 420 ? 62 : 76;
+    DOCS.forEach((d) => {
+      const rank = scored.findIndex((x) => x.d === d);
+      const li = d.li;
+      const sc = scored[rank];
+      if (rank < 0 || rank > 3) {
+        li.style.opacity = "0";
+        li.style.transform = `translate3d(0, ${(4 * rowH).toFixed(0)}px, 0)`;
+        li.classList.remove("is-top");
+        return;
+      }
+      li.style.opacity = "1";
+      li.style.transform = `translate3d(0, ${rank * rowH}px, 0)`;
+      li.classList.toggle("is-top", rank === 0);
+      const f = sc.f;
+      li.innerHTML = `<span class="kind">${d.kind}</span><b>${f === "name" ? hl(d.name, q, sc.at) : esc(d.name)}</b> · ${f === "where" ? hl(d.where, q, sc.at) : esc(d.where)}<span>${f === "text" ? hl(d.text, q, sc.at) : esc(d.text)}</span>`;
+    });
+    palFoot.textContent = q ? `${scored.length} found · ranked by match, then field, then recency` : "Nothing typed: the last things you opened";
+  }
+
+  /* ── Nightfall copy ───────────────────────────────────────────────── */
+
   const nightCopy = $("[data-night-copy]");
-  const nightHorizon = $("[data-night-horizon]");
-  const nightGlint = $("[data-night-glint]");
-
-  function paintNight(p) {
-    if (!nightSky) return;
+  let nightC = -1;
+  function paintNight(y) {
+    if (!nightCopy) return;
     if (still) {
-      nightSky.style.opacity = "";
-      nightSky.style.removeProperty("--dusk");
-      nightCopy.style.opacity = "";
-      nightCopy.style.transform = "";
+      if (nightC !== 1) {
+        nightC = 1;
+        nightCopy.style.opacity = "";
+        nightCopy.style.transform = "";
+      }
       return;
     }
-    nightSky.style.opacity = clamp(p / 0.4).toFixed(3);
-    nightSky.style.setProperty("--dusk", (1 - clamp((p - 0.3) / 0.4)).toFixed(3));
-    // The sun sets behind the water line; its glint on the water thins as it goes.
-    const set = clamp(p / 0.62);
-    nightSun.style.transform = `translate3d(0, ${(set * window.innerHeight * 0.5).toFixed(1)}px, 0)`;
-    nightGlint.style.opacity = (0.9 * (1 - set)).toFixed(3);
-    nightGlint.style.transform = `scaleY(${(1 - set * 0.7).toFixed(3)})`;
-    nightHorizon.style.opacity = Math.min(clamp(p / 0.2), 1 - clamp((p - 0.6) / 0.25)).toFixed(3);
-    const c = clamp((p - 0.5) / 0.22);
+    const p = pinProgress("night", y);
+    const c = clamp((p - 0.5) / 0.18);
+    if (Math.abs(c - nightC) < 0.001) return;
+    nightC = c;
     nightCopy.style.opacity = c.toFixed(3);
     nightCopy.style.transform = `translate3d(0, ${((1 - c) * 36).toFixed(1)}px, 0)`;
   }
 
-  /* ── The page's clock ─────────────────────────────────────────────── */
+  // The sun meets the water: rings go out from where its light touches.
+  let lastSunDrop = 0;
+  function sunDrops(t) {
+    if (still || day.tilt < 0.9 || day.sun[3] <= 0) return;
+    const h = (day.hz - day.sun[1]) / day.sun[2];
+    if (h > 1.4 || h < -1.05 || t - lastSunDrop < 1.6) return;
+    lastSunDrop = t;
+    drop(day.sun[0], day.hz + H * 0.09, 1.6);
+  }
 
-  const clock = $("[data-clock]");
-  const clockTime = $("[data-clock-time]");
-  const hourSections = $$("[data-hour]");
-  const toMin = (s) => {
-    const [h, m] = s.split(":").map(Number);
-    return h * 60 + m;
-  };
-  let chapters = [];
-  let lastMinute = -1;
-  function measureChapters() {
-    const y = window.scrollY;
-    chapters = hourSections.map((el, i) => {
-      const r = el.getBoundingClientRect();
-      const h0 = toMin(el.dataset.hour);
-      const next = hourSections[i + 1];
-      const h1 = "hold" in el.dataset ? h0 : el.dataset.hourEnd ? toMin(el.dataset.hourEnd) : next ? toMin(next.dataset.hour) : h0 + 30;
-      return { top: r.top + y, height: r.height, h0, h1 };
+  /* ── Cards: a small tilt toward the pointer, flat again at rest ───── */
+
+  if (window.matchMedia("(pointer: fine)").matches) {
+    $$("[data-tilt]").forEach((card) => {
+      let idle = 0;
+      const rest = () => {
+        card.style.transition = "transform .6s var(--ease)";
+        card.style.transform = "";
+      };
+      card.addEventListener("pointermove", (e) => {
+        if (still) return;
+        const r = card.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width - 0.5;
+        const yy = (e.clientY - r.top) / r.height - 0.5;
+        card.style.transition = "transform .25s var(--ease)";
+        card.style.transform = `perspective(1000px) rotateX(${(yy * -4).toFixed(2)}deg) rotateY(${(x * 4).toFixed(2)}deg)`;
+        clearTimeout(idle);
+        idle = setTimeout(rest, 900);
+      });
+      card.addEventListener("pointerleave", () => {
+        clearTimeout(idle);
+        rest();
+      });
     });
   }
-  function paintClock(y) {
-    if (!clock || !chapters.length) return;
-    const probe = y + window.innerHeight * 0.35;
-    let c = chapters[0];
-    for (const ch of chapters) if (probe >= ch.top) c = ch;
-    const m = Math.round(lerp(c.h0, c.h1, clamp((probe - c.top) / c.height)));
-    if (m === lastMinute) return;
-    lastMinute = m;
-    clockTime.textContent = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-    clock.classList.toggle("is-night", m >= 19 * 60 + 50);
-  }
 
-  /* ── Scroll-driven work, batched into one frame ───────────────────── */
+  /* ── One loop for the page ────────────────────────────────────────── */
 
-  const top = $("[data-top]");
-  const hero = $(".hero");
-  const heroWell = $("[data-hero-well]");
-  const heroCopy = $("[data-hero-copy]");
-  const floaters = $$("[data-depth-y]");
-  const pinProgress = (pin) => {
-    if (!pin) return 0;
-    const r = pin.getBoundingClientRect();
-    const travel = r.height - window.innerHeight;
-    return travel > 0 ? clamp(-r.top / travel) : 1;
-  };
+  let dirty = true;
+  let raf = 0;
+  let lastY = -1;
+  let lastT = performance.now();
+  let frames = 0;
+  const heroWellEl = heroWell.wrap;
 
-  let ticking = false;
-  function paint() {
-    ticking = false;
+  function tick(ts) {
+    raf = 0;
     syncMotion();
+    const dt = Math.min(0.05, (ts - lastT) / 1000);
+    adapt(ts - lastT);
+    lastT = ts;
+    frames++;
     const y = window.scrollY;
-    const vh = window.innerHeight;
-    if (top && hero) top.classList.toggle("is-solid", y > hero.offsetHeight - 90);
-    paintClock(y);
-    paintPeople(pinProgress(peoplePin));
-    paintDial(pinProgress(readyPin));
-    paintNight(pinProgress(nightPin));
-    if (still) return;
-
-    if (hero && y < hero.offsetHeight * 1.2) {
-      // Looking down into the well, then the surface tips away as you leave.
-      const p = clamp(y / hero.offsetHeight);
-      if (heroWell) heroWell.style.transform = `perspective(1100px) rotateX(${(p * 42).toFixed(2)}deg) scale(${(1 + p * 0.14).toFixed(3)})`;
-      if (heroCopy) {
-        heroCopy.style.transform = `translate3d(0, ${(p * -90).toFixed(1)}px, 0)`;
-        heroCopy.style.opacity = (1 - clamp((p - 0.25) / 0.6)).toFixed(3);
+    const moved = y !== lastY || dirty;
+    const t = now();
+    if (moved) {
+      lastY = y;
+      dirty = false;
+      computeDay(y);
+      paintHeader();
+      paintClock();
+      paintToday(y);
+      paintPieces(y);
+      paintDial(pinProgress("ready", y));
+      paintFlow(pinProgress("flow", y));
+      paintUp(y);
+      paintPalette(y);
+      paintNight(y);
+      lightChart();
+      if (heroWellEl && !still && y < H * 1.3) {
+        const hp = clamp(y / H);
+        heroWellEl.style.transform = `translate3d(0, ${(y * (1 - K)).toFixed(1)}px, 0)`;
+        heroWellEl.style.opacity = (1 - clamp((hp - 0.35) / 0.55)).toFixed(3);
+        if (heroCopy) heroCopy.style.transform = `translate3d(0, ${(y * -0.12).toFixed(1)}px, 0)`;
       }
     }
-    for (const el of floaters) {
-      const r = el.getBoundingClientRect();
-      if (r.bottom < -200 || r.top > vh + 200) continue;
-      const offset = r.top + r.height / 2 - vh / 2;
-      el.style.transform = `translate3d(0, ${(offset * Number(el.dataset.depthY)).toFixed(1)}px, 0)`;
+    const edgesLive = paintPeople(pinProgress("people", y));
+    if (!still) {
+      if (heroWell.ctx && heroWell.visible && y < H * 1.3) {
+        stepHero(dt);
+        drawHero();
+      }
+      sunDrops(t);
+      paintSheen(t);
+      // Water: every frame while something moves, every other frame at rest.
+      const live = moved || drops.some((d) => t - d.t0 < 4);
+      if (live || frames % 2 === 0) renderWater(t);
+      raf = requestAnimationFrame(tick);
+    } else {
+      if (heroWell.ctx && !heroWell.drawn) {
+        heroWell.drawn = true;
+        drawHero();
+      }
+      renderWater(2.0);
+      if (edgesLive || (water.mode && !water.ready)) raf = requestAnimationFrame(tick);
     }
   }
-  function request() {
-    if (!ticking) {
-      ticking = true;
-      requestAnimationFrame(paint);
-    }
+  function kick() {
+    if (!raf) raf = requestAnimationFrame(tick);
   }
-  window.addEventListener("scroll", request, { passive: true });
+
+  window.addEventListener("scroll", kick, { passive: true });
   window.addEventListener("resize", () => {
-    measureChapters();
-    request();
+    measure();
+    sizeHero();
+    resizeWater();
+    kick();
   });
-  window.addEventListener("load", () => {
-    measureChapters();
-    request();
+  // A hidden tab gets no animation frames, so the water simply stops there and
+  // picks up again when the tab comes back.
+  window.addEventListener("pageshow", () => {
+    lastT = performance.now();
+    kick();
   });
-  if ("ResizeObserver" in window) new ResizeObserver(() => measureChapters()).observe(document.body);
-  measureChapters();
-  paint();
+  if ("ResizeObserver" in window) {
+    let pending = 0;
+    new ResizeObserver(() => {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(() => {
+        measure();
+        kick();
+      });
+    }).observe(document.body);
+  }
 
   // `matches` is live: a mid-visit switch to reduced motion (or back) is
-  // honored on the next frame that paints, from a scroll or a canvas.
+  // honored on the next frame, and checked now and then while idle.
   function syncMotion() {
     if (motionQuery.matches === still) return;
     still = motionQuery.matches;
     root.classList.toggle("motion", !still);
     if (still) {
-      [heroWell, heroCopy, nightSun, ...floaters].forEach((el) => el && (el.style.transform = ""));
-      if (heroCopy) heroCopy.style.opacity = "";
-      wells.forEach((w) => w.setStill());
-    } else {
-      wells.forEach((w) => w.visible && w.start());
+      drops.length = 0;
+      [heroWellEl, heroCopy, nightCopy, todayWin].forEach((el) => el && (el.style.transform = ""));
+      if (heroWellEl) heroWellEl.style.opacity = "";
+      heroWell.splashed = true;
+      heroWell.drawn = false;
     }
-    peopleState = { view: "", mode: "", step: -1, t: -1 };
+    peopleState = { step: -1, t: -1 };
     dialState = "";
+    dialP = flowP = pieceE = upE = todayE = palN = nightC = -1;
+    measure();
     sizeChart();
-    measureChapters();
-    request();
   }
+  setInterval(() => {
+    if (motionQuery.matches !== still) kick();
+  }, 1500);
 
-  /* ── Profile card: a small tilt toward the pointer ────────────────── */
+  measure();
+  kick();
 
-  const tilt = $("[data-tilt]");
-  if (tilt && window.matchMedia("(pointer: fine)").matches) {
-    tilt.addEventListener("pointermove", (e) => {
-      if (still || !tilt.classList.contains("is-in")) return;
-      const r = tilt.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width - 0.5;
-      const yy = (e.clientY - r.top) / r.height - 0.5;
-      tilt.style.transition = "transform .25s var(--ease)";
-      tilt.style.transform = `perspective(900px) rotateX(${(yy * -6).toFixed(2)}deg) rotateY(${(x * 8).toFixed(2)}deg)`;
-    });
-    tilt.addEventListener("pointerleave", () => (tilt.style.transform = ""));
-  }
-
-  /* ── Health: the scan dims, it never hides ────────────────────────── */
-
-  const scan = $("[data-scan]");
-  if (scan) {
-    const field = $("[data-scan-field]", scan);
-    const note = $("[data-scan-note]", scan);
-    const buttons = $$("[data-scan-level]", scan);
-    const label = { thriving: "Thriving", solid: "Solid", watch: "Watch", strained: "Strained" };
-    const say = (level) => {
-      if (!level) return "No level picked: everything is lit.";
-      const nameOf = (li) => Array.from(li.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
-      const lit = $$(`li[data-h="${level}"]`, field).map(nameOf);
-      const names = lit.length > 1 ? `${lit.slice(0, -1).join(", ")} and ${lit[lit.length - 1]}` : lit[0];
-      return `${label[level]}: ${names} stay lit. Everything else dims, but nothing is hidden.`;
-    };
-    buttons.forEach((b) =>
-      b.addEventListener("click", () => {
-        const level = b.dataset.scanLevel;
-        const on = b.getAttribute("aria-pressed") !== "true";
-        buttons.forEach((o) => o.setAttribute("aria-pressed", String(o === b && on)));
-        if (on) field.dataset.active = level;
-        else delete field.dataset.active;
-        note.textContent = say(on ? level : null);
-      })
-    );
-  }
-
-  /* ── Capture: the #tag @meeting ! grammar, typed out ──────────────── */
-
-  const typer = $("[data-typer]");
-  if (typer) {
-    const out = $("[data-typer-out]", typer);
-    const TEXT = "Rota for Advent #training @staff-meeting !";
-    const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-    const render = (s) =>
-      esc(s)
-        .replace(/(#[\w-]+)/g, '<span class="tok tok--tag">$1</span>')
-        .replace(/(@[\w-]+)/g, '<span class="tok tok--at">$1</span>')
-        .replace(/(\s)!$/, '$1<span class="tok tok--bang">!</span>');
-
-    const type = () => {
-      if (still) {
-        out.innerHTML = render(TEXT);
-        return;
-      }
-      let n = 0;
-      const step = () => {
-        if (still) {
-          out.innerHTML = render(TEXT);
-          return;
-        }
-        n += 1;
-        out.innerHTML = render(TEXT.slice(0, n));
-        if (n < TEXT.length) setTimeout(step, TEXT[n - 1] === " " ? 110 : 45 + Math.random() * 50);
-        else setTimeout(() => ((n = 0), setTimeout(step, 600)), 3800);
-      };
-      step();
-    };
-
-    if (still || !("IntersectionObserver" in window)) {
-      out.innerHTML = render(TEXT);
-    } else {
-      const io = new IntersectionObserver(([e]) => {
-        if (e.isIntersecting) {
-          io.disconnect();
-          type();
-        }
-      }, { threshold: 0.5 });
-      io.observe(typer);
-    }
-  }
+  // The water starts after the first paint and the largest one, when the page is idle.
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 200));
+  const begin = () => idle(() => startWater(), { timeout: 1500 });
+  if (document.readyState === "complete") setTimeout(begin, 300);
+  else window.addEventListener("load", () => setTimeout(begin, 300), { once: true });
+  clock0 = performance.now();
 })();

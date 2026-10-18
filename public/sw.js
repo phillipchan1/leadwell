@@ -8,7 +8,7 @@
  *
  * Bump CACHE_VERSION to evict every cache on the next deploy.
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const SHELL_CACHE = `leadwell-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `leadwell-assets-${CACHE_VERSION}`;
 const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE];
@@ -19,6 +19,11 @@ const SHELL_URLS = [
   "/landing/index.html",
   "/landing/landing.css",
   "/landing/landing.js",
+  "/landing/assets/fonts/newsreader.woff2",
+  "/landing/assets/fonts/newsreader-italic.woff2",
+  "/landing/assets/fonts/instrument-sans.woff2",
+  "/landing/assets/fonts/plex-mono-400.woff2",
+  "/landing/assets/fonts/plex-mono-500.woff2",
   "/offline.html",
   "/manifest.webmanifest",
   "/icon-192.png",
