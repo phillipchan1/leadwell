@@ -10,6 +10,8 @@ import {
   libpqCleanEnv,
   redactSecrets,
   refuseUnsafeTestUrl,
+  SOURCE_READ_PGOPTIONS,
+  sourceReadEnv,
 } from "./loopback.mjs";
 
 const fails = [];
@@ -93,6 +95,14 @@ const cleaned = libpqCleanEnv(dirty);
 ok(!cleaned.PGHOST && !cleaned.PGHOSTADDR, "libpqCleanEnv drops PGHOST/PGHOSTADDR");
 ok(!cleaned.PGSERVICE && !cleaned.PGSERVICEFILE && !cleaned.PGSYSCONFDIR, "libpqCleanEnv drops service vars");
 ok(cleaned.KEEP === "yes", "libpqCleanEnv keeps unrelated vars");
+ok(
+  SOURCE_READ_PGOPTIONS === "-c default_transaction_read_only=on",
+  "source PGOPTIONS force default_transaction_read_only",
+);
+const sourceEnv = sourceReadEnv(dirty);
+ok(!sourceEnv.PGHOST && !sourceEnv.PGSERVICE, "sourceReadEnv drops libpq redirect vars");
+ok(sourceEnv.PGOPTIONS === SOURCE_READ_PGOPTIONS, "sourceReadEnv sets read-only PGOPTIONS");
+ok(sourceEnv.KEEP === "yes", "sourceReadEnv keeps unrelated vars");
 
 let missing = false;
 try {

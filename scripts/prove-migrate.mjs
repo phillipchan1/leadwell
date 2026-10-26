@@ -178,7 +178,8 @@ ok(
     /actions\/upload-artifact@[0-9a-f]{40}/.test(workflow),
   "cutover actions are SHA-pinned",
 );
-ok(workflow.includes("retention-days: 7"), "dump artifact retained 7 days");
+ok(/name: leadwell-source-dump[\s\S]*?retention-days:\s*1/.test(workflow), "dump artifact retained 1 day");
+ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
 ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
 ok(workflow.includes("scripts/migrate-supabase-to-neon.mjs"), "cutover runs the existing migrate script");

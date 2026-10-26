@@ -22,6 +22,17 @@ export function libpqCleanEnv(env = process.env) {
   return next;
 }
 
+/** libpq options that force the source session read-only. */
+export const SOURCE_READ_PGOPTIONS = "-c default_transaction_read_only=on";
+
+/** Env for source pg_dump / COPY / SELECT. Never use on the target. */
+export function sourceReadEnv(env = process.env) {
+  return {
+    ...libpqCleanEnv(env),
+    PGOPTIONS: SOURCE_READ_PGOPTIONS,
+  };
+}
+
 /** Strip postgres URIs so logs never echo a connection string. */
 export function redactSecrets(text) {
   return String(text).replace(/(?:postgres(?:ql)?):\/\/[^\s"'\\<>]+/gi, "postgres://***");

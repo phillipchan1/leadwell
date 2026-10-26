@@ -14,7 +14,7 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl } from "./loopback.mjs";
+import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl, sourceReadEnv } from "./loopback.mjs";
 import {
   CHECKSUM_TABLES,
   assertAuthUsersCarriedOver,
@@ -58,12 +58,12 @@ if (source === target) {
   process.exit(2);
 }
 
-function run(cmd, args) {
+function run(cmd, args, env) {
   const res = spawnSync(cmd, args, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
     maxBuffer: 64 * 1024 * 1024,
-    env: libpqCleanEnv(),
+    env: libpqCleanEnv(env ?? process.env),
   });
   if (res.status !== 0) {
     const err = (res.stderr || res.stdout || "").trim();
@@ -73,7 +73,11 @@ function run(cmd, args) {
 }
 
 function psql(url, sql) {
-  return run("psql", ["-v", "ON_ERROR_STOP=1", "-tA", "-d", url, "-c", sql]);
+  return run(
+    "psql",
+    ["-v", "ON_ERROR_STOP=1", "-tA", "-d", url, "-c", sql],
+    url === source ? sourceReadEnv() : undefined,
+  );
 }
 
 const srcHashes = parseHashes(psql(source, contentHashQuery()));

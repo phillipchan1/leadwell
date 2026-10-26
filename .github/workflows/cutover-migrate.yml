@@ -123,6 +123,8 @@ jobs:
           sudo apt-get install -y postgresql-client-15 postgresql-client-16 postgresql-client-17
 
       - name: pg_dump source (custom format)
+        env:
+          PGOPTIONS: "-c default_transaction_read_only=on"
         run: |
           set +x
           set -eu
@@ -132,14 +134,14 @@ jobs:
           import { spawnSync } from "node:child_process";
           import { existsSync, statSync } from "node:fs";
           import { join } from "node:path";
-          import { libpqCleanEnv, redactSecrets } from "./scripts/loopback.mjs";
+          import { redactSecrets, sourceReadEnv } from "./scripts/loopback.mjs";
 
           const source = process.env.SOURCE_DATABASE_URL || "";
           function run(cmd, args, opts = {}) {
             const res = spawnSync(cmd, args, {
               encoding: "utf8",
               maxBuffer: 64 * 1024 * 1024,
-              env: libpqCleanEnv(),
+              env: sourceReadEnv(),
               ...opts,
             });
             if (res.status !== 0) {
@@ -200,7 +202,7 @@ jobs:
         with:
           name: leadwell-source-dump
           path: artifacts/leadwell-source.dump
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
 
       - name: Create scratch target (dry_run)

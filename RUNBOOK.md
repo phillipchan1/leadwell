@@ -130,7 +130,7 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
    - masks `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL` (`::add-mask::`) and
      never `set -x`
    - `pg_dump`s `public` from Supabase (custom format, matching client major,
-     `sslmode=require`) and uploads the dump (7-day retention)
+     `sslmode=require`) and uploads the dump (1-day retention)
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
      Postgres 17 service container — **not** Neon
    - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target) to
