@@ -81,8 +81,15 @@ npm run dev
 
 Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
 
-Apply `worker/schema/001_leadwell.sql`, `002_better_auth.sql`, then
-`003_rate_limit.sql` to a local Postgres or Neon branch before signing in.
+Apply `worker/schema/001_leadwell.sql`, `002_better_auth.sql`,
+`003_rate_limit.sql`, then `004_rate_limit_window_start.sql` to a local
+Postgres or Neon branch before signing in. `004` is a `BEGIN`/`COMMIT`
+transaction. To undo just that column (same statement as
+`worker/schema/rollback/004_rate_limit_window_start.sql`):
+
+```sql
+ALTER TABLE rate_limit DROP COLUMN IF EXISTS window_start;
+```
 
 ---
 
@@ -308,12 +315,53 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 - `POST /api/openai` with a signed-in session and no client API key.
   Without `OPENAI_API_KEY` the Worker returns 501; with it, OpenAI answers.
 - Magic-link send is 3/minute per IP and per allowlisted email+IP. An hourly
-  cap (10/hour) is keyed on email + IP prefix (IPv4 /24, IPv6 /48), not on
-  email alone, so a fresh prefix always gets a real send. Verify is 10/minute
-  per IP. Prod keys IP on `CF-Connecting-IP` only. Extra requests return 429.
-  Mail is sent in `waitUntil` so timing does not leak the allowlist.
-  Background send failures log kind/status only (no email or token).
+  cap (10/hour) is keyed on email + IP prefix (IPv4 /24, IPv6 /48). Unparseable
+  IPs share one `invalid` prefix bucket. A silent 200/hour per-email soft cap
+  still returns 200 with the same timing but skips the send and logs once.
+  That soft cap is email-only — see below. Verify is 10/minute per IP. Prod
+  keys IP on `CF-Connecting-IP` only. Extra hard-limit requests return 429.
+  Mail (or the first-skip console log) is dispatched in `waitUntil` so timing
+  does not leak the allowlist or the cap. Soft-cap DB work (email + log keys)
+  is awaited on the request; background send failures log kind/status only
+  (no email, token, or IP).
 - Confirm the Supabase dashboard still has the original rows (source untouched).
+
+---
+
+## Magic-link soft cap (email-only lockout)
+
+The 200/hour silent cap is keyed on the allowlisted email alone
+(`email-soft|/sign-in/magic-link|<lowercased-email>`). Hard limits are 10/hour
+per email+prefix, so about **20 distinct /24 (or IPv6 /48) prefixes** can
+burn the soft cap and **silently lock the victim out**: further requests
+still return `200 {status:true}` and skip Resend. The victim sees a successful
+sign-in request and never gets mail.
+
+### How to spot it
+
+- One Worker log line per window: `magic-link send skipped` with
+  `{ kind: "soft_cap" }`. The log has no email, token, or IP.
+- In Postgres, look for a `rate_limit` row whose `key` starts with
+  `email-soft|/sign-in/magic-link|` and `count >= 200`. The suffix after
+  the last `|` is the lowercased address — read it in a SQL client; do
+  not copy it into app logs.
+
+### How to clear a key
+
+Replace the placeholder with the lowercased address. Do not log the
+statement or the key.
+
+```sql
+DELETE FROM rate_limit
+ WHERE key IN (
+   'email-soft|/sign-in/magic-link|<lowercased-email>',
+   'email-soft-log|/sign-in/magic-link|<lowercased-email>'
+ );
+```
+
+After delete, the next allowlisted request starts a new fixed hour window
+and can send again. Prefix hard-limit rows (`email-prefix|…`) are separate;
+clear those only if the same flood also 429s a prefix.
 
 ---
 
@@ -332,6 +380,12 @@ the current deployment (`a147830`). That is the fallback.
    Neon to Supabase.
 5. Re-migrate later only into a **new empty** Neon database (the script
    refuses a dirty target).
+6. If you applied `004_rate_limit_window_start.sql` and need to drop the
+   fixed-window column without a full cutover rollback:
+
+   ```sql
+   ALTER TABLE rate_limit DROP COLUMN IF EXISTS window_start;
+   ```
 
 ---
 

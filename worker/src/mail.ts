@@ -51,6 +51,15 @@ export function logMagicLinkSendFailure(
   log("magic-link send failed", describeMagicLinkSendFailure(err));
 }
 
+export type MagicLinkSoftCapSkip = { kind: "soft_cap" };
+
+/** Token-free, email-free. Call only on the first skip in the window. */
+export function logMagicLinkSoftCapSkip(
+  log: (message: string, detail: MagicLinkSoftCapSkip) => void = console.error,
+): void {
+  log("magic-link send skipped", { kind: "soft_cap" });
+}
+
 /**
  * Send a magic-link email through Resend. Fail closed: key and from-address
  * must be set. Uses fetch (no Resend SDK).

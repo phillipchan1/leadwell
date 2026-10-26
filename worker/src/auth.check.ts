@@ -4,19 +4,23 @@ import {
   existingUserForMagicLinkEmail,
   isAllowedEmail,
   PROD_AUTH_IP_HEADERS,
+  scheduleAuthBackground,
 } from "./auth.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import {
   describeMagicLinkSendFailure,
   logMagicLinkSendFailure,
+  logMagicLinkSoftCapSkip,
   magicLinkEmail,
   MagicLinkSendError,
   resendIdempotencyKey,
   sendMagicLinkEmail,
 } from "./mail.ts";
 import {
+  AUTH_IP_PREFIX_INVALID,
   authIpPrefix,
   MAGIC_LINK_EMAIL_PREFIX_MAX,
+  MAGIC_LINK_EMAIL_SOFT_MAX,
   MAGIC_LINK_SEND_MAX,
   MAGIC_LINK_VERIFY_MAX,
 } from "./rateLimit.ts";
@@ -69,11 +73,26 @@ ok(idem.startsWith("ml/"), "Resend idempotency key is hashed");
 ok(!idem.includes(token), "Resend idempotency key does not contain the token");
 ok(MAGIC_LINK_SEND_MAX === 3, "magic-link send is 3 per window");
 ok(MAGIC_LINK_EMAIL_PREFIX_MAX === 10, "hourly cap is 10 per email+IP-prefix");
+ok(MAGIC_LINK_EMAIL_SOFT_MAX === 200, "silent per-email soft cap is 200/hour");
 ok(MAGIC_LINK_VERIFY_MAX === 10, "magic-link verify is tightly capped");
 ok(authIpPrefix("203.0.113.45") === "203.0.113.0/24", "IPv4 prefix is /24");
 ok(authIpPrefix("2001:db8:abcd:1234::1") === "2001:0db8:abcd::/48", "IPv6 prefix is /48");
 ok(authIpPrefix("2001:db8::1") === "2001:0db8:0000::/48", "compressed IPv6 still /48");
 ok(authIpPrefix("::ffff:203.0.113.45") === "203.0.113.0/24", "IPv4-mapped IPv6 uses /24");
+ok(authIpPrefix("not-an-ip") === AUTH_IP_PREFIX_INVALID, "garbage IPv4-shaped string is invalid");
+ok(authIpPrefix("::::") === AUTH_IP_PREFIX_INVALID, "broken IPv6 is invalid");
+ok(authIpPrefix("2001:db8:gggg::1") === AUTH_IP_PREFIX_INVALID, "non-hex IPv6 is invalid");
+ok(authIpPrefix("unknown") === AUTH_IP_PREFIX_INVALID, "sentinel unknown is invalid");
+ok(
+  authIpPrefix("foo") === authIpPrefix("bar") && authIpPrefix("foo") === AUTH_IP_PREFIX_INVALID,
+  "unparseable IPs share one invalid bucket",
+);
+const softLogs: unknown[] = [];
+logMagicLinkSoftCapSkip((message, detail) => {
+  softLogs.push(message, detail);
+});
+ok(JSON.stringify(softLogs).includes("soft_cap"), "soft-cap skip logs kind soft_cap");
+ok(!JSON.stringify(softLogs).includes("@"), "soft-cap skip log has no email");
 
 ok(
   authIpAddressHeaders({}).join(",") === PROD_AUTH_IP_HEADERS.join(","),
@@ -186,6 +205,61 @@ await Promise.resolve();
 ok(unhandled === 0, "request.ts fallback catch does not raise unhandledRejection");
 process.off("unhandledRejection", onUnhandled);
 console.error = realError;
+
+let scheduled: Promise<unknown> | undefined;
+let backgroundDone = false;
+const slow = new Promise<void>((resolve) => {
+  setTimeout(() => {
+    backgroundDone = true;
+    resolve();
+  }, 180);
+});
+const tSched = Date.now();
+scheduleAuthBackground((task) => {
+  scheduled = task;
+}, slow);
+const schedMs = Date.now() - tSched;
+ok(schedMs < 50, `scheduleAuthBackground does not await the task (${schedMs}ms)`);
+ok(scheduled !== undefined, "waitUntil is invoked");
+ok(scheduled !== slow, "waitUntil receives the caught promise, not the raw task");
+ok(!backgroundDone, "scheduled work has not finished when scheduleAuthBackground returns");
+await slow;
+
+let orphanDone = false;
+const orphan = new Promise<void>((resolve) => {
+  setTimeout(() => {
+    orphanDone = true;
+    resolve();
+  }, 180);
+});
+const tOrphan = Date.now();
+scheduleAuthBackground(undefined, orphan);
+const orphanMs = Date.now() - tOrphan;
+ok(orphanMs < 50, `missing waitUntil still does not await the task (${orphanMs}ms)`);
+ok(!orphanDone, "missing-waitUntil path does not await Resend or the no-op");
+await orphan;
+
+let waitUntilUnhandled = 0;
+const onWaitUntilUnhandled = () => {
+  waitUntilUnhandled += 1;
+};
+process.on("unhandledRejection", onWaitUntilUnhandled);
+const rejectedSkip = Promise.reject(new MagicLinkSendError("resend_http", 503));
+const realSkipError = console.error;
+console.error = () => {};
+const pendingSkips = new Set<Promise<unknown>>();
+scheduleAuthBackground(
+  (task) => {
+    void task;
+  },
+  rejectedSkip,
+  pendingSkips,
+);
+await Promise.resolve();
+await Promise.resolve();
+ok(waitUntilUnhandled === 0, "waitUntil skip task with a pending Set does not raise unhandledRejection");
+process.off("unhandledRejection", onWaitUntilUnhandled);
+console.error = realSkipError;
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);
