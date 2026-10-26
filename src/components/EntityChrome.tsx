@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { useStore, useActiveTeamId } from "../store/useStore";
 import { useShortcut } from "@/hooks/use-shortcut";
-import { meetingSubjectName, meetingTitle } from "../lib/readiness";
+import { useMeetingsByNext } from "@/hooks/use-meetings-by-next";
+import { meetingTitle } from "../lib/readiness";
 import { findMeeting } from "../lib/slugs";
 import { Button } from "@/components/base/buttons/button";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
@@ -24,6 +25,7 @@ export function useEntityTrail() {
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
   const meetings = useStore((s) => s.meetings);
+  const meetingRows = useMeetingsByNext();
   const me = useStore((s) => s.me);
   const selectedPersonId = useStore((s) => s.selectedPersonId);
   const selectedManagerId = useStore((s) => s.selectedManagerId);
@@ -111,10 +113,8 @@ export function useEntityTrail() {
       return {
         parent,
         label: meetingTitle(meeting, subjectName),
-        siblings: meetings.map((m) => ({
-          id: m.id,
-          name: meetingTitle(m, meetingSubjectName(m, { people, teams, managers })),
-        })),
+        // Soonest first, the order the sidebar lists them in.
+        siblings: meetingRows.map((r) => ({ id: r.meeting.id, name: r.title })),
         currentId: meeting.id,
         select: selectMeeting,
       };
@@ -136,6 +136,7 @@ export function useEntityTrail() {
     meeting,
     meetingSubject,
     meetings,
+    meetingRows,
     selectedMe,
     me.name,
     people,
