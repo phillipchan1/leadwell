@@ -5,6 +5,11 @@
 # Secrets are masked and never printed. Do not set -x. Do not set
 # LEADWELL_MIGRATE_TEST (that flag is prove/CI loopback only and would
 # refuse the real source).
+#
+# Artifacts: NEVER upload pg_dump, CSV, or any row-data file. Dumps stay
+# in $RUNNER_TEMP / the runner workspace and are deleted in the always()
+# step below. The only allowed artifact is the checksum report (per-table
+# counts + content md5). No emails, no password hashes, no dump files.
 name: cutover-migrate
 
 on:
@@ -128,19 +133,22 @@ jobs:
       - name: pg_dump source (custom format)
         env:
           PGOPTIONS: "-c default_transaction_read_only=on"
+          CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
         run: |
           set +x
           set -eu
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
-          mkdir -p artifacts
+          mkdir -p "$CUTOVER_DUMP_DIR"
           node --input-type=module <<'JS'
           import { spawnSync } from "node:child_process";
-          import { existsSync, statSync } from "node:fs";
+          import { existsSync, mkdirSync, statSync } from "node:fs";
           import { join } from "node:path";
           import { redactSecrets, sourceReadEnv } from "./scripts/loopback.mjs";
           import { PG_DUMP_PUBLIC_ARGS } from "./scripts/migrate-users.lib.mjs";
 
           const source = process.env.SOURCE_DATABASE_URL || "";
+          const dumpDir = process.env.CUTOVER_DUMP_DIR || "";
+          if (!dumpDir) throw new Error("CUTOVER_DUMP_DIR is required (runner temp, never artifacts)");
           function run(cmd, args, opts = {}) {
             const res = spawnSync(cmd, args, {
               encoding: "utf8",
@@ -187,20 +195,13 @@ jobs:
           }
           if (!dump) throw new Error(`pg_dump matching Postgres ${major} not found`);
           console.log(`source postgres major ${major}; using matching pg_dump`);
-          const file = "artifacts/leadwell-source.dump";
+          mkdirSync(dumpDir, { recursive: true });
+          const file = join(dumpDir, "source.dump");
           run(dump, [...PG_DUMP_PUBLIC_ARGS, `--file=${file}`, source]);
           const bytes = statSync(file).size;
           if (!bytes) throw new Error("custom-format dump is empty");
-          console.log(`custom-format dump written (${bytes} bytes)`);
+          console.log(`custom-format dump written (${bytes} bytes; runner workspace only, not uploaded)`);
           JS
-
-      - name: Upload source dump
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: leadwell-source-dump
-          path: artifacts/leadwell-source.dump
-          retention-days: 1
-          if-no-files-found: error
 
       - name: Create scratch target (dry_run)
         if: ${{ inputs.dry_run }}
@@ -236,6 +237,8 @@ jobs:
           unset LEADWELL_MIGRATE_TEST
           node scripts/cutover-verify.mjs --report artifacts/cutover-report.md
 
+      # Guard: this is the only upload-artifact. Path must stay a markdown
+      # checksum table (counts + md5). Never point it at a dump or CSV.
       - name: Upload checksum report
         if: ${{ always() }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
@@ -244,3 +247,16 @@ jobs:
           path: artifacts/cutover-report.md
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Delete dumps
+        if: ${{ always() }}
+        run: |
+          set +x
+          set -eu
+          # Dumps and COPY CSVs stay on the runner only. Never upload them.
+          rm -rf "${RUNNER_TEMP}/leadwell-cutover"
+          find "${GITHUB_WORKSPACE}" "${RUNNER_TEMP}" -type f \( \
+            -name '*.dump' -o \
+            -name 'auth_users.csv' -o \
+            -name 'auth_identities.csv' \
+          \) -delete 2>/dev/null || true

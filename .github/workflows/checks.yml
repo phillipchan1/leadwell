@@ -1,5 +1,6 @@
 # Typecheck, lint, and the unit / prove scripts.
 # Deliberately not a production deploy. Vercel and Supabase stay intact.
+# Never upload pg_dump, CSV, or row-data artifacts from this workflow.
 name: checks
 
 on:

@@ -60,8 +60,10 @@ import {
   parseAuthUsersCsv,
   parseHashes,
   parseObjectList,
+  rolesToStubFromDumpSql,
   sourceAuthIdentitiesHashQuery,
   sourceAuthUsersHashQuery,
+  stubSupabaseRolesSql,
   targetBetterAuthUsersHashQuery,
 } from "./migrate-users.lib.mjs";
 
@@ -162,7 +164,7 @@ const DRY_RUN_LINES = [
   "dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)",
   "dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated",
   "dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)",
-  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL",
+  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and Supabase roles (anon, authenticated, service_role, plus dump TO/GRANT) on NEON_DB_URL",
   "dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out",
   'dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email (Google identities are not mapped)',
   "dry-run: would compare per-table row counts and content hashes and abort on mismatch",
@@ -249,6 +251,14 @@ try {
     const stubUsersPath = join(dir, "load_stub_users.sql");
     writeFileSync(stubUsersPath, loadStubAuthUsersSql(usersPath));
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", stubUsersPath]);
+
+    const schemaSqlPath = join(dir, "dump.schema.sql");
+    run(pgRestore, ["--schema-only", `--file=${schemaSqlPath}`, dumpPath]);
+    const stubRoles = rolesToStubFromDumpSql(readFileSync(schemaSqlPath, "utf8"));
+    const stubRolesPath = join(dir, "stub_roles.sql");
+    writeFileSync(stubRolesPath, stubSupabaseRolesSql(stubRoles));
+    console.log(`creating stub roles (${stubRoles.join(", ")}) as NOLOGIN on target…`);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", stubRolesPath]);
 
     console.log("restoring into Neon…");
     const tocPath = join(dir, "restore.toc");

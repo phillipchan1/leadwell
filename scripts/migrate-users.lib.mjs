@@ -342,21 +342,12 @@ ${MIGRATION_TMP_GRANTS_SQL.trim()}
 COMMIT;
 `;
 
-/** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
-export const PROVE_SUPABASE_ROLE_STUBS_SQL = `
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    CREATE ROLE anon NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    CREATE ROLE authenticated NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
-    CREATE ROLE service_role NOLOGIN;
-  END IF;
-END $$;
-`;
+/**
+ * Roles every Supabase dump's RLS policies / grants expect. Vanilla Postgres
+ * and empty Neon do not have these; CREATE POLICY … TO authenticated fails
+ * without them. Always stubbed as NOLOGIN on the restore target.
+ */
+export const DEFAULT_SUPABASE_ROLES = ["anon", "authenticated", "service_role"];
 
 /**
  * Local-Postgres stand-in for the prod wrappers. Same signatures as prod.
@@ -442,7 +433,9 @@ export function assertHashesMatch(src, dst, tables = CHECKSUM_TABLES) {
   }
 }
 
-/** Markdown table of per-table counts and md5 hashes. Safe for a step summary. */
+/** Markdown table of per-table counts and md5 hashes. Safe for a step summary.
+ * Must not include row data, emails, or password hashes — only counts + md5.
+ */
 export function formatChecksumReport(srcHashes, dstHashes, tables = CHECKSUM_TABLES) {
   const lines = [
     "| table | source_count | target_count | source_md5 | target_md5 | ok |",
@@ -602,6 +595,82 @@ export function isNonEmptyTargetObject(row) {
 export function quoteIdent(ident) {
   return `"${String(ident).replaceAll('"', '""')}"`;
 }
+
+function quoteStringLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function unquoteIdent(raw) {
+  const trimmed = String(raw).trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replaceAll('""', '"');
+  }
+  return trimmed;
+}
+
+const SKIP_DUMP_ROLES = new Set([
+  "public",
+  "none",
+  "current_user",
+  "session_user",
+  "current_role",
+  "postgres",
+]);
+
+export function isSkippedDumpRole(name) {
+  const n = String(name).toLowerCase();
+  return !n || SKIP_DUMP_ROLES.has(n) || n.startsWith("pg_");
+}
+
+/**
+ * Roles named by CREATE POLICY … TO and GRANT … TO in pg_restore SQL.
+ * Skips PUBLIC / session keywords / postgres / pg_* reserved roles.
+ */
+export function collectRolesFromDumpSql(sql) {
+  const roles = new Set();
+  const ident = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
+  const list = new RegExp(
+    String.raw`\bTO\s+((?:${ident})(?:\s*,\s*(?:${ident}))*)`,
+    "i",
+  );
+  for (const stmt of String(sql).split(";")) {
+    if (!/\bCREATE\s+POLICY\b/i.test(stmt) && !/\bGRANT\b/i.test(stmt)) continue;
+    const match = stmt.match(list);
+    if (!match) continue;
+    for (const part of match[1].split(",")) {
+      const name = unquoteIdent(part);
+      if (!isSkippedDumpRole(name)) roles.add(name);
+    }
+  }
+  return [...roles].sort();
+}
+
+/** Defaults plus every TO/GRANT role in the dump. */
+export function rolesToStubFromDumpSql(sql) {
+  return [...new Set([...DEFAULT_SUPABASE_ROLES, ...collectRolesFromDumpSql(sql)])].sort();
+}
+
+/**
+ * Idempotent NOLOGIN stubs. Safe to re-run on the dry-run scratch target
+ * and on Neon (cluster-level CREATE ROLE; IF NOT EXISTS).
+ */
+export function stubSupabaseRolesSql(roles = DEFAULT_SUPABASE_ROLES) {
+  const unique = [...new Set((roles ?? []).map((role) => String(role).trim()).filter(Boolean))].sort();
+  if (!unique.length) return "";
+  const body = unique
+    .map((role) => {
+      const lit = quoteStringLiteral(role);
+      const ident = quoteIdent(role);
+      return `  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
+    CREATE ROLE ${ident} NOLOGIN;
+  END IF;`;
+    })
+    .join("\n");
+  return `DO $$\nBEGIN\n${body}\nEND $$;\n`;
+}
+
+/** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
+export const PROVE_SUPABASE_ROLE_STUBS_SQL = stubSupabaseRolesSql(DEFAULT_SUPABASE_ROLES);
 
 /** Create the read-only source role used by the live prove harness. */
 export function proveMigrationReaderSetupSql(databaseName) {

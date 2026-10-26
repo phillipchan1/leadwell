@@ -82,41 +82,14 @@ people are imported automatically the first time you sign in — nothing is lost
 
 ---
 
-## Optional: a dev test account
+## Optional: a local allowlisted account
 
-Google sign-in can't be automated, and nobody should be handing your Google
-credentials to a script or a coding agent. So dev builds can offer a second,
-password-based sign-in for a throwaway account. It exercises the real thing —
-auth, row-level security, and cloud sync — while your own account stays
-untouched.
+Sign-in is email-only magic link. There is no password button and no
+Google sign-in. Put your address in `ALLOWED_EMAILS` (`.dev.vars`),
+request a link from the sign-in screen, and follow it.
 
-**1. Create the user.** Supabase dashboard → **Authentication → Users → Add
-user → Create new user**. Use an address you control (e.g.
-`you+leadwell-test@gmail.com`), a generated password, and tick **Auto Confirm
-User** so there's no email round-trip.
-
-**2. Point `.env.local` at it:**
-
-```sh
-VITE_DEV_TEST_EMAIL=you+leadwell-test@gmail.com
-VITE_DEV_TEST_PASSWORD=the-generated-password
-```
-
-**3. Restart `npm run dev`.** The sign-in screen now shows a dashed
-**Continue as test user (dev)** button. First sign-in seeds that account with
-the sample org, so there's data to look at immediately.
-
-Notes:
-
-- `.env.local` is gitignored — the password never enters the repo. The button is
-  gated on `import.meta.env.DEV`, which is statically `false` in a production
-  build, so Vite drops the code path from `dist/` entirely.
-- The test user lives in your production project but gets its own `user_id`, and
-  RLS scopes every table by `user_id` — it cannot see or touch your real data.
-- Use a *distinct* password, not one you use anywhere else, and rotate it in the
-  dashboard if `.env.local` is ever exposed.
-- `npm run dev` also exposes `window.useStore` for inspecting or driving store
-  state from the console.
+`npm run dev` also exposes `window.useStore` for inspecting or driving
+store state from the console.
 
 ---
 

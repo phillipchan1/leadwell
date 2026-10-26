@@ -35,7 +35,7 @@ These are load-bearing. If a task seems to require changing one, stop and ask.
 ## Working agreement
 
 - **Verify per phase, not per file.** Run `npm run build` (`tsc -b && vite build`) — it must pass clean before any commit.
-- **Drive the real app to check behavior.** Start the dev server via the preview tooling (`.claude/launch.json` exists; port 5173 with fallback). Sign in with the dev-only **"Continue as test user (dev)"** button on the sign-in screen — it appears when `VITE_DEV_TEST_EMAIL` / `VITE_DEV_TEST_PASSWORD` are set in gitignored `.env.local`. If the button is missing, ask the maintainer to add them. **Never attempt Google sign-in.** `window.useStore` is exposed in dev for reading/driving store state from the console.
+- **Drive the real app to check behavior.** Start the dev server via the preview tooling (`.claude/launch.json` exists; port 5173 with fallback). Sign in with an allowlisted email (magic link only). There is no Google sign-in. `window.useStore` is exposed in dev for reading/driving store state from the console.
 - **Check both themes and both viewports on every visual change.** Light + dark, 375×667 and 1440×900. Dark mode is where this codebase breaks most often.
 - **One commit per phase**, message given at the end of each phase. Branch off `master` first — do not commit to `master` directly.
 - **Report honestly.** If a task turns out to be wrong, or bigger than described, say so and stop rather than half-doing it.

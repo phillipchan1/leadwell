@@ -11,11 +11,13 @@
  *   LEADWELL_PROVE_TARGET_URL=postgres://…@127.0.0.1/… \
  *     node scripts/prove-migrate.mjs
  *
- * Live mode seeds a throwaway source, imports into an empty target, and
- * checks row counts + content hashes. It never talks to Supabase.
+ * Live mode seeds a throwaway source (including CREATE POLICY …
+ * TO authenticated), imports into an empty target, and checks row
+ * counts + content hashes + that the role-scoped policy restored.
+ * It never talks to Supabase.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,8 +54,11 @@ import {
   parseIdentitiesCsv,
   parseObjectList,
   proveMigrationReaderSetupSql,
+  rolesToStubFromDumpSql,
   sourceAuthIdentitiesHashQuery,
   sourceAuthUsersHashQuery,
+  stubSupabaseRolesSql,
+  collectRolesFromDumpSql,
   targetBetterAuthUsersHashQuery,
 } from "./migrate-users.lib.mjs";
 
@@ -72,6 +77,7 @@ const DRY_RUN_NEEDLES = [
   "dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated",
   "dry-run: would refuse a non-empty target",
   "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto",
+  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and Supabase roles (anon, authenticated, service_role, plus dump TO/GRANT) on NEON_DB_URL",
   "dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out",
   'dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email',
   "dry-run: would compare per-table row counts and content hashes and abort on mismatch",
@@ -197,12 +203,43 @@ ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("BEGIN;"), "prod apply is wrapped in BE
 ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("COMMIT;"), "prod apply commits as one transaction");
 ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("OWNER TO postgres"), "prod apply can pin function owner");
 ok(MIGRATION_TMP_DEPENDENTS_SQL.includes("pg_depend"), "dependents pre-check reads pg_depend");
-ok(proveMigrationReaderSetupSql("leadwell_src").includes("CREATE ROLE anon NOLOGIN"), "CI stubs anon for the prod REVOKE");
+ok(
+  /CREATE ROLE "?anon"? NOLOGIN/.test(proveMigrationReaderSetupSql("leadwell_src")),
+  "CI stubs anon for the prod REVOKE",
+);
+
+const policyDumpSql = `
+CREATE POLICY actions_owner ON public.actions TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
+GRANT ALL ON TABLE public.actions TO authenticated;
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+CREATE POLICY extra ON public.profiles TO "dashboard_user", PUBLIC USING (true);
+SET search_path TO public;
+ALTER TABLE public.actions OWNER TO postgres;
+GRANT authenticated TO postgres;
+`;
+const scanned = collectRolesFromDumpSql(policyDumpSql);
+ok(scanned.includes("authenticated"), "scan finds POLICY TO authenticated");
+ok(scanned.includes("anon") && scanned.includes("service_role"), "scan finds GRANT TO anon/service_role");
+ok(scanned.includes("dashboard_user"), "scan finds quoted TO role");
+ok(!scanned.includes("public") && !scanned.includes("PUBLIC"), "scan skips PUBLIC");
+ok(!scanned.includes("postgres"), "scan skips OWNER TO / GRANT … TO postgres");
+const stubbed = rolesToStubFromDumpSql("");
+ok(
+  stubbed.join(",") === "anon,authenticated,service_role",
+  "empty dump still stubs anon, authenticated, service_role",
+);
+ok(rolesToStubFromDumpSql(policyDumpSql).includes("dashboard_user"), "stub list includes scanned extras");
+const roleSql = stubSupabaseRolesSql(["authenticated", "anon"]);
+ok(/CREATE ROLE "anon" NOLOGIN/.test(roleSql), "stub SQL creates anon NOLOGIN");
+ok(/CREATE ROLE "authenticated" NOLOGIN/.test(roleSql), "stub SQL creates authenticated NOLOGIN");
+ok(/IF NOT EXISTS \(SELECT 1 FROM pg_roles WHERE rolname = 'authenticated'\)/.test(roleSql), "stub SQL is idempotent");
 ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
 ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
 ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
 
 const migrateSrc = readFileSync(join(here, "migrate-supabase-to-neon.mjs"), "utf8");
+ok(migrateSrc.includes("rolesToStubFromDumpSql"), "migrate scans dump TO/GRANT for roles");
+ok(migrateSrc.includes("stubSupabaseRolesSql"), "migrate applies role stubs before restore");
 ok(migrateSrc.includes("EXPORT_AUTH_USERS_COPY_SQL"), "migrate exports users via lib COPY SQL");
 ok(migrateSrc.includes("EXPORT_AUTH_IDENTITIES_COPY_SQL"), "migrate exports identities via lib COPY SQL");
 ok(migrateSrc.includes("PG_DUMP_PUBLIC_ARGS"), "migrate uses shared public-only dump args");
@@ -259,7 +296,32 @@ ok(
     /actions\/upload-artifact@[0-9a-f]{40}/.test(workflow),
   "cutover actions are SHA-pinned",
 );
-ok(/name: leadwell-source-dump[\s\S]*?retention-days:\s*1/.test(workflow), "dump artifact retained 1 day");
+ok(!/leadwell-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
+ok(!/path:.*\.dump/.test(workflow), "cutover upload-artifact paths are not dumps");
+ok(workflow.includes("NEVER upload"), "cutover comments the no-dump-artifact guard");
+ok(
+  /name: Delete dumps[\s\S]*always\(\)/.test(workflow) ||
+    /if:\s*\$\{\{\s*always\(\)\s*\}\}[\s\S]*\*\.dump/.test(workflow),
+  "cutover always() deletes dumps",
+);
+ok(workflow.includes("cutover-report.md"), "cutover artifact is the checksum report only");
+const workflowUploads = [...workflow.matchAll(/uses:\s*actions\/upload-artifact[^\n]*\n(?:[ \t]+[^\n]*\n)*/g)].map(
+  (m) => m[0],
+);
+ok(workflowUploads.length === 1, "cutover has exactly one upload-artifact");
+ok(
+  workflowUploads.every((block) => /cutover-report\.md/.test(block) && !/\.dump|\.csv/i.test(block)),
+  "cutover upload-artifact is the markdown checksum report",
+);
+for (const name of readdirSync(join(root, ".github/workflows"))) {
+  if (!name.endsWith(".yml") && !name.endsWith(".yaml")) continue;
+  const text = readFileSync(join(root, ".github/workflows", name), "utf8");
+  const uploads = [...text.matchAll(/uses:\s*actions\/upload-artifact[^\n]*\n(?:[ \t]+[^\n]*\n)*/g)].map((m) => m[0]);
+  ok(
+    uploads.every((block) => !/\.dump|\.csv|auth_users|auth_identities/i.test(block)),
+    `${name} does not upload dump/csv/row-data artifacts`,
+  );
+}
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
 ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
@@ -279,6 +341,16 @@ ok(runbook.includes("OWNER TO postgres"), "runbook documents optional ALTER FUNC
 ok(/LIMIT 1/.test(runbook) || /count\(\*\)/.test(runbook), "runbook id check is bounded");
 ok(runbook.includes("DROP SCHEMA migration_tmp CASCADE"), "runbook drops migration_tmp after cutover");
 ok(runbook.includes("encrypted_password"), "runbook documents that password hashes stay off the TABLE");
+ok(runbook.includes('role "authenticated" does not exist'), "runbook documents the restore role failure");
+ok(runbook.includes("NOLOGIN"), "runbook documents NOLOGIN role stubs");
+ok(runbook.includes("dump's `CREATE POLICY"), "runbook documents scanning dump TO/GRANT roles");
+ok(runbook.includes("FORCE ROW LEVEL SECURITY") || runbook.includes("FORCE RLS"), "runbook documents Worker vs RLS");
+ok(runbook.includes("user_id"), "runbook documents Worker user_id scoping");
+ok(!runbook.includes("uploads the dump"), "runbook no longer says the dump is uploaded");
+const setupMd = readFileSync(join(root, "SETUP.md"), "utf8");
+ok(!/Continue as test user/.test(setupMd), "SETUP.md has no Continue as test user");
+const designPrompt = readFileSync(join(root, "docs/design-audit-implementation-prompt.md"), "utf8");
+ok(!/Continue as test user/.test(designPrompt), "design prompt has no Continue as test user");
 
 // --- dry-run with no URLs --------------------------------------------------
 const dry = spawnSync(process.execPath, [join(here, "migrate-supabase-to-neon.mjs"), "--dry-run"], {
@@ -371,6 +443,8 @@ INSERT INTO public.profiles (user_id, name, title)
 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Phil', 'Lead');
 INSERT INTO public.teams (user_id, id, name, capacity_id, sort_order)
 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
+INSERT INTO public.actions (user_id, id, person_id, text)
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'a1', 'p1', 'Follow up');
 `;
     const seedPath = join(dir, "seed.sql");
     writeFileSync(seedPath, seed);
@@ -495,6 +569,24 @@ ORDER BY 1`;
     ok(identPriv.includes("service_role=f"), "service_role has no EXECUTE on auth_identities()");
     ok(identPriv.includes("migration_reader=t"), "migration_reader has EXECUTE on auth_identities()");
 
+    const policyPath = join(dir, "source_policies.sql");
+    writeFileSync(
+      policyPath,
+      `
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS UUID LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+ALTER TABLE public.actions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS actions_owner ON public.actions;
+CREATE POLICY actions_owner ON public.actions
+  FOR ALL
+  TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+GRANT SELECT ON public.actions TO authenticated;
+`,
+    );
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", policyPath]);
+
     const migrated = spawnSync(
       process.execPath,
       [join(here, "migrate-supabase-to-neon.mjs")],
@@ -514,6 +606,64 @@ ORDER BY 1`;
     ok(migrated.status === 0, "live migrate exits 0");
     ok(migratedOut.includes("migration ok"), "live migrate prints migration ok");
     ok(migratedOut.includes("profiles:"), "live migrate prints per-table hashes");
+    ok(
+      /creating stub roles \(.*authenticated.*\) as NOLOGIN/.test(migratedOut),
+      "live migrate stubs dump roles before restore",
+    );
+
+    const roleBits = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      `SELECT rolname || '=' || CASE WHEN rolcanlogin THEN 'login' ELSE 'nologin' END
+       FROM pg_roles
+       WHERE rolname IN ('anon', 'authenticated', 'service_role')
+       ORDER BY 1`,
+    ])
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    ok(roleBits.includes("anon=nologin"), "target stubbed anon NOLOGIN");
+    ok(roleBits.includes("authenticated=nologin"), "target stubbed authenticated NOLOGIN");
+    ok(roleBits.includes("service_role=nologin"), "target stubbed service_role NOLOGIN");
+
+    const pol = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      `SELECT policyname || '=' || array_to_string(roles, ',')
+       FROM pg_policies
+       WHERE schemaname = 'public' AND tablename = 'actions' AND policyname = 'actions_owner'`,
+    ]).trim();
+    ok(pol === "actions_owner=authenticated", "restored actions_owner policy is TO authenticated");
+
+    const asOwner = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      "SELECT count(*) FROM public.actions",
+    ]).trim();
+    ok(asOwner === "1", "table owner still reads actions (RLS not forced)");
+
+    const asAuth = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      "SET ROLE authenticated; SELECT count(*) FROM public.actions",
+    ]).trim();
+    ok(asAuth === "0", "authenticated RLS uses stub auth.uid() (no rows)");
 
     const mapped = run("psql", [
       "-v",

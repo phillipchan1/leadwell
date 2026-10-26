@@ -107,7 +107,7 @@ Expected output:
 dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)
 dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated
 dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)
-dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL
+dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and Supabase roles (anon, authenticated, service_role, plus dump TO/GRANT) on NEON_DB_URL
 dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out
 dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email (Google identities are not mapped)
 dry-run: would compare per-table row counts and content hashes and abort on mismatch
@@ -135,16 +135,21 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
    - masks `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL` (`::add-mask::`) and
      never `set -x`
    - `pg_dump`s `public` from Supabase (custom format, matching client major,
-     `sslmode=require`, `--exclude-schema=auth`) and uploads the dump
-     (1-day retention). Auth rows are **not** in the dump
+     `sslmode=require`, `--exclude-schema=auth`) into `$RUNNER_TEMP`. The
+     dump is **never** uploaded as an artifact. Auth rows are **not** in
+     the dump. An `always()` step deletes `*.dump` and auth COPY CSVs
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
-     Postgres 17 service container — **not** Neon. That script `COPY`s
-     the narrow TABLE columns from `migration_tmp.auth_users()` /
-     `migration_tmp.auth_identities()` (id/name/email/verified/timestamps
-     and user_id/provider/provider_id — no password hashes or tokens)
-   - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target,
-     including auth users via the function vs Better Auth `"user"`) to
-     the step summary and a 7-day artifact
+     Postgres 17 service container — **not** Neon. Before restore it
+     creates `NOLOGIN` stubs for `anon` / `authenticated` / `service_role`
+     (and any other dump `TO`/`GRANT` roles) so RLS policies can restore.
+     That script `COPY`s the narrow TABLE columns from
+     `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`
+     (id/name/email/verified/timestamps and user_id/provider/provider_id
+     — no password hashes or tokens)
+   - writes per-table `COUNT(*)` + content md5 hashes (source vs scratch
+     target, including auth users via the function vs Better Auth `"user"`)
+     to the step summary and a 7-day artifact. That artifact is counts and
+     hashes only — no row data, emails, or password hashes
    - confirms Phil's auth user (via `migration_tmp.auth_users()`) landed
      in Better Auth `"user"` with the same id and email, and prints
      **the id only**
@@ -162,12 +167,56 @@ The script:
 2. `COPY`s `migration_tmp.auth_users()` (and `migration_tmp.auth_identities()`, unused). The functions `RETURNS TABLE` only the columns Better Auth needs. Never `SELECT`s `auth.users` / `auth.identities` — the source role cannot get `USAGE` on `auth`.
 3. Aborts on blank or case-insensitive-duplicate emails.
 4. Refuses a non-empty Neon target.
-5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
+5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, and stub Supabase
+   roles (`anon`, `authenticated`, `service_role`, plus any other names in
+   the dump's `CREATE POLICY … TO` / `GRANT … TO` clauses) as `NOLOGIN`.
+   Then restores public. The same stubs run on the Actions scratch target
+   (`dry_run=true`) and on Neon (`dry_run=false`). Without them,
+   `pg_restore` fails with `role "authenticated" does not exist` on
+   `CREATE POLICY actions_owner … TO authenticated`.
 6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
 7. Does **not** map Google identities.
 8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch.
 9. On failure, drops only objects this run created on Neon. Supabase is never
-   modified.
+   modified. Role stubs are cluster-level and are left in place (NOLOGIN).
+
+### Restored RLS vs how the Worker enforces access
+
+Supabase policies are `TO authenticated` and `user_id = auth.uid()`. After
+cutover the Worker is the access path, not PostgREST:
+
+- The Worker connects with `DATABASE_URL` / Hyperdrive as the Neon owner
+  (or that role via Hyperdrive). It never `SET ROLE authenticated` /
+  `anon` / `service_role`.
+- `pg_restore --no-owner` makes that connecting role the table owner.
+  Table owners **bypass RLS** unless `FORCE ROW LEVEL SECURITY` is set.
+  We do **not** FORCE RLS — that would hide every row from the Worker
+  (`auth.uid()` is the NULL stub).
+- Access is enforced in `worker/src/store.ts`: every load / upsert /
+  delete is scoped `WHERE user_id = $1` for the Better Auth session user.
+  That is the same `user_id` as the migrated Supabase auth UUID.
+
+The `NOLOGIN` stubs exist so `CREATE POLICY` can restore. Nothing can log
+in as those roles. Policies stay attached to `authenticated` and still
+call stub `auth.uid()`, so a future `SET ROLE authenticated` session
+would see the RLS expression. That is dump fidelity, not the Worker
+path. Do not grant `LOGIN` on the stubs and do not point Hyperdrive at
+`authenticated`.
+
+Loopback prove that a restore with role-scoped policies succeeds:
+
+```sh
+LEADWELL_PROVE_SOURCE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell_src \
+LEADWELL_PROVE_TARGET_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell_dst \
+  npm run test:migrate
+```
+
+`scripts/prove-migrate.mjs` seeds `CREATE POLICY actions_owner … TO authenticated`
+(the clause that failed in cutover dry-run 40377053881), then asserts the
+target has the NOLOGIN stubs, the policy is restored, the table owner can
+still read rows, and `SET ROLE authenticated` sees none (`auth.uid()` is
+the NULL stub). Dump-SQL scanning of `TO`/`GRANT` is also unit-tested
+without a database.
 
 Email/password hashes from GoTrue are not portable. Phil's login path is a
 **magic-link** to the migrated `"user"` row (same UUID + email). The first
