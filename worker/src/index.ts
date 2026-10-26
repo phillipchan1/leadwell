@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { sessionUser } from "./auth.ts";
+import { handleAuthRequest, sessionUser } from "./auth.ts";
 import {
   API_CORS,
   API_SECURITY,
@@ -7,7 +7,7 @@ import {
   beginAuthCors,
   json,
 } from "./cors.ts";
-import { assertNoClientKey, proxyAnthropic, sanitizeAnthropicBody } from "./anthropic.ts";
+import { assertNoClientKey, proxyOpenAI, sanitizeOpenAIBody } from "./openai.ts";
 import type { Env } from "./env.ts";
 import { authOf, finishRequest, sqlOf, type WorkerContext, type WorkerVars } from "./request.ts";
 import { stripGetSessionToken } from "./sessionBody.ts";
@@ -61,7 +61,7 @@ app.all("/api/auth/*", async (c) => {
   try {
     const auth = authOf(c);
     const res = await stripGetSessionToken(
-      await auth.handler(c.req.raw),
+      await handleAuthRequest(auth, c.req.raw),
       new URL(c.req.url).pathname,
     );
     return new Response(res.body, {
@@ -139,7 +139,7 @@ app.delete("/api/data", async (c) => {
   return json({ ok: true });
 });
 
-async function handleAnthropic(c: WorkerContext): Promise<Response> {
+async function handleOpenAI(c: WorkerContext): Promise<Response> {
   const user = await requireUser(c);
   if (!user) return json({ error: "not authenticated" }, 401);
   try {
@@ -155,18 +155,18 @@ async function handleAnthropic(c: WorkerContext): Promise<Response> {
   }
   let body;
   try {
-    body = sanitizeAnthropicBody(raw, c.env);
+    body = sanitizeOpenAIBody(raw, c.env);
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "invalid body" }, 400);
   }
-  const res = await proxyAnthropic(c.env, body);
+  const res = await proxyOpenAI(c.env, body);
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(API_SECURITY)) headers.set(k, v);
   return new Response(res.body, { status: res.status, headers });
 }
 
-app.post("/api/anthropic", (c) => handleAnthropic(c));
-app.post("/functions/v1/anthropic", (c) => handleAnthropic(c));
+app.post("/api/openai", (c) => handleOpenAI(c));
+app.post("/functions/v1/openai", (c) => handleOpenAI(c));
 
 function hasFileExtension(path: string): boolean {
   return /\.[A-Za-z0-9]{1,16}$/.test(path);

@@ -18,7 +18,8 @@
   // and AUTH_COOKIE_DOMAIN=polarch.day. Local (`.dev.vars`): ENVIRONMENT=local.
   // ENVIRONMENT=local is the only unset-URL fallback.
   "vars": {
-    "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+    "OPENAI_MODEL": "gpt-5-mini",
+    "AUTH_EMAIL_FROM": "login@polarch.day",
     "ALLOWED_EMAILS": "phillipchan1@gmail.com"
   },
   // Replace `id` with a real Hyperdrive config before `wrangler deploy`.
@@ -41,7 +42,8 @@
       "workers_dev": true,
       "preview_urls": true,
       "vars": {
-        "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+        "OPENAI_MODEL": "gpt-5-mini",
+        "AUTH_EMAIL_FROM": "login@polarch.day",
         "ALLOWED_EMAILS": "phillipchan1@gmail.com"
       },
       // Empty on purpose: Hyperdrive is not inherited. Preview uses DATABASE_URL.

@@ -1,53 +1,45 @@
-import { useEffect, useRef, useState } from "react";
+import { FormEvent, useState } from "react";
 import {
   backendConfigured,
   devTestUserConfigured,
   signInAsTestUser,
-  signInWithGoogle,
+  signInWithMagicLink,
 } from "../lib/auth";
 import { Button } from "@/components/base/buttons/button";
 import { Mark, Wordmark } from "./brand/glyphs";
 
 /** Full-screen sign-in gate shown when there's no authenticated session. */
-export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }) {
+export function Login() {
+  const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const startedGoogle = useRef(false);
+  const [sent, setSent] = useState(false);
 
-  const onSignIn = async () => {
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await signInWithGoogle();
-      // Redirects away; nothing else runs on success.
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sign-in failed.");
+      await signInWithMagicLink(email);
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign-in failed.");
+    } finally {
       setBusy(false);
     }
   };
-
-  // Landing "Continue with Google" lands here so OAuth starts on this origin
-  // (the same redirect URLs as the in-app button). StrictMode remounts; once.
-  useEffect(() => {
-    if (!autoStartGoogle || !backendConfigured || startedGoogle.current) return;
-    startedGoogle.current = true;
-    void onSignIn();
-  }, [autoStartGoogle]);
 
   const onTestSignIn = async () => {
     setError(null);
     setBusy(true);
     try {
       await signInAsTestUser();
-      // SIGNED_IN runs bootstrap; the gate unmounts on its own.
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Test sign-in failed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Test sign-in failed.");
       setBusy(false);
     }
   };
 
-  // The first thing anyone sees, so it is the brand at its plainest: leather,
-  // the mark, and one sentence about what this is for.
   return (
     <div className="pad-safe-top pad-safe-bottom flex h-full items-center justify-center bg-leather px-6 text-leather-fg">
       <div className="flex w-full max-w-[380px] flex-col items-center gap-8 text-center">
@@ -70,24 +62,40 @@ export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }
             Backend not configured. Start the Worker (<code>npm run cf:dev</code>) or Vite with
             the <code>/api</code> proxy. See <code>RUNBOOK.md</code>.
           </p>
+        ) : sent ? (
+          <p className="w-full rounded-xl bg-leather-hi p-4 text-[15px] leading-relaxed text-leather-ink">
+            Check your email for a sign-in link. It expires in a few minutes.
+          </p>
         ) : (
-          <Button
-            size="lg"
-            color="secondary"
-            iconLeading={<GoogleMark />}
-            onClick={onSignIn}
-            isDisabled={busy}
-            isLoading={busy}
-            showTextWhileLoading
-            className="w-full"
-          >
-            {busy ? "Redirecting…" : "Continue with Google"}
-          </Button>
+          <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
+            <label className="sr-only" htmlFor="signin-email">
+              Email
+            </label>
+            <input
+              id="signin-email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="h-12 w-full rounded-xl border border-leather-line bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-gilt"
+            />
+            <Button
+              type="submit"
+              size="lg"
+              color="secondary"
+              isDisabled={busy}
+              isLoading={busy}
+              showTextWhileLoading
+              className="w-full"
+            >
+              {busy ? "Sending…" : "Email me a sign-in link"}
+            </Button>
+          </form>
         )}
 
-        {/* Dev only — compiled out of production builds. Lets an agent drive
-            the real signed-in app without touching the Google account. */}
-        {backendConfigured && devTestUserConfigured && (
+        {backendConfigured && devTestUserConfigured && !sent && (
           <Button
             size="md"
             color="secondary"
@@ -105,28 +113,5 @@ export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }
         {error && <p className="text-[13px] text-gilt">{error}</p>}
       </div>
     </div>
-  );
-}
-
-function GoogleMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
-      />
-      <path
-        fill="#34A853"
-        d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"
-      />
-      <path
-        fill="#EA4335"
-        d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"
-      />
-    </svg>
   );
 }

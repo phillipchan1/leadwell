@@ -10,7 +10,7 @@
     "typecheck": "tsc -b --noEmit && tsc --noEmit -p worker/tsconfig.json",
     "lint": "eslint .",
     "test": "npm run test:worker && npm run test:loopback && npm run test:migrate",
-    "test:worker": "node --experimental-strip-types worker/src/authUrl.check.ts && node --experimental-strip-types worker/src/refuseTestUrl.check.ts && node --experimental-strip-types worker/src/auth.check.ts && node --experimental-strip-types worker/src/anthropic.check.ts && node --experimental-strip-types worker/src/store.check.ts",
+    "test:worker": "node --experimental-strip-types worker/src/authUrl.check.ts && node --experimental-strip-types worker/src/refuseTestUrl.check.ts && node --experimental-strip-types worker/src/auth.check.ts && node --experimental-strip-types worker/src/openai.check.ts && node --experimental-strip-types worker/src/store.check.ts && node --experimental-strip-types worker/src/auth.flow.check.ts",
     "test:loopback": "node scripts/prove-loopback.mjs",
     "test:migrate": "node scripts/prove-migrate.mjs",
     "cf:dev": "npm run build && wrangler dev",

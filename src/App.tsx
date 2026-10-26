@@ -385,9 +385,7 @@ export default function App() {
       }
       return null;
     }
-    return (
-      <Login autoStartGoogle={path === "/signin" && params.get("google") === "1"} />
-    );
+    return <Login />;
   }
 
   const inSessionEditor = Boolean(sessionId);

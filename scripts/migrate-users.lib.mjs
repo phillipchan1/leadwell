@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS verification (
 CREATE INDEX IF NOT EXISTS session_user_id_idx ON session(user_id);
 CREATE INDEX IF NOT EXISTS account_user_id_idx ON account(user_id);
 CREATE INDEX IF NOT EXISTS verification_identifier_idx ON verification(identifier);
+
+CREATE TABLE IF NOT EXISTS rate_limit (
+  id TEXT PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  count INTEGER NOT NULL,
+  last_request BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_limit_key_idx ON rate_limit(key);
 `;
 
 export const CHECK_LOWER_EMAIL_DUPES_SQL = `
@@ -548,20 +556,7 @@ ${CREATE_LOWER_EMAIL_INDEX_SQL}
   );
 }
 
-export function loadGoogleAccountsSql(identitiesCsvPath) {
-  return `
-BEGIN;
-CREATE TEMP TABLE auth_identities_import (
-  user_id TEXT, provider TEXT, provider_id TEXT
-) ON COMMIT DROP;
-\\copy auth_identities_import FROM '${identitiesCsvPath}' WITH CSV
-INSERT INTO account (id, account_id, provider_id, user_id, created_at, updated_at)
-SELECT gen_random_uuid()::text, provider_id, 'google', user_id, NOW(), NOW()
-FROM auth_identities_import
-WHERE provider IN ('google', 'Google')
-  AND provider_id <> ''
-  AND EXISTS (SELECT 1 FROM "user" u WHERE u.id = auth_identities_import.user_id)
-ON CONFLICT DO NOTHING;
-COMMIT;
-`;
+/** Harmless no-op. Google identities are not mapped (magic-link auth). */
+export function loadGoogleAccountsSql(_identitiesCsvPath) {
+  return "-- Google identity mapping skipped (magic-link auth).\n";
 }

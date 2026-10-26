@@ -1,9 +1,10 @@
 import {
-  ACCOUNT_LINKING,
+  existingUserForMagicLinkEmail,
   isAllowedEmail,
-  socialEmailMayLinkToExistingUser,
 } from "./auth.ts";
 import { clientConnection, poolSsl } from "./db.ts";
+import { magicLinkEmail, resendIdempotencyKey } from "./mail.ts";
+import { MAGIC_LINK_SEND_MAX, MAGIC_LINK_VERIFY_MAX } from "./rateLimit.ts";
 
 const fails: string[] = [];
 let checks = 0;
@@ -11,38 +12,6 @@ function ok(cond: boolean, msg: string) {
   checks++;
   if (!cond) fails.push(msg);
 }
-
-ok(!("trustedProviders" in ACCOUNT_LINKING), "google is not a trusted provider");
-ok(ACCOUNT_LINKING.disableImplicitLinking === true, "implicit email linking is off");
-ok(
-  ACCOUNT_LINKING.enabled === true && ACCOUNT_LINKING.disableImplicitLinking === true,
-  "Phil signs in via the migrated Google account row (sub), not email adoption",
-);
-
-ok(
-  !socialEmailMayLinkToExistingUser({
-    trustedProviders: [],
-    providerId: "google",
-    emailVerified: false,
-  }),
-  "unverified Google email cannot link to an existing user",
-);
-ok(
-  socialEmailMayLinkToExistingUser({
-    trustedProviders: [],
-    providerId: "google",
-    emailVerified: true,
-  }),
-  "verified Google email may link when implicit linking is otherwise allowed",
-);
-ok(
-  socialEmailMayLinkToExistingUser({
-    trustedProviders: ["google"],
-    providerId: "google",
-    emailVerified: false,
-  }),
-  "trustedProviders would have allowed the unverified link — we do not set that",
-);
 
 ok(
   isAllowedEmail({ ALLOWED_EMAILS: "phil@example.com" }, "Phil@Example.com"),
@@ -58,6 +27,32 @@ ok(
   isAllowedEmail({ ALLOWED_EMAILS: "a@x.com, phil@example.com" }, "phil@example.com"),
   "comma-separated allowlist",
 );
+
+const philId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const migrated = [{ id: philId, email: "Phil@Example.com" }];
+ok(
+  existingUserForMagicLinkEmail(migrated, "phil@example.com")?.id === philId,
+  "first magic-link sign-in lands on the migrated Supabase UUID",
+);
+ok(
+  existingUserForMagicLinkEmail(migrated, "other@example.com") === null,
+  "unknown email is not an existing user",
+);
+ok(
+  existingUserForMagicLinkEmail([], "phil@example.com") === null,
+  "empty user table would create, not adopt",
+);
+
+const mail = magicLinkEmail({ url: "https://polarch.day/api/auth/magic-link/verify?token=abc" });
+ok(mail.subject.includes("LeadWell"), "magic-link subject is set");
+ok(mail.text.includes("https://polarch.day/api/auth/magic-link/verify"), "magic-link body has url");
+
+const token = "visible-token-should-not-appear";
+const idem = await resendIdempotencyKey(token);
+ok(idem.startsWith("ml/"), "Resend idempotency key is hashed");
+ok(!idem.includes(token), "Resend idempotency key does not contain the token");
+ok(MAGIC_LINK_SEND_MAX === 3, "magic-link send is 3 per window");
+ok(MAGIC_LINK_VERIFY_MAX === 10, "magic-link verify is tightly capped");
 
 const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/leadwell?sslmode=disable";
 const loopback = "postgresql://postgres@127.0.0.1:5432/leadwell";

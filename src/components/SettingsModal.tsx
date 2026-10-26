@@ -32,15 +32,15 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             Account
           </h3>
           <p className="text-xs leading-relaxed text-stone-500">
-            Signed in with Google. Your org data syncs to the cloud and stays
-            private to this account (row-level security).
+            Signed in with a magic-link email. Your org data syncs to the cloud
+            and stays private to this account.
           </p>
           <div className="rounded-xl border border-stone-200 bg-stone-50 p-3 dark:border-stone-700 dark:bg-stone-950/50">
             <p className="text-caption font-medium uppercase tracking-wide text-quaternary">
               Signed in as
             </p>
             <p className="mt-0.5 text-sm text-stone-800 dark:text-stone-100">
-              {userEmail ?? "Google account"}
+              {userEmail ?? "this account"}
             </p>
           </div>
           <Button
