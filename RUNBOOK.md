@@ -32,7 +32,7 @@ Never put values here.
 | `AUTH_EMAIL_FROM` | wrangler var | Verified Resend from-address (e.g. `login@polarch.day`). |
 | `OPENAI_API_KEY` | wrangler secret | Server-side OpenAI key. The client must never send it. |
 | `OPENAI_MODEL` | wrangler var | Optional. Must be in the Worker allowlist (`gpt-5-mini`, `gpt-5`). Defaults to `gpt-5-mini`. |
-| `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and sign-in. Set to Phil's email. Empty admits nobody. |
+| `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and sign-in. Set to Phil's email. Empty admits nobody. Non-allowlisted magic-link requests still return `{status:true}` and do not send mail. |
 | `DATABASE_URL` | wrangler secret | Neon connection string. Used when Hyperdrive is unset (preview / local). |
 | `HYPERDRIVE` | wrangler binding | Workers Paid. Replace the placeholder id in `wrangler.jsonc` before production deploy. Local uses `localConnectionString`. |
 
@@ -73,8 +73,8 @@ npm run dev
 
 Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
 
-Apply `worker/schema/001_leadwell.sql` then `002_better_auth.sql` to a local
-Postgres or Neon branch before signing in.
+Apply `worker/schema/001_leadwell.sql`, `002_better_auth.sql`, then
+`003_rate_limit.sql` to a local Postgres or Neon branch before signing in.
 
 ---
 
@@ -166,6 +166,8 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 - Dev-only: email/password test user if `VITE_DEV_*` is set.
 - `POST /api/openai` with a signed-in session and no client API key.
   Without `OPENAI_API_KEY` the Worker returns 501; with it, OpenAI answers.
+- Magic-link send is 3/minute per IP and per email; verify is 10/minute per IP.
+  Extra requests return 429. Rate counts live in `rate_limit` (not process memory).
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---

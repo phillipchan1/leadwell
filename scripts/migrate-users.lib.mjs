@@ -81,6 +81,14 @@ CREATE TABLE IF NOT EXISTS verification (
 CREATE INDEX IF NOT EXISTS session_user_id_idx ON session(user_id);
 CREATE INDEX IF NOT EXISTS account_user_id_idx ON account(user_id);
 CREATE INDEX IF NOT EXISTS verification_identifier_idx ON verification(identifier);
+
+CREATE TABLE IF NOT EXISTS rate_limit (
+  id TEXT PRIMARY KEY,
+  key TEXT NOT NULL UNIQUE,
+  count INTEGER NOT NULL,
+  last_request BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS rate_limit_key_idx ON rate_limit(key);
 `;
 
 export const CHECK_LOWER_EMAIL_DUPES_SQL = `

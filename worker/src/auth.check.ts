@@ -3,7 +3,8 @@ import {
   isAllowedEmail,
 } from "./auth.ts";
 import { clientConnection, poolSsl } from "./db.ts";
-import { magicLinkEmail } from "./mail.ts";
+import { magicLinkEmail, resendIdempotencyKey } from "./mail.ts";
+import { MAGIC_LINK_SEND_MAX, MAGIC_LINK_VERIFY_MAX } from "./rateLimit.ts";
 
 const fails: string[] = [];
 let checks = 0;
@@ -45,6 +46,13 @@ ok(
 const mail = magicLinkEmail({ url: "https://polarch.day/api/auth/magic-link/verify?token=abc" });
 ok(mail.subject.includes("LeadWell"), "magic-link subject is set");
 ok(mail.text.includes("https://polarch.day/api/auth/magic-link/verify"), "magic-link body has url");
+
+const token = "visible-token-should-not-appear";
+const idem = await resendIdempotencyKey(token);
+ok(idem.startsWith("ml/"), "Resend idempotency key is hashed");
+ok(!idem.includes(token), "Resend idempotency key does not contain the token");
+ok(MAGIC_LINK_SEND_MAX === 3, "magic-link send is 3 per window");
+ok(MAGIC_LINK_VERIFY_MAX === 10, "magic-link verify is tightly capped");
 
 const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/leadwell?sslmode=disable";
 const loopback = "postgresql://postgres@127.0.0.1:5432/leadwell";

@@ -9,11 +9,18 @@ import {
 } from "./authUrl.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
-import { sendMagicLinkEmail } from "./mail.ts";
+import { sendMagicLinkEmail, settleMagicLinkSend } from "./mail.ts";
+import {
+  authRateLimitCustomRules,
+  consumeEmailMagicLinkLimit,
+  createDatabaseRateLimitStorage,
+  rateLimitDeniedResponse,
+} from "./rateLimit.ts";
 
 export type AuthInstance = ReturnType<typeof createAuth>;
 
 const ownedPools = new WeakMap<object, Pool>();
+const authDatabases = new WeakMap<object, AuthDatabase>();
 
 /**
  * Neon / PGlite columns are snake_case. Better Auth's default identifiers are
@@ -136,7 +143,17 @@ export function createAuth(env: Env, database?: AuthDatabase) {
     baseURL,
     basePath: "/api/auth",
     database: db as Pool,
-    emailAndPassword: { enabled: true },
+    emailAndPassword: { enabled: true, disableSignUp: true },
+    rateLimit: {
+      enabled: true,
+      storage: "database",
+      modelName: "rate_limit",
+      fields: { lastRequest: "last_request" },
+      window: 60,
+      max: 60,
+      customRules: authRateLimitCustomRules(),
+      customStorage: createDatabaseRateLimitStorage(db),
+    },
     user: {
       ...authModels.user,
       validateUserInfo: ({ user, source }) => {
@@ -174,21 +191,28 @@ export function createAuth(env: Env, database?: AuthDatabase) {
         path: "/",
         ...(cookieDomain ? { domain: cookieDomain } : {}),
       },
+      ipAddress: {
+        ipAddressHeaders: ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"],
+      },
     },
     plugins: [
       bearer({ requireSignature: true }),
       magicLink({
         expiresIn: 60 * 10,
         sendMagicLink: async ({ email, url, token }) => {
-          if (!isAllowedEmail(env, email)) {
-            throw new Error("this account is not allowed");
+          const started = Date.now();
+          try {
+            if (!isAllowedEmail(env, email)) return;
+            await sendMagicLinkEmail(env, { email, url, token });
+          } finally {
+            await settleMagicLinkSend(started);
           }
-          await sendMagicLinkEmail(env, { email, url, token });
         },
       }),
     ],
   });
   if (owned) ownedPools.set(auth, owned);
+  authDatabases.set(auth, db);
   return auth;
 }
 
@@ -200,6 +224,31 @@ export function getAuth(env: Env): AuthInstance {
 export async function closeAuth(auth: AuthInstance): Promise<void> {
   const pool = ownedPools.get(auth);
   if (pool) await pool.end();
+}
+
+/**
+ * Better Auth handler plus the extra per-email magic-link bucket.
+ * The built-in limiter keys IP + path only; this adds 3/min per email.
+ */
+export async function handleAuthRequest(auth: AuthInstance, req: Request): Promise<Response> {
+  const path = new URL(req.url).pathname;
+  if (req.method === "POST" && path.endsWith("/sign-in/magic-link")) {
+    const db = authDatabases.get(auth);
+    if (db) {
+      let email = "";
+      try {
+        const body = (await req.clone().json()) as { email?: unknown };
+        if (typeof body.email === "string") email = body.email;
+      } catch {
+        /* Better Auth answers invalid JSON */
+      }
+      if (email) {
+        const result = await consumeEmailMagicLinkLimit(db, email);
+        if (!result.allowed) return rateLimitDeniedResponse(result.retryAfter ?? 60);
+      }
+    }
+  }
+  return auth.handler(req);
 }
 
 export async function sessionUser(

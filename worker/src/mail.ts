@@ -2,6 +2,9 @@ import type { Env } from "./env.ts";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
+/** Both allowlisted send and silent skip wait at least this long. */
+export const MAGIC_LINK_SEND_FLOOR_MS = 200;
+
 export function authEmailFrom(env: Pick<Env, "AUTH_EMAIL_FROM">): string {
   return env.AUTH_EMAIL_FROM?.trim() || "";
 }
@@ -13,9 +16,24 @@ export function magicLinkEmail(opts: { url: string }): { subject: string; text: 
   return { subject, text, html };
 }
 
+/** SHA-256 hex of the token — never put the raw token in Resend headers. */
+export async function resendIdempotencyKey(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `ml/${hex}`;
+}
+
+export async function settleMagicLinkSend(
+  startedAt: number,
+  floorMs: number = MAGIC_LINK_SEND_FLOOR_MS,
+): Promise<void> {
+  const wait = floorMs - (Date.now() - startedAt);
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+}
+
 /**
- * Send a magic-link email through Resend. Fail closed: allowlist, key, and
- * from-address must all be set. Uses fetch (no Resend SDK).
+ * Send a magic-link email through Resend. Fail closed: key and from-address
+ * must be set. Uses fetch (no Resend SDK).
  */
 export async function sendMagicLinkEmail(
   env: Env,
@@ -32,7 +50,7 @@ export async function sendMagicLinkEmail(
     headers: {
       authorization: `Bearer ${key}`,
       "content-type": "application/json",
-      "Idempotency-Key": `magic-link/${opts.token}`,
+      "Idempotency-Key": await resendIdempotencyKey(opts.token),
     },
     body: JSON.stringify({
       from,

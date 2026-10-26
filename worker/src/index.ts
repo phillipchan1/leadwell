@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { sessionUser } from "./auth.ts";
+import { handleAuthRequest, sessionUser } from "./auth.ts";
 import {
   API_CORS,
   API_SECURITY,
@@ -61,7 +61,7 @@ app.all("/api/auth/*", async (c) => {
   try {
     const auth = authOf(c);
     const res = await stripGetSessionToken(
-      await auth.handler(c.req.raw),
+      await handleAuthRequest(auth, c.req.raw),
       new URL(c.req.url).pathname,
     );
     return new Response(res.body, {
