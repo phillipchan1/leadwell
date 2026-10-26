@@ -10,6 +10,7 @@ import {
   AUTH_IP_PREFIX_INVALID,
   consumeEmailMagicLinkLimit,
   emailIpPrefixMagicLinkRateLimitKey,
+  emailSoftLogMagicLinkRateLimitKey,
   emailSoftMagicLinkRateLimitKey,
   MAGIC_LINK_EMAIL_PREFIX_MAX,
   MAGIC_LINK_EMAIL_SOFT_MAX,
@@ -241,12 +242,17 @@ try {
 
   await db.query("DELETE FROM rate_limit");
   resendCalls.length = 0;
-  await db.query("INSERT INTO rate_limit (id, key, count, last_request) VALUES ($1, $2, $3, $4)", [
-    crypto.randomUUID(),
-    emailSoftMagicLinkRateLimitKey("phil@example.com"),
-    MAGIC_LINK_EMAIL_SOFT_MAX,
-    Date.now() - 1000,
-  ]);
+  const softWindowStart = Date.now() - 1000;
+  await db.query(
+    "INSERT INTO rate_limit (id, key, count, last_request, window_start) VALUES ($1, $2, $3, $4, $5)",
+    [
+      crypto.randomUUID(),
+      emailSoftMagicLinkRateLimitKey("phil@example.com"),
+      MAGIC_LINK_EMAIL_SOFT_MAX,
+      softWindowStart,
+      softWindowStart,
+    ],
+  );
   const softLogs: unknown[][] = [];
   const realSoftError = console.error;
   console.error = (...args: unknown[]) => {
@@ -260,6 +266,15 @@ try {
     ok(soft.status === 200, `soft cap still returns 200 (got ${soft.status})`);
     ok(softBody.status === true, "soft cap returns {status:true}");
     ok(softMs < 120, `soft-cap response has the same fast timing (${softMs}ms)`);
+    ok(resendCalls.length === 0, "capped path does not await Resend");
+    ok(
+      !softLogs.some((args) => (args[1] as { kind?: string } | undefined)?.kind === "soft_cap"),
+      "soft-cap log is not awaited on the request path",
+    );
+    ok(
+      (await keysMatching(emailSoftLogMagicLinkRateLimitKey("phil@example.com"))).length === 0,
+      "soft-log consume is not awaited on the capped path",
+    );
     await flushMail();
     ok(resendCalls.length === 0, "soft cap skips the send");
     const skipLog = softLogs.find((args) => {
@@ -283,6 +298,68 @@ try {
     );
   } finally {
     console.error = realSoftError;
+  }
+
+  const noWaitAuth = createAuth(env, pool);
+  try {
+    await db.query("DELETE FROM rate_limit");
+    resendCalls.length = 0;
+    const noWaitCapStart = Date.now();
+    await db.query(
+      "INSERT INTO rate_limit (id, key, count, last_request, window_start) VALUES ($1, $2, $3, $4, $5)",
+      [
+        crypto.randomUUID(),
+        emailSoftMagicLinkRateLimitKey("phil@example.com"),
+        MAGIC_LINK_EMAIL_SOFT_MAX,
+        noWaitCapStart,
+        noWaitCapStart,
+      ],
+    );
+    const noWaitLogs: unknown[][] = [];
+    const realNoWaitError = console.error;
+    console.error = (...args: unknown[]) => {
+      noWaitLogs.push(args);
+    };
+    try {
+      const tNoWaitCap = Date.now();
+      const noWaitCap = await sendLink(
+        "phil@example.com",
+        { "cf-connecting-ip": "203.0.80.2" },
+        noWaitAuth,
+      );
+      const noWaitCapMs = Date.now() - tNoWaitCap;
+      ok(noWaitCap.status === 200, `capped without waitUntil is 200 (got ${noWaitCap.status})`);
+      ok(noWaitCapMs < 120, `capped without waitUntil does not await extra work (${noWaitCapMs}ms)`);
+      ok(resendCalls.length === 0, "capped without waitUntil does not await Resend");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      ok(resendCalls.length === 0, "capped without waitUntil dispatches a no-op, not Resend");
+      ok(
+        noWaitLogs.some((args) => (args[1] as { kind?: string } | undefined)?.kind === "soft_cap"),
+        "capped without waitUntil still logs in the background",
+      );
+    } finally {
+      console.error = realNoWaitError;
+    }
+
+    await db.query("DELETE FROM rate_limit");
+    resendCalls.length = 0;
+    const tNoWaitSend = Date.now();
+    const noWaitSend = await sendLink(
+      "phil@example.com",
+      { "cf-connecting-ip": "203.0.80.1" },
+      noWaitAuth,
+    );
+    const noWaitSendMs = Date.now() - tNoWaitSend;
+    ok(noWaitSend.status === 200, "uncapped without waitUntil is 200");
+    ok(
+      noWaitSendMs < 120,
+      `uncapped without waitUntil does not await Resend (${noWaitSendMs}ms)`,
+    );
+    ok(resendCalls.length === 0, "uncapped without waitUntil has not finished Resend yet");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    ok(resendCalls.length === 1, "uncapped without waitUntil still dispatches the send");
+  } finally {
+    await closeAuth(noWaitAuth);
   }
 
   await db.query("DELETE FROM rate_limit");

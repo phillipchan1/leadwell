@@ -152,42 +152,54 @@ export function authRateLimitCustomRules(): Record<string, RateLimitRule> {
 /**
  * One atomic consume against `rate_limit`. Used as Better Auth customStorage
  * (per IP + path) and for the extra email+IP / email+prefix magic-link buckets.
+ *
+ * The window is fixed: `window_start` stays put until `now - window_start`
+ * meets the window, then count resets. `last_request` is still written so
+ * Better Auth's field map stays valid; it does not slide the window.
  */
 export async function consumeRateLimitKey(
   db: RateLimitDatabase,
   key: string,
   rule: RateLimitRule,
+  nowMs = Date.now(),
 ): Promise<{ allowed: boolean; retryAfter: number | null }> {
-  const now = Date.now();
+  const now = nowMs;
   const windowMs = rule.window * 1000;
   const client = await db.connect();
   try {
     const result = await client.query(
-      `INSERT INTO rate_limit (id, key, count, last_request)
-       VALUES ($1, $2, 1, $3)
+      `INSERT INTO rate_limit (id, key, count, last_request, window_start)
+       VALUES ($1, $2, 1, $3, $3)
        ON CONFLICT (key) DO UPDATE SET
          count = CASE
-           WHEN $3::bigint - rate_limit.last_request >= $4::bigint THEN 1
+           WHEN $3::bigint - COALESCE(rate_limit.window_start, rate_limit.last_request) >= $4::bigint THEN 1
            WHEN rate_limit.count < $5 THEN rate_limit.count + 1
            ELSE rate_limit.count
          END,
          last_request = CASE
-           WHEN $3::bigint - rate_limit.last_request >= $4::bigint THEN $3::bigint
+           WHEN $3::bigint - COALESCE(rate_limit.window_start, rate_limit.last_request) >= $4::bigint THEN $3::bigint
            WHEN rate_limit.count < $5 THEN $3::bigint
            ELSE rate_limit.last_request
+         END,
+         window_start = CASE
+           WHEN $3::bigint - COALESCE(rate_limit.window_start, rate_limit.last_request) >= $4::bigint THEN $3::bigint
+           ELSE COALESCE(rate_limit.window_start, rate_limit.last_request)
          END
-       RETURNING count, last_request`,
+       RETURNING count, last_request, window_start`,
       [crypto.randomUUID(), key, now, windowMs, rule.max],
     );
-    const row = result.rows[0] as { count: number; last_request: string | number } | undefined;
+    const row = result.rows[0] as
+      | { count: number; last_request: string | number; window_start: string | number }
+      | undefined;
     if (!row) throw new Error("rate_limit consume returned no row");
     const last = Number(row.last_request);
+    const start = Number(row.window_start);
     if (last === now && Number(row.count) <= rule.max) {
       return { allowed: true, retryAfter: null };
     }
     return {
       allowed: false,
-      retryAfter: Math.max(1, Math.ceil((last + windowMs - now) / 1000)),
+      retryAfter: Math.max(1, Math.ceil((start + windowMs - now) / 1000)),
     };
   } finally {
     client.release();
@@ -203,8 +215,9 @@ export function createDatabaseRateLimitStorage(db: RateLimitDatabase) {
 }
 
 /**
- * 3/min per email+IP, then 10/hr per email+IP-prefix (/24 or /48).
- * Nothing is keyed on email alone — a fresh prefix always gets a real send.
+ * Hard limits: 3/min per email+IP, then 10/hr per email+IP-prefix (/24 or /48).
+ * These buckets are not email-only. The silent 200/hr soft cap is — see
+ * `consumeEmailMagicLinkSoftCap`.
  */
 export async function consumeEmailMagicLinkLimit(
   db: RateLimitDatabase,
@@ -228,26 +241,35 @@ export async function consumeEmailMagicLinkLimit(
 }
 
 /**
- * Silent 200/hr per-email soft cap. Past it we still return 200 and skip
- * the send. `firstSkip` is true only on the first trip this window so we
- * log once.
+ * Silent 200/hr per-email soft cap. One consume only — first-skip logging
+ * is `recordEmailMagicLinkSoftCapSkip`, scheduled on the same waitUntil
+ * path as a real send so capped and uncapped requests await the same work.
  */
 export async function consumeEmailMagicLinkSoftCap(
   db: RateLimitDatabase,
   email: string,
-): Promise<{ allowed: boolean; firstSkip: boolean }> {
+): Promise<{ allowed: boolean }> {
   const trimmed = email.trim().toLowerCase();
-  if (!trimmed) return { allowed: true, firstSkip: false };
+  if (!trimmed) return { allowed: true };
   const result = await consumeRateLimitKey(
     db,
     emailSoftMagicLinkRateLimitKey(trimmed),
     MAGIC_LINK_EMAIL_SOFT_RULE,
   );
-  if (result.allowed) return { allowed: true, firstSkip: false };
+  return { allowed: result.allowed };
+}
+
+/** First skip in the window returns true so the caller can log once. */
+export async function recordEmailMagicLinkSoftCapSkip(
+  db: RateLimitDatabase,
+  email: string,
+): Promise<boolean> {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) return false;
   const logged = await consumeRateLimitKey(
     db,
     emailSoftLogMagicLinkRateLimitKey(trimmed),
     MAGIC_LINK_EMAIL_SOFT_LOG_RULE,
   );
-  return { allowed: false, firstSkip: logged.allowed };
+  return logged.allowed;
 }

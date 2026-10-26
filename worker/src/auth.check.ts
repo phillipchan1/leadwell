@@ -4,6 +4,7 @@ import {
   existingUserForMagicLinkEmail,
   isAllowedEmail,
   PROD_AUTH_IP_HEADERS,
+  scheduleAuthBackground,
 } from "./auth.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import {
@@ -204,6 +205,38 @@ await Promise.resolve();
 ok(unhandled === 0, "request.ts fallback catch does not raise unhandledRejection");
 process.off("unhandledRejection", onUnhandled);
 console.error = realError;
+
+let scheduled: Promise<unknown> | undefined;
+let backgroundDone = false;
+const slow = new Promise<void>((resolve) => {
+  setTimeout(() => {
+    backgroundDone = true;
+    resolve();
+  }, 180);
+});
+const tSched = Date.now();
+scheduleAuthBackground((task) => {
+  scheduled = task;
+}, slow);
+const schedMs = Date.now() - tSched;
+ok(schedMs < 50, `scheduleAuthBackground does not await the task (${schedMs}ms)`);
+ok(scheduled === slow, "waitUntil receives the same promise on every path");
+ok(!backgroundDone, "scheduled work has not finished when scheduleAuthBackground returns");
+await slow;
+
+let orphanDone = false;
+const orphan = new Promise<void>((resolve) => {
+  setTimeout(() => {
+    orphanDone = true;
+    resolve();
+  }, 180);
+});
+const tOrphan = Date.now();
+scheduleAuthBackground(undefined, orphan);
+const orphanMs = Date.now() - tOrphan;
+ok(orphanMs < 50, `missing waitUntil still does not await the task (${orphanMs}ms)`);
+ok(!orphanDone, "missing-waitUntil path does not await Resend or the no-op");
+await orphan;
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);

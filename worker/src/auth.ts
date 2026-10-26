@@ -17,6 +17,8 @@ import {
   consumeEmailMagicLinkSoftCap,
   createDatabaseRateLimitStorage,
   rateLimitDeniedResponse,
+  recordEmailMagicLinkSoftCapSkip,
+  type RateLimitDatabase,
 } from "./rateLimit.ts";
 
 export type AuthInstance = ReturnType<typeof createAuth>;
@@ -151,6 +153,43 @@ export type CreateAuthOptions = {
   waitUntil?: (task: Promise<unknown>) => void;
 };
 
+/**
+ * Same dispatch for a real send and a soft-cap no-op. Never awaited — Resend
+ * and the first-skip log both run on this path only.
+ */
+export function scheduleAuthBackground(
+  waitUntil: ((task: Promise<unknown>) => void) | undefined,
+  task: Promise<unknown>,
+): void {
+  if (waitUntil) {
+    waitUntil(task);
+    return;
+  }
+  void task.catch((err) => {
+    logMagicLinkSendFailure(err);
+  });
+}
+
+/** Real Resend send, or the soft-cap no-op (log consume + optional log). */
+export function deliverMagicLinkOrSkip(
+  env: Env,
+  db: RateLimitDatabase,
+  opts: { email: string; url: string; token: string; send: boolean },
+): Promise<unknown> {
+  if (!opts.send) {
+    return recordEmailMagicLinkSoftCapSkip(db, opts.email).then((firstSkip) => {
+      if (firstSkip) logMagicLinkSoftCapSkip();
+    });
+  }
+  return sendMagicLinkEmail(env, {
+    email: opts.email,
+    url: opts.url,
+    token: opts.token,
+  }).catch((err) => {
+    logMagicLinkSendFailure(err);
+  });
+}
+
 export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAuthOptions) {
   const url = databaseUrl(env);
   if (!database && !url) {
@@ -233,18 +272,15 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
         sendMagicLink: async ({ email, url, token }) => {
           if (!isAllowedEmail(env, email)) return;
           const soft = await consumeEmailMagicLinkSoftCap(db, email);
-          if (!soft.allowed) {
-            if (soft.firstSkip) logMagicLinkSoftCapSkip();
-            return;
-          }
-          const sending = sendMagicLinkEmail(env, { email, url, token }).catch((err) => {
-            logMagicLinkSendFailure(err);
-          });
-          if (options?.waitUntil) {
-            options.waitUntil(sending);
-            return;
-          }
-          await sending;
+          scheduleAuthBackground(
+            options?.waitUntil,
+            deliverMagicLinkOrSkip(env, db, {
+              email,
+              url,
+              token,
+              send: soft.allowed,
+            }),
+          );
         },
       }),
     ],
@@ -269,7 +305,8 @@ export async function closeAuth(auth: AuthInstance): Promise<void> {
  * Better Auth handler plus the extra email buckets.
  * Built-in limiter is IP + path only; this adds 3/min per email+IP,
  * then 10/hr per email+IP-prefix (/24 or /48). A 200/hr per-email soft
- * cap is applied in sendMagicLink (200 + skip send), not here.
+ * cap is applied in sendMagicLink (200 + skip send on the same waitUntil
+ * path), not here.
  */
 export async function handleAuthRequest(auth: AuthInstance, req: Request): Promise<Response> {
   const path = new URL(req.url).pathname;
