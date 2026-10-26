@@ -31,7 +31,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { refuseUnsafeTestUrl } from "./loopback.mjs";
+import { libpqCleanEnv, refuseUnsafeTestUrl } from "./loopback.mjs";
 import {
   BETTER_AUTH_TABLES_SQL,
   CHECKSUM_TABLES,
@@ -61,11 +61,13 @@ const target = process.env.NEON_DB_URL || process.env.TARGET_DATABASE_URL || "";
 const isTest = process.env.LEADWELL_MIGRATE_TEST === "1";
 
 function run(cmd, args, opts = {}) {
+  const { env, ...rest } = opts;
   const res = spawnSync(cmd, args, {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
     maxBuffer: 64 * 1024 * 1024,
-    ...opts,
+    ...rest,
+    env: libpqCleanEnv(env ?? process.env),
   });
   if (res.status !== 0) {
     const err = (res.stderr || res.stdout || "").trim();
@@ -77,7 +79,11 @@ function run(cmd, args, opts = {}) {
 function runToFile(cmd, args, file) {
   const fd = openSync(file, "w");
   try {
-    const res = spawnSync(cmd, args, { encoding: "utf8", stdio: ["ignore", fd, "pipe"] });
+    const res = spawnSync(cmd, args, {
+      encoding: "utf8",
+      stdio: ["ignore", fd, "pipe"],
+      env: libpqCleanEnv(),
+    });
     if (res.status !== 0) {
       const err = (res.stderr || "").trim();
       throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${err}`);

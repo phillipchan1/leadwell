@@ -20,11 +20,22 @@ ok(body.stream === true, "stream passthrough");
 ok(Array.isArray(body.messages), "messages kept");
 
 const custom = sanitizeAnthropicBody(
-  { messages: [{ role: "user", content: "x" }], model: "claude-haiku-4-5", max_tokens: 99 },
+  { messages: [{ role: "user", content: "x" }], model: "claude-sonnet-4-20250514", max_tokens: 99 },
   env,
 );
-ok(custom.model === "claude-haiku-4-5", "client may pick a model name");
+ok(custom.model === "claude-sonnet-4-20250514", "allowlisted model honored");
 ok(custom.max_tokens === 99, "client max_tokens honored when sane");
+
+let unknownModel = false;
+try {
+  sanitizeAnthropicBody(
+    { messages: [{ role: "user", content: "x" }], model: "claude-opus-secret" },
+    env,
+  );
+} catch {
+  unknownModel = true;
+}
+ok(unknownModel, "unknown model rejected");
 
 const capped = sanitizeAnthropicBody(
   { messages: [{ role: "user", content: "x" }], max_tokens: 99_000 },

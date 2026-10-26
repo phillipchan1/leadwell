@@ -1,4 +1,4 @@
-import { refuseUnsafeTestUrl } from "./refuseTestUrl.ts";
+import { libpqCleanEnv, refuseUnsafeTestUrl } from "./refuseTestUrl.ts";
 
 const fails: string[] = [];
 let checks = 0;
@@ -37,6 +37,46 @@ ok(
 );
 if (saved === undefined) delete process.env.PGHOST;
 else process.env.PGHOST = saved;
+
+function withEnv(name: string, value: string, fn: () => boolean): boolean {
+  const prev = process.env[name];
+  process.env[name] = value;
+  try {
+    return fn();
+  } finally {
+    if (prev === undefined) delete process.env[name];
+    else process.env[name] = prev;
+  }
+}
+
+ok(
+  withEnv("PGSERVICE", "neon-prod", () =>
+    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  ),
+  "PGSERVICE refused even if URL is loopback",
+);
+ok(
+  withEnv("PGSERVICEFILE", "/tmp/pg_service.conf", () =>
+    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  ),
+  "PGSERVICEFILE refused even if URL is loopback",
+);
+ok(
+  withEnv("PGSYSCONFDIR", "/tmp/pgconf", () =>
+    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  ),
+  "PGSYSCONFDIR refused even if URL is loopback",
+);
+
+const cleaned = libpqCleanEnv({
+  PGHOST: "ep-prod.neon.tech",
+  PGSERVICE: "neon-prod",
+  PGSERVICEFILE: "/tmp/pg_service.conf",
+  PGSYSCONFDIR: "/tmp/pgconf",
+  KEEP: "yes",
+});
+ok(!cleaned.PGSERVICE && !cleaned.PGSERVICEFILE && !cleaned.PGSYSCONFDIR, "libpqCleanEnv drops service vars");
+ok(cleaned.KEEP === "yes", "libpqCleanEnv keeps unrelated vars");
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);

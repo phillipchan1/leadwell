@@ -25,7 +25,8 @@ Never put values here.
 | `GOOGLE_CLIENT_ID` | wrangler secret | Same Google OAuth web client, new redirect URI. |
 | `GOOGLE_CLIENT_SECRET` | wrangler secret | Same Google client. |
 | `ANTHROPIC_API_KEY` | wrangler secret | Server-side Claude key. The client must never send it. |
-| `ANTHROPIC_MODEL` | wrangler var | Optional. Defaults to `claude-sonnet-4-20250514`. |
+| `ANTHROPIC_MODEL` | wrangler var | Optional. Must be in the Worker allowlist. Defaults to `claude-sonnet-4-20250514`. |
+| `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and account linking. Set to Phil's Google email. Empty admits no new users. |
 | `DATABASE_URL` | wrangler secret | Neon connection string. Used when Hyperdrive is unset (preview / local). |
 | `HYPERDRIVE` | wrangler binding | Workers Paid. Replace the placeholder id in `wrangler.jsonc` before production deploy. Local uses `localConnectionString`. |
 
@@ -111,7 +112,7 @@ The script:
 5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
 6. Inserts Better Auth `"user"` rows with the **same UUIDs**.
 7. Maps Google identities → `account` (`provider_id = google`).
-8. Compares per-table `COUNT(*)` and `md5` of every row. Aborts on mismatch.
+8. Compares per-table `COUNT(*)` and `md5` of every row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch). Aborts on mismatch.
 9. On failure, drops only objects this run created on Neon. Supabase is never
    modified.
 
@@ -126,7 +127,8 @@ remains available for a new test user or a password reset after cutover.
 1. Create a Neon project (free tier). Leave it empty.
 2. Create a Cloudflare Worker (`leadwell`) with Workers static assets.
    Hyperdrive is Workers Paid; preview can use `DATABASE_URL` instead.
-3. Set the Worker secrets and `BETTER_AUTH_URL` to the `*.workers.dev` origin.
+3. Set the Worker secrets, `BETTER_AUTH_URL` to the `*.workers.dev` origin, and
+   `ALLOWED_EMAILS` to Phil's Google email.
 4. In Google Cloud, add the Better Auth callback to the existing OAuth client:
    `{BETTER_AUTH_URL}/api/auth/callback/google`
    Do not remove the Supabase callback until rollback is no longer needed.
@@ -156,12 +158,19 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 
 ## Rollback
 
-1. Share the Vercel URL again (or restore the previous bookmark). Do not
+`vercel.json` has `"ignoreCommand": "exit 0"`. Merging this branch to
+`master` does **not** ship a new Vercel build. Production on Vercel stays
+the current deployment (`a147830`). That is the fallback.
+
+1. Point the shared URL / bookmark back at that Vercel deployment. Do not
    delete the Worker.
 2. Google still works against Supabase — its redirect URI was never removed.
 3. Neon and the Worker can stay; they are unused until you cut over again.
-4. Re-migrate later only into a **new empty** Neon database (the script
-   refuses a dirty target). Do not write back from Neon to Supabase.
+4. **Writes made on Neon after cutover do not exist on Supabase.** Rolling
+   back returns Phil to the last Supabase snapshot. Do not write back from
+   Neon to Supabase.
+5. Re-migrate later only into a **new empty** Neon database (the script
+   refuses a dirty target).
 
 ---
 

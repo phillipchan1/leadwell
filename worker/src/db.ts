@@ -102,6 +102,15 @@ export function clientConnection(
   };
 }
 
+/**
+ * node-pg Pool option. Always pass this — never omit `ssl` after stripping
+ * sslmode, or a remote host opens cleartext. `true` for every non-loopback,
+ * non-Hyperdrive host.
+ */
+export function poolSsl(ssl: false | "require"): boolean {
+  return ssl === "require";
+}
+
 export function createSql(env: Env): Sql {
   const url = databaseUrl(env);
   if (!url) throw new Error("database is not configured (HYPERDRIVE or DATABASE_URL)");

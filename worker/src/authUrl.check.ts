@@ -3,6 +3,7 @@ import {
   clientConnection,
   clientSsl,
   isHyperdriveHostname,
+  poolSsl,
   postgresSsl,
   stripSslMode,
   usesHyperdrive,
@@ -108,6 +109,12 @@ ok(stripSslMode(hyperdrive).includes("sslmode") === false, "sslmode stripped");
 ok(
   clientConnection({ HYPERDRIVE: { connectionString: hyperdrive } }, hyperdrive).ssl === false,
   "clientConnection Hyperdrive ssl false",
+);
+ok(poolSsl("require") === true, "poolSsl require is TLS on");
+ok(poolSsl(false) === false, "poolSsl false is TLS off");
+ok(
+  poolSsl(clientConnection({}, `${neon}?sslmode=disable`).ssl) === true,
+  "auth pool still TLS after sslmode stripped from remote URL",
 );
 
 ok(

@@ -6,6 +6,24 @@ import parsePgConnectionString from "pg-connection-string";
 
 const REDIRECT_QUERY_PARAMS = new Set(["host", "hostaddr", "service"]);
 
+/** libpq env vars that can pick a different host than the URL. */
+export const LIBPQ_REDIRECT_ENV = [
+  "PGHOST",
+  "PGHOSTADDR",
+  "PGSERVICE",
+  "PGSERVICEFILE",
+  "PGSYSCONFDIR",
+] as const;
+
+/** Copy env without libpq host-redirect vars. Use for psql/pg_dump/pg_restore. */
+export function libpqCleanEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const next = { ...env };
+  for (const key of LIBPQ_REDIRECT_ENV) delete next[key];
+  return next;
+}
+
 function parseConnectionString(url: string) {
   const parse =
     typeof parsePgConnectionString === "function"
@@ -62,6 +80,12 @@ function refuseEnvHost(name: "PGHOST" | "PGHOSTADDR"): void {
   }
 }
 
+function refuseRedirectEnv(name: "PGSERVICE" | "PGSERVICEFILE" | "PGSYSCONFDIR"): void {
+  const raw = process.env[name]?.trim();
+  if (!raw) return;
+  throw new Error(`${name} can redirect the connection — refusing to wipe`);
+}
+
 /** Throw before any connect/query when a wipe/test URL is not loopback. */
 export function refuseUnsafeTestUrl(
   url: string,
@@ -69,6 +93,9 @@ export function refuseUnsafeTestUrl(
 ): void {
   refuseEnvHost("PGHOST");
   refuseEnvHost("PGHOSTADDR");
+  refuseRedirectEnv("PGSERVICE");
+  refuseRedirectEnv("PGSERVICEFILE");
+  refuseRedirectEnv("PGSYSCONFDIR");
 
   let parsed: URL;
   try {

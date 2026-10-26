@@ -14,6 +14,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
+  /** Comma-separated allowlist. Empty = no new users. Set to Phil's email. */
+  ALLOWED_EMAILS?: string;
 }
 
 const PLACEHOLDER_HYPERDRIVE = "00000000000000000000000000000000";

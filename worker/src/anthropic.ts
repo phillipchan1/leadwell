@@ -9,6 +9,11 @@ const FORBIDDEN_CLIENT_HEADERS = [
   "anthropic-api-key",
 ];
 
+export const ALLOWED_ANTHROPIC_MODELS = ["claude-sonnet-4-20250514"] as const;
+export type AllowedAnthropicModel = (typeof ALLOWED_ANTHROPIC_MODELS)[number];
+export const MAX_ANTHROPIC_TOKENS = 8192;
+export const DEFAULT_ANTHROPIC_TOKENS = 4096;
+
 export type AnthropicBody = {
   model?: string;
   messages?: unknown;
@@ -24,6 +29,23 @@ export type AnthropicBody = {
   top_p?: number;
 };
 
+export function isAllowedAnthropicModel(model: string): model is AllowedAnthropicModel {
+  return (ALLOWED_ANTHROPIC_MODELS as readonly string[]).includes(model);
+}
+
+export function resolveAnthropicModel(env: Env, requested?: string): AllowedAnthropicModel {
+  const fromClient = requested?.trim() ?? "";
+  if (fromClient) {
+    if (!isAllowedAnthropicModel(fromClient)) {
+      throw new Error("model is not allowed");
+    }
+    return fromClient;
+  }
+  const fromEnv = anthropicModel(env);
+  if (isAllowedAnthropicModel(fromEnv)) return fromEnv;
+  return ALLOWED_ANTHROPIC_MODELS[0];
+}
+
 export function sanitizeAnthropicBody(input: unknown, env: Env): AnthropicBody {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("body must be a JSON object");
@@ -33,11 +55,15 @@ export function sanitizeAnthropicBody(input: unknown, env: Env): AnthropicBody {
     throw new Error("messages must be an array");
   }
   const maxTokens = Number(raw.max_tokens);
+  const capped =
+    Number.isFinite(maxTokens) && maxTokens > 0
+      ? Math.min(maxTokens, MAX_ANTHROPIC_TOKENS)
+      : DEFAULT_ANTHROPIC_TOKENS;
   return {
-    model: typeof raw.model === "string" && raw.model.trim() ? raw.model : anthropicModel(env),
+    model: resolveAnthropicModel(env, typeof raw.model === "string" ? raw.model : undefined),
     messages: raw.messages,
     system: raw.system,
-    max_tokens: Number.isFinite(maxTokens) && maxTokens > 0 ? Math.min(maxTokens, 8192) : 4096,
+    max_tokens: capped,
     stream: raw.stream === true,
     temperature: typeof raw.temperature === "number" ? raw.temperature : undefined,
     tools: raw.tools,

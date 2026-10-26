@@ -8,4 +8,6 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 ANTHROPIC_API_KEY=
 # ANTHROPIC_MODEL=claude-sonnet-4-20250514
+# Comma-separated. Sign-up and account-link only. Set to Phil's email.
+ALLOWED_EMAILS=phillipchan1@gmail.com
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell

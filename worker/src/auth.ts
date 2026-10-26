@@ -6,7 +6,7 @@ import {
   isLocalAuthHost,
   resolveAuthBaseURL,
 } from "./authUrl.ts";
-import { clientConnection } from "./db.ts";
+import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
 
 export type AuthInstance = ReturnType<typeof createAuth>;
@@ -63,6 +63,46 @@ export const authModels = {
   },
 } as const;
 
+/**
+ * No `trustedProviders`. Better Auth then only implicit-links when the
+ * provider email is verified. An unverified Google email must never attach
+ * to an existing user. Phil signs in through the migrated `account` row
+ * (Google `sub`), not through email linking.
+ */
+export const ACCOUNT_LINKING = {
+  enabled: true,
+  disableImplicitLinking: true,
+} as const;
+
+export function allowedEmails(env: Pick<Env, "ALLOWED_EMAILS">): Set<string> {
+  return new Set(
+    (env.ALLOWED_EMAILS ?? "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
+export function isAllowedEmail(
+  env: Pick<Env, "ALLOWED_EMAILS">,
+  email: string | null | undefined,
+): boolean {
+  if (!email || typeof email !== "string") return false;
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) return false;
+  return allowedEmails(env).has(trimmed);
+}
+
+/** Implicit email-link is allowed only for a verified address of an untrusted provider. */
+export function socialEmailMayLinkToExistingUser(opts: {
+  trustedProviders: readonly string[];
+  providerId: string;
+  emailVerified: boolean;
+}): boolean {
+  if (opts.trustedProviders.includes(opts.providerId)) return true;
+  return opts.emailVerified === true;
+}
+
 /** `pg.Pool` or a PGlite stand-in with the same connect/query/end surface. */
 export type AuthDatabase =
   | Pool
@@ -93,7 +133,7 @@ export function createAuth(env: Env, database?: AuthDatabase) {
     (owned = new Pool({
       connectionString: opts!.connectionString,
       max: 1,
-      ...(opts!.ssl === false ? { ssl: false } : {}),
+      ssl: poolSsl(opts!.ssl),
     }));
   const google =
     env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
@@ -101,6 +141,7 @@ export function createAuth(env: Env, database?: AuthDatabase) {
           google: {
             clientId: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,
+            disableImplicitSignUp: true,
           },
         }
       : undefined;
@@ -111,14 +152,25 @@ export function createAuth(env: Env, database?: AuthDatabase) {
     database: db as Pool,
     emailAndPassword: { enabled: true },
     socialProviders: google,
-    user: authModels.user,
+    user: {
+      ...authModels.user,
+      validateUserInfo: ({ user, source }) => {
+        if (source.action !== "create-user" && source.action !== "link-account") {
+          return;
+        }
+        if (isAllowedEmail(env, typeof user.email === "string" ? user.email : null)) {
+          return;
+        }
+        return {
+          error: "not_allowed",
+          errorDescription: "this account is not allowed",
+        };
+      },
+    },
     session: authModels.session,
     account: {
       ...authModels.account,
-      accountLinking: {
-        enabled: true,
-        trustedProviders: ["google"],
-      },
+      accountLinking: ACCOUNT_LINKING,
     },
     verification: authModels.verification,
     trustedOrigins: isLocalAuthHost(baseURL)

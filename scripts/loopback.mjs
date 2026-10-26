@@ -6,6 +6,22 @@ import parsePgConnectionString from "pg-connection-string";
 
 const REDIRECT_QUERY_PARAMS = new Set(["host", "hostaddr", "service"]);
 
+/** libpq env vars that can pick a different host than the URL. */
+export const LIBPQ_REDIRECT_ENV = [
+  "PGHOST",
+  "PGHOSTADDR",
+  "PGSERVICE",
+  "PGSERVICEFILE",
+  "PGSYSCONFDIR",
+];
+
+/** Copy env without libpq host-redirect vars. Use for psql/pg_dump/pg_restore. */
+export function libpqCleanEnv(env = process.env) {
+  const next = { ...env };
+  for (const key of LIBPQ_REDIRECT_ENV) delete next[key];
+  return next;
+}
+
 function parseConnectionString(url) {
   const parse =
     typeof parsePgConnectionString === "function"
@@ -61,9 +77,18 @@ function refuseEnvHost(name) {
   }
 }
 
+function refuseRedirectEnv(name) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return;
+  throw new Error(`${name} can redirect the connection — refusing to connect`);
+}
+
 export function refuseUnsafeTestUrl(url, label = "LEADWELL_TEST_DATABASE_URL") {
   refuseEnvHost("PGHOST");
   refuseEnvHost("PGHOSTADDR");
+  refuseRedirectEnv("PGSERVICE");
+  refuseRedirectEnv("PGSERVICEFILE");
+  refuseRedirectEnv("PGSYSCONFDIR");
 
   let parsed;
   try {

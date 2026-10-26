@@ -3,7 +3,11 @@
  * Prove the loopback-only guard used by every DB-touching test/prove script.
  * Does not connect to any database.
  */
-import { assertLoopbackDatabaseUrl, refuseUnsafeTestUrl } from "./loopback.mjs";
+import {
+  assertLoopbackDatabaseUrl,
+  libpqCleanEnv,
+  refuseUnsafeTestUrl,
+} from "./loopback.mjs";
 
 const fails = [];
 let checks = 0;
@@ -43,6 +47,49 @@ ok(
 );
 if (saved === undefined) delete process.env.PGHOST;
 else process.env.PGHOST = saved;
+
+function withEnv(name, value, fn) {
+  const prev = process.env[name];
+  process.env[name] = value;
+  try {
+    return fn();
+  } finally {
+    if (prev === undefined) delete process.env[name];
+    else process.env[name] = prev;
+  }
+}
+
+ok(
+  withEnv("PGSERVICE", "neon-prod", () =>
+    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  ),
+  "PGSERVICE refused even if URL is loopback",
+);
+ok(
+  withEnv("PGSERVICEFILE", "/tmp/pg_service.conf", () =>
+    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  ),
+  "PGSERVICEFILE refused even if URL is loopback",
+);
+ok(
+  withEnv("PGSYSCONFDIR", "/tmp/pgconf", () =>
+    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  ),
+  "PGSYSCONFDIR refused even if URL is loopback",
+);
+
+const dirty = {
+  PGHOST: "ep-prod.neon.tech",
+  PGHOSTADDR: "1.2.3.4",
+  PGSERVICE: "neon-prod",
+  PGSERVICEFILE: "/tmp/pg_service.conf",
+  PGSYSCONFDIR: "/tmp/pgconf",
+  KEEP: "yes",
+};
+const cleaned = libpqCleanEnv(dirty);
+ok(!cleaned.PGHOST && !cleaned.PGHOSTADDR, "libpqCleanEnv drops PGHOST/PGHOSTADDR");
+ok(!cleaned.PGSERVICE && !cleaned.PGSERVICEFILE && !cleaned.PGSYSCONFDIR, "libpqCleanEnv drops service vars");
+ok(cleaned.KEEP === "yes", "libpqCleanEnv keeps unrelated vars");
 
 let missing = false;
 try {

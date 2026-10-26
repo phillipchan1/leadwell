@@ -17,7 +17,8 @@
   // ENVIRONMENT=local is the only unset-URL fallback. Preview/prod: omit
   // ENVIRONMENT and set BETTER_AUTH_URL to the public Worker origin (RUNBOOK.md).
   "vars": {
-    "ANTHROPIC_MODEL": "claude-sonnet-4-20250514"
+    "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+    "ALLOWED_EMAILS": "phillipchan1@gmail.com"
   },
   // Replace `id` with a real Hyperdrive config before `wrangler deploy`.
   // Hyperdrive is Workers Paid. Local / Free preview uses DATABASE_URL.
@@ -38,7 +39,8 @@
       "workers_dev": true,
       "preview_urls": true,
       "vars": {
-        "ANTHROPIC_MODEL": "claude-sonnet-4-20250514"
+        "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+        "ALLOWED_EMAILS": "phillipchan1@gmail.com"
       },
       // Empty on purpose: Hyperdrive is not inherited. Preview uses DATABASE_URL.
       "hyperdrive": []

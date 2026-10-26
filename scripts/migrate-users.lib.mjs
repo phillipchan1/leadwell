@@ -141,12 +141,17 @@ export function checksumQuery() {
   );
 }
 
-/** Per-table row count plus md5 of every row's text representation, ordered. */
+/**
+ * Per-table row count plus md5 of every row's text representation.
+ * ORDER BY uses COLLATE "C" so source/target collation differences cannot
+ * reorder rows and produce a false hash mismatch. A remaining mismatch is
+ * a real content difference, not a locale artifact.
+ */
 export function contentHashQuery() {
   return (
     CHECKSUM_TABLES.map((table, i) => {
       const select = `SELECT '${table}' AS t, COUNT(*)::bigint AS n,
-  md5(COALESCE(string_agg(md5((t.*)::text), '' ORDER BY (t.*)::text), '')) AS h
+  md5(COALESCE(string_agg(md5((t.*)::text), '' ORDER BY (t.*)::text COLLATE "C"), '')) AS h
 FROM public.${table} t`;
       return i === 0 ? select : `UNION ALL ${select}`;
     }).join("\n") + "\nORDER BY 1"

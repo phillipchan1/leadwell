@@ -19,7 +19,7 @@ import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { refuseUnsafeTestUrl } from "./loopback.mjs";
+import { libpqCleanEnv, refuseUnsafeTestUrl } from "./loopback.mjs";
 import {
   CHECKSUM_TABLES,
   assertCountsMatch,
@@ -128,6 +128,7 @@ ok(ids[0]?.provider === "google" && ids[0].provider_id === "google-sub-1", "iden
 
 ok(CHECKSUM_TABLES.length === 21, "21 public tables checksummed");
 ok(contentHashQuery().includes("md5"), "content hash query uses md5");
+ok(contentHashQuery().includes('COLLATE "C"'), "hash order is collation-independent");
 ok(parseCounts("profiles|3\n").profiles === 3, "parseCounts");
 
 // --- dry-run with no URLs --------------------------------------------------
@@ -147,10 +148,12 @@ const source = process.env.LEADWELL_PROVE_SOURCE_URL || "";
 const target = process.env.LEADWELL_PROVE_TARGET_URL || "";
 
 function run(cmd, args, opts = {}) {
+  const { env, ...rest } = opts;
   const res = spawnSync(cmd, args, {
     encoding: "utf8",
     cwd: root,
-    ...opts,
+    ...rest,
+    env: libpqCleanEnv(env ?? process.env),
   });
   if (res.status !== 0) {
     throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${(res.stderr || res.stdout || "").trim()}`);
