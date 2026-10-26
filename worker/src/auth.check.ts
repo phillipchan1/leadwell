@@ -220,7 +220,8 @@ scheduleAuthBackground((task) => {
 }, slow);
 const schedMs = Date.now() - tSched;
 ok(schedMs < 50, `scheduleAuthBackground does not await the task (${schedMs}ms)`);
-ok(scheduled === slow, "waitUntil receives the same promise on every path");
+ok(scheduled !== undefined, "waitUntil is invoked");
+ok(scheduled !== slow, "waitUntil receives the caught promise, not the raw task");
 ok(!backgroundDone, "scheduled work has not finished when scheduleAuthBackground returns");
 await slow;
 
@@ -246,12 +247,17 @@ process.on("unhandledRejection", onWaitUntilUnhandled);
 const rejectedSkip = Promise.reject(new MagicLinkSendError("resend_http", 503));
 const realSkipError = console.error;
 console.error = () => {};
-scheduleAuthBackground((task) => {
-  void task;
-}, rejectedSkip);
+const pendingSkips = new Set<Promise<unknown>>();
+scheduleAuthBackground(
+  (task) => {
+    void task;
+  },
+  rejectedSkip,
+  pendingSkips,
+);
 await Promise.resolve();
 await Promise.resolve();
-ok(waitUntilUnhandled === 0, "waitUntil skip task has a catch");
+ok(waitUntilUnhandled === 0, "waitUntil skip task with a pending Set does not raise unhandledRejection");
 process.off("unhandledRejection", onWaitUntilUnhandled);
 console.error = realSkipError;
 

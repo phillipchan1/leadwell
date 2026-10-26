@@ -168,17 +168,10 @@ export function scheduleAuthBackground(
   task: Promise<unknown>,
   pending?: Set<Promise<unknown>>,
 ): void {
-  if (pending) {
-    pending.add(task);
-    void task.finally(() => pending.delete(task));
-  }
-  void task.catch((err) => {
-    logMagicLinkSendFailure(err);
-  });
-  if (waitUntil) {
-    waitUntil(task);
-    return;
-  }
+  const safe = task.catch(logMagicLinkSendFailure);
+  pending?.add(safe);
+  safe.finally(() => pending?.delete(safe));
+  waitUntil?.(safe);
 }
 
 /** Real Resend send, or the soft-cap no-op (console log only — no DB). */
@@ -315,10 +308,17 @@ export function getAuth(env: Env): AuthInstance {
   return createAuth(env);
 }
 
+const CLOSE_AUTH_DRAIN_MS = 5000;
+
 export async function closeAuth(auth: AuthInstance): Promise<void> {
   const pending = pendingBackground.get(auth);
   if (pending?.size) {
-    await Promise.allSettled([...pending]);
+    await Promise.race([
+      Promise.allSettled([...pending]),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, CLOSE_AUTH_DRAIN_MS);
+      }),
+    ]);
   }
   const pool = ownedPools.get(auth);
   if (pool) await pool.end();
