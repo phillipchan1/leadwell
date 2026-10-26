@@ -252,10 +252,10 @@ LEADWELL_PROVE_TARGET_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell
 
 `scripts/prove-migrate.mjs` seeds `CREATE POLICY actions_owner … TO authenticated`
 (the clause that failed in cutover dry-run 40377053881), then asserts the
-target has the NOLOGIN stubs, the policy is restored, the table owner can
-still read rows, and `SET ROLE authenticated` sees none (`auth.uid()` is
-the NULL stub). Dump-SQL scanning of `TO`/`GRANT` is also unit-tested
-without a database.
+target has the NOLOGIN stubs, the policy is restored, and the table owner
+can still read rows (the Worker path). The `authenticated` stub has no
+`USAGE` on `public` — the Worker never `SET ROLE` those stubs. Dump-SQL
+scanning of `TO`/`GRANT` is also unit-tested without a database.
 
 Email/password hashes from GoTrue are not portable. Phil's login path is a
 **magic-link** to the migrated `"user"` row (same UUID + email). The first

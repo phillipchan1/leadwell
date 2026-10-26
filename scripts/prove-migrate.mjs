@@ -696,18 +696,17 @@ GRANT SELECT ON public.actions TO authenticated;
       "-c",
       "SELECT count(*) FROM public.actions",
     ]).trim();
-    ok(asOwner === "1", "table owner still reads actions (RLS not forced)");
-
-    const asAuth = run("psql", [
+    ok(asOwner === "1", "table owner still reads actions (Worker path; RLS not forced)");
+    const authUsage = run("psql", [
       "-v",
       "ON_ERROR_STOP=1",
       "-tA",
       "-d",
       target,
       "-c",
-      "SET ROLE authenticated; SELECT count(*) FROM public.actions",
+      "SELECT has_schema_privilege('authenticated', 'public', 'USAGE')",
     ]).trim();
-    ok(asAuth === "0", "authenticated RLS uses stub auth.uid() (no rows)");
+    ok(authUsage === "f", "authenticated stub has no USAGE on public (Worker does not SET ROLE)");
 
     const mapped = run("psql", [
       "-v",
