@@ -16,7 +16,7 @@ import { Mark } from "./brand/glyphs";
  */
 export function LoadingSplash() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 bg-secondary px-6">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-col items-center justify-center gap-5 bg-secondary px-6">
       <Mark size={56} className="shadow-sm" />
       <SkeletonLines count={3} className="w-full max-w-xs" />
       <p className="text-sm text-quaternary">

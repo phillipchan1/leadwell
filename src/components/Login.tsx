@@ -41,7 +41,7 @@ export function Login() {
   };
 
   return (
-    <div className="pad-safe-top pad-safe-bottom flex h-full items-center justify-center bg-leather px-6 text-leather-fg">
+    <div className="pad-safe-top pad-safe-bottom flex h-full min-h-0 w-full flex-1 items-center justify-center bg-leather px-6 text-leather-fg">
       <div className="flex w-full max-w-[380px] flex-col items-center gap-8 text-center">
         <div className="flex items-center gap-3.5 text-[34px]">
           <Mark size={52} />
@@ -110,7 +110,7 @@ export function Login() {
           </Button>
         )}
 
-        {error && <p className="text-[13px] text-teal-400">{error}</p>}
+        {error && <p className="text-[13px] text-gilt-ink">{error}</p>}
       </div>
     </div>
   );

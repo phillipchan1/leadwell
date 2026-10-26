@@ -120,19 +120,20 @@ setTimeout(() => {
   const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const pal = (bg, base, lite, acc, prm, glow) => ({ bg: hex(bg), base: hex(base), lite: hex(lite), acc: hex(acc), prm, glow });
   const PAL = {
-    dawn: pal("#013133", "#013133", "#3f9a91", "#e1b34d", [0.3, 0.9, 0.7], 0.3),
-    // The day's light chapters sit a shade deeper than their paper, so the
-    // caustics, the light pool and every ring read as moving light around the cards.
-    morning: pal("#eef3f1", "#dde8e4", "#ffffff", "#e8c470", [1.0, 0.9, 0.45], 0.24),
-    forenoon: pal("#023436", "#023436", "#46a399", "#e1b34d", [0.28, 0.9, 0.6], 0.16),
-    "late-morning": pal("#eef3f1", "#dce7e3", "#ffffff", "#e8c470", [1.05, 0.9, 0.45], 0.26),
-    noon: pal("#f3f5f1", "#e3e9e2", "#ffffff", "#f0d590", [1.05, 0.9, 0.5], 0.28),
-    afternoon: pal("#f0f2ec", "#dfe5da", "#ffffff", "#ebc77c", [1.1, 0.95, 0.5], 0.32),
-    late: pal("#f4f0e6", "#e7dfcf", "#fffbf2", "#e8b964", [1.1, 0.95, 0.5], 0.34),
-    golden: pal("#0b2e30", "#0b2e30", "#7a9a78", "#eaa64e", [0.28, 0.9, 0.8], 0.3),
-    dusk: pal("#15122b", "#15122b", "#4b3f7a", "#f0a868", [0.2, 0.8, 0.6], 0.1),
-    night: pal("#15122b", "#15122b", "#463c84", "#c3b3f6", [0.22, 0.8, 0.5], 0.08),
-    deep: pal("#0f1427", "#0f1427", "#33427a", "#c3b3f6", [0.24, 0.85, 0.5], 0.08),
+    // Night / Daylight / Night Surface / Subtle. Light is Ember; accent is Star.
+    // Matches the [data-pal] chapter colors in index.html and tokens.css.
+    dawn: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.3, 0.9, 0.7], 0.3),
+    // Light chapters sit a shade deeper than Daylight so caustics read as light.
+    morning: pal("#f7f6f4", "#eeece9", "#ffffff", "#cc5533", [1.0, 0.9, 0.45], 0.24),
+    forenoon: pal("#221f1d", "#221f1d", "#ec7c58", "#cc5533", [0.28, 0.9, 0.6], 0.16),
+    "late-morning": pal("#f7f6f4", "#eeece9", "#ffffff", "#cc5533", [1.05, 0.9, 0.45], 0.26),
+    noon: pal("#f7f6f4", "#eeece9", "#ffffff", "#cc5533", [1.05, 0.9, 0.5], 0.28),
+    afternoon: pal("#eeece9", "#e3e0dc", "#ffffff", "#cc5533", [1.1, 0.95, 0.5], 0.32),
+    late: pal("#f7f6f4", "#eeece9", "#fffbf2", "#cc5533", [1.1, 0.95, 0.5], 0.34),
+    golden: pal("#221f1d", "#221f1d", "#ec7c58", "#cc5533", [0.28, 0.9, 0.8], 0.3),
+    dusk: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.2, 0.8, 0.6], 0.1),
+    night: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.22, 0.8, 0.5], 0.08),
+    deep: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.24, 0.85, 0.5], 0.08),
   };
   const mixPal = (a, b, t) => {
     if (t <= 0 || a === b) return a;
