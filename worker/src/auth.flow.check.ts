@@ -182,6 +182,7 @@ try {
   ok((await emailBucket("phil@example.com")) === 10, "global email bucket is 10 after a 10-IP flood");
   const freshIp = await sendLink("phil@example.com", { "cf-connecting-ip": "203.0.113.200" });
   ok(freshIp.status === 200, "Phil from a fresh IP still gets 200 after a 10-IP flood");
+  await flushMail();
 
   await db.query("DELETE FROM rate_limit");
   resendCalls.length = 0;

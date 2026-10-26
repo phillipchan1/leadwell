@@ -172,12 +172,15 @@ let unhandled = 0;
 const onUnhandled = () => {
   unhandled += 1;
 };
+const realError = console.error;
+console.error = () => {};
 process.on("unhandledRejection", onUnhandled);
 catchBackgroundTask(Promise.reject(new MagicLinkSendError("resend_http", 500)));
 await Promise.resolve();
 await Promise.resolve();
 ok(unhandled === 0, "request.ts fallback catch does not raise unhandledRejection");
 process.off("unhandledRejection", onUnhandled);
+console.error = realError;
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);
