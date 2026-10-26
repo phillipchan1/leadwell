@@ -166,6 +166,207 @@ FROM public.${table} t`;
   );
 }
 
+/**
+ * Prod LeadWell grants the read-only source role (migration_reader) EXECUTE
+ * on these SECURITY DEFINER wrappers, not USAGE on auth. Every source read
+ * of auth.users / auth.identities must go through them. The functions
+ * RETURNS TABLE only the Better Auth / COPY columns — never
+ * encrypted_password, recovery tokens, or other GoTrue secrets. Auth is
+ * magic-link only; those secrets are not required.
+ */
+export const SOURCE_AUTH_USERS_FN = "migration_tmp.auth_users()";
+export const SOURCE_AUTH_IDENTITIES_FN = "migration_tmp.auth_identities()";
+export const MIGRATION_READER_ROLE = "migration_reader";
+
+/** pg_dump public only. Never dump auth — those rows come from the functions. */
+export const PG_DUMP_PUBLIC_ARGS = [
+  "--format=custom",
+  "--no-owner",
+  "--no-acl",
+  "--schema=public",
+  "--exclude-schema=auth",
+];
+
+export const EXPORT_AUTH_USERS_COPY_SQL = `
+COPY (
+  SELECT id::text, name, email, email_verified, created_at, updated_at
+  FROM ${SOURCE_AUTH_USERS_FN}
+) TO STDOUT WITH CSV
+`;
+
+export const EXPORT_AUTH_IDENTITIES_COPY_SQL = `
+COPY (
+  SELECT user_id::text, provider, provider_id
+  FROM ${SOURCE_AUTH_IDENTITIES_FN}
+) TO STDOUT WITH CSV
+`;
+
+export const SOURCE_AUTH_USERS_ID_EMAIL_SQL = `
+SELECT id::text || '|' || COALESCE(email, '') FROM ${SOURCE_AUTH_USERS_FN} ORDER BY id
+`;
+
+export const TARGET_BETTER_AUTH_USERS_ID_EMAIL_SQL = `
+SELECT id::text || '|' || COALESCE(email, '') FROM "user" ORDER BY id
+`;
+
+function idEmailHashSelect(fromRel, label = "auth_users") {
+  return `SELECT '${label}' AS t, COUNT(*)::bigint AS n,
+  md5(COALESCE(string_agg(md5((id::text || '|' || lower(COALESCE(email, '')))), '' ORDER BY id::text COLLATE "C"), '')) AS h
+FROM ${fromRel}`;
+}
+
+/** Source count + md5 of auth users via the SECURITY DEFINER function. */
+export function sourceAuthUsersHashQuery() {
+  return idEmailHashSelect(SOURCE_AUTH_USERS_FN);
+}
+
+/** Target count + md5 of Better Auth "user" (same id + lower(email) as source). */
+export function targetBetterAuthUsersHashQuery() {
+  return idEmailHashSelect('"user"');
+}
+
+/** Source count + md5 of auth identities via the SECURITY DEFINER function. */
+export function sourceAuthIdentitiesHashQuery() {
+  return `SELECT 'auth_identities' AS t, COUNT(*)::bigint AS n,
+  md5(COALESCE(string_agg(md5((user_id::text || '|' || COALESCE(provider, '') || '|' || COALESCE(provider_id::text, ''))), '' ORDER BY (user_id::text || '|' || COALESCE(provider, '') || '|' || COALESCE(provider_id::text, '')) COLLATE "C"), '')) AS h
+FROM ${SOURCE_AUTH_IDENTITIES_FN}`;
+}
+
+/**
+ * Prod + CI SQL for the SECURITY DEFINER wrappers. DROP first because
+ * CREATE OR REPLACE cannot change SETOF auth.users / auth.identities to
+ * RETURNS TABLE. Qualify every relation — search_path is empty.
+ *
+ * Columns are exactly what COPY / Better Auth need. encrypted_password,
+ * recovery_token, confirmation_token, and identity_data are omitted;
+ * magic-link sign-in does not use them.
+ */
+export const MIGRATION_TMP_FUNCTIONS_SQL = `
+CREATE SCHEMA IF NOT EXISTS migration_tmp;
+
+DROP FUNCTION IF EXISTS migration_tmp.auth_users();
+DROP FUNCTION IF EXISTS migration_tmp.auth_identities();
+
+CREATE OR REPLACE FUNCTION migration_tmp.auth_users()
+RETURNS TABLE (
+  id uuid,
+  name text,
+  email text,
+  email_verified boolean,
+  created_at timestamptz,
+  updated_at timestamptz
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT
+    u.id,
+    COALESCE(u.raw_user_meta_data->>'name', split_part(u.email, '@', 1), ''),
+    u.email,
+    COALESCE(u.email_confirmed_at IS NOT NULL, false),
+    u.created_at,
+    u.updated_at
+  FROM auth.users AS u;
+$$;
+
+CREATE OR REPLACE FUNCTION migration_tmp.auth_identities()
+RETURNS TABLE (
+  user_id uuid,
+  provider text,
+  provider_id text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+  SELECT
+    i.user_id,
+    i.provider,
+    COALESCE(
+      i.identity_data->>'sub',
+      i.identity_data->>'provider_id',
+      i.provider_id::text,
+      ''
+    )
+  FROM auth.identities AS i;
+$$;
+`;
+
+/**
+ * REVOKE default/Supabase roles, then EXECUTE for migration_reader only.
+ * Prod always has PUBLIC, anon, authenticated, service_role. The CI
+ * harness creates the last three as NOLOGIN stubs so this statement
+ * applies there too.
+ */
+export const MIGRATION_TMP_GRANTS_SQL = `
+REVOKE ALL ON SCHEMA migration_tmp FROM PUBLIC;
+REVOKE ALL ON FUNCTION migration_tmp.auth_users(), migration_tmp.auth_identities() FROM PUBLIC, anon, authenticated, service_role;
+GRANT USAGE ON SCHEMA migration_tmp TO ${MIGRATION_READER_ROLE};
+GRANT EXECUTE ON FUNCTION migration_tmp.auth_users(), migration_tmp.auth_identities() TO ${MIGRATION_READER_ROLE};
+`;
+
+/** Expect 0 rows before DROP FUNCTION. Any row is a normal dependent. */
+export const MIGRATION_TMP_DEPENDENTS_SQL = `
+SELECT
+  pg_catalog.pg_describe_object(d.classid, d.objid, d.objsubid) AS dependent,
+  pg_catalog.pg_describe_object(d.refclassid, d.refobjid, d.refobjsubid) AS referenced
+FROM pg_catalog.pg_depend d
+JOIN pg_catalog.pg_proc p ON p.oid = d.refobjid
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities')
+  AND d.deptype = 'n'
+ORDER BY 1, 2
+`;
+
+/**
+ * Exact prod apply script (function bodies + grants). Run as a privileged
+ * role with: psql -1 -v ON_ERROR_STOP=1. Pre-check dependents first.
+ * ALTER FUNCTION OWNER is optional when the creating role is already postgres.
+ */
+export const MIGRATION_TMP_PROD_APPLY_SQL = `
+BEGIN;
+
+${MIGRATION_TMP_FUNCTIONS_SQL.trim()}
+
+-- Optional: pin SECURITY DEFINER owner if the creating role is not postgres.
+ALTER FUNCTION migration_tmp.auth_users() OWNER TO postgres;
+ALTER FUNCTION migration_tmp.auth_identities() OWNER TO postgres;
+
+${MIGRATION_TMP_GRANTS_SQL.trim()}
+
+COMMIT;
+`;
+
+/** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
+export const PROVE_SUPABASE_ROLE_STUBS_SQL = `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN;
+  END IF;
+END $$;
+`;
+
+/**
+ * Local-Postgres stand-in for the prod wrappers. Same signatures as prod.
+ * Call after auth.users / auth.identities exist and after the
+ * migration_reader role has been created.
+ */
+export const PROVE_MIGRATION_TMP_FUNCTIONS_SQL = `
+${MIGRATION_TMP_FUNCTIONS_SQL}
+${MIGRATION_TMP_GRANTS_SQL}
+`;
+
 export function parseCountLine(line) {
   const trimmed = String(line).trim();
   if (!trimmed || trimmed.startsWith("-") || trimmed.startsWith("(")) return null;
@@ -399,6 +600,30 @@ export function isNonEmptyTargetObject(row) {
 
 export function quoteIdent(ident) {
   return `"${String(ident).replaceAll('"', '""')}"`;
+}
+
+/** Create the read-only source role used by the live prove harness. */
+export function proveMigrationReaderSetupSql(databaseName) {
+  const db = quoteIdent(databaseName);
+  const role = quoteIdent(MIGRATION_READER_ROLE);
+  return `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATION_READER_ROLE}') THEN
+    CREATE ROLE ${role} LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
+  ELSE
+    ALTER ROLE ${role} WITH LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
+  END IF;
+END $$;
+GRANT CONNECT ON DATABASE ${db} TO ${role};
+GRANT USAGE ON SCHEMA public TO ${role};
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role};
+REVOKE ALL ON SCHEMA auth FROM PUBLIC;
+REVOKE ALL ON SCHEMA auth FROM ${role};
+${PROVE_SUPABASE_ROLE_STUBS_SQL}
+${PROVE_MIGRATION_TMP_FUNCTIONS_SQL}
+`;
 }
 
 export function dropCreatedSql(created) {

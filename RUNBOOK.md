@@ -47,7 +47,7 @@ Never put values here.
 
 | Name | Notes |
 | --- | --- |
-| `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project. The script only `pg_dump`s / `COPY`s. |
+| `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project (`migration_reader`). The script `pg_dump`s `public` (never `auth`) and `COPY`s auth rows from `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`. |
 | `NEON_DB_URL` | Empty Neon database. The script writes here. |
 | `LEADWELL_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover or the Actions cutover workflow. |
 | `PG_BIN` | Optional directory containing `pg_dump` / `pg_restore` matching the source major. |
@@ -58,7 +58,7 @@ Repo secrets. Never put values here or in the workflow file.
 
 | Name | Notes |
 | --- | --- |
-| `SOURCE_DATABASE_URL` | Read-only Supabase **session-pooler** URI (`sslmode=require`). Same role the laptop script calls `SUPABASE_DB_URL`. |
+| `SOURCE_DATABASE_URL` | Read-only Supabase **session-pooler** URI (`sslmode=require`). `migration_reader` — no `USAGE` on `auth`; auth rows are read through `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`. Same role the laptop script calls `SUPABASE_DB_URL`. |
 | `NEON_DATABASE_URL` | Empty Neon database. Used only when `dry_run=false`. |
 
 `checks.yml` still uses loopback prove URLs only. These two secrets belong on the
@@ -97,7 +97,7 @@ node scripts/migrate-supabase-to-neon.mjs --dry-run
 Expected output:
 
 ```
-dry-run: would pg_dump public + auth.users + auth.identities from SUPABASE_DB_URL (read-only)
+dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)
 dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated
 dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)
 dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL
@@ -128,13 +128,19 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
    - masks `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL` (`::add-mask::`) and
      never `set -x`
    - `pg_dump`s `public` from Supabase (custom format, matching client major,
-     `sslmode=require`) and uploads the dump (1-day retention)
+     `sslmode=require`, `--exclude-schema=auth`) and uploads the dump
+     (1-day retention). Auth rows are **not** in the dump
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
-     Postgres 17 service container — **not** Neon
-   - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target) to
+     Postgres 17 service container — **not** Neon. That script `COPY`s
+     the narrow TABLE columns from `migration_tmp.auth_users()` /
+     `migration_tmp.auth_identities()` (id/name/email/verified/timestamps
+     and user_id/provider/provider_id — no password hashes or tokens)
+   - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target,
+     including auth users via the function vs Better Auth `"user"`) to
      the step summary and a 7-day artifact
-   - confirms Phil's `auth.users` row landed in Better Auth `"user"` with the
-     same id and email, and prints **the id only**
+   - confirms Phil's auth user (via `migration_tmp.auth_users()`) landed
+     in Better Auth `"user"` with the same id and email, and prints
+     **the id only**
    - fails if any checksum table mismatches or the user did not carry over
 3. Uncheck **dry_run** only when Neon is empty and you intend to load it.
    Same dump + migrate script + checksums; the target is `NEON_DATABASE_URL`.
@@ -145,20 +151,121 @@ guards in `scripts/loopback.mjs` stay as they are.
 
 The script:
 
-1. `pg_dump`s `public` (no-owner, no-acl) from Supabase.
-2. `COPY`s `auth.users` (and `auth.identities`, unused).
+1. `pg_dump`s `public` (no-owner, no-acl, `--exclude-schema=auth`) from Supabase.
+2. `COPY`s `migration_tmp.auth_users()` (and `migration_tmp.auth_identities()`, unused). The functions `RETURNS TABLE` only the columns Better Auth needs. Never `SELECT`s `auth.users` / `auth.identities` — the source role cannot get `USAGE` on `auth`.
 3. Aborts on blank or case-insensitive-duplicate emails.
 4. Refuses a non-empty Neon target.
 5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
 6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
 7. Does **not** map Google identities.
-8. Compares per-table `COUNT(*)` and `md5` of every row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch). Aborts on mismatch.
+8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch.
 9. On failure, drops only objects this run created on Neon. Supabase is never
    modified.
 
 Email/password hashes from GoTrue are not portable. Phil's login path is a
 **magic-link** to the migrated `"user"` row (same UUID + email). The first
 sign-in with that email lands on that row; it does not create a second user.
+The wrappers therefore do **not** return `encrypted_password`, recovery
+tokens, or confirmation tokens. If a later change needs a secret column,
+justify it in the PR — do not widen `RETURNS TABLE` by default.
+
+### Apply / verify `migration_tmp` (prod, once)
+
+Apply the SQL from the PR description (same text as
+`MIGRATION_TMP_PROD_APPLY_SQL` in `scripts/migrate-users.lib.mjs`) on
+LeadWell prod as a privileged role (`postgres`), **not**
+`migration_reader`. Run it as one transaction:
+
+```sh
+psql -1 -v ON_ERROR_STOP=1 "$SUPABASE_DB_URL" -f apply-migration-tmp.sql
+```
+
+`CREATE OR REPLACE` cannot change `SETOF auth.users` to `RETURNS TABLE`,
+so the script `DROP`s the old functions first. Do not grant `USAGE` on
+`auth`.
+
+Pre-check dependents (expect 0 rows; abort if anything depends on the
+current wrappers):
+
+```sql
+SELECT
+  pg_catalog.pg_describe_object(d.classid, d.objid, d.objsubid) AS dependent,
+  pg_catalog.pg_describe_object(d.refclassid, d.refobjid, d.refobjsubid) AS referenced
+FROM pg_catalog.pg_depend d
+JOIN pg_catalog.pg_proc p ON p.oid = d.refobjid
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities')
+  AND d.deptype = 'n'
+ORDER BY 1, 2;
+```
+
+The apply script wraps `CREATE` / `REVOKE` / `GRANT` in `BEGIN`/`COMMIT`
+and includes an optional `ALTER FUNCTION … OWNER TO postgres` (needed
+only when the creating role is not already `postgres`). After a failed
+apply or an aborted data migration, roll back with:
+
+```sql
+DROP SCHEMA migration_tmp CASCADE;
+```
+
+Then verify (still as a privileged role; never print row values):
+
+```sql
+-- expect f
+SELECT has_schema_privilege('migration_reader', 'auth', 'USAGE');
+
+-- expect t
+SELECT has_function_privilege('migration_reader', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('migration_reader', 'migration_tmp.auth_identities()', 'EXECUTE');
+
+-- expect f
+SELECT has_function_privilege('anon', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('anon', 'migration_tmp.auth_identities()', 'EXECUTE');
+SELECT has_function_privilege('authenticated', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('authenticated', 'migration_tmp.auth_identities()', 'EXECUTE');
+SELECT has_function_privilege('service_role', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('service_role', 'migration_tmp.auth_identities()', 'EXECUTE');
+
+-- expect TABLE (...), not SETOF auth.users / auth.identities
+-- expect no encrypted_password / recovery_token / confirmation_token / identity_data
+SELECT p.proname, pg_get_function_result(p.oid)
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities')
+ORDER BY 1;
+
+-- expect search_path = ''
+SELECT p.proname, pg_get_functiondef(p.oid)
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities');
+```
+
+As `migration_reader` (session-pooler URI), confirm:
+
+```sql
+-- expect permission denied
+SELECT 1 FROM auth.users LIMIT 1;
+
+-- expect column does not exist (function is TABLE, not SETOF auth.users)
+SELECT encrypted_password FROM migration_tmp.auth_users();
+
+-- expect one row; print the id only
+SELECT id FROM migration_tmp.auth_users() LIMIT 1;
+```
+
+### After cutover
+
+Once Neon is loaded and magic-link sign-in works, drop the temporary
+schema so the wrappers cannot be reused. Do **not** drop `auth` or
+`public`. Supabase stays intact. Same statement as the abort rollback:
+
+```sql
+DROP SCHEMA migration_tmp CASCADE;
+```
 
 ---
 

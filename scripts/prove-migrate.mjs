@@ -22,6 +22,18 @@ import { fileURLToPath } from "node:url";
 import { libpqCleanEnv, refuseUnsafeTestUrl } from "./loopback.mjs";
 import {
   CHECKSUM_TABLES,
+  EXPORT_AUTH_IDENTITIES_COPY_SQL,
+  EXPORT_AUTH_USERS_COPY_SQL,
+  MIGRATION_READER_ROLE,
+  MIGRATION_TMP_DEPENDENTS_SQL,
+  MIGRATION_TMP_FUNCTIONS_SQL,
+  MIGRATION_TMP_GRANTS_SQL,
+  MIGRATION_TMP_PROD_APPLY_SQL,
+  PG_DUMP_PUBLIC_ARGS,
+  PROVE_MIGRATION_TMP_FUNCTIONS_SQL,
+  SOURCE_AUTH_IDENTITIES_FN,
+  SOURCE_AUTH_USERS_FN,
+  SOURCE_AUTH_USERS_ID_EMAIL_SQL,
   assertAuthUsersCarriedOver,
   assertCountsMatch,
   assertHashesMatch,
@@ -39,6 +51,10 @@ import {
   parseIdEmailRows,
   parseIdentitiesCsv,
   parseObjectList,
+  proveMigrationReaderSetupSql,
+  sourceAuthIdentitiesHashQuery,
+  sourceAuthUsersHashQuery,
+  targetBetterAuthUsersHashQuery,
 } from "./migrate-users.lib.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -52,7 +68,7 @@ function ok(cond, msg) {
 }
 
 const DRY_RUN_NEEDLES = [
-  "dry-run: would pg_dump public + auth.users + auth.identities from SUPABASE_DB_URL (read-only)",
+  "dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)",
   "dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated",
   "dry-run: would refuse a non-empty target",
   "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto",
@@ -132,7 +148,72 @@ ok(ids[0]?.provider === "google" && ids[0].provider_id === "google-sub-1", "iden
 ok(CHECKSUM_TABLES.length === 21, "21 public tables checksummed");
 ok(contentHashQuery().includes("md5"), "content hash query uses md5");
 ok(contentHashQuery().includes('COLLATE "C"'), "hash order is collation-independent");
+ok(!contentHashQuery().includes("auth.users"), "public checksums do not read auth.users");
+ok(!contentHashQuery().includes("auth.identities"), "public checksums do not read auth.identities");
 ok(parseCounts("profiles|3\n").profiles === 3, "parseCounts");
+
+ok(PG_DUMP_PUBLIC_ARGS.includes("--schema=public"), "pg_dump dumps public only");
+ok(PG_DUMP_PUBLIC_ARGS.includes("--exclude-schema=auth"), "pg_dump excludes auth");
+ok(SOURCE_AUTH_USERS_FN === "migration_tmp.auth_users()", "source users function name");
+ok(SOURCE_AUTH_IDENTITIES_FN === "migration_tmp.auth_identities()", "source identities function name");
+ok(EXPORT_AUTH_USERS_COPY_SQL.includes(SOURCE_AUTH_USERS_FN), "users COPY uses the function");
+ok(!/\bFROM\s+auth\.users\b/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY does not read auth.users");
+ok(EXPORT_AUTH_IDENTITIES_COPY_SQL.includes(SOURCE_AUTH_IDENTITIES_FN), "identities COPY uses the function");
+ok(
+  !/\bFROM\s+auth\.identities\b/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL),
+  "identities COPY does not read auth.identities",
+);
+ok(SOURCE_AUTH_USERS_ID_EMAIL_SQL.includes(SOURCE_AUTH_USERS_FN), "Phil id check uses the function");
+ok(!/\bFROM\s+auth\.users\b/.test(SOURCE_AUTH_USERS_ID_EMAIL_SQL), "Phil id check does not read auth.users");
+ok(sourceAuthUsersHashQuery().includes(SOURCE_AUTH_USERS_FN), "auth users count/md5 uses the function");
+ok(sourceAuthIdentitiesHashQuery().includes(SOURCE_AUTH_IDENTITIES_FN), "auth identities count/md5 uses the function");
+ok(targetBetterAuthUsersHashQuery().includes('"user"'), "target auth hash reads Better Auth user");
+ok(PROVE_MIGRATION_TMP_FUNCTIONS_SQL.includes("SECURITY DEFINER"), "prove harness functions are SECURITY DEFINER");
+ok(MIGRATION_TMP_FUNCTIONS_SQL.includes("RETURNS TABLE"), "prod users/identities fns return TABLE");
+ok(!/SETOF/.test(MIGRATION_TMP_FUNCTIONS_SQL), "prod fns do not return SETOF");
+ok(MIGRATION_TMP_FUNCTIONS_SQL.includes("SET search_path = ''"), "prod fns pin empty search_path");
+ok(
+  !/SELECT\s+\*\s+FROM\s+auth\.(users|identities)/i.test(MIGRATION_TMP_FUNCTIONS_SQL),
+  "prod fns do not SELECT * from auth tables",
+);
+ok(
+  !/encrypted_password|recovery_token|confirmation_token/i.test(MIGRATION_TMP_FUNCTIONS_SQL),
+  "prod fns omit password hashes and recovery tokens",
+);
+ok(
+  PROVE_MIGRATION_TMP_FUNCTIONS_SQL.includes(MIGRATION_TMP_FUNCTIONS_SQL.trim()),
+  "CI harness uses the same CREATE OR REPLACE SQL as prod",
+);
+ok(
+  /REVOKE ALL ON FUNCTION migration_tmp\.auth_users\(\), migration_tmp\.auth_identities\(\) FROM PUBLIC, anon, authenticated, service_role/.test(
+    MIGRATION_TMP_GRANTS_SQL,
+  ) &&
+    /GRANT EXECUTE ON FUNCTION migration_tmp\.auth_users\(\), migration_tmp\.auth_identities\(\) TO migration_reader/.test(
+      MIGRATION_TMP_GRANTS_SQL,
+    ),
+  "EXECUTE is granted to migration_reader only after REVOKE PUBLIC and Supabase roles",
+);
+ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("BEGIN;"), "prod apply is wrapped in BEGIN");
+ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("COMMIT;"), "prod apply commits as one transaction");
+ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("OWNER TO postgres"), "prod apply can pin function owner");
+ok(MIGRATION_TMP_DEPENDENTS_SQL.includes("pg_depend"), "dependents pre-check reads pg_depend");
+ok(proveMigrationReaderSetupSql("leadwell_src").includes("CREATE ROLE anon NOLOGIN"), "CI stubs anon for the prod REVOKE");
+ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
+ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
+ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
+
+const migrateSrc = readFileSync(join(here, "migrate-supabase-to-neon.mjs"), "utf8");
+ok(migrateSrc.includes("EXPORT_AUTH_USERS_COPY_SQL"), "migrate exports users via lib COPY SQL");
+ok(migrateSrc.includes("EXPORT_AUTH_IDENTITIES_COPY_SQL"), "migrate exports identities via lib COPY SQL");
+ok(migrateSrc.includes("PG_DUMP_PUBLIC_ARGS"), "migrate uses shared public-only dump args");
+ok(!/FROM\s+auth\.users\b/.test(migrateSrc), "migrate source has no FROM auth.users");
+ok(!/FROM\s+auth\.identities\b/.test(migrateSrc), "migrate source has no FROM auth.identities");
+const verifySrc = readFileSync(join(here, "cutover-verify.mjs"), "utf8");
+ok(verifySrc.includes("SOURCE_AUTH_USERS_ID_EMAIL_SQL"), "verify Phil check uses the function SQL");
+ok(verifySrc.includes("sourceAuthUsersHashQuery"), "verify auth users count/md5 uses the function");
+ok(verifySrc.includes("sourceAuthIdentitiesHashQuery"), "verify auth identities count/md5 uses the function");
+ok(!/FROM\s+auth\.users\b/.test(verifySrc), "verify source has no FROM auth.users");
+ok(!/FROM\s+auth\.identities\b/.test(verifySrc), "verify source has no FROM auth.identities");
 
 const idEmail = parseIdEmailRows("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa|phil@example.com\n");
 ok(idEmail[0]?.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "parseIdEmailRows id");
@@ -184,6 +265,20 @@ ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_
 ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
 ok(workflow.includes("scripts/migrate-supabase-to-neon.mjs"), "cutover runs the existing migrate script");
 ok(workflow.includes("scripts/cutover-verify.mjs"), "cutover writes checksums via cutover-verify");
+ok(workflow.includes("PG_DUMP_PUBLIC_ARGS") || workflow.includes("--exclude-schema=auth"), "cutover dump excludes auth");
+ok(workflow.includes("migration_tmp.auth_users"), "cutover comments the SECURITY DEFINER users function");
+
+const runbook = readFileSync(join(root, "RUNBOOK.md"), "utf8");
+ok(runbook.includes("has_schema_privilege"), "runbook verifies migration_reader has no USAGE on auth");
+ok(runbook.includes("has_function_privilege"), "runbook verifies EXECUTE on the wrappers");
+ok(runbook.includes("has_function_privilege('anon'"), "runbook expects anon EXECUTE = f");
+ok(runbook.includes("has_function_privilege('authenticated'"), "runbook expects authenticated EXECUTE = f");
+ok(runbook.includes("has_function_privilege('service_role'"), "runbook expects service_role EXECUTE = f");
+ok(runbook.includes("psql -1 -v ON_ERROR_STOP=1"), "runbook applies prod SQL in one transaction");
+ok(runbook.includes("OWNER TO postgres"), "runbook documents optional ALTER FUNCTION owner");
+ok(/LIMIT 1/.test(runbook) || /count\(\*\)/.test(runbook), "runbook id check is bounded");
+ok(runbook.includes("DROP SCHEMA migration_tmp CASCADE"), "runbook drops migration_tmp after cutover");
+ok(runbook.includes("encrypted_password"), "runbook documents that password hashes stay off the TABLE");
 
 // --- dry-run with no URLs --------------------------------------------------
 const dry = spawnSync(process.execPath, [join(here, "migrate-supabase-to-neon.mjs"), "--dry-run"], {
@@ -226,7 +321,7 @@ if (source || target) {
   const schema = readFileSync(join(root, "worker/schema/001_leadwell.sql"), "utf8");
   const dir = mkdtempSync(join(tmpdir(), "leadwell-prove-"));
   try {
-    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;"]);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP SCHEMA IF EXISTS migration_tmp CASCADE; DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;"]);
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-c", "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;"]);
     const seed = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -237,7 +332,10 @@ CREATE TABLE auth.users (
   raw_user_meta_data JSONB,
   email_confirmed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ
+  updated_at TIMESTAMPTZ,
+  encrypted_password TEXT,
+  recovery_token TEXT,
+  confirmation_token TEXT
 );
 CREATE TABLE auth.identities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -249,12 +347,18 @@ CREATE TABLE auth.identities (
   updated_at TIMESTAMPTZ
 );
 ${schema}
-INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at)
+INSERT INTO auth.users (
+  id, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at,
+  encrypted_password, recovery_token, confirmation_token
+)
 VALUES (
   'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
   'phil@example.com',
   '{"name":"Phil"}',
-  NOW(), NOW(), NOW()
+  NOW(), NOW(), NOW(),
+  'not-a-real-hash',
+  'not-a-real-recovery',
+  'not-a-real-confirm'
 );
 INSERT INTO auth.identities (user_id, provider, provider_id, identity_data)
 VALUES (
@@ -272,6 +376,125 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
     writeFileSync(seedPath, seed);
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", seedPath]);
 
+    const sourceDb = decodeURIComponent(new URL(source).pathname.replace(/^\//, "").replace(/\/$/, ""));
+    if (!sourceDb) throw new Error("prove source URL has no database name");
+    const readerSetupPath = join(dir, "reader.sql");
+    writeFileSync(readerSetupPath, proveMigrationReaderSetupSql(sourceDb));
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", readerSetupPath]);
+    const readerSource = (() => {
+      const u = new URL(source);
+      u.username = MIGRATION_READER_ROLE;
+      u.password = MIGRATION_READER_ROLE;
+      return u.href;
+    })();
+
+    const denied = spawnSync(
+      "psql",
+      ["-v", "ON_ERROR_STOP=1", "-d", readerSource, "-c", "SELECT 1 FROM auth.users LIMIT 1"],
+      { encoding: "utf8", cwd: root, env: libpqCleanEnv() },
+    );
+    ok(denied.status !== 0, "migration_reader cannot SELECT auth.users directly");
+    ok(
+      /permission denied/i.test(`${denied.stderr || ""}\n${denied.stdout || ""}`),
+      "direct auth.users read is permission denied",
+    );
+    const viaFn = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      readerSource,
+      "-c",
+      `SELECT count(*) FROM ${SOURCE_AUTH_USERS_FN}`,
+    ]).trim();
+    ok(viaFn === "1", "migration_reader can read via migration_tmp.auth_users()");
+
+    const usersResult = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      readerSource,
+      "-c",
+      "SELECT pg_get_function_result('migration_tmp.auth_users()'::regprocedure)",
+    ]).trim();
+    ok(/TABLE/i.test(usersResult) && !/SETOF/i.test(usersResult), "live auth_users() RETURNS TABLE, not SETOF");
+    ok(
+      !/encrypted_password|recovery_token|confirmation_token/i.test(usersResult),
+      "live auth_users() result type omits secrets",
+    );
+    const identResult = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      readerSource,
+      "-c",
+      "SELECT pg_get_function_result('migration_tmp.auth_identities()'::regprocedure)",
+    ]).trim();
+    ok(/TABLE/i.test(identResult) && !/SETOF/i.test(identResult), "live auth_identities() RETURNS TABLE, not SETOF");
+    ok(!/identity_data/i.test(identResult), "live auth_identities() omits identity_data");
+
+    const secretCols = spawnSync(
+      "psql",
+      [
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        readerSource,
+        "-c",
+        "SELECT encrypted_password, recovery_token FROM migration_tmp.auth_users()",
+      ],
+      { encoding: "utf8", cwd: root, env: libpqCleanEnv() },
+    );
+    ok(secretCols.status !== 0, "SELECT encrypted_password from auth_users() fails");
+    ok(
+      /column .* does not exist/i.test(`${secretCols.stderr || ""}\n${secretCols.stdout || ""}`),
+      "auth_users() has no encrypted_password / recovery_token columns",
+    );
+    const identBlob = spawnSync(
+      "psql",
+      [
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        readerSource,
+        "-c",
+        "SELECT identity_data FROM migration_tmp.auth_identities()",
+      ],
+      { encoding: "utf8", cwd: root, env: libpqCleanEnv() },
+    );
+    ok(identBlob.status !== 0, "SELECT identity_data from auth_identities() fails");
+
+    const privSql = (fn) =>
+      `SELECT r.rolname || '=' || CASE WHEN has_function_privilege(r.rolname, '${fn}', 'EXECUTE') THEN 't' ELSE 'f' END
+FROM (VALUES ('migration_reader'), ('anon'), ('authenticated'), ('service_role')) AS r(rolname)
+ORDER BY 1`;
+    const privRows = run("psql", ["-v", "ON_ERROR_STOP=1", "-tA", "-d", source, "-c", privSql("migration_tmp.auth_users()")])
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    ok(privRows.includes("anon=f"), "anon has no EXECUTE on auth_users()");
+    ok(privRows.includes("authenticated=f"), "authenticated has no EXECUTE on auth_users()");
+    ok(privRows.includes("service_role=f"), "service_role has no EXECUTE on auth_users()");
+    ok(privRows.includes("migration_reader=t"), "migration_reader has EXECUTE on auth_users()");
+    const identPriv = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      source,
+      "-c",
+      privSql("migration_tmp.auth_identities()"),
+    ])
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    ok(identPriv.includes("anon=f"), "anon has no EXECUTE on auth_identities()");
+    ok(identPriv.includes("authenticated=f"), "authenticated has no EXECUTE on auth_identities()");
+    ok(identPriv.includes("service_role=f"), "service_role has no EXECUTE on auth_identities()");
+    ok(identPriv.includes("migration_reader=t"), "migration_reader has EXECUTE on auth_identities()");
+
     const migrated = spawnSync(
       process.execPath,
       [join(here, "migrate-supabase-to-neon.mjs")],
@@ -280,7 +503,7 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
         cwd: root,
         env: {
           ...process.env,
-          SUPABASE_DB_URL: source,
+          SUPABASE_DB_URL: readerSource,
           NEON_DB_URL: target,
           LEADWELL_MIGRATE_TEST: "1",
         },
@@ -310,7 +533,7 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
       cwd: root,
       env: {
         ...process.env,
-        SOURCE_DATABASE_URL: source,
+        SOURCE_DATABASE_URL: readerSource,
         TARGET_DATABASE_URL: target,
         LEADWELL_MIGRATE_TEST: "1",
         DRY_RUN: "true",
