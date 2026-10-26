@@ -5,8 +5,10 @@
  * still matches. Magic-link sign-in uses that email. Google identities
  * are not mapped (no Google provider).
  *
- * SOURCE IS READ-ONLY. The script only runs pg_dump and COPY … TO STDOUT
- * against SUPABASE_DB_URL. It never ALTER/DROP/DISABLE anything on the source.
+ * SOURCE IS READ-ONLY. The script only runs pg_dump (public, never auth)
+ * and COPY … TO STDOUT against SUPABASE_DB_URL. Auth rows come from
+ * migration_tmp.auth_users() / migration_tmp.auth_identities() — the
+ * source role has no USAGE on auth. It never ALTER/DROP/DISABLE the source.
  *
  * Usage:
  *   SUPABASE_DB_URL=postgres://... NEON_DB_URL=postgres://... \
@@ -36,8 +38,13 @@ import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl, sourceReadEnv } from
 import {
   BETTER_AUTH_TABLES_SQL,
   CHECKSUM_TABLES,
+  EXPORT_AUTH_IDENTITIES_COPY_SQL,
+  EXPORT_AUTH_USERS_COPY_SQL,
   LIST_USER_OBJECTS_TEXT_SQL,
+  PG_DUMP_PUBLIC_ARGS,
   REQUIRED_EXTENSIONS_SQL,
+  SOURCE_AUTH_IDENTITIES_FN,
+  SOURCE_AUTH_USERS_FN,
   STUB_AUTH_SQL,
   assertCountsMatch,
   assertHashesMatch,
@@ -53,6 +60,9 @@ import {
   parseAuthUsersCsv,
   parseHashes,
   parseObjectList,
+  sourceAuthIdentitiesHashQuery,
+  sourceAuthUsersHashQuery,
+  targetBetterAuthUsersHashQuery,
 } from "./migrate-users.lib.mjs";
 
 const dryRun = process.argv.includes("--dry-run");
@@ -149,7 +159,7 @@ function psql(url, extraArgs, sql) {
 }
 
 const DRY_RUN_LINES = [
-  "dry-run: would pg_dump public + auth.users + auth.identities from SUPABASE_DB_URL (read-only)",
+  "dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)",
   "dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated",
   "dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)",
   "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL",
@@ -195,46 +205,19 @@ try {
   writeFileSync(stubAuthPath, STUB_AUTH_SQL);
   writeFileSync(betterAuthPath, BETTER_AUTH_TABLES_SQL);
 
-  console.log("dumping public schema + data (no-owner, no-acl)…");
-  run(
-    pgDump,
-    [
-      "--format=custom",
-      "--no-owner",
-      "--no-acl",
-      "--schema=public",
-      `--file=${dumpPath}`,
-      source,
-    ],
-    { env: sourceReadEnv() },
-  );
+  console.log("dumping public schema + data (no-owner, no-acl, exclude auth)…");
+  run(pgDump, [...PG_DUMP_PUBLIC_ARGS, `--file=${dumpPath}`, source], { env: sourceReadEnv() });
 
-  console.log("exporting auth.users…");
-  const usersCopy = `
-    COPY (
-      SELECT id::text, COALESCE(raw_user_meta_data->>'name', split_part(email, '@', 1), ''),
-             email, COALESCE(email_confirmed_at IS NOT NULL, false),
-             created_at, updated_at
-      FROM auth.users
-    ) TO STDOUT WITH CSV
-  `;
-  runToFile("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", usersCopy], usersPath);
+  console.log(`exporting auth.users via ${SOURCE_AUTH_USERS_FN}…`);
+  runToFile("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", EXPORT_AUTH_USERS_COPY_SQL], usersPath);
   const csv = readFileSync(usersPath, "utf8");
 
-  console.log("exporting auth.identities…");
-  const identitiesCopy = `
-    COPY (
-      SELECT user_id::text, provider,
-             COALESCE(identity_data->>'sub', identity_data->>'provider_id', provider_id::text, '')
-      FROM auth.identities
-    ) TO STDOUT WITH CSV
-  `;
-  try {
-    runToFile("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", identitiesCopy], identitiesPath);
-  } catch (err) {
-    console.warn("auth.identities export skipped:", err instanceof Error ? err.message : err);
-    writeFileSync(identitiesPath, "");
-  }
+  console.log(`exporting auth.identities via ${SOURCE_AUTH_IDENTITIES_FN}…`);
+  runToFile(
+    "psql",
+    ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", EXPORT_AUTH_IDENTITIES_COPY_SQL],
+    identitiesPath,
+  );
 
   console.log("pre-checking source emails (read-only)…");
   assertSourceUsersReady(parseAuthUsersCsv(csv));
@@ -307,6 +290,22 @@ try {
       Object.fromEntries(CHECKSUM_TABLES.map((t) => [t, dstHashes[t]?.n])),
     );
     assertHashesMatch(srcHashes, dstHashes);
+
+    const srcAuth = parseHashes(psql(source, ["-tA"], sourceAuthUsersHashQuery()));
+    const dstAuth = parseHashes(psql(target, ["-tA"], targetBetterAuthUsersHashQuery()));
+    console.log(
+      `  auth_users: source=${srcAuth.auth_users?.n ?? "?"} neon=${dstAuth.auth_users?.n ?? "?"} hash ${srcAuth.auth_users?.hash ?? "?"} → ${dstAuth.auth_users?.hash ?? "?"}`,
+    );
+    assertCountsMatch(
+      { auth_users: srcAuth.auth_users?.n },
+      { auth_users: dstAuth.auth_users?.n },
+      ["auth_users"],
+    );
+    assertHashesMatch(srcAuth, dstAuth, ["auth_users"]);
+    const srcIdent = parseHashes(psql(source, ["-tA"], sourceAuthIdentitiesHashQuery()));
+    console.log(
+      `  auth_identities (source via ${SOURCE_AUTH_IDENTITIES_FN}): n=${srcIdent.auth_identities?.n ?? "?"} hash=${srcIdent.auth_identities?.hash ?? "?"}`,
+    );
     console.log("migration ok");
   } catch (err) {
     if (wroteTarget) {

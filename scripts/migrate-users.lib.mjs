@@ -166,6 +166,109 @@ FROM public.${table} t`;
   );
 }
 
+/**
+ * Prod LeadWell grants the read-only source role (migration_reader) EXECUTE
+ * on these SECURITY DEFINER wrappers, not USAGE on auth. Every source read
+ * of auth.users / auth.identities must go through them.
+ */
+export const SOURCE_AUTH_USERS_FN = "migration_tmp.auth_users()";
+export const SOURCE_AUTH_IDENTITIES_FN = "migration_tmp.auth_identities()";
+export const MIGRATION_READER_ROLE = "migration_reader";
+
+/** pg_dump public only. Never dump auth — those rows come from the functions. */
+export const PG_DUMP_PUBLIC_ARGS = [
+  "--format=custom",
+  "--no-owner",
+  "--no-acl",
+  "--schema=public",
+  "--exclude-schema=auth",
+];
+
+export const EXPORT_AUTH_USERS_COPY_SQL = `
+COPY (
+  SELECT id::text, COALESCE(raw_user_meta_data->>'name', split_part(email, '@', 1), ''),
+         email, COALESCE(email_confirmed_at IS NOT NULL, false),
+         created_at, updated_at
+  FROM ${SOURCE_AUTH_USERS_FN}
+) TO STDOUT WITH CSV
+`;
+
+export const EXPORT_AUTH_IDENTITIES_COPY_SQL = `
+COPY (
+  SELECT user_id::text, provider,
+         COALESCE(identity_data->>'sub', identity_data->>'provider_id', provider_id::text, '')
+  FROM ${SOURCE_AUTH_IDENTITIES_FN}
+) TO STDOUT WITH CSV
+`;
+
+export const SOURCE_AUTH_USERS_ID_EMAIL_SQL = `
+SELECT id::text || '|' || COALESCE(email, '') FROM ${SOURCE_AUTH_USERS_FN} ORDER BY id
+`;
+
+export const TARGET_BETTER_AUTH_USERS_ID_EMAIL_SQL = `
+SELECT id::text || '|' || COALESCE(email, '') FROM "user" ORDER BY id
+`;
+
+function idEmailHashSelect(fromRel, label = "auth_users") {
+  return `SELECT '${label}' AS t, COUNT(*)::bigint AS n,
+  md5(COALESCE(string_agg(md5((id::text || '|' || lower(COALESCE(email, '')))), '' ORDER BY id::text COLLATE "C"), '')) AS h
+FROM ${fromRel}`;
+}
+
+/** Source count + md5 of auth users via the SECURITY DEFINER function. */
+export function sourceAuthUsersHashQuery() {
+  return idEmailHashSelect(SOURCE_AUTH_USERS_FN);
+}
+
+/** Target count + md5 of Better Auth "user" (same id + lower(email) as source). */
+export function targetBetterAuthUsersHashQuery() {
+  return idEmailHashSelect('"user"');
+}
+
+/** Source count + md5 of auth identities via the SECURITY DEFINER function. */
+export function sourceAuthIdentitiesHashQuery() {
+  return `SELECT 'auth_identities' AS t, COUNT(*)::bigint AS n,
+  md5(COALESCE(string_agg(md5((user_id::text || '|' || COALESCE(provider, '') || '|' || COALESCE(provider_id::text, ''))), '' ORDER BY (user_id::text || '|' || COALESCE(provider, '') || '|' || COALESCE(provider_id::text, '')) COLLATE "C"), '')) AS h
+FROM ${SOURCE_AUTH_IDENTITIES_FN}`;
+}
+
+/**
+ * Local-Postgres stand-in for the prod wrappers. Creates SECURITY DEFINER
+ * functions owned by the current (superuser) role and grants EXECUTE only
+ * to migration_reader. Call after auth.users / auth.identities exist and
+ * after the migration_reader role has been created.
+ */
+export const PROVE_MIGRATION_TMP_FUNCTIONS_SQL = `
+CREATE SCHEMA IF NOT EXISTS migration_tmp;
+
+CREATE OR REPLACE FUNCTION migration_tmp.auth_users()
+RETURNS SETOF auth.users
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT * FROM auth.users;
+$$;
+
+CREATE OR REPLACE FUNCTION migration_tmp.auth_identities()
+RETURNS SETOF auth.identities
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $$
+  SELECT * FROM auth.identities;
+$$;
+
+REVOKE ALL ON SCHEMA migration_tmp FROM PUBLIC;
+REVOKE ALL ON FUNCTION migration_tmp.auth_users() FROM PUBLIC;
+REVOKE ALL ON FUNCTION migration_tmp.auth_identities() FROM PUBLIC;
+GRANT USAGE ON SCHEMA migration_tmp TO ${MIGRATION_READER_ROLE};
+GRANT EXECUTE ON FUNCTION migration_tmp.auth_users() TO ${MIGRATION_READER_ROLE};
+GRANT EXECUTE ON FUNCTION migration_tmp.auth_identities() TO ${MIGRATION_READER_ROLE};
+`;
+
 export function parseCountLine(line) {
   const trimmed = String(line).trim();
   if (!trimmed || trimmed.startsWith("-") || trimmed.startsWith("(")) return null;
@@ -399,6 +502,29 @@ export function isNonEmptyTargetObject(row) {
 
 export function quoteIdent(ident) {
   return `"${String(ident).replaceAll('"', '""')}"`;
+}
+
+/** Create the read-only source role used by the live prove harness. */
+export function proveMigrationReaderSetupSql(databaseName) {
+  const db = quoteIdent(databaseName);
+  const role = quoteIdent(MIGRATION_READER_ROLE);
+  return `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATION_READER_ROLE}') THEN
+    CREATE ROLE ${role} LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
+  ELSE
+    ALTER ROLE ${role} WITH LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
+  END IF;
+END $$;
+GRANT CONNECT ON DATABASE ${db} TO ${role};
+GRANT USAGE ON SCHEMA public TO ${role};
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role};
+REVOKE ALL ON SCHEMA auth FROM PUBLIC;
+REVOKE ALL ON SCHEMA auth FROM ${role};
+${PROVE_MIGRATION_TMP_FUNCTIONS_SQL}
+`;
 }
 
 export function dropCreatedSql(created) {

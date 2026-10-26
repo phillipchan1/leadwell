@@ -49,7 +49,7 @@ Never put values here.
 
 | Name | Notes |
 | --- | --- |
-| `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project. The script only `pg_dump`s / `COPY`s. |
+| `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project (`migration_reader`). The script `pg_dump`s `public` (never `auth`) and `COPY`s auth rows from `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`. |
 | `NEON_DB_URL` | Empty Neon database. The script writes here. |
 | `LEADWELL_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover or the Actions cutover workflow. |
 | `PG_BIN` | Optional directory containing `pg_dump` / `pg_restore` matching the source major. |
@@ -60,7 +60,7 @@ Repo secrets. Never put values here or in the workflow file.
 
 | Name | Notes |
 | --- | --- |
-| `SOURCE_DATABASE_URL` | Read-only Supabase **session-pooler** URI (`sslmode=require`). Same role the laptop script calls `SUPABASE_DB_URL`. |
+| `SOURCE_DATABASE_URL` | Read-only Supabase **session-pooler** URI (`sslmode=require`). `migration_reader` — no `USAGE` on `auth`; auth rows are read through `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`. Same role the laptop script calls `SUPABASE_DB_URL`. |
 | `NEON_DATABASE_URL` | Empty Neon database. Used only when `dry_run=false`. |
 
 `checks.yml` still uses loopback prove URLs only. These two secrets belong on the
@@ -99,7 +99,7 @@ node scripts/migrate-supabase-to-neon.mjs --dry-run
 Expected output:
 
 ```
-dry-run: would pg_dump public + auth.users + auth.identities from SUPABASE_DB_URL (read-only)
+dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)
 dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated
 dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)
 dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL
@@ -130,13 +130,18 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
    - masks `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL` (`::add-mask::`) and
      never `set -x`
    - `pg_dump`s `public` from Supabase (custom format, matching client major,
-     `sslmode=require`) and uploads the dump (1-day retention)
+     `sslmode=require`, `--exclude-schema=auth`) and uploads the dump
+     (1-day retention). Auth rows are **not** in the dump
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
-     Postgres 17 service container — **not** Neon
-   - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target) to
+     Postgres 17 service container — **not** Neon. That script `COPY`s
+     `SELECT *` equivalent columns from `migration_tmp.auth_users()` /
+     `migration_tmp.auth_identities()`
+   - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target,
+     including auth users via the function vs Better Auth `"user"`) to
      the step summary and a 7-day artifact
-   - confirms Phil's `auth.users` row landed in Better Auth `"user"` with the
-     same id and email, and prints **the id only**
+   - confirms Phil's auth user (via `migration_tmp.auth_users()`) landed
+     in Better Auth `"user"` with the same id and email, and prints
+     **the id only**
    - fails if any checksum table mismatches or the user did not carry over
 3. Uncheck **dry_run** only when Neon is empty and you intend to load it.
    Same dump + migrate script + checksums; the target is `NEON_DATABASE_URL`.
@@ -147,14 +152,14 @@ guards in `scripts/loopback.mjs` stay as they are.
 
 The script:
 
-1. `pg_dump`s `public` (no-owner, no-acl) from Supabase.
-2. `COPY`s `auth.users` (and `auth.identities`, unused).
+1. `pg_dump`s `public` (no-owner, no-acl, `--exclude-schema=auth`) from Supabase.
+2. `COPY`s `migration_tmp.auth_users()` (and `migration_tmp.auth_identities()`, unused). Never `SELECT`s `auth.users` / `auth.identities` — the source role cannot get `USAGE` on `auth`.
 3. Aborts on blank or case-insensitive-duplicate emails.
 4. Refuses a non-empty Neon target.
 5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
 6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
 7. Does **not** map Google identities.
-8. Compares per-table `COUNT(*)` and `md5` of every row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch). Aborts on mismatch.
+8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch.
 9. On failure, drops only objects this run created on Neon. Supabase is never
    modified.
 
