@@ -548,20 +548,7 @@ ${CREATE_LOWER_EMAIL_INDEX_SQL}
   );
 }
 
-export function loadGoogleAccountsSql(identitiesCsvPath) {
-  return `
-BEGIN;
-CREATE TEMP TABLE auth_identities_import (
-  user_id TEXT, provider TEXT, provider_id TEXT
-) ON COMMIT DROP;
-\\copy auth_identities_import FROM '${identitiesCsvPath}' WITH CSV
-INSERT INTO account (id, account_id, provider_id, user_id, created_at, updated_at)
-SELECT gen_random_uuid()::text, provider_id, 'google', user_id, NOW(), NOW()
-FROM auth_identities_import
-WHERE provider IN ('google', 'Google')
-  AND provider_id <> ''
-  AND EXISTS (SELECT 1 FROM "user" u WHERE u.id = auth_identities_import.user_id)
-ON CONFLICT DO NOTHING;
-COMMIT;
-`;
+/** Harmless no-op. Google identities are not mapped (magic-link auth). */
+export function loadGoogleAccountsSql(_identitiesCsvPath) {
+  return "-- Google identity mapping skipped (magic-link auth).\n";
 }

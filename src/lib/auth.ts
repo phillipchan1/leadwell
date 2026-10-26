@@ -1,4 +1,5 @@
-/** Better Auth client: Google + optional email/password (dev test user). */
+/** Better Auth client: magic link + optional email/password (dev test user). */
+import { magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/client";
 
 /** Boot scripts read this — Better Auth cookies are httpOnly. */
@@ -10,6 +11,7 @@ export type AuthEvent = "SIGNED_IN" | "SIGNED_OUT" | "INITIAL_SESSION";
 export const authClient = createAuthClient({
   basePath: "/api/auth",
   fetchOptions: { credentials: "include" },
+  plugins: [magicLinkClient()],
 });
 
 const listeners = new Set<(event: AuthEvent) => void>();
@@ -65,13 +67,15 @@ export async function hydrateAuth(): Promise<AuthUser | null> {
   return user;
 }
 
-/** Kick off the Google OAuth redirect. Returns to the current origin. */
-export async function signInWithGoogle(): Promise<void> {
-  const { error } = await authClient.signIn.social({
-    provider: "google",
-    callbackURL: window.location.origin,
+/** Send a magic-link email. Returns to the current origin after verify. */
+export async function signInWithMagicLink(email: string): Promise<void> {
+  const trimmed = email.trim();
+  if (!trimmed) throw new Error("Email is required");
+  const { error } = await authClient.signIn.magicLink({
+    email: trimmed,
+    callbackURL: `${window.location.origin}/signin`,
   });
-  if (error) throw new Error(error.message || "Google sign-in failed");
+  if (error) throw new Error(error.message || "Could not send the sign-in link");
 }
 
 /**

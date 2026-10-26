@@ -10,6 +10,9 @@ equivalent is shipped.
 There are no crons, storage buckets, or payments. The public host will
 be **polarch.day** (product rename comes later; Worker/repo stay LeadWell).
 
+Auth is a magic-link email (Resend). There is no Google OAuth client.
+Sign-in and sign-up are allowlist-only (`ALLOWED_EMAILS`).
+
 ---
 
 ## Env vars and secrets (names only)
@@ -25,11 +28,11 @@ Never put values here.
 | `TRUSTED_ORIGINS` | wrangler var | Optional comma-separated extra origins for CORS and Better Auth. `BETTER_AUTH_URL` is always included. Use for `www` or a leftover `*.workers.dev` host. Hosts must not contain `*`. |
 | `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Must equal or be a parent of the `BETTER_AUTH_URL` host and must not be a public suffix (`workers.dev`, `pages.dev`, `co.uk`, …). Omit on `*.workers.dev` / `*.pages.dev` and local. |
 | `ENVIRONMENT` | `.dev.vars` only | Set to `local` on your laptop. Omit in preview/prod. |
-| `GOOGLE_CLIENT_ID` | wrangler secret | Same Google OAuth web client, new redirect URI. |
-| `GOOGLE_CLIENT_SECRET` | wrangler secret | Same Google client. |
-| `ANTHROPIC_API_KEY` | wrangler secret | Server-side Claude key. The client must never send it. |
-| `ANTHROPIC_MODEL` | wrangler var | Optional. Must be in the Worker allowlist. Defaults to `claude-sonnet-4-20250514`. |
-| `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and account linking. Set to Phil's Google email. Empty admits no new users. |
+| `RESEND_API_KEY` | wrangler secret | Resend sending key. Worker sends magic-link mail. |
+| `AUTH_EMAIL_FROM` | wrangler var | Verified Resend from-address (e.g. `login@polarch.day`). |
+| `OPENAI_API_KEY` | wrangler secret | Server-side OpenAI key. The client must never send it. |
+| `OPENAI_MODEL` | wrangler var | Optional. Must be in the Worker allowlist (`gpt-5-mini`, `gpt-5`). Defaults to `gpt-5-mini`. |
+| `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and sign-in. Set to Phil's email. Empty admits nobody. |
 | `DATABASE_URL` | wrangler secret | Neon connection string. Used when Hyperdrive is unset (preview / local). |
 | `HYPERDRIVE` | wrangler binding | Workers Paid. Replace the placeholder id in `wrangler.jsonc` before production deploy. Local uses `localConnectionString`. |
 
@@ -91,7 +94,7 @@ dry-run: would abort before any Neon write if an email is blank or lower(email) 
 dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)
 dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL
 dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out
-dry-run: would insert auth.users into Better Auth "user" (same ids) and Google identities into account
+dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email (Google identities are not mapped)
 dry-run: would compare per-table row counts and content hashes and abort on mismatch
 tools required: pg_dump, pg_restore, psql
 ```
@@ -109,19 +112,19 @@ prints row counts; it does not write to Neon.
 The script:
 
 1. `pg_dump`s `public` (no-owner, no-acl) from Supabase.
-2. `COPY`s `auth.users` and `auth.identities`.
+2. `COPY`s `auth.users` (and `auth.identities`, unused).
 3. Aborts on blank or case-insensitive-duplicate emails.
 4. Refuses a non-empty Neon target.
 5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
-6. Inserts Better Auth `"user"` rows with the **same UUIDs**.
-7. Maps Google identities → `account` (`provider_id = google`).
+6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
+7. Does **not** map Google identities.
 8. Compares per-table `COUNT(*)` and `md5` of every row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch). Aborts on mismatch.
 9. On failure, drops only objects this run created on Neon. Supabase is never
    modified.
 
-Email/password hashes from GoTrue are not portable. Phil's login path is
-**Google**, linked by the mapped UUID + Google `account` row. Email/password
-remains available for a new test user or a password reset after cutover.
+Email/password hashes from GoTrue are not portable. Phil's login path is a
+**magic-link** to the migrated `"user"` row (same UUID + email). The first
+sign-in with that email lands on that row; it does not create a second user.
 
 ---
 
@@ -130,7 +133,8 @@ remains available for a new test user or a password reset after cutover.
 1. Create a Neon project (free tier). Leave it empty.
 2. Create a Cloudflare Worker (`leadwell`) with Workers static assets.
    Hyperdrive is Workers Paid; preview can use `DATABASE_URL` instead.
-3. Set the Worker secrets and `ALLOWED_EMAILS` to Phil's Google email.
+3. Set the Worker secrets (`BETTER_AUTH_SECRET`, `RESEND_API_KEY`,
+   `OPENAI_API_KEY`, `DATABASE_URL`) and `ALLOWED_EMAILS` to Phil's email.
    Preview can use `BETTER_AUTH_URL` = the `*.workers.dev` origin. Production
    uses the custom domain (next step).
 4. Attach **polarch.day** as the Worker custom domain (dashboard: Workers →
@@ -138,16 +142,15 @@ remains available for a new test user or a password reset after cutover.
    `npx wrangler domains add polarch.day`). Then set:
    - `BETTER_AUTH_URL` = `https://polarch.day`
    - `AUTH_COOKIE_DOMAIN` = `polarch.day` (no leading dot)
+   - `AUTH_EMAIL_FROM` = `login@polarch.day` (verify the domain in Resend)
    - `TRUSTED_ORIGINS` only if you still serve `www` or `*.workers.dev`
    Do not rename the Worker, package, or repo.
-5. In Google Cloud, add these Better Auth callbacks to the existing OAuth
-   client (keep the Supabase callback until rollback is unused):
-   - `https://polarch.day/api/auth/callback/google`
-   - `{workers.dev origin}/api/auth/callback/google` while preview exists
+5. In Resend, verify **polarch.day** and send from `login@polarch.day`.
+   No Google OAuth client. No Google redirect URI.
 6. Run the migrate script against the empty Neon database.
 7. `npm run build && wrangler deploy` (or `--env preview` first).
-8. Open `https://polarch.day`. Sign in with Google. Data should be Phil's
-   existing org (same `user.id` as the Supabase auth UUID).
+8. Open `https://polarch.day`. Request a magic-link to Phil's email. Data
+   should be Phil's existing org (same `user.id` as the Supabase auth UUID).
 9. Smoke-test. The shared URL is `https://polarch.day`.
 
 Vercel stays deployed. Supabase stays live. Nothing is deleted.
@@ -158,11 +161,11 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 
 - `GET /api/health` → `{ ok: true, service: "leadwell", realtime: false }`
 - Signed-out `https://polarch.day/` still shows the marketing landing.
-- Google sign-in returns to the app; the org loads (people, meetings, prayer).
+- Magic-link sign-in returns to the app; the org loads (people, meetings, prayer).
 - An edit syncs (chrome leaves "saving"); reload keeps it.
 - Dev-only: email/password test user if `VITE_DEV_*` is set.
-- `POST /api/anthropic` with a signed-in session and no client API key.
-  Without `ANTHROPIC_API_KEY` the Worker returns 501; with it, Claude answers.
+- `POST /api/openai` with a signed-in session and no client API key.
+  Without `OPENAI_API_KEY` the Worker returns 501; with it, OpenAI answers.
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---
@@ -190,6 +193,8 @@ the current deployment (`a147830`). That is the fallback.
 - No Cloudflare cron.
 - No R2 / storage.
 - No payments.
+- No Google OAuth client.
+- No Anthropic / Claude proxy.
 - No Supabase realtime replacement (unused).
 - No rename of the Worker, package, or repo (polarch.day is a host only).
 - No deletion of the Vercel project or the LeadWell Supabase project.

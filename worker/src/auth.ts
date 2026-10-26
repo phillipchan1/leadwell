@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { bearer } from "better-auth/plugins";
+import { bearer, magicLink } from "better-auth/plugins";
 import { Pool } from "pg";
 import {
   authCookieSecure,
@@ -9,6 +9,7 @@ import {
 } from "./authUrl.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
+import { sendMagicLinkEmail } from "./mail.ts";
 
 export type AuthInstance = ReturnType<typeof createAuth>;
 
@@ -64,17 +65,6 @@ export const authModels = {
   },
 } as const;
 
-/**
- * No `trustedProviders`. Better Auth then only implicit-links when the
- * provider email is verified. An unverified Google email must never attach
- * to an existing user. Phil signs in through the migrated `account` row
- * (Google `sub`), not through email linking.
- */
-export const ACCOUNT_LINKING = {
-  enabled: true,
-  disableImplicitLinking: true,
-} as const;
-
 export function allowedEmails(env: Pick<Env, "ALLOWED_EMAILS">): Set<string> {
   return new Set(
     (env.ALLOWED_EMAILS ?? "")
@@ -94,14 +84,18 @@ export function isAllowedEmail(
   return allowedEmails(env).has(trimmed);
 }
 
-/** Implicit email-link is allowed only for a verified address of an untrusted provider. */
-export function socialEmailMayLinkToExistingUser(opts: {
-  trustedProviders: readonly string[];
-  providerId: string;
-  emailVerified: boolean;
-}): boolean {
-  if (opts.trustedProviders.includes(opts.providerId)) return true;
-  return opts.emailVerified === true;
+/**
+ * Better Auth magic-link verify looks up `user` by lowercased email and
+ * only creates a row when none exists. A migrated Supabase user (same
+ * UUID + email) is therefore the first-sign-in target.
+ */
+export function existingUserForMagicLinkEmail(
+  users: readonly { id: string; email: string }[],
+  email: string,
+): { id: string; email: string } | null {
+  const want = email.trim().toLowerCase();
+  if (!want) return null;
+  return users.find((u) => u.email.trim().toLowerCase() === want) ?? null;
 }
 
 /** `pg.Pool` or a PGlite stand-in with the same connect/query/end surface. */
@@ -137,27 +131,20 @@ export function createAuth(env: Env, database?: AuthDatabase) {
       max: 1,
       ssl: poolSsl(opts!.ssl),
     }));
-  const google =
-    env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-      ? {
-          google: {
-            clientId: env.GOOGLE_CLIENT_ID,
-            clientSecret: env.GOOGLE_CLIENT_SECRET,
-            disableImplicitSignUp: true,
-          },
-        }
-      : undefined;
   const auth = betterAuth({
     secret,
     baseURL,
     basePath: "/api/auth",
     database: db as Pool,
     emailAndPassword: { enabled: true },
-    socialProviders: google,
     user: {
       ...authModels.user,
       validateUserInfo: ({ user, source }) => {
-        if (source.action !== "create-user" && source.action !== "link-account") {
+        if (
+          source.action !== "create-user" &&
+          source.action !== "link-account" &&
+          source.action !== "sign-in"
+        ) {
           return;
         }
         if (isAllowedEmail(env, typeof user.email === "string" ? user.email : null)) {
@@ -170,10 +157,7 @@ export function createAuth(env: Env, database?: AuthDatabase) {
       },
     },
     session: authModels.session,
-    account: {
-      ...authModels.account,
-      accountLinking: ACCOUNT_LINKING,
-    },
+    account: authModels.account,
     verification: authModels.verification,
     trustedOrigins: resolveTrustedOrigins(env),
     advanced: {
@@ -191,7 +175,18 @@ export function createAuth(env: Env, database?: AuthDatabase) {
         ...(cookieDomain ? { domain: cookieDomain } : {}),
       },
     },
-    plugins: [bearer({ requireSignature: true })],
+    plugins: [
+      bearer({ requireSignature: true }),
+      magicLink({
+        expiresIn: 60 * 10,
+        sendMagicLink: async ({ email, url, token }) => {
+          if (!isAllowedEmail(env, email)) {
+            throw new Error("this account is not allowed");
+          }
+          await sendMagicLinkEmail(env, { email, url, token });
+        },
+      }),
+    ],
   });
   if (owned) ownedPools.set(auth, owned);
   return auth;

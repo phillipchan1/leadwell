@@ -54,7 +54,7 @@ const DRY_RUN_NEEDLES = [
   "dry-run: would refuse a non-empty target",
   "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto",
   "dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out",
-  'dry-run: would insert auth.users into Better Auth "user"',
+  'dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email',
   "dry-run: would compare per-table row counts and content hashes and abort on mismatch",
 ];
 
@@ -258,9 +258,9 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
       "-d",
       target,
       "-c",
-      `SELECT provider_id || '|' || account_id FROM account WHERE provider_id = 'google'`,
+      `SELECT count(*) FROM account WHERE provider_id = 'google'`,
     ]).trim();
-    ok(google.includes("google-sub-1"), "Google identity mapped to account");
+    ok(google === "0", "Google identities are not mapped");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
