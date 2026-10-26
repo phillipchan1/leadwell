@@ -1,11 +1,12 @@
 /**
- * Prove magic-link rate limits and allowlist non-disclosure against a real
- * Better Auth instance on PGlite.
+ * Prove magic-link rate limits, waitUntil mail, CF-Connecting-IP keying,
+ * allowlist-before-email-counter, email+IP and email+prefix (no email-only
+ * key), send-failure logs, and no password auth.
  */
 import { PGlite } from "@electric-sql/pglite";
 import { closeAuth, createAuth, handleAuthRequest, type AuthDatabase } from "./auth.ts";
 import { applySchema } from "./isolationDb.ts";
-import { MAGIC_LINK_SEND_MAX, MAGIC_LINK_VERIFY_MAX } from "./rateLimit.ts";
+import { MAGIC_LINK_EMAIL_PREFIX_MAX, MAGIC_LINK_SEND_MAX, MAGIC_LINK_VERIFY_MAX } from "./rateLimit.ts";
 
 const fails: string[] = [];
 let checks = 0;
@@ -40,7 +41,7 @@ const env = {
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
   BETTER_AUTH_URL: "http://localhost:8787",
   ENVIRONMENT: "local" as const,
-  ALLOWED_EMAILS: "phil@example.com",
+  ALLOWED_EMAILS: "phil@example.com,pat@example.com",
   RESEND_API_KEY: "re_test",
   AUTH_EMAIL_FROM: "login@polarch.day",
 };
@@ -49,13 +50,19 @@ const origin = "http://localhost:8787";
 const db = new PGlite();
 await applySchema(db);
 const pool = pgliteAsPool(db);
-const auth = createAuth(env, pool);
+const background: Promise<unknown>[] = [];
+const auth = createAuth(env, pool, {
+  waitUntil: (task) => {
+    background.push(task);
+  },
+});
 
 const resendCalls: { to: string[]; idempotency?: string | null }[] = [];
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (url.includes("api.resend.com")) {
+    await new Promise((resolve) => setTimeout(resolve, 180));
     const headers = new Headers(init?.headers);
     const body = JSON.parse(String(init?.body ?? "{}")) as { to?: string[] };
     resendCalls.push({ to: body.to ?? [], idempotency: headers.get("Idempotency-Key") });
@@ -73,13 +80,18 @@ function magicLinkHeaders(extra: Record<string, string> = {}): Headers {
   });
 }
 
-async function sendLink(email: string, extra: Record<string, string> = {}): Promise<Response> {
+async function sendLink(
+  email: string,
+  extra: Record<string, string> = {},
+  instance = auth,
+  requestOrigin = origin,
+): Promise<Response> {
   return handleAuthRequest(
-    auth,
-    new Request(`${origin}/api/auth/sign-in/magic-link`, {
+    instance,
+    new Request(`${requestOrigin}/api/auth/sign-in/magic-link`, {
       method: "POST",
-      headers: magicLinkHeaders(extra),
-      body: JSON.stringify({ email, callbackURL: `${origin}/signin` }),
+      headers: magicLinkHeaders({ origin: requestOrigin, ...extra }),
+      body: JSON.stringify({ email, callbackURL: `${requestOrigin}/signin` }),
     }),
   );
 }
@@ -94,16 +106,36 @@ async function verifyBad(token: string): Promise<Response> {
   );
 }
 
+async function flushMail(): Promise<void> {
+  const pending = background.splice(0);
+  await Promise.all(pending);
+}
+
+async function keysMatching(pattern: string): Promise<string[]> {
+  const result = await db.query("SELECT key FROM rate_limit WHERE key LIKE $1", [pattern]);
+  return (result.rows as { key: string }[]).map((row) => row.key);
+}
+
 try {
+  const tAllowed = Date.now();
   const allowed = await sendLink("phil@example.com");
+  const allowedMs = Date.now() - tAllowed;
   const allowedBody = (await allowed.json()) as { status?: boolean };
   ok(allowed.status === 200, `allowlisted send is 200 (got ${allowed.status})`);
   ok(allowedBody.status === true, "allowlisted send returns {status:true}");
+  ok(allowedMs < 120, `allowlisted response does not wait on Resend (${allowedMs}ms)`);
+  ok(resendCalls.length === 0, "Resend has not finished before waitUntil flush");
 
+  const tDenied = Date.now();
   const denied = await sendLink("stranger@example.com");
+  const deniedMs = Date.now() - tDenied;
   const deniedBody = (await denied.json()) as { status?: boolean };
   ok(denied.status === 200, `non-allowlisted send is 200 (got ${denied.status})`);
   ok(deniedBody.status === true, "non-allowlisted send returns {status:true}");
+  ok(deniedMs < 120, `non-allowlisted response is equally fast (${deniedMs}ms)`);
+
+  await flushMail();
+  ok(resendCalls.length === 1, `waitUntil sent exactly one email (got ${resendCalls.length})`);
   ok(
     resendCalls.every((c) => c.to.includes("phil@example.com")),
     "Resend is not called for a non-allowlisted address",
@@ -115,10 +147,74 @@ try {
 
   await db.query("DELETE FROM rate_limit");
   resendCalls.length = 0;
+  const strangerStatuses: number[] = [];
+  for (let i = 0; i < 20; i++) {
+    strangerStatuses.push(
+      (await sendLink("stranger@example.com", { "cf-connecting-ip": `198.51.100.${i + 1}` })).status,
+    );
+  }
+  await flushMail();
+  ok(
+    strangerStatuses.every((s) => s === 200),
+    "non-allowlisted floods still return 200 (not 429 on email)",
+  );
+  ok(
+    (await keysMatching("%phil@example.com%")).length === 0,
+    "stranger floods do not charge Phil's email buckets",
+  );
+  ok(resendCalls.length === 0, "stranger floods do not call Resend");
+
+  const prefixCap: number[] = [];
+  for (let i = 1; i <= MAGIC_LINK_EMAIL_PREFIX_MAX + 1; i++) {
+    prefixCap.push(
+      (await sendLink("phil@example.com", { "cf-connecting-ip": `198.51.100.${i}` })).status,
+    );
+  }
+  await flushMail();
+  ok(
+    prefixCap.slice(0, MAGIC_LINK_EMAIL_PREFIX_MAX).every((s) => s === 200),
+    `first ${MAGIC_LINK_EMAIL_PREFIX_MAX} from one /24 are 200 (got ${prefixCap.join(",")})`,
+  );
+  ok(
+    prefixCap[MAGIC_LINK_EMAIL_PREFIX_MAX] === 429,
+    `11th from the same /24 is 429 (got ${prefixCap[MAGIC_LINK_EMAIL_PREFIX_MAX]})`,
+  );
+  ok(
+    resendCalls.length === MAGIC_LINK_EMAIL_PREFIX_MAX,
+    `per-prefix hourly cap holds at ${MAGIC_LINK_EMAIL_PREFIX_MAX} real sends (got ${resendCalls.length})`,
+  );
+  ok(
+    (await keysMatching("email|/sign-in/magic-link|%")).length === 0,
+    "no rate-limit key is email-only",
+  );
+
+  await db.query("DELETE FROM rate_limit");
+  resendCalls.length = 0;
+  const philFlood: number[] = [];
+  for (let i = 1; i <= 25; i++) {
+    philFlood.push(
+      (await sendLink("phil@example.com", { "cf-connecting-ip": `203.0.${i}.10` })).status,
+    );
+  }
+  await flushMail();
+  ok(
+    philFlood.every((s) => s === 200),
+    `25-prefix Phil flood is all 200 (got ${philFlood.join(",")})`,
+  );
+  ok(resendCalls.length === 25, `25 prefixes each get a real send (got ${resendCalls.length})`);
+  resendCalls.length = 0;
+  const freshPrefix = await sendLink("phil@example.com", { "cf-connecting-ip": "198.51.200.1" });
+  ok(freshPrefix.status === 200, "Phil from a fresh prefix still gets 200 after a 25-prefix flood");
+  await flushMail();
+  ok(resendCalls.length === 1, "fresh prefix gets a real send, not a silent 200");
+
+  await db.query("DELETE FROM rate_limit");
+  resendCalls.length = 0;
   const sendStatuses: number[] = [];
   for (let i = 0; i < 20; i++) {
     sendStatuses.push((await sendLink("phil@example.com")).status);
   }
+  await flushMail();
   const sendOk = sendStatuses.filter((s) => s === 200).length;
   const sendLimited = sendStatuses.filter((s) => s === 429).length;
   ok(resendCalls.length <= MAGIC_LINK_SEND_MAX, `20 sends produce ≤${MAGIC_LINK_SEND_MAX} Resend calls (got ${resendCalls.length})`);
@@ -136,6 +232,39 @@ try {
     `verify 429s match the tight cap (got ${verifyLimited}, cap ${MAGIC_LINK_VERIFY_MAX})`,
   );
 
+  const prodEnv = {
+    ...env,
+    ENVIRONMENT: undefined,
+    BETTER_AUTH_URL: "https://polarch.day",
+  };
+  const prodBg: Promise<unknown>[] = [];
+  const prodAuth = createAuth(prodEnv, pool, { waitUntil: (task) => prodBg.push(task) });
+  await db.query("DELETE FROM rate_limit");
+  const ipA = { "cf-connecting-ip": "198.51.100.10", "x-forwarded-for": "8.8.8.8", "x-real-ip": "1.1.1.1" };
+  const ipASpoof = {
+    "cf-connecting-ip": "198.51.100.10",
+    "x-forwarded-for": "9.9.9.9",
+    "x-real-ip": "2.2.2.2",
+  };
+  const ipB = { "cf-connecting-ip": "198.51.100.11", "x-forwarded-for": "8.8.8.8", "x-real-ip": "1.1.1.1" };
+  for (let i = 0; i < 3; i++) {
+    ok(
+      (await sendLink("phil@example.com", i === 0 ? ipA : ipASpoof, prodAuth, "https://polarch.day"))
+        .status === 200,
+      `prod IP A send ${i + 1} succeeds`,
+    );
+  }
+  ok(
+    (await sendLink("pat@example.com", ipASpoof, prodAuth, "https://polarch.day")).status === 429,
+    "prod: same CF-Connecting-IP is one bucket even when XFF/X-Real-IP change",
+  );
+  ok(
+    (await sendLink("pat@example.com", ipB, prodAuth, "https://polarch.day")).status === 200,
+    "prod: a new CF-Connecting-IP is a separate bucket (XFF match is ignored)",
+  );
+  await Promise.all(prodBg.splice(0));
+  await closeAuth(prodAuth);
+
   const signup = await handleAuthRequest(
     auth,
     new Request(`${origin}/api/auth/sign-up/email`, {
@@ -149,6 +278,79 @@ try {
     }),
   );
   ok(signup.status >= 400, `email/password sign-up is disabled (got ${signup.status})`);
+  const signin = await handleAuthRequest(
+    auth,
+    new Request(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: magicLinkHeaders(),
+      body: JSON.stringify({
+        email: "phil@example.com",
+        password: "a-long-enough-password",
+      }),
+    }),
+  );
+  ok(signin.status >= 400, `email/password sign-in is disabled (got ${signin.status})`);
+
+  await db.query("DELETE FROM rate_limit");
+  const failLogs: unknown[][] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => {
+    failLogs.push(args);
+  };
+  try {
+    const missingBg: Promise<unknown>[] = [];
+    const missingAuth = createAuth(
+      { ...env, RESEND_API_KEY: "", AUTH_EMAIL_FROM: "" },
+      pool,
+      { waitUntil: (task) => missingBg.push(task) },
+    );
+    const missing = await sendLink(
+      "phil@example.com",
+      { "cf-connecting-ip": "203.0.113.80" },
+      missingAuth,
+    );
+    ok(missing.status === 200, `missing mail env still returns 200 (got ${missing.status})`);
+    await Promise.all(missingBg);
+    const missingLog = failLogs.find((args) => {
+      const detail = args[1] as { kind?: string } | undefined;
+      return detail?.kind === "missing_env";
+    });
+    ok(Boolean(missingLog), "missing RESEND/FROM logs kind missing_env");
+    const missingBlob = JSON.stringify(missingLog ?? []);
+    ok(!missingBlob.includes("phil@example.com"), "missing_env log has no email");
+    ok(!/"token"/.test(missingBlob) && !missingBlob.includes("visible"), "missing_env log has no token");
+    await closeAuth(missingAuth);
+
+    failLogs.length = 0;
+    const resendFailBg: Promise<unknown>[] = [];
+    const failingFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("api.resend.com")) {
+        return new Response("upstream failed", { status: 500 });
+      }
+      return failingFetch(input as never, init);
+    }) as typeof fetch;
+    const failAuth = createAuth(env, pool, { waitUntil: (task) => resendFailBg.push(task) });
+    const resendFail = await sendLink(
+      "phil@example.com",
+      { "cf-connecting-ip": "203.0.113.81" },
+      failAuth,
+    );
+    ok(resendFail.status === 200, `Resend 500 still returns 200 (got ${resendFail.status})`);
+    await Promise.all(resendFailBg);
+    const httpLog = failLogs.find((args) => {
+      const detail = args[1] as { kind?: string; status?: number } | undefined;
+      return detail?.kind === "resend_http" && detail.status === 500;
+    });
+    ok(Boolean(httpLog), "Resend 500 logs kind resend_http and status 500");
+    const httpBlob = JSON.stringify(httpLog ?? []);
+    ok(!httpBlob.includes("phil@example.com"), "resend_http log has no email");
+    ok(!/"token"/.test(httpBlob) && !httpBlob.includes("visible"), "resend_http log has no token");
+    await closeAuth(failAuth);
+  } finally {
+    console.error = realError;
+  }
 } finally {
   globalThis.fetch = realFetch;
   await closeAuth(auth);

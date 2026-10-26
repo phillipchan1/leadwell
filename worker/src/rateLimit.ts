@@ -5,12 +5,21 @@
 
 export const MAGIC_LINK_SEND_WINDOW_SEC = 60;
 export const MAGIC_LINK_SEND_MAX = 3;
+export const MAGIC_LINK_EMAIL_PREFIX_WINDOW_SEC = 60 * 60;
+export const MAGIC_LINK_EMAIL_PREFIX_MAX = 10;
 export const MAGIC_LINK_VERIFY_WINDOW_SEC = 60;
 export const MAGIC_LINK_VERIFY_MAX = 10;
 
 export const MAGIC_LINK_SEND_RULE = {
   window: MAGIC_LINK_SEND_WINDOW_SEC,
   max: MAGIC_LINK_SEND_MAX,
+} as const;
+
+export const MAGIC_LINK_EMAIL_IP_RULE = MAGIC_LINK_SEND_RULE;
+
+export const MAGIC_LINK_EMAIL_PREFIX_RULE = {
+  window: MAGIC_LINK_EMAIL_PREFIX_WINDOW_SEC,
+  max: MAGIC_LINK_EMAIL_PREFIX_MAX,
 } as const;
 
 export const MAGIC_LINK_VERIFY_RULE = {
@@ -41,8 +50,64 @@ export type RateLimitDatabase = {
   }>;
 };
 
-export function emailMagicLinkRateLimitKey(email: string): string {
-  return `email|/sign-in/magic-link|${email.trim().toLowerCase()}`;
+export function emailIpMagicLinkRateLimitKey(email: string, ip: string): string {
+  return `email-ip|/sign-in/magic-link|${email.trim().toLowerCase()}|${ip.trim()}`;
+}
+
+export function emailIpPrefixMagicLinkRateLimitKey(email: string, prefix: string): string {
+  return `email-prefix|/sign-in/magic-link|${email.trim().toLowerCase()}|${prefix}`;
+}
+
+function parseIpv4(value: string): [number, number, number, number] | null {
+  const match = value.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!match) return null;
+  const octets = match.slice(1).map(Number) as [number, number, number, number];
+  if (octets.some((n) => n > 255)) return null;
+  return octets;
+}
+
+function parseIpv6Groups(side: string | undefined): string[] | null {
+  if (!side) return [];
+  const out: string[] = [];
+  for (const part of side.split(":")) {
+    if (part.includes(".")) {
+      const v4 = parseIpv4(part);
+      if (!v4) return null;
+      out.push(((v4[0] << 8) | v4[1]).toString(16).padStart(4, "0"));
+      out.push(((v4[2] << 8) | v4[3]).toString(16).padStart(4, "0"));
+      continue;
+    }
+    if (!/^[0-9a-f]{1,4}$/i.test(part)) return null;
+    out.push(part.toLowerCase().padStart(4, "0"));
+  }
+  return out;
+}
+
+/** IPv4 /24 or IPv6 /48. Never used as an email-only key. */
+export function authIpPrefix(ip: string): string {
+  const raw = ip.trim().toLowerCase();
+  if (!raw) return "unknown";
+  const unwrapped = raw.startsWith("[") && raw.endsWith("]") ? raw.slice(1, -1) : raw;
+  const noZone = unwrapped.split("%")[0] ?? unwrapped;
+  const v4 = parseIpv4(noZone);
+  if (v4) return `${v4[0]}.${v4[1]}.${v4[2]}.0/24`;
+  const mapped = noZone.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+  if (mapped) {
+    const inner = parseIpv4(mapped[1] ?? "");
+    if (inner) return `${inner[0]}.${inner[1]}.${inner[2]}.0/24`;
+  }
+  if (!noZone.includes(":")) return noZone;
+  const halves = noZone.split("::");
+  if (halves.length > 2) return noZone;
+  const left = parseIpv6Groups(halves[0]);
+  const right = halves.length === 1 ? [] : parseIpv6Groups(halves[1]);
+  if (!left || !right) return noZone;
+  const groups =
+    halves.length === 1
+      ? left
+      : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0000"), ...right];
+  if (groups.length !== 8) return noZone;
+  return `${groups[0]}:${groups[1]}:${groups[2]}::/48`;
 }
 
 export function rateLimitDeniedResponse(retryAfter: number): Response {
@@ -65,7 +130,7 @@ export function authRateLimitCustomRules(): Record<string, RateLimitRule> {
 
 /**
  * One atomic consume against `rate_limit`. Used as Better Auth customStorage
- * (per IP + path) and for the extra per-email magic-link bucket.
+ * (per IP + path) and for the extra email+IP / email+prefix magic-link buckets.
  */
 export async function consumeRateLimitKey(
   db: RateLimitDatabase,
@@ -116,11 +181,27 @@ export function createDatabaseRateLimitStorage(db: RateLimitDatabase) {
   };
 }
 
+/**
+ * 3/min per email+IP, then 10/hr per email+IP-prefix (/24 or /48).
+ * Nothing is keyed on email alone — a fresh prefix always gets a real send.
+ */
 export async function consumeEmailMagicLinkLimit(
   db: RateLimitDatabase,
   email: string,
+  ip: string,
 ): Promise<{ allowed: boolean; retryAfter: number | null }> {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed) return { allowed: true, retryAfter: null };
-  return consumeRateLimitKey(db, emailMagicLinkRateLimitKey(trimmed), MAGIC_LINK_SEND_RULE);
+  const address = ip.trim() || "unknown";
+  const perIp = await consumeRateLimitKey(
+    db,
+    emailIpMagicLinkRateLimitKey(trimmed, address),
+    MAGIC_LINK_EMAIL_IP_RULE,
+  );
+  if (!perIp.allowed) return perIp;
+  return consumeRateLimitKey(
+    db,
+    emailIpPrefixMagicLinkRateLimitKey(trimmed, authIpPrefix(address)),
+    MAGIC_LINK_EMAIL_PREFIX_RULE,
+  );
 }
