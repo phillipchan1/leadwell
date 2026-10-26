@@ -24,6 +24,15 @@ const APPLE = /Mac|iPhone|iPad|iPod/.test(
 
 /** ⌘ on Apple hardware, Ctrl everywhere else. */
 export const MOD_LABEL = APPLE ? "⌘" : "Ctrl";
+
+/**
+ * Is the platform's modifier held on a pointer or key event? Ctrl is the wrong
+ * answer on a Mac for a *click*: Ctrl-click is a right-click there, and fires
+ * `contextmenu` instead of `click`.
+ */
+export function hasMod(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
+  return APPLE ? e.metaKey : e.ctrlKey;
+}
 const ALT_LABEL = APPLE ? "⌥" : "Alt";
 const SHIFT_LABEL = APPLE ? "⇧" : "Shift";
 

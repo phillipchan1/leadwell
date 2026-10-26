@@ -7,6 +7,8 @@ import type {
 import type { CurriculumSlot, Session, Tag, Topic, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
+import { useBoardSelection } from "@/hooks/use-board-selection";
+import { ContextMenu, type MenuEntry } from "./ContextMenu";
 import { InlineComposer } from "./InlineComposer";
 import { TopicDetail } from "./TopicDetail";
 import {
@@ -28,15 +30,30 @@ import { MEETING_LABEL, daysBetween, todayISO } from "../lib/readiness";
 import { chainVerticalWheel } from "../lib/scroll-chain";
 import { sessionSummary } from "../lib/session";
 import { deleteWithUndo, doWithUndo } from "../lib/undo";
+import { toast } from "../lib/toasts";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
-import { ArrowRight, ChevronRight, DotsGrid, Plus } from "@untitledui/icons";
+import {
+  ArrowRight,
+  CheckCircle,
+  ChevronRight,
+  Copy01,
+  CornerUpLeft,
+  DotsGrid,
+  Flag01,
+  FlipBackward,
+  LayersTwo01,
+  Maximize01,
+  PauseCircle,
+  Plus,
+  Trash01,
+} from "@untitledui/icons";
 import { StripPager, fitColumns, pageStrip } from "./StripPager";
 import {
   useReorderableRow,
   type MoveResult,
 } from "@/hooks/use-reorderable-row";
 import { announce } from "@/lib/announce";
-import { MOD_LABEL } from "@/lib/keys";
+import { MOD_LABEL, hasMod, isTypingTarget, ownsKeyboard } from "@/lib/keys";
 import { IdeasIcon } from "./shell/places";
 import { cx } from "@/utils/cx";
 
@@ -75,6 +92,19 @@ type CardHandlers = {
   onAddHere?: (raw: string, key: string) => void;
   /** Open the full idea — title, sub-points, notes, placement. */
   onOpen?: (id: string) => void;
+  /** Selected cards, by id — the highlight, and what a right-click acts on. */
+  selected: ReadonlySet<string>;
+  /** Cards in the air: the one being dragged, and the rest of its group. */
+  lifted: (id: string) => boolean;
+  /** ⌘/Ctrl-click and Shift-click on a card. */
+  onPick: (
+    id: string,
+    e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }
+  ) => void;
+  /** A plain click lets go of the selection before it opens the card. */
+  onPlain: () => void;
+  /** Right-click, or the menu key from the keyboard. Coordinates are the viewport's. */
+  onMenu: (id: string, x: number, y: number, fromKeyboard: boolean) => void;
 };
 
 const fmtDay = (iso: string, opts: Intl.DateTimeFormatOptions) =>
@@ -122,6 +152,11 @@ export function TopicBoard({
   const deleteTopic = useStore((s) => s.deleteTopic);
   const restoreTopic = useStore((s) => s.restoreTopic);
   const moveTopic = useStore((s) => s.moveTopic);
+  const addTopic = useStore((s) => s.addTopic);
+  const updateTopic = useStore((s) => s.updateTopic);
+  const deleteTopics = useStore((s) => s.deleteTopics);
+  const placeTopicsAt = useStore((s) => s.placeTopicsAt);
+  const revertTopics = useStore((s) => s.revertTopics);
   const addSession = useStore((s) => s.addSession);
   const addMeetingRow = useStore((s) => s.addMeetingRow);
   const setCurriculum = useStore((s) => s.setCurriculum);
@@ -158,6 +193,26 @@ export function TopicBoard({
   const foldable = narrow || Boolean(selectedSlotKey) || cramped;
   const trayFolded = foldable && !trayWhileOpen;
 
+  const selection = useBoardSelection({ rootRef, enabled: !openTopicId });
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    ids: string[];
+    fromKeyboard: boolean;
+  } | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  /**
+   * What is selected *and on screen*, in reading order. A tray filter can hide
+   * selected cards without this component rendering at all, so anything that
+   * acts on the selection asks here at the moment it acts rather than trusting
+   * a set that may have outlived what it points at.
+   */
+  const liveSelection = useCallback((): Topic[] => {
+    const byId = new Map(topics.map((t) => [t.id, t]));
+    return selection.ordered().flatMap((id) => byId.get(id) ?? []);
+  }, [topics, selection.ordered]);
+
   const removeTopic = useCallback(
     (topic: Topic) => {
       deleteWithUndo(
@@ -170,6 +225,20 @@ export function TopicBoard({
       );
     },
     [deleteTopic, restoreTopic]
+  );
+
+  const removeTopics = useCallback(
+    (doomed: Topic[]) => {
+      if (doomed.length === 0) return;
+      if (doomed.length === 1) return removeTopic(doomed[0]);
+      deleteWithUndo(
+        `${doomed.length} topics deleted.`,
+        () => deleteTopics(doomed.map((t) => t.id)),
+        () => doomed.forEach((t) => restoreTopic(t))
+      );
+      announce(`Deleted ${doomed.length} topics. Press ${MOD_LABEL} Z to undo.`);
+    },
+    [deleteTopics, removeTopic, restoreTopic]
   );
 
   /*
@@ -230,20 +299,65 @@ export function TopicBoard({
   );
 
   /*
+   * Grabbing a selected card takes the whole selection with it. The group is
+   * fixed at pickup — reading order, so it lands the way it looked — and held
+   * in a ref because the drop reads it from an effect that outlives the render
+   * that set it.
+   */
+  const liftedRef = useRef<string[]>([]);
+  const [liftedIds, setLiftedIds] = useState<string[]>([]);
+  const lifted = useMemo(() => new Set(liftedIds), [liftedIds]);
+
+  /*
    * A drop resolves to a cell *and a position in it*. `place` still answers the
    * first half for the keyboard "Move to…" path, where there is no pointer to
    * read an index from and appending is the honest default.
    */
   const placeAt = useCallback(
     (topicId: string, key: string, index: number) => {
-      placeTopicAt(topicId, { ...parseColumnKey(key), meetingId: meeting.id }, index);
+      const target = { ...parseColumnKey(key), meetingId: meeting.id };
+      const group = liftedRef.current;
+      if (group.length > 1 && group.includes(topicId)) {
+        // `index` counts every card in the zone but the one grabbed — which
+        // includes the rest of the group, who are about to leave it.
+        const zone =
+          layout.bucket.find((g) => g.key === key)?.topics ??
+          layout.weeks.flatMap((w) => w.cells).find((c) => c.key === key)?.topics ??
+          [];
+        const above = zone
+          .filter((t) => t.id !== topicId)
+          .slice(0, index)
+          .filter((t) => !group.includes(t.id)).length;
+        placeTopicsAt(group, target, above);
+        return;
+      }
+      placeTopicAt(topicId, target, index);
     },
-    [placeTopicAt, meeting.id]
+    [layout, placeTopicAt, placeTopicsAt, meeting.id]
   );
 
   const dnd = useBoardDnD(placeAt);
   const { drag, zoneRef: columnRef, handleProps } = dnd;
   const dragged = drag ? topics.find((t) => t.id === drag.id) : null;
+
+  const dragId = drag?.id ?? null;
+  useEffect(() => {
+    if (!dragId) {
+      liftedRef.current = [];
+      setLiftedIds([]);
+      return;
+    }
+    // Picking up a card that isn't selected is a fresh start: it goes alone.
+    if (!selection.selected.has(dragId)) {
+      selection.clear();
+      return;
+    }
+    const group = liveSelection().map((t) => t.id);
+    liftedRef.current = group;
+    setLiftedIds(group);
+    // Only on pickup: the group is whatever was selected at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragId]);
 
   const roll = useCallback(
     (topic: Topic) => {
@@ -260,6 +374,280 @@ export function TopicBoard({
     },
     [addSession, ahead, meeting, rollTopic, sessions, today, topics]
   );
+
+  // ── Right-click ───────────────────────────────────────────────────────────
+
+  /** Do something to several topics, with the way back for all of them. */
+  const revertible = useCallback(
+    (message: string, targets: Topic[], act: () => void) => {
+      const before = [...targets];
+      doWithUndo(message, act, () => revertTopics(before));
+    },
+    [revertTopics]
+  );
+
+  /** "Topic" for one, "3 topics" for several — the front half of a toast. */
+  const noun = (n: number, one: string) => (n === 1 ? one : `${n} topics`);
+
+  const moveTo = (targets: Topic[], key: string) => {
+    const ids = targets.map((t) => t.id);
+    revertible(`${noun(ids.length, "Topic")} moved.`, targets, () =>
+      placeTopicsAt(ids, { ...parseColumnKey(key), meetingId: meeting.id })
+    );
+  };
+
+  const coverAll = (targets: Topic[]) => {
+    const reopen = targets.every((t) => t.status !== "open");
+    const acted = targets.filter((t) => (t.status === "open") !== reopen);
+    const loose = acted.every((t) => !t.sessionId);
+    const n = acted.length;
+    revertible(
+      reopen
+        ? `${noun(n, "Topic")} reopened.`
+        : n === 1
+          ? loose
+            ? "Idea marked done."
+            : "Topic covered."
+          : `${n} topics marked ${loose ? "done" : "covered"}.`,
+      acted,
+      () => acted.forEach((t) => coverTopic(t.id, !reopen))
+    );
+  };
+
+  const parkAll = (targets: Topic[], park: boolean) => {
+    const acted = targets.filter((t) =>
+      park ? !(t.lane === "parked" && !t.sessionId) : t.lane === "parked" && !t.sessionId
+    );
+    revertible(
+      park ? `${noun(acted.length, "Topic")} parked.` : `${noun(acted.length, "Topic")} back in ideas.`,
+      acted,
+      () =>
+        acted.forEach((t) =>
+          placeTopic(t.id, park ? { lane: "parked" } : { lane: "backlog", slotId: t.slotId })
+        )
+    );
+  };
+
+  /** Off the week, back to the tray — still in the same section. */
+  const unplanAll = (targets: Topic[]) => {
+    const acted = targets.filter((t) => t.sessionId);
+    revertible(`${noun(acted.length, "Topic")} back in ideas.`, acted, () =>
+      acted.forEach((t) => placeTopic(t.id, { lane: "backlog", slotId: t.slotId }))
+    );
+  };
+
+  const flagAll = (targets: Topic[], urgent: boolean) => {
+    targets.forEach((t) => updateTopic(t.id, { urgent: urgent || undefined }));
+    announce(urgent ? "Marked urgent." : "No longer urgent.");
+  };
+
+  const duplicateAll = (targets: Topic[]) => {
+    let made: string[] = [];
+    doWithUndo(
+      `${noun(targets.length, "Topic")} duplicated.`,
+      () => {
+        made = targets.map((t) => {
+          const id = addTopic(meeting.id, t.text, {
+            lane: t.lane,
+            sessionId: t.sessionId,
+            slotId: t.slotId,
+            tagIds: t.tagIds,
+            dueDate: t.dueDate,
+          });
+          updateTopic(id, { detail: t.detail, points: t.points, urgent: t.urgent });
+          return id;
+        });
+      },
+      () => deleteTopics(made)
+    );
+  };
+
+  const copyAll = async (targets: Topic[]) => {
+    try {
+      await navigator.clipboard.writeText(targets.map((t) => t.text).join("\n"));
+      toast({ message: targets.length === 1 ? "Copied." : `Copied ${targets.length} topics.` });
+    } catch {
+      toast({ message: "Couldn't copy to the clipboard." });
+    }
+  };
+
+  /** Where to, for a topic or a handful: the tray's groups, then each week still ahead. */
+  const moveEntries = (targets: Topic[]): MenuEntry[] => {
+    const cells = [...layout.bucket, ...layout.weeks.flatMap((w) => w.cells)];
+    // Only a single card has a "here" to tick; a mixed selection has several.
+    const here =
+      targets.length === 1
+        ? cells.find((c) => c.topics.some((t) => t.id === targets[0].id))?.key
+        : undefined;
+    const item = (label: string, key: string): MenuEntry => ({
+      type: "item",
+      label,
+      onSelect: () => moveTo(targets, key),
+      ...(targets.length === 1 ? { checked: key === here, disabled: key === here } : {}),
+    });
+
+    const entries: MenuEntry[] = [
+      { type: "heading", label: "Ideas" },
+      ...layout.bucket.map((g) =>
+        item(g.lane === "parked" ? "Parked" : g.label === "Ideas" ? "Not on a week" : g.label, g.key)
+      ),
+    ];
+    for (const week of layout.weeks) {
+      if (week.slot.past) continue;
+      const bare = week.cells.length === 1 && !week.cells[0].label;
+      if (!bare) entries.push({ type: "heading", label: weekName(week.slot.date) });
+      for (const c of week.cells) {
+        entries.push(item(c.label || weekName(week.slot.date), c.key));
+      }
+    }
+    return entries;
+  };
+
+  const menuEntries = (targets: Topic[]): MenuEntry[] => {
+    const n = targets.length;
+    const one = n === 1 ? targets[0] : null;
+    const count = n > 1 ? ` ${n}` : "";
+    const allCovered = targets.every((t) => t.status !== "open");
+    const allLoose = targets.every((t) => !t.sessionId);
+    const allParked = targets.every((t) => t.lane === "parked" && !t.sessionId);
+    const allUrgent = targets.every((t) => t.urgent);
+
+    return [
+      ...(one
+        ? ([
+            {
+              type: "item",
+              label: "Open",
+              icon: <Maximize01 className="size-4" />,
+              onSelect: () => setOpenTopicId(one.id),
+            },
+          ] satisfies MenuEntry[])
+        : []),
+      {
+        type: "item",
+        label: allCovered
+          ? `Reopen${count}`
+          : `Mark${count} ${allLoose ? "done" : "covered"}`,
+        icon: <CheckCircle className="size-4" />,
+        onSelect: () => coverAll(targets),
+      },
+      { type: "separator" },
+      {
+        type: "submenu",
+        label: n > 1 ? `Move ${n} to` : "Move to",
+        icon: <ArrowRight className="size-4" />,
+        entries: moveEntries(targets),
+      },
+      ...(targets.some((t) => t.sessionId)
+        ? ([
+            {
+              type: "item",
+              label: "Back to ideas",
+              icon: <CornerUpLeft className="size-4" />,
+              onSelect: () => unplanAll(targets),
+            },
+          ] satisfies MenuEntry[])
+        : []),
+      {
+        type: "item",
+        label: allParked ? `Bring${count} back` : `Park${count}`,
+        icon: allParked ? <FlipBackward className="size-4" /> : <PauseCircle className="size-4" />,
+        onSelect: () => parkAll(targets, !allParked),
+      },
+      {
+        type: "item",
+        label: allUrgent ? "Not urgent" : "Mark urgent",
+        icon: <Flag01 className="size-4" />,
+        onSelect: () => flagAll(targets, !allUrgent),
+      },
+      { type: "separator" },
+      {
+        type: "item",
+        label: `Duplicate${count}`,
+        icon: <LayersTwo01 className="size-4" />,
+        onSelect: () => duplicateAll(targets),
+      },
+      {
+        type: "item",
+        label: n > 1 ? `Copy ${n} as text` : "Copy text",
+        icon: <Copy01 className="size-4" />,
+        onSelect: () => void copyAll(targets),
+      },
+      { type: "separator" },
+      {
+        type: "item",
+        label: n > 1 ? `Delete ${n}` : "Delete",
+        icon: <Trash01 className="size-4" />,
+        hint: "⌫",
+        danger: true,
+        onSelect: () => removeTopics(targets),
+      },
+    ];
+  };
+
+  /**
+   * Right-clicking a card that is part of the selection acts on all of it;
+   * right-clicking one that isn't moves the selection there first — the same
+   * thing Finder and Notion do, and what keeps a menu from quietly acting on
+   * cards you weren't pointing at.
+   */
+  const openMenu = (id: string, x: number, y: number, fromKeyboard: boolean) => {
+    const live = liveSelection();
+    if (!live.some((t) => t.id === id)) selection.only([id]);
+    setMenu({
+      x,
+      y,
+      ids: live.some((t) => t.id === id) ? live.map((t) => t.id) : [id],
+      fromKeyboard,
+    });
+  };
+  const menuTargets = menu
+    ? menu.ids.flatMap((id) => topics.find((t) => t.id === id) ?? [])
+    : [];
+
+  // A box sweeps through cards faster than a screen reader can say them; speak
+  // where it ended up.
+  const selectedCount = selection.selected.size;
+  useEffect(() => {
+    if (selectedCount > 0) announce(`${selectedCount} selected.`);
+  }, [selectedCount]);
+
+  /*
+   * Esc lets go of the selection; Delete removes it. Both only while nothing in
+   * particular has focus (or a card does, for Esc): a Backspace typed into a
+   * field, or into a dialog over the board, is not for the cards behind it, and
+   * a focused card handle has its own Delete.
+   *
+   * Listens in the capture phase and, for Esc, stops the event there. The
+   * meeting page closes itself on Esc through two other routes — the app's
+   * shared dismiss stack and the global shortcut handler — and neither looks at
+   * whether someone else already took the key. Without this, letting go of a
+   * selection would also take you off the page.
+   */
+  useEffect(() => {
+    if (selection.selected.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (menu || openTopicId) return;
+      if (isTypingTarget(e.target) || ownsKeyboard(e.target)) return;
+      const active = document.activeElement as HTMLElement | null;
+      const onSurface = !active || active === document.body;
+      if (e.key === "Escape") {
+        if (!onSurface && !active?.closest("[data-drag-item]")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        selection.clear();
+        return;
+      }
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (e.metaKey || e.ctrlKey || e.altKey || !onSurface) return;
+      const doomed = liveSelection();
+      if (doomed.length === 0) return;
+      e.preventDefault();
+      removeTopics(doomed);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [selection.clear, selection.selected.size, menu, openTopicId, liveSelection, removeTopics]);
 
   const moveGroups: MoveGroup[] = [
     {
@@ -294,7 +682,17 @@ export function TopicBoard({
     },
     onRoll: roll,
     onBacklog: (id) => placeTopic(id, { lane: "backlog" }),
-    onDelete: removeTopic,
+    // Delete on a card that is part of a selection removes the selection.
+    onDelete: (topic) => {
+      const group = liveSelection();
+      if (group.length > 1 && group.some((t) => t.id === topic.id)) removeTopics(group);
+      else removeTopic(topic);
+    },
+    selected: selection.selected,
+    lifted: (id) => drag?.id === id || lifted.has(id),
+    onPick: selection.pick,
+    onPlain: selection.clear,
+    onMenu: openMenu,
   };
 
   const parked = layout.bucket[layout.bucket.length - 1];
@@ -302,7 +700,7 @@ export function TopicBoard({
   const ideaCount = ideaGroups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
-    <div ref={rootRef} className="@container flex flex-col gap-4">
+    <div ref={rootRef} className="@container flex flex-col gap-4" {...selection.rootProps}>
       {loose.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-cond-watch-soft px-4 py-3">
           <p className="min-w-0 flex-1 text-[13.5px] leading-5 text-cond-watch-ink">
@@ -400,7 +798,29 @@ export function TopicBoard({
           }}
         >
           {dragged.text}
+          {liftedIds.length > 1 && (
+            <span className="absolute -top-2 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-teal-600 px-1 font-mono text-[10.5px] font-medium text-white dark:bg-teal-500 dark:text-stone-950">
+              {liftedIds.length}
+            </span>
+          )}
         </div>
+      )}
+      {/* The box being swept across the board. Positioned by the hook, every frame. */}
+      <div
+        ref={selection.marqueeRef}
+        hidden
+        aria-hidden
+        className="pointer-events-none fixed z-40 rounded-[3px] border border-teal-500 bg-teal-500/15"
+      />
+      {menu && menuTargets.length > 0 && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          fromKeyboard={menu.fromKeyboard}
+          label={`Actions for ${menuTargets.length === 1 ? "topic" : `${menuTargets.length} topics`}`}
+          entries={menuEntries(menuTargets)}
+          onClose={closeMenu}
+        />
       )}
       {/*
         The full idea, opened from any card on the board. A card stays a
@@ -640,6 +1060,8 @@ function ScheduleGrid({
           measure();
         }}
         onWheel={chainVerticalWheel}
+        // The drag-box pans this when it reaches the edge.
+        data-board-scroller
         // A scroller clips on both axes, and the next week's ring and halo
         // sit just outside its sheet: the padding gives them room.
         className="scroll-contain scrollbar-hide -mt-2 overflow-x-auto pt-2 pb-3"
@@ -1127,7 +1549,7 @@ function GridCell({
         past={past}
         tickable={tickable}
         covered={t.status !== "open"}
-        isDragging={drag?.id === t.id}
+        isDragging={cardProps.lifted(t.id)}
         {...cardProps}
       />
     );
@@ -1389,7 +1811,7 @@ function IdeasTray({
                     past={false}
                     tickable
                     covered={false}
-                    isDragging={drag?.id === t.id}
+                    isDragging={cardProps.lifted(t.id)}
                     {...cardProps}
                   />
                 ))}
@@ -1438,7 +1860,7 @@ function IdeasTray({
                   past={false}
                   tickable
                   covered={false}
-                  isDragging={drag?.id === t.id}
+                  isDragging={cardProps.lifted(t.id)}
                   {...cardProps}
                 />
               ))}
@@ -1520,6 +1942,10 @@ function BoardCard({
   onBacklog,
   onDelete,
   onOpen,
+  selected,
+  onPick,
+  onPlain,
+  onMenu,
 }: {
   topic: Topic;
   columnKey: string;
@@ -1532,6 +1958,7 @@ function BoardCard({
   const ref = useRef<HTMLLIElement>(null);
   const name = topic.text || "topic";
   const down = useRef<{ x: number; y: number } | null>(null);
+  const picked = selected.has(topic.id);
   const { rowProps, handleProps: keyHandleProps } = useReorderableRow({
     label: `“${name}”`,
     onMove: (dir) => onReorder(topic.id, dir),
@@ -1553,15 +1980,23 @@ function BoardCard({
       if (el?.closest('input, select, textarea, a, label, [role="checkbox"], button')) return;
       grab.onPointerDown(e);
     },
-    // A press that never travelled is a click, and a click opens the idea.
+    /*
+     * A press that never travelled is a click. Held with ⌘/Ctrl or Shift it
+     * selects; plain, it opens the idea — and lets go of any selection first,
+     * so what opens is never a surprise next to a highlighted group.
+     */
     onClick: (e: ReactMouseEvent) => {
-      if (!onOpen) return;
       const el = e.target as HTMLElement | null;
       if (el?.closest('input, select, textarea, a, label, [role="checkbox"], button')) return;
       const start = down.current;
       down.current = null;
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4) return;
-      onOpen(topic.id);
+      if (e.shiftKey || hasMod(e)) {
+        onPick(topic.id, e);
+        return;
+      }
+      onPlain();
+      onOpen?.(topic.id);
     },
   };
 
@@ -1572,7 +2007,25 @@ function BoardCard({
     <li
       ref={ref}
       data-drag-item={topic.id}
+      data-selected={picked || undefined}
       {...rowProps}
+      onKeyDown={(e) => {
+        // The menu key, or Shift+F10: the keyboard's right-click.
+        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
+          e.preventDefault();
+          e.stopPropagation();
+          const r = ref.current?.getBoundingClientRect();
+          if (r) onMenu(topic.id, r.left + 16, r.top + r.height / 2, true);
+          return;
+        }
+        rowProps.onKeyDown(e);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        // On a touchscreen the long press is the drag; it doesn't also get a menu.
+        if ((e.nativeEvent as PointerEvent).pointerType === "touch") return;
+        onMenu(topic.id, e.clientX, e.clientY, false);
+      }}
       className={cx(
         "group/card relative list-none rounded-[10px] border transition-[border-color,box-shadow]",
         covered
@@ -1580,6 +2033,8 @@ function BoardCard({
           : slipped
             ? "border-cond-watch bg-primary shadow-[inset_3px_0_0_var(--color-cond-watch)]"
             : "border-secondary bg-primary shadow-[0_1px_1.5px_rgba(10,34,37,0.05)] hover:border-primary hover:shadow-[0_2px_6px_-2px_rgba(10,34,37,0.14)]",
+        picked &&
+          "border-teal-600 bg-teal-50 shadow-[0_0_0_1px_var(--color-teal-600)] hover:border-teal-600 dark:border-teal-500 dark:bg-teal-950/50 dark:shadow-[0_0_0_1px_var(--color-teal-500)]",
         isDragging && "opacity-35"
       )}
     >
@@ -1601,8 +2056,11 @@ function BoardCard({
 
       <div
         {...cardGrab}
-        className="flex cursor-grab items-start gap-2 px-2.5 py-2 active:cursor-grabbing"
+        // Not selectable text: a Shift-click would otherwise paint a text range
+        // across the board, and a press here is a drag, never a caret.
+        className="flex cursor-grab items-start gap-2 px-2.5 py-2 select-none active:cursor-grabbing"
       >
+        {picked && <span className="sr-only">Selected.</span>}
         {tickable && (
           <Checkbox
             size="sm"
