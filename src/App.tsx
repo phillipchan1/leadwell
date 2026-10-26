@@ -304,7 +304,6 @@ export default function App() {
     }
   }, [phase, signInPath, navigate]);
   const tab = useStore((s) => s.tab);
-  const setTab = useStore((s) => s.setTab);
   const focused = useStore((s) => s.focused);
   const sessionId = useStore((s) => s.sessionId);
   const settingsOpen = useStore((s) => s.settingsOpen);
@@ -318,13 +317,10 @@ export default function App() {
   // `g` then a letter. Jumping to a tab also drops whatever entity is open —
   // "go to People" that leaves a team panel covering half the screen has not
   // gone anywhere.
-  const clearSelection = useStore((s) => s.clearSelection);
+  const goToTab = useStore((s) => s.goToTab);
   const onGo = useCallback(
-    (target: GoTarget) => {
-      clearSelection();
-      setTab(target === "people" ? lastPeopleTab() : target);
-    },
-    [clearSelection, setTab]
+    (target: GoTarget) => goToTab(target === "people" ? lastPeopleTab() : target),
+    [goToTab]
   );
 
   // People remembers which of its views you were last in.

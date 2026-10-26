@@ -198,6 +198,13 @@ type Store = PersistedData &
   UIState & {
     // ui
     setTab: (tab: Tab) => void;
+    /**
+     * Go to a tab with nothing open. `setTab` keeps the open entity as a peek,
+     * and `clearSelection()` then `setTab()` doesn't drop it: the first only
+     * starts a navigation, so the second still reads the old selection and
+     * puts it straight back.
+     */
+    goToTab: (tab: Tab) => void;
     setTreeDomainId: (id: string | null) => void;
     /** Add/remove one health level from the canvas scan. */
     toggleHealthScan: (value: HealthFilterValue) => void;
@@ -1260,6 +1267,7 @@ export const useStore = create<Store>((set, get) => ({
     const s = get();
     goTab(s, currentSelection(s), tab);
   },
+  goToTab: (tab) => goTab(get(), null, tab),
   // Filtering the canvas drops any selection that just left the view.
   setTreeDomainId: (id) => {
     const s = get();

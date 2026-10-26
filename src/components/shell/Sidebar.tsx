@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Keyboard01, Moon01, Settings01, Sun } from "@untitledui/icons";
 import { useStore } from "@/store/useStore";
-import type { Tab } from "@/lib/routes";
 import { routePath } from "@/lib/routes";
 import { loadRecents, recordRecent } from "@/lib/recents";
 import { MOD_LABEL } from "@/lib/keys";
@@ -28,16 +27,10 @@ export function Sidebar({
 }) {
   const tab = useStore((s) => s.tab);
   const focused = useStore((s) => s.focused);
-  const setTab = useStore((s) => s.setTab);
-  const clearSelection = useStore((s) => s.clearSelection);
+  const goPlace = useStore((s) => s.goToTab);
   const setPaletteOpen = useStore((s) => s.setPaletteOpen);
   const openModal = useStore((s) => s.openModal);
   const active = placeOf(tab);
-
-  const goPlace = (target: Tab) => {
-    clearSelection();
-    setTab(target);
-  };
 
   return (
     <nav

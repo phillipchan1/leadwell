@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Moon01, Settings01, Sun, User01 } from "@untitledui/icons";
 import { useStore } from "@/store/useStore";
-import type { Tab } from "@/lib/routes";
 import { useMenu } from "@/hooks/use-menu";
 import { Mark } from "@/components/brand/glyphs";
 import { cx } from "@/utils/cx";
@@ -119,15 +118,9 @@ export function PhoneHeader() {
 export function PhoneTabBar() {
   const tab = useStore((s) => s.tab);
   const focused = useStore((s) => s.focused);
-  const setTab = useStore((s) => s.setTab);
-  const clearSelection = useStore((s) => s.clearSelection);
+  const go = useStore((s) => s.goToTab);
   const openModal = useStore((s) => s.openModal);
   const active = placeOf(tab);
-
-  const go = (target: Tab) => {
-    clearSelection();
-    setTab(target);
-  };
 
   const places = PLACES.filter((p) => p.id !== "ideas");
   const left = places.slice(0, 2);
