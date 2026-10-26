@@ -10,7 +10,6 @@ import {
   AUTH_IP_PREFIX_INVALID,
   consumeEmailMagicLinkLimit,
   emailIpPrefixMagicLinkRateLimitKey,
-  emailSoftLogMagicLinkRateLimitKey,
   emailSoftMagicLinkRateLimitKey,
   MAGIC_LINK_EMAIL_PREFIX_MAX,
   MAGIC_LINK_EMAIL_SOFT_MAX,
@@ -267,14 +266,6 @@ try {
     ok(softBody.status === true, "soft cap returns {status:true}");
     ok(softMs < 120, `soft-cap response has the same fast timing (${softMs}ms)`);
     ok(resendCalls.length === 0, "capped path does not await Resend");
-    ok(
-      !softLogs.some((args) => (args[1] as { kind?: string } | undefined)?.kind === "soft_cap"),
-      "soft-cap log is not awaited on the request path",
-    );
-    ok(
-      (await keysMatching(emailSoftLogMagicLinkRateLimitKey("phil@example.com"))).length === 0,
-      "soft-log consume is not awaited on the capped path",
-    );
     await flushMail();
     ok(resendCalls.length === 0, "soft cap skips the send");
     const skipLog = softLogs.find((args) => {

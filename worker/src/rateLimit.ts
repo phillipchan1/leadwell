@@ -173,28 +173,23 @@ export async function consumeRateLimitKey(
        ON CONFLICT (key) DO UPDATE SET
          count = CASE
            WHEN $3::bigint - COALESCE(rate_limit.window_start, rate_limit.last_request) >= $4::bigint THEN 1
-           WHEN rate_limit.count < $5 THEN rate_limit.count + 1
-           ELSE rate_limit.count
+           ELSE rate_limit.count + 1
          END,
-         last_request = CASE
-           WHEN $3::bigint - COALESCE(rate_limit.window_start, rate_limit.last_request) >= $4::bigint THEN $3::bigint
-           WHEN rate_limit.count < $5 THEN $3::bigint
-           ELSE rate_limit.last_request
-         END,
+         last_request = $3::bigint,
          window_start = CASE
            WHEN $3::bigint - COALESCE(rate_limit.window_start, rate_limit.last_request) >= $4::bigint THEN $3::bigint
            ELSE COALESCE(rate_limit.window_start, rate_limit.last_request)
          END
-       RETURNING count, last_request, window_start`,
-      [crypto.randomUUID(), key, now, windowMs, rule.max],
+       RETURNING count, window_start`,
+      [crypto.randomUUID(), key, now, windowMs],
     );
     const row = result.rows[0] as
-      | { count: number; last_request: string | number; window_start: string | number }
+      | { count: number; window_start: string | number }
       | undefined;
     if (!row) throw new Error("rate_limit consume returned no row");
-    const last = Number(row.last_request);
+    const count = Number(row.count);
     const start = Number(row.window_start);
-    if (last === now && Number(row.count) <= rule.max) {
+    if (count <= rule.max) {
       return { allowed: true, retryAfter: null };
     }
     return {
