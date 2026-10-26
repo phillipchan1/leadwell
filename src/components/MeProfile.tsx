@@ -91,7 +91,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
         </div>
       </div>
 
-      <div className="scroll-contain min-h-0 flex-1 overflow-y-auto p-6">
+      <div className="pane-scroll p-6">
         <section className="space-y-3">
           <SectionTitle>My profile</SectionTitle>
           <p className="text-xs text-stone-500">

@@ -25,6 +25,7 @@ import {
   type WeekColumn,
 } from "../lib/topics";
 import { MEETING_LABEL, daysBetween, todayISO } from "../lib/readiness";
+import { chainVerticalWheel } from "../lib/scroll-chain";
 import { sessionSummary } from "../lib/session";
 import { deleteWithUndo, doWithUndo } from "../lib/undo";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
@@ -638,6 +639,7 @@ function ScheduleGrid({
           scrollLeftRef.current = scrollRef.current?.scrollLeft ?? 0;
           measure();
         }}
+        onWheel={chainVerticalWheel}
         // A scroller clips on both axes, and the next week's ring and halo
         // sit just outside its sheet: the padding gives them room.
         className="scroll-contain scrollbar-hide -mt-2 overflow-x-auto pt-2 pb-3"

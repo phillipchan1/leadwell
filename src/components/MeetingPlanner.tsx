@@ -268,7 +268,7 @@ export function MeetingPlanner({
         {panel && !asSheet && (
           <aside
             aria-label="This week"
-            className="occurrence-notes-aside sticky top-4 flex max-h-[min(calc(100dvh-10rem),calc(100%-1rem))] w-[min(46%,29rem)] shrink-0 flex-col self-start overflow-hidden rounded-[20px] border border-secondary bg-primary shadow-[0_1px_2px_rgba(10,34,37,0.06),0_18px_40px_-28px_rgba(10,34,37,0.35)]"
+            className="occurrence-notes-aside sticky top-4 flex h-[min(calc(100dvh-12rem),100%)] max-h-[calc(100dvh-12rem)] w-[min(46%,29rem)] shrink-0 flex-col self-start overflow-hidden rounded-[20px] border border-secondary bg-primary shadow-[0_1px_2px_rgba(10,34,37,0.06),0_18px_40px_-28px_rgba(10,34,37,0.35)]"
           >
             {panel}
           </aside>

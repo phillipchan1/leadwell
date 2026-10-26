@@ -225,7 +225,7 @@ export function MeetingProfile({
         counts={{ meetings: openCount, notes: sessionCount }}
       />
 
-      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
+      <div className="pane-scroll relative">
         {mode === "now" && (
           <div className={cx("flex flex-col pt-5 pb-10", pad)}>
             <MeetingAgenda meeting={meeting} onOpenSession={openSession} narrow={!focus} />

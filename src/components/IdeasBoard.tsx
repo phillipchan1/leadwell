@@ -14,6 +14,7 @@ import {
 import { findMeeting, findTag, parseCapture, splitCaptureLines } from "@/lib/ideas";
 import { nextSlotAfter, plannedSlots } from "@/lib/topics";
 import { deleteWithUndo } from "@/lib/undo";
+import { chainVerticalWheel } from "@/lib/scroll-chain";
 import { useStore } from "@/store/useStore";
 import { DropList } from "./DropList";
 import { tagChipClass, tagDotClass } from "./TagChip";
@@ -637,6 +638,7 @@ export function IdeasBoard() {
             key={groupBy}
             ref={stripRef}
             onScroll={measureStrip}
+            onWheel={chainVerticalWheel}
             className="scroll-contain min-w-0 flex-1 overflow-x-auto pb-3"
           >
             <div className="inline-flex min-w-full items-start gap-3">

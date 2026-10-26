@@ -254,7 +254,7 @@ export function TeamProfile({
 
       {/* A container query, not a viewport one: the panel is resizable, so the
           layout has to answer to how wide *it* is. */}
-      <div className="scroll-contain @container min-h-0 flex-1 overflow-y-auto">
+      <div className="pane-scroll @container">
         {/* ── Now: the audit loop — my read, readiness, what's next ─────── */}
         {mode === "now" && (
           <div className="grid gap-6 px-4 py-5 sm:px-6 @4xl:grid-cols-2 @4xl:items-start">

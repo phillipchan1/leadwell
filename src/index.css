@@ -215,6 +215,18 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Flex column child that must scroll: `flex-1 min-h-0` alone still leaves
+   some engines (and zoomed viewports) with no scrollbar. `height: 0` with
+   `flex: 1 1 0%` forces a bounded box. */
+@utility pane-scroll {
+  flex: 1 1 0%;
+  height: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ── Touch baseline ──
    See the `@media (pointer: coarse)` block at the very bottom of this file for
    the 16px type floor and the touch sizing of the hand-rolled controls. It

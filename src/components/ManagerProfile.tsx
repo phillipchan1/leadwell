@@ -133,7 +133,7 @@ export function ManagerProfile({
 
       {/* A container query, not a viewport one: the panel is resizable, so the
           layout has to answer to how wide *it* is. */}
-      <div className="scroll-contain @container relative min-h-0 flex-1 overflow-y-auto">
+      <div className="pane-scroll @container relative">
         {mode === "now" && (
           <div className="grid min-w-0 gap-6 p-4 sm:p-6 @4xl:grid-cols-2 @4xl:items-start">
             <PrepPanel
