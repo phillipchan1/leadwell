@@ -262,7 +262,7 @@ export async function closeAuth(auth: AuthInstance): Promise<void> {
 /**
  * Better Auth handler plus the extra email buckets.
  * Built-in limiter is IP + path only; this adds 3/min per email+IP,
- * then 20/hr per email (global consume runs only after the per-IP check).
+ * then 10/hr per email+IP-prefix (/24 or /48). Nothing is keyed on email alone.
  */
 export async function handleAuthRequest(auth: AuthInstance, req: Request): Promise<Response> {
   const path = new URL(req.url).pathname;

@@ -15,7 +15,8 @@ import {
   sendMagicLinkEmail,
 } from "./mail.ts";
 import {
-  MAGIC_LINK_EMAIL_GLOBAL_MAX,
+  authIpPrefix,
+  MAGIC_LINK_EMAIL_PREFIX_MAX,
   MAGIC_LINK_SEND_MAX,
   MAGIC_LINK_VERIFY_MAX,
 } from "./rateLimit.ts";
@@ -67,8 +68,12 @@ const idem = await resendIdempotencyKey(token);
 ok(idem.startsWith("ml/"), "Resend idempotency key is hashed");
 ok(!idem.includes(token), "Resend idempotency key does not contain the token");
 ok(MAGIC_LINK_SEND_MAX === 3, "magic-link send is 3 per window");
-ok(MAGIC_LINK_EMAIL_GLOBAL_MAX === 20, "global per-email cap is 20/hour");
+ok(MAGIC_LINK_EMAIL_PREFIX_MAX === 10, "hourly cap is 10 per email+IP-prefix");
 ok(MAGIC_LINK_VERIFY_MAX === 10, "magic-link verify is tightly capped");
+ok(authIpPrefix("203.0.113.45") === "203.0.113.0/24", "IPv4 prefix is /24");
+ok(authIpPrefix("2001:db8:abcd:1234::1") === "2001:0db8:abcd::/48", "IPv6 prefix is /48");
+ok(authIpPrefix("2001:db8::1") === "2001:0db8:0000::/48", "compressed IPv6 still /48");
+ok(authIpPrefix("::ffff:203.0.113.45") === "203.0.113.0/24", "IPv4-mapped IPv6 uses /24");
 
 ok(
   authIpAddressHeaders({}).join(",") === PROD_AUTH_IP_HEADERS.join(","),

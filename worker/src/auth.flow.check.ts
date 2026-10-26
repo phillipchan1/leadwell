@@ -1,16 +1,12 @@
 /**
  * Prove magic-link rate limits, waitUntil mail, CF-Connecting-IP keying,
- * allowlist-before-email-counter, email+IP (not global 3/min) lockout,
- * send-failure logs, and no password auth.
+ * allowlist-before-email-counter, email+IP and email+prefix (no email-only
+ * key), send-failure logs, and no password auth.
  */
 import { PGlite } from "@electric-sql/pglite";
 import { closeAuth, createAuth, handleAuthRequest, type AuthDatabase } from "./auth.ts";
 import { applySchema } from "./isolationDb.ts";
-import {
-  emailGlobalMagicLinkRateLimitKey,
-  MAGIC_LINK_SEND_MAX,
-  MAGIC_LINK_VERIFY_MAX,
-} from "./rateLimit.ts";
+import { MAGIC_LINK_EMAIL_PREFIX_MAX, MAGIC_LINK_SEND_MAX, MAGIC_LINK_VERIFY_MAX } from "./rateLimit.ts";
 
 const fails: string[] = [];
 let checks = 0;
@@ -115,12 +111,9 @@ async function flushMail(): Promise<void> {
   await Promise.all(pending);
 }
 
-async function emailBucket(email: string): Promise<number> {
-  const result = await db.query("SELECT count FROM rate_limit WHERE key = $1", [
-    emailGlobalMagicLinkRateLimitKey(email),
-  ]);
-  const row = result.rows[0] as { count?: number } | undefined;
-  return Number(row?.count ?? 0);
+async function keysMatching(pattern: string): Promise<string[]> {
+  const result = await db.query("SELECT key FROM rate_limit WHERE key LIKE $1", [pattern]);
+  return (result.rows as { key: string }[]).map((row) => row.key);
 }
 
 try {
@@ -165,24 +158,55 @@ try {
     strangerStatuses.every((s) => s === 200),
     "non-allowlisted floods still return 200 (not 429 on email)",
   );
-  ok((await emailBucket("phil@example.com")) === 0, "stranger floods do not charge Phil's email bucket");
+  ok(
+    (await keysMatching("%phil@example.com%")).length === 0,
+    "stranger floods do not charge Phil's email buckets",
+  );
   ok(resendCalls.length === 0, "stranger floods do not call Resend");
 
+  const prefixCap: number[] = [];
+  for (let i = 1; i <= MAGIC_LINK_EMAIL_PREFIX_MAX + 1; i++) {
+    prefixCap.push(
+      (await sendLink("phil@example.com", { "cf-connecting-ip": `198.51.100.${i}` })).status,
+    );
+  }
+  await flushMail();
+  ok(
+    prefixCap.slice(0, MAGIC_LINK_EMAIL_PREFIX_MAX).every((s) => s === 200),
+    `first ${MAGIC_LINK_EMAIL_PREFIX_MAX} from one /24 are 200 (got ${prefixCap.join(",")})`,
+  );
+  ok(
+    prefixCap[MAGIC_LINK_EMAIL_PREFIX_MAX] === 429,
+    `11th from the same /24 is 429 (got ${prefixCap[MAGIC_LINK_EMAIL_PREFIX_MAX]})`,
+  );
+  ok(
+    resendCalls.length === MAGIC_LINK_EMAIL_PREFIX_MAX,
+    `per-prefix hourly cap holds at ${MAGIC_LINK_EMAIL_PREFIX_MAX} real sends (got ${resendCalls.length})`,
+  );
+  ok(
+    (await keysMatching("email|/sign-in/magic-link|%")).length === 0,
+    "no rate-limit key is email-only",
+  );
+
+  await db.query("DELETE FROM rate_limit");
+  resendCalls.length = 0;
   const philFlood: number[] = [];
-  for (let i = 0; i < 10; i++) {
+  for (let i = 1; i <= 25; i++) {
     philFlood.push(
-      (await sendLink("phil@example.com", { "cf-connecting-ip": `203.0.113.${20 + i}` })).status,
+      (await sendLink("phil@example.com", { "cf-connecting-ip": `203.0.${i}.10` })).status,
     );
   }
   await flushMail();
   ok(
     philFlood.every((s) => s === 200),
-    `10-IP Phil flood is all 200 (got ${philFlood.join(",")})`,
+    `25-prefix Phil flood is all 200 (got ${philFlood.join(",")})`,
   );
-  ok((await emailBucket("phil@example.com")) === 10, "global email bucket is 10 after a 10-IP flood");
-  const freshIp = await sendLink("phil@example.com", { "cf-connecting-ip": "203.0.113.200" });
-  ok(freshIp.status === 200, "Phil from a fresh IP still gets 200 after a 10-IP flood");
+  ok(resendCalls.length === 25, `25 prefixes each get a real send (got ${resendCalls.length})`);
+  resendCalls.length = 0;
+  const freshPrefix = await sendLink("phil@example.com", { "cf-connecting-ip": "198.51.200.1" });
+  ok(freshPrefix.status === 200, "Phil from a fresh prefix still gets 200 after a 25-prefix flood");
   await flushMail();
+  ok(resendCalls.length === 1, "fresh prefix gets a real send, not a silent 200");
 
   await db.query("DELETE FROM rate_limit");
   resendCalls.length = 0;
