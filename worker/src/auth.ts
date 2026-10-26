@@ -10,7 +10,7 @@ import {
 } from "./authUrl.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
-import { sendMagicLinkEmail } from "./mail.ts";
+import { logMagicLinkSendFailure, sendMagicLinkEmail } from "./mail.ts";
 import {
   authRateLimitCustomRules,
   consumeEmailMagicLinkLimit,
@@ -103,6 +103,17 @@ export const LOCAL_AUTH_IP_HEADERS = [
 
 export function authIpAddressHeaders(env: Pick<Env, "ENVIRONMENT">): string[] {
   return isLocalAuthRuntime(env) ? [...LOCAL_AUTH_IP_HEADERS] : [...PROD_AUTH_IP_HEADERS];
+}
+
+/** Same header order Better Auth uses for the per-IP limiter. */
+export function clientAuthIp(headers: Headers, env: Pick<Env, "ENVIRONMENT">): string {
+  for (const name of authIpAddressHeaders(env)) {
+    const value = headers.get(name);
+    if (!value) continue;
+    const first = value.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return "unknown";
 }
 
 /**
@@ -220,7 +231,9 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
         expiresIn: 60 * 10,
         sendMagicLink: async ({ email, url, token }) => {
           if (!isAllowedEmail(env, email)) return;
-          const sending = sendMagicLinkEmail(env, { email, url, token });
+          const sending = sendMagicLinkEmail(env, { email, url, token }).catch((err) => {
+            logMagicLinkSendFailure(err);
+          });
           if (options?.waitUntil) {
             options.waitUntil(sending);
             return;
@@ -247,8 +260,9 @@ export async function closeAuth(auth: AuthInstance): Promise<void> {
 }
 
 /**
- * Better Auth handler plus the extra per-email magic-link bucket.
- * The built-in limiter keys IP + path only; this adds 3/min per email.
+ * Better Auth handler plus the extra email buckets.
+ * Built-in limiter is IP + path only; this adds 3/min per email+IP,
+ * then 20/hr per email (global consume runs only after the per-IP check).
  */
 export async function handleAuthRequest(auth: AuthInstance, req: Request): Promise<Response> {
   const path = new URL(req.url).pathname;
@@ -264,7 +278,7 @@ export async function handleAuthRequest(auth: AuthInstance, req: Request): Promi
       }
       const gate = authEnvs.get(auth);
       if (email && gate && isAllowedEmail(gate, email)) {
-        const result = await consumeEmailMagicLinkLimit(db, email);
+        const result = await consumeEmailMagicLinkLimit(db, email, clientAuthIp(req.headers, gate));
         if (!result.allowed) return rateLimitDeniedResponse(result.retryAfter ?? 60);
       }
     }

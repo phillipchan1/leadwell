@@ -1,12 +1,25 @@
 import {
   authIpAddressHeaders,
+  clientAuthIp,
   existingUserForMagicLinkEmail,
   isAllowedEmail,
   PROD_AUTH_IP_HEADERS,
 } from "./auth.ts";
 import { clientConnection, poolSsl } from "./db.ts";
-import { magicLinkEmail, resendIdempotencyKey } from "./mail.ts";
-import { MAGIC_LINK_SEND_MAX, MAGIC_LINK_VERIFY_MAX } from "./rateLimit.ts";
+import {
+  describeMagicLinkSendFailure,
+  logMagicLinkSendFailure,
+  magicLinkEmail,
+  MagicLinkSendError,
+  resendIdempotencyKey,
+  sendMagicLinkEmail,
+} from "./mail.ts";
+import {
+  MAGIC_LINK_EMAIL_GLOBAL_MAX,
+  MAGIC_LINK_SEND_MAX,
+  MAGIC_LINK_VERIFY_MAX,
+} from "./rateLimit.ts";
+import { catchBackgroundTask } from "./request.ts";
 
 const fails: string[] = [];
 let checks = 0;
@@ -54,6 +67,7 @@ const idem = await resendIdempotencyKey(token);
 ok(idem.startsWith("ml/"), "Resend idempotency key is hashed");
 ok(!idem.includes(token), "Resend idempotency key does not contain the token");
 ok(MAGIC_LINK_SEND_MAX === 3, "magic-link send is 3 per window");
+ok(MAGIC_LINK_EMAIL_GLOBAL_MAX === 20, "global per-email cap is 20/hour");
 ok(MAGIC_LINK_VERIFY_MAX === 10, "magic-link verify is tightly capped");
 
 ok(
@@ -65,6 +79,23 @@ ok(!authIpAddressHeaders({}).includes("x-real-ip"), "prod ignores X-Real-IP");
 ok(
   authIpAddressHeaders({ ENVIRONMENT: "local" }).includes("x-forwarded-for"),
   "local still accepts XFF for wrangler/vite",
+);
+ok(
+  clientAuthIp(
+    new Headers({ "cf-connecting-ip": "198.51.100.10", "x-forwarded-for": "8.8.8.8" }),
+    {},
+  ) === "198.51.100.10",
+  "prod client IP is CF-Connecting-IP",
+);
+ok(
+  clientAuthIp(new Headers({ "x-forwarded-for": "8.8.8.8", "x-real-ip": "1.1.1.1" }), {}) ===
+    "unknown",
+  "prod ignores XFF/X-Real-IP when CF-Connecting-IP is absent",
+);
+ok(
+  clientAuthIp(new Headers({ "x-forwarded-for": "8.8.8.8" }), { ENVIRONMENT: "local" }) ===
+    "8.8.8.8",
+  "local client IP can read XFF",
 );
 
 const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/leadwell?sslmode=disable";
@@ -84,6 +115,69 @@ ok(
     false,
   "Better Auth pool TLS off for Hyperdrive",
 );
+
+const missingEnvErr = new MagicLinkSendError("missing_env");
+const resendHttpErr = new MagicLinkSendError("resend_http", 500);
+ok(
+  describeMagicLinkSendFailure(missingEnvErr).kind === "missing_env" &&
+    describeMagicLinkSendFailure(missingEnvErr).status === undefined,
+  "missing_env failure is kind-only",
+);
+ok(
+  describeMagicLinkSendFailure(resendHttpErr).kind === "resend_http" &&
+    describeMagicLinkSendFailure(resendHttpErr).status === 500,
+  "resend_http failure includes status",
+);
+
+const logged: unknown[] = [];
+logMagicLinkSendFailure(missingEnvErr, (message, detail) => {
+  logged.push(message, detail);
+});
+logMagicLinkSendFailure(resendHttpErr, (message, detail) => {
+  logged.push(message, detail);
+});
+const loggedBlob = JSON.stringify(logged);
+ok(loggedBlob.includes("missing_env") && loggedBlob.includes("resend_http"), "send logs include kind");
+ok(loggedBlob.includes("500"), "send logs include HTTP status");
+ok(!loggedBlob.includes("@") && !loggedBlob.includes("token"), "send logs have no email or token");
+
+const realFetch = globalThis.fetch;
+try {
+  await sendMagicLinkEmail(
+    { RESEND_API_KEY: "", AUTH_EMAIL_FROM: "" } as never,
+    { email: "phil@example.com", url: "https://polarch.day/x", token: "visible-token" },
+  );
+  ok(false, "missing mail env throws");
+} catch (err) {
+  ok(err instanceof MagicLinkSendError && err.kind === "missing_env", "missing mail env is missing_env");
+}
+
+globalThis.fetch = (async () => new Response("nope", { status: 500 })) as typeof fetch;
+try {
+  await sendMagicLinkEmail(
+    { RESEND_API_KEY: "re_test", AUTH_EMAIL_FROM: "login@polarch.day" } as never,
+    { email: "phil@example.com", url: "https://polarch.day/x", token: "visible-token" },
+  );
+  ok(false, "Resend 500 throws");
+} catch (err) {
+  ok(
+    err instanceof MagicLinkSendError && err.kind === "resend_http" && err.status === 500,
+    "Resend 500 is resend_http with status",
+  );
+} finally {
+  globalThis.fetch = realFetch;
+}
+
+let unhandled = 0;
+const onUnhandled = () => {
+  unhandled += 1;
+};
+process.on("unhandledRejection", onUnhandled);
+catchBackgroundTask(Promise.reject(new MagicLinkSendError("resend_http", 500)));
+await Promise.resolve();
+await Promise.resolve();
+ok(unhandled === 0, "request.ts fallback catch does not raise unhandledRejection");
+process.off("unhandledRejection", onUnhandled);
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);

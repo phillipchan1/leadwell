@@ -200,9 +200,12 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 - An edit syncs (chrome leaves "saving"); reload keeps it.
 - `POST /api/openai` with a signed-in session and no client API key.
   Without `OPENAI_API_KEY` the Worker returns 501; with it, OpenAI answers.
-- Magic-link send is 3/minute per IP and per allowlisted email; verify is
-  10/minute per IP. Prod keys IP on `CF-Connecting-IP` only. Extra requests
-  return 429. Mail is sent in `waitUntil` so timing does not leak the allowlist.
+- Magic-link send is 3/minute per IP and per allowlisted email+IP. A global
+  20/hour per-email cap sits behind the per-IP check so a 10-IP flood cannot
+  lock Phil out of a fresh IP. Verify is 10/minute per IP. Prod keys IP on
+  `CF-Connecting-IP` only. Extra requests return 429. Mail is sent in
+  `waitUntil` so timing does not leak the allowlist. Background send failures
+  log kind/status only (no email or token).
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---

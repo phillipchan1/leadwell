@@ -1,12 +1,13 @@
 /**
  * Prove magic-link rate limits, waitUntil mail, CF-Connecting-IP keying,
- * allowlist-before-email-counter, and no password auth.
+ * allowlist-before-email-counter, email+IP (not global 3/min) lockout,
+ * send-failure logs, and no password auth.
  */
 import { PGlite } from "@electric-sql/pglite";
 import { closeAuth, createAuth, handleAuthRequest, type AuthDatabase } from "./auth.ts";
 import { applySchema } from "./isolationDb.ts";
 import {
-  emailMagicLinkRateLimitKey,
+  emailGlobalMagicLinkRateLimitKey,
   MAGIC_LINK_SEND_MAX,
   MAGIC_LINK_VERIFY_MAX,
 } from "./rateLimit.ts";
@@ -116,7 +117,7 @@ async function flushMail(): Promise<void> {
 
 async function emailBucket(email: string): Promise<number> {
   const result = await db.query("SELECT count FROM rate_limit WHERE key = $1", [
-    emailMagicLinkRateLimitKey(email),
+    emailGlobalMagicLinkRateLimitKey(email),
   ]);
   const row = result.rows[0] as { count?: number } | undefined;
   return Number(row?.count ?? 0);
@@ -167,20 +168,20 @@ try {
   ok((await emailBucket("phil@example.com")) === 0, "stranger floods do not charge Phil's email bucket");
   ok(resendCalls.length === 0, "stranger floods do not call Resend");
 
-  const philAfterFlood: number[] = [];
-  for (let i = 0; i < 3; i++) {
-    philAfterFlood.push(
+  const philFlood: number[] = [];
+  for (let i = 0; i < 10; i++) {
+    philFlood.push(
       (await sendLink("phil@example.com", { "cf-connecting-ip": `203.0.113.${20 + i}` })).status,
     );
   }
   await flushMail();
   ok(
-    philAfterFlood.every((s) => s === 200),
-    `Phil can still send after stranger floods (got ${philAfterFlood.join(",")})`,
+    philFlood.every((s) => s === 200),
+    `10-IP Phil flood is all 200 (got ${philFlood.join(",")})`,
   );
-  ok((await emailBucket("phil@example.com")) === 3, "Phil's email bucket is 3 after his own sends");
-  const locked = await sendLink("phil@example.com", { "cf-connecting-ip": "203.0.113.200" });
-  ok(locked.status === 429, "fourth Phil send is 429 on the email counter, even from a new IP");
+  ok((await emailBucket("phil@example.com")) === 10, "global email bucket is 10 after a 10-IP flood");
+  const freshIp = await sendLink("phil@example.com", { "cf-connecting-ip": "203.0.113.200" });
+  ok(freshIp.status === 200, "Phil from a fresh IP still gets 200 after a 10-IP flood");
 
   await db.query("DELETE FROM rate_limit");
   resendCalls.length = 0;
@@ -264,6 +265,67 @@ try {
     }),
   );
   ok(signin.status >= 400, `email/password sign-in is disabled (got ${signin.status})`);
+
+  await db.query("DELETE FROM rate_limit");
+  const failLogs: unknown[][] = [];
+  const realError = console.error;
+  console.error = (...args: unknown[]) => {
+    failLogs.push(args);
+  };
+  try {
+    const missingBg: Promise<unknown>[] = [];
+    const missingAuth = createAuth(
+      { ...env, RESEND_API_KEY: "", AUTH_EMAIL_FROM: "" },
+      pool,
+      { waitUntil: (task) => missingBg.push(task) },
+    );
+    const missing = await sendLink(
+      "phil@example.com",
+      { "cf-connecting-ip": "203.0.113.80" },
+      missingAuth,
+    );
+    ok(missing.status === 200, `missing mail env still returns 200 (got ${missing.status})`);
+    await Promise.all(missingBg);
+    const missingLog = failLogs.find((args) => {
+      const detail = args[1] as { kind?: string } | undefined;
+      return detail?.kind === "missing_env";
+    });
+    ok(Boolean(missingLog), "missing RESEND/FROM logs kind missing_env");
+    const missingBlob = JSON.stringify(missingLog ?? []);
+    ok(!missingBlob.includes("phil@example.com"), "missing_env log has no email");
+    ok(!/"token"/.test(missingBlob) && !missingBlob.includes("visible"), "missing_env log has no token");
+    await closeAuth(missingAuth);
+
+    failLogs.length = 0;
+    const resendFailBg: Promise<unknown>[] = [];
+    const failingFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url.includes("api.resend.com")) {
+        return new Response("upstream failed", { status: 500 });
+      }
+      return failingFetch(input as never, init);
+    }) as typeof fetch;
+    const failAuth = createAuth(env, pool, { waitUntil: (task) => resendFailBg.push(task) });
+    const resendFail = await sendLink(
+      "phil@example.com",
+      { "cf-connecting-ip": "203.0.113.81" },
+      failAuth,
+    );
+    ok(resendFail.status === 200, `Resend 500 still returns 200 (got ${resendFail.status})`);
+    await Promise.all(resendFailBg);
+    const httpLog = failLogs.find((args) => {
+      const detail = args[1] as { kind?: string; status?: number } | undefined;
+      return detail?.kind === "resend_http" && detail.status === 500;
+    });
+    ok(Boolean(httpLog), "Resend 500 logs kind resend_http and status 500");
+    const httpBlob = JSON.stringify(httpLog ?? []);
+    ok(!httpBlob.includes("phil@example.com"), "resend_http log has no email");
+    ok(!/"token"/.test(httpBlob) && !httpBlob.includes("visible"), "resend_http log has no token");
+    await closeAuth(failAuth);
+  } finally {
+    console.error = realError;
+  }
 } finally {
   globalThis.fetch = realFetch;
   await closeAuth(auth);

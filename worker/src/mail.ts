@@ -20,6 +20,37 @@ export async function resendIdempotencyKey(token: string): Promise<string> {
   return `ml/${hex}`;
 }
 
+export type MagicLinkSendFailure = {
+  kind: "missing_env" | "resend_http" | "unknown";
+  status?: number;
+};
+
+export class MagicLinkSendError extends Error {
+  readonly kind: Exclude<MagicLinkSendFailure["kind"], "unknown">;
+  readonly status?: number;
+  constructor(kind: MagicLinkSendError["kind"], status?: number) {
+    super("magic-link send failed");
+    this.name = "MagicLinkSendError";
+    this.kind = kind;
+    this.status = status;
+  }
+}
+
+export function describeMagicLinkSendFailure(err: unknown): MagicLinkSendFailure {
+  if (err instanceof MagicLinkSendError) {
+    return err.status == null ? { kind: err.kind } : { kind: err.kind, status: err.status };
+  }
+  return { kind: "unknown" };
+}
+
+/** Token-free, email-free. Logs kind and optional HTTP status only. */
+export function logMagicLinkSendFailure(
+  err: unknown,
+  log: (message: string, detail: MagicLinkSendFailure) => void = console.error,
+): void {
+  log("magic-link send failed", describeMagicLinkSendFailure(err));
+}
+
 /**
  * Send a magic-link email through Resend. Fail closed: key and from-address
  * must be set. Uses fetch (no Resend SDK).
@@ -31,7 +62,7 @@ export async function sendMagicLinkEmail(
   const key = env.RESEND_API_KEY?.trim();
   const from = authEmailFrom(env);
   if (!key || !from) {
-    throw new Error("RESEND_API_KEY and AUTH_EMAIL_FROM must be set");
+    throw new MagicLinkSendError("missing_env");
   }
   const body = magicLinkEmail({ url: opts.url });
   const res = await fetch(RESEND_URL, {
@@ -50,6 +81,6 @@ export async function sendMagicLinkEmail(
     }),
   });
   if (!res.ok) {
-    throw new Error("failed to send sign-in email");
+    throw new MagicLinkSendError("resend_http", res.status);
   }
 }

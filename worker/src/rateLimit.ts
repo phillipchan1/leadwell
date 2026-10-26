@@ -5,12 +5,21 @@
 
 export const MAGIC_LINK_SEND_WINDOW_SEC = 60;
 export const MAGIC_LINK_SEND_MAX = 3;
+export const MAGIC_LINK_EMAIL_GLOBAL_WINDOW_SEC = 60 * 60;
+export const MAGIC_LINK_EMAIL_GLOBAL_MAX = 20;
 export const MAGIC_LINK_VERIFY_WINDOW_SEC = 60;
 export const MAGIC_LINK_VERIFY_MAX = 10;
 
 export const MAGIC_LINK_SEND_RULE = {
   window: MAGIC_LINK_SEND_WINDOW_SEC,
   max: MAGIC_LINK_SEND_MAX,
+} as const;
+
+export const MAGIC_LINK_EMAIL_IP_RULE = MAGIC_LINK_SEND_RULE;
+
+export const MAGIC_LINK_EMAIL_GLOBAL_RULE = {
+  window: MAGIC_LINK_EMAIL_GLOBAL_WINDOW_SEC,
+  max: MAGIC_LINK_EMAIL_GLOBAL_MAX,
 } as const;
 
 export const MAGIC_LINK_VERIFY_RULE = {
@@ -41,7 +50,11 @@ export type RateLimitDatabase = {
   }>;
 };
 
-export function emailMagicLinkRateLimitKey(email: string): string {
+export function emailIpMagicLinkRateLimitKey(email: string, ip: string): string {
+  return `email-ip|/sign-in/magic-link|${email.trim().toLowerCase()}|${ip.trim()}`;
+}
+
+export function emailGlobalMagicLinkRateLimitKey(email: string): string {
   return `email|/sign-in/magic-link|${email.trim().toLowerCase()}`;
 }
 
@@ -65,7 +78,7 @@ export function authRateLimitCustomRules(): Record<string, RateLimitRule> {
 
 /**
  * One atomic consume against `rate_limit`. Used as Better Auth customStorage
- * (per IP + path) and for the extra per-email magic-link bucket.
+ * (per IP + path) and for the extra email+IP / global-email magic-link buckets.
  */
 export async function consumeRateLimitKey(
   db: RateLimitDatabase,
@@ -116,11 +129,25 @@ export function createDatabaseRateLimitStorage(db: RateLimitDatabase) {
   };
 }
 
+/**
+ * 3/min per email+IP, then a 20/hr global per-email cap. The global consume
+ * runs only after the per-IP check so one IP cannot burn the hour bucket
+ * without first passing its own 3/min, and a distributed flood cannot lock
+ * the real user out of a fresh IP until 20/hr.
+ */
 export async function consumeEmailMagicLinkLimit(
   db: RateLimitDatabase,
   email: string,
+  ip: string,
 ): Promise<{ allowed: boolean; retryAfter: number | null }> {
   const trimmed = email.trim().toLowerCase();
-  if (!trimmed) return { allowed: true, retryAfter: null };
-  return consumeRateLimitKey(db, emailMagicLinkRateLimitKey(trimmed), MAGIC_LINK_SEND_RULE);
+  const address = ip.trim();
+  if (!trimmed || !address) return { allowed: true, retryAfter: null };
+  const perIp = await consumeRateLimitKey(
+    db,
+    emailIpMagicLinkRateLimitKey(trimmed, address),
+    MAGIC_LINK_EMAIL_IP_RULE,
+  );
+  if (!perIp.allowed) return perIp;
+  return consumeRateLimitKey(db, emailGlobalMagicLinkRateLimitKey(trimmed), MAGIC_LINK_EMAIL_GLOBAL_RULE);
 }

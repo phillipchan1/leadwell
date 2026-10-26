@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { closeAuth, createAuth, type AuthInstance } from "./auth.ts";
 import { closeSql, createSql, type Sql } from "./db.ts";
 import type { Env } from "./env.ts";
+import { logMagicLinkSendFailure } from "./mail.ts";
 
 export type WorkerVars = {
   sql?: Sql;
@@ -18,6 +19,13 @@ export function sqlOf(c: WorkerContext): Sql {
   return sql;
 }
 
+/** Swallow a background task when executionCtx is missing (Node tests). */
+export function catchBackgroundTask(task: Promise<unknown>): void {
+  void task.catch((err) => {
+    logMagicLinkSendFailure(err);
+  });
+}
+
 export function authOf(c: WorkerContext): AuthInstance {
   const existing = c.get("auth");
   if (existing) return existing;
@@ -26,7 +34,7 @@ export function authOf(c: WorkerContext): AuthInstance {
       try {
         c.executionCtx.waitUntil(task);
       } catch {
-        void task;
+        catchBackgroundTask(task);
       }
     },
   });
