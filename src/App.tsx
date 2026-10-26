@@ -192,6 +192,8 @@ function useDropStaleSelection() {
  * when it isn't the one the meeting opens on.
  */
 function useDocumentTitle() {
+  const location = useLocation();
+  const phase = useStore((s) => s.phase);
   const selected = useSelectedEntity();
   const tab = useStore((s) => s.tab);
   const section = useStore((s) => s.section);
@@ -199,6 +201,8 @@ function useDocumentTitle() {
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
+  const signIn =
+    phase === "anon" || location.pathname.replace(/\/$/, "") === "/signin";
 
   let title: string | undefined;
   if (!selected) {
@@ -221,8 +225,8 @@ function useDocumentTitle() {
   }
 
   useEffect(() => {
-    document.title = title ? `${title} — Polarch` : "Polarch";
-  }, [title]);
+    document.title = signIn ? "Sign in — Polarch" : title ? `${title} — Polarch` : "Polarch";
+  }, [signIn, title]);
 }
 
 /**

@@ -79,16 +79,16 @@ export function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="h-12 w-full rounded-xl border border-leather-line bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-gilt"
+              className="h-12 w-full rounded-xl border border-leather-mute bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-leather-mute"
             />
             <Button
               type="submit"
               size="lg"
-              color="secondary"
+              color="primary"
               isDisabled={busy}
               isLoading={busy}
               showTextWhileLoading
-              className="w-full"
+              className="w-full bg-[#ec7c58] text-[#181615] hover:bg-[#d4623e] before:hidden"
             >
               {busy ? "Sending…" : "Email me a sign-in link"}
             </Button>
