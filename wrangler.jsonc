@@ -1,0 +1,51 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "leadwell",
+  "main": "worker/src/index.ts",
+  "compatibility_date": "2026-01-15",
+  "compatibility_flags": ["nodejs_compat"],
+  // Static Vite build. Deep links fall back to index.html (same as Vercel SPA).
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  // BETTER_AUTH_URL, TRUSTED_ORIGINS, AUTH_COOKIE_DOMAIN, and ENVIRONMENT
+  // are not set here — wrangler vars ship to prod. Attach polarch.day in
+  // the dashboard (RUNBOOK.md); then set BETTER_AUTH_URL=https://polarch.day
+  // and AUTH_COOKIE_DOMAIN=polarch.day. Local (`.dev.vars`): ENVIRONMENT=local.
+  // ENVIRONMENT=local is the only unset-URL fallback.
+  "vars": {
+    "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+    "ALLOWED_EMAILS": "phillipchan1@gmail.com"
+  },
+  // Replace `id` with a real Hyperdrive config before `wrangler deploy`.
+  // Hyperdrive is Workers Paid. Local / Free preview uses DATABASE_URL.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:5432/leadwell"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  // Preview stays on workers.dev. Custom domain (polarch.day) is attached
+  // in the Cloudflare dashboard, not in this file. Do not deploy from CI.
+  "env": {
+    "preview": {
+      "name": "leadwell-preview",
+      "workers_dev": true,
+      "preview_urls": true,
+      "vars": {
+        "ANTHROPIC_MODEL": "claude-sonnet-4-20250514",
+        "ALLOWED_EMAILS": "phillipchan1@gmail.com"
+      },
+      // Empty on purpose: Hyperdrive is not inherited. Preview uses DATABASE_URL.
+      "hyperdrive": []
+    }
+  }
+}

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  backendConfigured,
   devTestUserConfigured,
   signInAsTestUser,
   signInWithGoogle,
 } from "../lib/auth";
-import { supabaseConfigured } from "../lib/supabase";
 import { Button } from "@/components/base/buttons/button";
 import { Mark, Wordmark } from "./brand/glyphs";
 
@@ -29,7 +29,7 @@ export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }
   // Landing "Continue with Google" lands here so OAuth starts on this origin
   // (the same redirect URLs as the in-app button). StrictMode remounts; once.
   useEffect(() => {
-    if (!autoStartGoogle || !supabaseConfigured || startedGoogle.current) return;
+    if (!autoStartGoogle || !backendConfigured || startedGoogle.current) return;
     startedGoogle.current = true;
     void onSignIn();
   }, [autoStartGoogle]);
@@ -39,7 +39,7 @@ export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }
     setBusy(true);
     try {
       await signInAsTestUser();
-      // onAuthStateChange runs bootstrap; the gate unmounts on its own.
+      // SIGNED_IN runs bootstrap; the gate unmounts on its own.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Test sign-in failed.");
       setBusy(false);
@@ -65,11 +65,10 @@ export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }
           </p>
         </div>
 
-        {!supabaseConfigured ? (
+        {!backendConfigured ? (
           <p className="w-full rounded-xl bg-leather-hi p-4 text-left text-[13px] leading-relaxed text-leather-ink">
-            Backend not configured. Add <code>VITE_SUPABASE_URL</code> and{" "}
-            <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code> and restart the dev
-            server. See <code>SETUP.md</code>.
+            Backend not configured. Start the Worker (<code>npm run cf:dev</code>) or Vite with
+            the <code>/api</code> proxy. See <code>RUNBOOK.md</code>.
           </p>
         ) : (
           <Button
@@ -88,7 +87,7 @@ export function Login({ autoStartGoogle = false }: { autoStartGoogle?: boolean }
 
         {/* Dev only — compiled out of production builds. Lets an agent drive
             the real signed-in app without touching the Google account. */}
-        {supabaseConfigured && devTestUserConfigured && (
+        {backendConfigured && devTestUserConfigured && (
           <Button
             size="md"
             color="secondary"

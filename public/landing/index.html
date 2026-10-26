@@ -7,17 +7,14 @@
     /* Signed-in visitors belong in the app. OAuth also returns to `/`, so a
        code on this URL is sent there too — the React client picks it up. */
     (function () {
-      var SUPABASE_REF = "";
       var q = location.search;
       var h = location.hash;
       function hasSession() {
-        if (!SUPABASE_REF) return false;
         try {
-          var raw = localStorage.getItem("sb-" + SUPABASE_REF + "-auth-token");
+          var raw = localStorage.getItem("lw-session");
           if (!raw) return false;
           var v = JSON.parse(raw);
-          var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
-          return Boolean(token);
+          return Boolean(v && v.id);
         } catch (e) {}
         return false;
       }

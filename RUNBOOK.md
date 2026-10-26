@@ -1,0 +1,195 @@
+# LeadWell cutover: Vercel/Supabase → Cloudflare/Neon
+
+Phil is the only user. Vercel and the Supabase project **LeadWell** stay
+intact. This runbook is the cutover, not a delete.
+
+Realtime publication is on in Supabase. The app never calls
+`supabase.channel` / `.subscribe()`, so realtime is dropped. No Worker
+equivalent is shipped.
+
+There are no crons, storage buckets, or payments. The public host will
+be **polarch.day** (product rename comes later; Worker/repo stay LeadWell).
+
+---
+
+## Env vars and secrets (names only)
+
+Never put values here.
+
+### Worker / wrangler secrets
+
+| Name | Where | Notes |
+| --- | --- | --- |
+| `BETTER_AUTH_SECRET` | wrangler secret | Session signing. Generate a long random string. |
+| `BETTER_AUTH_URL` | wrangler var | Public Worker origin (`https`, with a scheme). Required in preview/prod. Unset is allowed only when `ENVIRONMENT=local`. Loopback may use `http`. After the custom domain is attached, set this to that origin. |
+| `TRUSTED_ORIGINS` | wrangler var | Optional comma-separated extra origins for CORS and Better Auth. `BETTER_AUTH_URL` is always included. Use for `www` or a leftover `*.workers.dev` host. Hosts must not contain `*`. |
+| `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Must equal or be a parent of the `BETTER_AUTH_URL` host and must not be a public suffix (`workers.dev`, `pages.dev`, `co.uk`, …). Omit on `*.workers.dev` / `*.pages.dev` and local. |
+| `ENVIRONMENT` | `.dev.vars` only | Set to `local` on your laptop. Omit in preview/prod. |
+| `GOOGLE_CLIENT_ID` | wrangler secret | Same Google OAuth web client, new redirect URI. |
+| `GOOGLE_CLIENT_SECRET` | wrangler secret | Same Google client. |
+| `ANTHROPIC_API_KEY` | wrangler secret | Server-side Claude key. The client must never send it. |
+| `ANTHROPIC_MODEL` | wrangler var | Optional. Must be in the Worker allowlist. Defaults to `claude-sonnet-4-20250514`. |
+| `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and account linking. Set to Phil's Google email. Empty admits no new users. |
+| `DATABASE_URL` | wrangler secret | Neon connection string. Used when Hyperdrive is unset (preview / local). |
+| `HYPERDRIVE` | wrangler binding | Workers Paid. Replace the placeholder id in `wrangler.jsonc` before production deploy. Local uses `localConnectionString`. |
+
+### Client (Vite)
+
+| Name | Where | Notes |
+| --- | --- | --- |
+| `VITE_DEV_TEST_EMAIL` | `.env.local` | Dev-only email/password button. Compiled out of production. |
+| `VITE_DEV_TEST_PASSWORD` | `.env.local` | Same. |
+| `VITE_DEMO` | build env | `1` for the offline sample-org build. |
+| `LEADWELL_WORKER_ORIGIN` | `.env.local` | Optional Vite proxy target. Defaults to `http://127.0.0.1:8787`. |
+
+### Migration script (laptop, once)
+
+| Name | Notes |
+| --- | --- |
+| `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project. The script only `pg_dump`s / `COPY`s. |
+| `NEON_DB_URL` | Empty Neon database. The script writes here. |
+| `LEADWELL_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover. |
+| `PG_BIN` | Optional directory containing `pg_dump` / `pg_restore` matching the source major. |
+
+Do not put `SUPABASE_DB_URL` or `NEON_DB_URL` in CI except the loopback prove URLs.
+
+---
+
+## Local
+
+```sh
+cp .env.example .env.local
+cp .dev.vars.example .dev.vars
+# fill names from the tables above
+npm install
+# terminal 1
+npx wrangler dev
+# terminal 2
+npm run dev
+```
+
+Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
+
+Apply `worker/schema/001_leadwell.sql` then `002_better_auth.sql` to a local
+Postgres or Neon branch before signing in.
+
+---
+
+## Data migration (source is read-only)
+
+Dry-run with no URLs (prints the contract, writes nothing):
+
+```sh
+node scripts/migrate-supabase-to-neon.mjs --dry-run
+```
+
+Expected output:
+
+```
+dry-run: would pg_dump public + auth.users + auth.identities from SUPABASE_DB_URL (read-only)
+dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated
+dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)
+dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL
+dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out
+dry-run: would insert auth.users into Better Auth "user" (same ids) and Google identities into account
+dry-run: would compare per-table row counts and content hashes and abort on mismatch
+tools required: pg_dump, pg_restore, psql
+```
+
+Live cutover (Phil, by hand — not a test, so loopback is not required):
+
+```sh
+SUPABASE_DB_URL=postgres://… NEON_DB_URL=postgres://… \
+  node scripts/migrate-supabase-to-neon.mjs
+```
+
+`--dry-run` with both URLs set still dumps from Supabase (read-only) and
+prints row counts; it does not write to Neon.
+
+The script:
+
+1. `pg_dump`s `public` (no-owner, no-acl) from Supabase.
+2. `COPY`s `auth.users` and `auth.identities`.
+3. Aborts on blank or case-insensitive-duplicate emails.
+4. Refuses a non-empty Neon target.
+5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
+6. Inserts Better Auth `"user"` rows with the **same UUIDs**.
+7. Maps Google identities → `account` (`provider_id = google`).
+8. Compares per-table `COUNT(*)` and `md5` of every row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch). Aborts on mismatch.
+9. On failure, drops only objects this run created on Neon. Supabase is never
+   modified.
+
+Email/password hashes from GoTrue are not portable. Phil's login path is
+**Google**, linked by the mapped UUID + Google `account` row. Email/password
+remains available for a new test user or a password reset after cutover.
+
+---
+
+## Cutover
+
+1. Create a Neon project (free tier). Leave it empty.
+2. Create a Cloudflare Worker (`leadwell`) with Workers static assets.
+   Hyperdrive is Workers Paid; preview can use `DATABASE_URL` instead.
+3. Set the Worker secrets and `ALLOWED_EMAILS` to Phil's Google email.
+   Preview can use `BETTER_AUTH_URL` = the `*.workers.dev` origin. Production
+   uses the custom domain (next step).
+4. Attach **polarch.day** as the Worker custom domain (dashboard: Workers →
+   leadwell → Settings → Domains & Routes → Add, or
+   `npx wrangler domains add polarch.day`). Then set:
+   - `BETTER_AUTH_URL` = `https://polarch.day`
+   - `AUTH_COOKIE_DOMAIN` = `polarch.day` (no leading dot)
+   - `TRUSTED_ORIGINS` only if you still serve `www` or `*.workers.dev`
+   Do not rename the Worker, package, or repo.
+5. In Google Cloud, add these Better Auth callbacks to the existing OAuth
+   client (keep the Supabase callback until rollback is unused):
+   - `https://polarch.day/api/auth/callback/google`
+   - `{workers.dev origin}/api/auth/callback/google` while preview exists
+6. Run the migrate script against the empty Neon database.
+7. `npm run build && wrangler deploy` (or `--env preview` first).
+8. Open `https://polarch.day`. Sign in with Google. Data should be Phil's
+   existing org (same `user.id` as the Supabase auth UUID).
+9. Smoke-test. The shared URL is `https://polarch.day`.
+
+Vercel stays deployed. Supabase stays live. Nothing is deleted.
+
+---
+
+## Smoke tests
+
+- `GET /api/health` → `{ ok: true, service: "leadwell", realtime: false }`
+- Signed-out `https://polarch.day/` still shows the marketing landing.
+- Google sign-in returns to the app; the org loads (people, meetings, prayer).
+- An edit syncs (chrome leaves "saving"); reload keeps it.
+- Dev-only: email/password test user if `VITE_DEV_*` is set.
+- `POST /api/anthropic` with a signed-in session and no client API key.
+  Without `ANTHROPIC_API_KEY` the Worker returns 501; with it, Claude answers.
+- Confirm the Supabase dashboard still has the original rows (source untouched).
+
+---
+
+## Rollback
+
+`vercel.json` has `"ignoreCommand": "exit 0"`. Merging this branch to
+`master` does **not** ship a new Vercel build. Production on Vercel stays
+the current deployment (`a147830`). That is the fallback.
+
+1. Point the shared URL / bookmark back at that Vercel deployment. Do not
+   delete the Worker.
+2. Google still works against Supabase — its redirect URI was never removed.
+3. Neon and the Worker can stay; they are unused until you cut over again.
+4. **Writes made on Neon after cutover do not exist on Supabase.** Rolling
+   back returns Phil to the last Supabase snapshot. Do not write back from
+   Neon to Supabase.
+5. Re-migrate later only into a **new empty** Neon database (the script
+   refuses a dirty target).
+
+---
+
+## What is not here
+
+- No Cloudflare cron.
+- No R2 / storage.
+- No payments.
+- No Supabase realtime replacement (unused).
+- No rename of the Worker, package, or repo (polarch.day is a host only).
+- No deletion of the Vercel project or the LeadWell Supabase project.

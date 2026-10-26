@@ -8,7 +8,6 @@
          load the app. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
       (function () {
         var LEADWELL_DEMO = false;
-        var SUPABASE_REF = "";
         function loadApp() {
           // LEADWELL_LOAD_APP
         }
@@ -19,13 +18,11 @@
           );
         }
         function hasSession() {
-          if (!SUPABASE_REF) return false;
           try {
-            var raw = localStorage.getItem("sb-" + SUPABASE_REF + "-auth-token");
+            var raw = localStorage.getItem("lw-session");
             if (!raw) return false;
             var v = JSON.parse(raw);
-            var token = v && (v.access_token || (v.currentSession && v.currentSession.access_token));
-            return Boolean(token);
+            return Boolean(v && v.id);
           } catch (e) {}
           return false;
         }

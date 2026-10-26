@@ -3,5 +3,7 @@ dist
 *.tsbuildinfo
 .env
 .env.local
+.dev.vars
 *.local
 .DS_Store
+.wrangler
