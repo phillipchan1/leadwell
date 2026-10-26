@@ -215,9 +215,9 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Flex column child that must scroll: `flex-1 min-h-0` alone still leaves
-   some engines (and zoomed viewports) with no scrollbar. `height: 0` with
-   `flex: 1 1 0%` forces a bounded box. */
+/* Flex *column* child that must scroll — never on a row sibling (e.g. the main
+   canvas beside the peek panel): `height: 0` is the cross axis there and
+   collapses the pane to a white band. */
 @utility pane-scroll {
   flex: 1 1 0%;
   height: 0;

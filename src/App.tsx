@@ -442,8 +442,8 @@ export default function App() {
                 // ordinary tall document that has to scroll like every other
                 // tab, so the clip is scoped to lg and up.
                 tab === "tree"
-                  ? "scroll-contain min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden lg:h-auto"
-                  : "pane-scroll",
+                  ? "scroll-contain min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col lg:overflow-hidden"
+                  : "scroll-contain min-h-0 flex-1 overflow-y-auto",
                 // The entity takes the whole surface below xl. Important, so
                 // the tree pane's `lg:flex` can't put the split back.
                 selected && "max-xl:hidden!"
