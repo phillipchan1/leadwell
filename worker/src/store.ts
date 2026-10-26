@@ -19,16 +19,28 @@ function quoteIdent(name: string): string {
   return `"${name}"`;
 }
 
+const EMPTY_JSON_ARRAY_COLUMNS = new Set([
+  "clifton_top5",
+  "strengths",
+  "watch_outs",
+  "custom_modalities",
+  "messages",
+]);
+
 function serialize(column: string, value: unknown): unknown {
-  if (value === undefined) return null;
   if (JSON_COLUMNS.has(column)) {
-    if (value == null) return column === "messages" ? JSON.stringify([]) : null;
+    if (value === undefined || value === null) {
+      return EMPTY_JSON_ARRAY_COLUMNS.has(column) ? JSON.stringify([]) : null;
+    }
     return typeof value === "string" ? value : JSON.stringify(value);
   }
   if (TEXT_ARRAY_COLUMNS.has(column)) {
     return Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : [];
   }
-  return value;
+  if (column === "updated_at" && (value === undefined || value === null)) {
+    return new Date().toISOString();
+  }
+  return value === undefined ? null : value;
 }
 
 function scopedRow(userId: string, table: TableName, row: Row): Row {
@@ -94,7 +106,7 @@ export async function upsertRows(
     await sql.unsafe(
       `INSERT INTO ${quoteIdent(table)} (${colList}) VALUES (${placeholders})
        ON CONFLICT (${conflict}) DO UPDATE SET ${setClause}`,
-      values,
+      values as never[],
     );
   }
 }
