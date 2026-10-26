@@ -1,0 +1,249 @@
+# Manual Supabase → Neon cutover. workflow_dispatch only — not a deploy.
+# Source is a read-only Supabase session-pooler role. Secrets are masked
+# and never printed. Do not set -x. Do not set LEADWELL_MIGRATE_TEST
+# (that flag is prove/CI loopback only and would refuse the real source).
+name: cutover-migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >
+          Restore into the Actions Postgres service instead of Neon.
+          Leave true unless you intend to write to NEON_DATABASE_URL.
+        type: boolean
+        default: true
+
+concurrency:
+  group: cutover-migrate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Setup Node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Mask secrets and prepare URLs
+        env:
+          # Empty on purpose: prove/CI sets this so both URLs must be
+          # loopback. This job reads the real Supabase session pooler.
+          LEADWELL_MIGRATE_TEST: ""
+        run: |
+          set +x
+          set -eu
+          unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
+          node --input-type=module <<'JS'
+          import { ensureSslMode, githubAddMaskLines } from "./scripts/loopback.mjs";
+
+          function mask(value) {
+            for (const line of githubAddMaskLines(value)) process.stdout.write(`${line}\n`);
+          }
+
+          const dryRun = process.env.DRY_RUN === "true";
+          let source = (process.env.SOURCE_DATABASE_URL || "").trim();
+          let neon = (process.env.NEON_DATABASE_URL || "").trim();
+          mask(source);
+          mask(neon);
+          if (!source) {
+            console.error("Missing repo secret SOURCE_DATABASE_URL");
+            process.exit(1);
+          }
+          source = ensureSslMode(source);
+          mask(source);
+          let target;
+          if (dryRun) {
+            target = "postgresql://postgres:postgres@127.0.0.1:5432/leadwell_cutover";
+          } else {
+            if (!neon) {
+              console.error("Missing repo secret NEON_DATABASE_URL (required when dry_run=false)");
+              process.exit(1);
+            }
+            target = ensureSslMode(neon);
+            mask(target);
+          }
+          if (source === target) {
+            console.error("Source and target URLs must be different");
+            process.exit(1);
+          }
+          const fs = await import("node:fs");
+          const delim = `CUTOVER_${Date.now()}`;
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            [
+              ["SOURCE_DATABASE_URL", source],
+              ["SUPABASE_DB_URL", source],
+              ["NEON_DB_URL", target],
+              ["TARGET_DATABASE_URL", target],
+            ]
+              .map(([k, v]) => `${k}<<${delim}\n${v}\n${delim}\n`)
+              .join(""),
+          );
+          console.log(`dry_run=${dryRun} target=${dryRun ? "scratch-postgres" : "neon"}`);
+          JS
+
+      - name: Install PostgreSQL clients
+        run: |
+          set +x
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-15 postgresql-client-16 postgresql-client-17
+
+      - name: pg_dump source (custom format)
+        env:
+          PGOPTIONS: "-c default_transaction_read_only=on"
+        run: |
+          set +x
+          set -eu
+          unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
+          mkdir -p artifacts
+          node --input-type=module <<'JS'
+          import { spawnSync } from "node:child_process";
+          import { existsSync, statSync } from "node:fs";
+          import { join } from "node:path";
+          import { redactSecrets, sourceReadEnv } from "./scripts/loopback.mjs";
+
+          const source = process.env.SOURCE_DATABASE_URL || "";
+          function run(cmd, args, opts = {}) {
+            const res = spawnSync(cmd, args, {
+              encoding: "utf8",
+              maxBuffer: 64 * 1024 * 1024,
+              env: sourceReadEnv(),
+              ...opts,
+            });
+            if (res.status !== 0) {
+              throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${(res.stderr || res.stdout || "").trim()}`));
+            }
+            return res.stdout;
+          }
+          function toolMajor(bin) {
+            const res = spawnSync(bin, ["--version"], { encoding: "utf8" });
+            if (res.status !== 0) return null;
+            const m = `${res.stdout || ""}\n${res.stderr || ""}`.match(/(\d+)\./);
+            return m ? Number(m[1]) : null;
+          }
+          const verOut = run("psql", [
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-tA",
+            "-d",
+            source,
+            "-c",
+            "SHOW server_version_num",
+          ]);
+          const n = Number(String(verOut).trim());
+          if (!Number.isFinite(n) || n < 10000) throw new Error("unparsable server_version_num");
+          const major = Math.floor(n / 10000);
+          const candidates = [
+            process.env.PG_BIN ? join(process.env.PG_BIN, "pg_dump") : null,
+            `/usr/lib/postgresql/${major}/bin/pg_dump`,
+            `/usr/pgsql-${major}/bin/pg_dump`,
+            "pg_dump",
+          ].filter(Boolean);
+          let dump = null;
+          for (const bin of candidates) {
+            if (bin !== "pg_dump" && !existsSync(bin)) continue;
+            if (toolMajor(bin) === major) {
+              dump = bin;
+              break;
+            }
+          }
+          if (!dump) throw new Error(`pg_dump matching Postgres ${major} not found`);
+          console.log(`source postgres major ${major}; using matching pg_dump`);
+          const file = "artifacts/leadwell-source.dump";
+          run(dump, [
+            "--format=custom",
+            "--no-owner",
+            "--no-acl",
+            "--schema=public",
+            `--file=${file}`,
+            source,
+          ]);
+          const bytes = statSync(file).size;
+          if (!bytes) throw new Error("custom-format dump is empty");
+          console.log(`custom-format dump written (${bytes} bytes)`);
+          JS
+
+      - name: Upload source dump
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: leadwell-source-dump
+          path: artifacts/leadwell-source.dump
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Create scratch target (dry_run)
+        if: ${{ inputs.dry_run }}
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set +x
+          set -eu
+          unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_cutover;"
+
+      - name: Run Supabase → Neon migrate script
+        env:
+          LEADWELL_MIGRATE_TEST: ""
+        run: |
+          set +x
+          set -eu
+          unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
+          unset LEADWELL_MIGRATE_TEST
+          # dry_run=true: NEON_DB_URL is the scratch service DB (prepared above).
+          # dry_run=false: NEON_DB_URL is NEON_DATABASE_URL. No --dry-run flag —
+          # the script's --dry-run exits before restore, so we would have no
+          # target to checksum or to confirm Phil's user.
+          node scripts/migrate-supabase-to-neon.mjs
+
+      - name: Checksums and Phil auth user
+        env:
+          LEADWELL_MIGRATE_TEST: ""
+        run: |
+          set +x
+          set -eu
+          unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
+          unset LEADWELL_MIGRATE_TEST
+          node scripts/cutover-verify.mjs --report artifacts/cutover-report.md
+
+      - name: Upload checksum report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: cutover-report
+          path: artifacts/cutover-report.md
+          retention-days: 7
+          if-no-files-found: ignore

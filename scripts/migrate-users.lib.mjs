@@ -240,6 +240,77 @@ export function assertHashesMatch(src, dst, tables = CHECKSUM_TABLES) {
   }
 }
 
+/** Markdown table of per-table counts and md5 hashes. Safe for a step summary. */
+export function formatChecksumReport(srcHashes, dstHashes, tables = CHECKSUM_TABLES) {
+  const lines = [
+    "| table | source_count | target_count | source_md5 | target_md5 | ok |",
+    "| --- | ---: | ---: | --- | --- | --- |",
+  ];
+  for (const table of tables) {
+    const s = srcHashes?.[table];
+    const d = dstHashes?.[table];
+    const ok =
+      Number.isFinite(s?.n) &&
+      Number.isFinite(d?.n) &&
+      s.n === d.n &&
+      Boolean(s?.hash) &&
+      Boolean(d?.hash) &&
+      s.hash === d.hash;
+    lines.push(
+      `| ${table} | ${s?.n ?? "?"} | ${d?.n ?? "?"} | ${s?.hash ?? "?"} | ${d?.hash ?? "?"} | ${ok ? "yes" : "NO"} |`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/** Parse `id|email` lines from `psql -tA`. Callers must not print emails. */
+export function parseIdEmailRows(text) {
+  const rows = [];
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const sep = line.indexOf("|");
+    if (sep <= 0) continue;
+    rows.push({ id: line.slice(0, sep), email: line.slice(sep + 1) });
+  }
+  return rows;
+}
+
+/**
+ * Every source auth.users row must exist on target `"user"` with the same
+ * id and email (case-insensitive). Messages include ids only — never email.
+ */
+export function assertAuthUsersCarriedOver(sourceUsers, targetUsers) {
+  const src = new Map((sourceUsers ?? []).map((user) => [String(user.id), user]));
+  const dst = new Map((targetUsers ?? []).map((user) => [String(user.id), user]));
+  const problems = [];
+  const ids = [];
+  if (src.size === 0) problems.push("source has no auth.users rows");
+  for (const [id, user] of src) {
+    const other = dst.get(id);
+    if (!other) {
+      problems.push(`auth user ${id} missing on target`);
+      continue;
+    }
+    const a = String(user.email ?? "").trim().toLowerCase();
+    const b = String(other.email ?? "").trim().toLowerCase();
+    if (!a || a !== b) {
+      problems.push(`auth user ${id} email mismatch`);
+      continue;
+    }
+    ids.push(id);
+  }
+  for (const id of dst.keys()) {
+    if (!src.has(id)) problems.push(`target has extra user ${id}`);
+  }
+  if (problems.length) {
+    throw new Error(
+      `auth user carry-over failed — abort:\n${problems.map((p) => `  ${p}`).join("\n")}`,
+    );
+  }
+  return ids;
+}
+
 const USER_OBJECT_FROM = `
 SELECT n.nspname AS schema, c.relname AS name, c.relkind::text AS kind, '' AS args
 FROM pg_class c
