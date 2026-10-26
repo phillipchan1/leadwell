@@ -355,7 +355,7 @@ export default function App() {
    */
   if (location.pathname.replace(/\/$/, "") === "/lab/meetings") {
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <Suspense fallback={<LoadingSplash />}>
           <MeetingsLab />
         </Suspense>
@@ -395,7 +395,7 @@ export default function App() {
 
   if (inSessionEditor) {
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
         <Suspense fallback={<LoadingSplash />}>
           <SessionEditorView />
         </Suspense>
@@ -409,12 +409,12 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0 overflow-hidden">
       {/* The leather frame: a sidebar on a desktop, a header and tab bar on a
           phone. Navigation used to take two stacked rows of every screen. */}
       <Sidebar badges={badges} />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PhoneHeader />
 
         {inFocus ? (
@@ -424,9 +424,10 @@ export default function App() {
              is on screen. Between lg and xl the sidebar leaves 792px, short of
              the 18rem + 32rem the split needs, and both halves came out
              clipped. */
-          <div className="flex min-h-0 flex-1">
+          <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <main
               className={cx(
+                "min-h-0",
                 // Horizontal padding is `pad-safe-x`'s alone — `p-4` sets the
                 // same property and lost to it, which flattened every tab
                 // against both screen edges below `sm`.

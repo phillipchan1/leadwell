@@ -106,6 +106,13 @@
   transition-timing-function: inherit;
 }
 
+html {
+  /* iOS Safari can zoom the viewport when a field under 16px focuses and never
+     zoom back out; keep type at the authored scale. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 html,
 body {
   font-family: var(--font-body);
@@ -156,6 +163,14 @@ body,
   height: 100dvh;
 }
 
+html,
+body {
+  /* Document scroll is disabled on purpose — every tab scrolls inside the
+     shell. Lock the viewport so browser zoom can't grow the page underneath
+     a pane that forgot to scroll. */
+  overflow: hidden;
+}
+
 body {
   @apply bg-stone-50 text-stone-900 antialiased dark:bg-stone-950 dark:text-stone-100;
   /* No document-level scroll to rubber-band or pull-to-refresh: every
@@ -164,6 +179,10 @@ body {
 }
 
 #root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   /* Kills the 300ms double-tap-to-zoom delay on every button and link. */
   touch-action: manipulation;
 }

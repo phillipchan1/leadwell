@@ -158,7 +158,7 @@ export function MeetingProfile({
   );
 
   return (
-    <div className="scroll-contain relative flex h-full min-h-0 flex-1 flex-col overflow-y-auto bg-primary">
+    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-primary">
       <header className={cx("entity-header @container shrink-0 pt-6 pb-5", pad)}>
         <div className="flex flex-col gap-5">
           <div className="flex items-start gap-4">
@@ -218,42 +218,65 @@ export function MeetingProfile({
         </div>
       </header>
 
-      <div className="sticky top-0 z-20 bg-primary">
-        <EntityModeTabs
-          subject="meeting"
-          mode={mode}
-          onMode={(m) => setSection(modeSection(m, "meeting"))}
-          counts={{ meetings: openCount, notes: sessionCount }}
-        />
-      </div>
+      <EntityModeTabs
+        subject="meeting"
+        mode={mode}
+        onMode={(m) => setSection(modeSection(m, "meeting"))}
+        counts={{ meetings: openCount, notes: sessionCount }}
+      />
 
-      {mode === "now" && (
-        <div className={cx("flex flex-col pt-5 pb-10", pad)}>
-          <MeetingAgenda meeting={meeting} onOpenSession={openSession} narrow={!focus} />
-        </div>
-      )}
+      <div className="scroll-contain relative min-h-0 flex-1 overflow-y-auto">
+        {mode === "now" && (
+          <div className={cx("flex flex-col pt-5 pb-10", pad)}>
+            <MeetingAgenda meeting={meeting} onOpenSession={openSession} narrow={!focus} />
+          </div>
+        )}
 
-      {mode === "meetings" && (
-        <div className={cx("flex flex-col pt-5 pb-10", pad)}>
-          <MeetingPlanner
+        {mode === "meetings" && (
+          <div className={cx("flex flex-col pt-5 pb-10", pad)}>
+            <MeetingPlanner
+              meeting={meeting}
+              selectedSlotKey={selectedSlotKey}
+              onSelectWeek={onSelectWeek}
+              onCloseNotes={closeNotes}
+              onOpenSession={openSession}
+              historyView={false}
+              oneOff={false}
+              narrow={!focus}
+            />
+          </div>
+        )}
+
+        {mode === "notes" && (
+          <div className={cx("flex flex-col gap-4 pt-5 pb-10", pad)}>
+            <TrackerLink meetingId={meeting.id} />
+            <SessionHistoryTable meetingId={meeting.id} onOpen={(id) => setSelectedSlotKey(`s:${id}`)} />
+          </div>
+        )}
+
+        {mode === "profile" && (
+          <MeetingSettings
             meeting={meeting}
-            selectedSlotKey={selectedSlotKey}
-            onSelectWeek={onSelectWeek}
-            onCloseNotes={closeNotes}
-            onOpenSession={openSession}
-            historyView={false}
-            oneOff={false}
-            narrow={!focus}
+            title={title}
+            unnamedFallback={meetingTitle({ ...meeting, name: undefined }, subjectName)}
+            sessionCount={sessionCount}
+            pad={pad}
+            onChange={(patch) => updateMeeting(meeting.id, patch)}
+            onDelete={async () => {
+              if (
+                await confirmAction({
+                  title: `Delete “${title}”?`,
+                  body: `Its ${sessionCount} write-up${sessionCount === 1 ? "" : "s"} and ${mine.length} topic${mine.length === 1 ? "" : "s"} go with it. This can't be undone.`,
+                  confirmLabel: "Delete",
+                })
+              ) {
+                untrackMeeting(meeting.id);
+                clearSelection();
+              }
+            }}
           />
-        </div>
-      )}
-
-      {mode === "notes" && (
-        <div className={cx("flex flex-col gap-4 pt-5 pb-10", pad)}>
-          <TrackerLink meetingId={meeting.id} />
-          <SessionHistoryTable meetingId={meeting.id} onOpen={(id) => setSelectedSlotKey(`s:${id}`)} />
-        </div>
-      )}
+        )}
+      </div>
 
       {mode === "notes" && selectedSlotKey && (
         <OccurrenceNotesSheet open onClose={closeNotes} label="Meeting notes">
@@ -265,29 +288,6 @@ export function MeetingProfile({
             onMaterialized={(id) => setSelectedSlotKey(`s:${id}`)}
           />
         </OccurrenceNotesSheet>
-      )}
-
-      {mode === "profile" && (
-        <MeetingSettings
-          meeting={meeting}
-          title={title}
-          unnamedFallback={meetingTitle({ ...meeting, name: undefined }, subjectName)}
-          sessionCount={sessionCount}
-          pad={pad}
-          onChange={(patch) => updateMeeting(meeting.id, patch)}
-          onDelete={async () => {
-            if (
-              await confirmAction({
-                title: `Delete “${title}”?`,
-                body: `Its ${sessionCount} write-up${sessionCount === 1 ? "" : "s"} and ${mine.length} topic${mine.length === 1 ? "" : "s"} go with it. This can't be undone.`,
-                confirmLabel: "Delete",
-              })
-            ) {
-              untrackMeeting(meeting.id);
-              clearSelection();
-            }
-          }}
-        />
       )}
     </div>
   );

@@ -130,7 +130,11 @@ export function EntityBody({ density }: { density: Density }) {
     }
   };
 
-  return <Suspense fallback={<ProfileFallback />}>{body()}</Suspense>;
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <Suspense fallback={<ProfileFallback />}>{body()}</Suspense>
+    </div>
+  );
 }
 
 /**
@@ -190,7 +194,7 @@ export function PeekPanel() {
     <div
       ref={ref}
       style={{ "--peek-w": `${panelPct}%` } as CSSProperties}
-      className="relative flex min-w-0 flex-1 shrink-0 flex-col bg-primary xl:w-[var(--peek-w)] xl:min-w-[32rem] xl:flex-none xl:border-l xl:border-stone-200 xl:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:xl:border-stone-800 dark:xl:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
+      className="relative flex min-h-0 min-w-0 flex-1 shrink-0 flex-col overflow-hidden bg-primary xl:w-[var(--peek-w)] xl:min-w-[32rem] xl:flex-none xl:border-l xl:border-stone-200 xl:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] dark:xl:border-stone-800 dark:xl:shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.35)]"
     >
       {/* The divider. Keyboard-resizable too, because a drag handle that only
           answers to a mouse is a control half the people here can't reach. */}

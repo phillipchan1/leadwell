@@ -67,7 +67,7 @@ export function MeProfile({ density: _density = "peek" }: { density?: Density })
   const [editingAssessments, setEditingAssessments] = useState(false);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-primary">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-primary">
       <div className="entity-header shrink-0 border-b border-secondary p-6">
         <div className="flex items-start gap-3">
           <Avatar name={me.name} photo={me.photo} size={48} />

@@ -159,7 +159,7 @@ export function TeamProfile({
 
   return (
     <aside
-      className="flex h-full min-h-0 flex-col bg-primary"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-primary"
       data-team-mode={mode}
     >
       {/* Header — identity only. The name stays editable in place; everything

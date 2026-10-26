@@ -18,10 +18,10 @@ export function FocusView() {
   if (!selected) return null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-stone-100/60 dark:bg-stone-950">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-stone-100/60 dark:bg-stone-950">
       <EntityChrome mode="focus" />
       <div
-        className="flex min-h-0 flex-1 flex-col bg-primary"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-primary"
         {...swipe}
       >
         <EntityBody density="focus" />
