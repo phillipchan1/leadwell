@@ -32,7 +32,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { libpqCleanEnv, refuseUnsafeTestUrl } from "./loopback.mjs";
+import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl, sourceReadEnv } from "./loopback.mjs";
 import {
   BETTER_AUTH_TABLES_SQL,
   CHECKSUM_TABLES,
@@ -71,7 +71,7 @@ function run(cmd, args, opts = {}) {
   });
   if (res.status !== 0) {
     const err = (res.stderr || res.stdout || "").trim();
-    throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${err}`);
+    throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
   }
   return res.stdout;
 }
@@ -82,11 +82,11 @@ function runToFile(cmd, args, file) {
     const res = spawnSync(cmd, args, {
       encoding: "utf8",
       stdio: ["ignore", fd, "pipe"],
-      env: libpqCleanEnv(),
+      env: sourceReadEnv(),
     });
     if (res.status !== 0) {
       const err = (res.stderr || "").trim();
-      throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${err}`);
+      throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
     }
   } finally {
     closeSync(fd);
@@ -101,15 +101,19 @@ function toolMajor(bin) {
 }
 
 function serverMajor(url) {
-  const out = run("psql", [
-    "-v",
-    "ON_ERROR_STOP=1",
-    "-tA",
-    "-d",
-    url,
-    "-c",
-    "SHOW server_version_num",
-  ]);
+  const out = run(
+    "psql",
+    [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      url,
+      "-c",
+      "SHOW server_version_num",
+    ],
+    { env: sourceReadEnv() },
+  );
   const n = Number(String(out).trim());
   if (!Number.isFinite(n) || n < 10000) throw new Error(`unparsable server_version_num: ${out}`);
   return Math.floor(n / 10000);
@@ -137,7 +141,11 @@ function needBin(name) {
 }
 
 function psql(url, extraArgs, sql) {
-  return run("psql", ["-v", "ON_ERROR_STOP=1", "-d", url, ...extraArgs, "-c", sql]);
+  return run(
+    "psql",
+    ["-v", "ON_ERROR_STOP=1", "-d", url, ...extraArgs, "-c", sql],
+    url === source ? { env: sourceReadEnv() } : {},
+  );
 }
 
 const DRY_RUN_LINES = [
@@ -188,14 +196,18 @@ try {
   writeFileSync(betterAuthPath, BETTER_AUTH_TABLES_SQL);
 
   console.log("dumping public schema + data (no-owner, no-acl)…");
-  run(pgDump, [
-    "--format=custom",
-    "--no-owner",
-    "--no-acl",
-    "--schema=public",
-    `--file=${dumpPath}`,
-    source,
-  ]);
+  run(
+    pgDump,
+    [
+      "--format=custom",
+      "--no-owner",
+      "--no-acl",
+      "--schema=public",
+      `--file=${dumpPath}`,
+      source,
+    ],
+    { env: sourceReadEnv() },
+  );
 
   console.log("exporting auth.users…");
   const usersCopy = `

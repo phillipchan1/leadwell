@@ -40,8 +40,6 @@ Never put values here.
 
 | Name | Where | Notes |
 | --- | --- | --- |
-| `VITE_DEV_TEST_EMAIL` | `.env.local` | Dev-only email/password button. Compiled out of production. |
-| `VITE_DEV_TEST_PASSWORD` | `.env.local` | Same. |
 | `VITE_DEMO` | build env | `1` for the offline sample-org build. |
 | `LEADWELL_WORKER_ORIGIN` | `.env.local` | Optional Vite proxy target. Defaults to `http://127.0.0.1:8787`. |
 
@@ -51,10 +49,20 @@ Never put values here.
 | --- | --- |
 | `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project. The script only `pg_dump`s / `COPY`s. |
 | `NEON_DB_URL` | Empty Neon database. The script writes here. |
-| `LEADWELL_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover. |
+| `LEADWELL_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover or the Actions cutover workflow. |
 | `PG_BIN` | Optional directory containing `pg_dump` / `pg_restore` matching the source major. |
 
-Do not put `SUPABASE_DB_URL` or `NEON_DB_URL` in CI except the loopback prove URLs.
+### GitHub Actions cutover (`cutover-migrate.yml`)
+
+Repo secrets. Never put values here or in the workflow file.
+
+| Name | Notes |
+| --- | --- |
+| `SOURCE_DATABASE_URL` | Read-only Supabase **session-pooler** URI (`sslmode=require`). Same role the laptop script calls `SUPABASE_DB_URL`. |
+| `NEON_DATABASE_URL` | Empty Neon database. Used only when `dry_run=false`. |
+
+`checks.yml` still uses loopback prove URLs only. These two secrets belong on the
+manual cutover workflow, not in the PR checks job.
 
 ---
 
@@ -109,6 +117,32 @@ SUPABASE_DB_URL=postgres://… NEON_DB_URL=postgres://… \
 `--dry-run` with both URLs set still dumps from Supabase (read-only) and
 prints row counts; it does not write to Neon.
 
+### GitHub Actions (`cutover-migrate.yml`)
+
+Manual only (`workflow_dispatch`). Default input `dry_run=true`. It is not
+on push or pull_request. Do not add the secret values to the repo; set them
+once in the GitHub UI (Settings → Secrets and variables → Actions).
+
+1. Actions → **cutover-migrate** → Run workflow.
+2. Leave **dry_run** checked for a rehearsal. The job:
+   - masks `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL` (`::add-mask::`) and
+     never `set -x`
+   - `pg_dump`s `public` from Supabase (custom format, matching client major,
+     `sslmode=require`) and uploads the dump (1-day retention)
+   - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
+     Postgres 17 service container — **not** Neon
+   - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target) to
+     the step summary and a 7-day artifact
+   - confirms Phil's `auth.users` row landed in Better Auth `"user"` with the
+     same id and email, and prints **the id only**
+   - fails if any checksum table mismatches or the user did not carry over
+3. Uncheck **dry_run** only when Neon is empty and you intend to load it.
+   Same dump + migrate script + checksums; the target is `NEON_DATABASE_URL`.
+
+The job does **not** set `LEADWELL_MIGRATE_TEST`. That flag is prove/CI
+loopback only and would refuse the real session-pooler URL. The loopback
+guards in `scripts/loopback.mjs` stay as they are.
+
 The script:
 
 1. `pg_dump`s `public` (no-owner, no-acl) from Supabase.
@@ -147,7 +181,8 @@ sign-in with that email lands on that row; it does not create a second user.
    Do not rename the Worker, package, or repo.
 5. In Resend, verify **polarch.day** and send from `login@polarch.day`.
    No Google OAuth client. No Google redirect URI.
-6. Run the migrate script against the empty Neon database.
+6. Run the migrate script against the empty Neon database (laptop, above) or
+   the **cutover-migrate** workflow with `dry_run=false`.
 7. `npm run build && wrangler deploy` (or `--env preview` first).
 8. Open `https://polarch.day`. Request a magic-link to Phil's email. Data
    should be Phil's existing org (same `user.id` as the Supabase auth UUID).
@@ -163,11 +198,14 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 - Signed-out `https://polarch.day/` still shows the marketing landing.
 - Magic-link sign-in returns to the app; the org loads (people, meetings, prayer).
 - An edit syncs (chrome leaves "saving"); reload keeps it.
-- Dev-only: email/password test user if `VITE_DEV_*` is set.
 - `POST /api/openai` with a signed-in session and no client API key.
   Without `OPENAI_API_KEY` the Worker returns 501; with it, OpenAI answers.
-- Magic-link send is 3/minute per IP and per email; verify is 10/minute per IP.
-  Extra requests return 429. Rate counts live in `rate_limit` (not process memory).
+- Magic-link send is 3/minute per IP and per allowlisted email+IP. An hourly
+  cap (10/hour) is keyed on email + IP prefix (IPv4 /24, IPv6 /48), not on
+  email alone, so a fresh prefix always gets a real send. Verify is 10/minute
+  per IP. Prod keys IP on `CF-Connecting-IP` only. Extra requests return 429.
+  Mail is sent in `waitUntil` so timing does not leak the allowlist.
+  Background send failures log kind/status only (no email or token).
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---

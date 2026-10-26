@@ -1,4 +1,4 @@
-/** Better Auth client: magic link + optional email/password (dev test user). */
+/** Better Auth client: magic link only. */
 import { magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/client";
 
@@ -76,31 +76,6 @@ export async function signInWithMagicLink(email: string): Promise<void> {
     callbackURL: `${window.location.origin}/signin`,
   });
   if (error) throw new Error(error.message || "Could not send the sign-in link");
-}
-
-/**
- * Dev-only email/password test account. Credentials live in gitignored
- * `.env.local`. `import.meta.env.DEV` is statically false in production, so
- * Vite drops this path from the bundle.
- */
-export const devTestUserConfigured =
-  import.meta.env.DEV &&
-  Boolean(import.meta.env.VITE_DEV_TEST_EMAIL && import.meta.env.VITE_DEV_TEST_PASSWORD);
-
-export async function signInAsTestUser(): Promise<void> {
-  if (!devTestUserConfigured) {
-    throw new Error(
-      "No dev test user configured. Set VITE_DEV_TEST_EMAIL and " +
-        "VITE_DEV_TEST_PASSWORD in .env.local (see RUNBOOK.md).",
-    );
-  }
-  const { error } = await authClient.signIn.email({
-    email: import.meta.env.VITE_DEV_TEST_EMAIL!,
-    password: import.meta.env.VITE_DEV_TEST_PASSWORD!,
-  });
-  if (error) throw new Error(error.message || "Test sign-in failed");
-  await getSession();
-  emit("SIGNED_IN");
 }
 
 export async function signOut(): Promise<void> {

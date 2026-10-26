@@ -1,10 +1,5 @@
 import { FormEvent, useState } from "react";
-import {
-  backendConfigured,
-  devTestUserConfigured,
-  signInAsTestUser,
-  signInWithMagicLink,
-} from "../lib/auth";
+import { backendConfigured, signInWithMagicLink } from "../lib/auth";
 import { Button } from "@/components/base/buttons/button";
 import { Mark, Wordmark } from "./brand/glyphs";
 
@@ -25,17 +20,6 @@ export function Login() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");
     } finally {
-      setBusy(false);
-    }
-  };
-
-  const onTestSignIn = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await signInAsTestUser();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Test sign-in failed.");
       setBusy(false);
     }
   };
@@ -93,21 +77,6 @@ export function Login() {
               {busy ? "Sending…" : "Email me a sign-in link"}
             </Button>
           </form>
-        )}
-
-        {backendConfigured && devTestUserConfigured && !sent && (
-          <Button
-            size="md"
-            color="secondary"
-            onClick={onTestSignIn}
-            isDisabled={busy}
-            isLoading={busy}
-            showTextWhileLoading
-            data-testid="dev-test-signin"
-            className="-mt-4 w-full"
-          >
-            {busy ? "Signing in…" : "Continue as test user (dev)"}
-          </Button>
         )}
 
         {error && <p className="text-[13px] text-gilt-ink">{error}</p>}

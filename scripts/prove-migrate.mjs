@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { libpqCleanEnv, refuseUnsafeTestUrl } from "./loopback.mjs";
 import {
   CHECKSUM_TABLES,
+  assertAuthUsersCarriedOver,
   assertCountsMatch,
   assertHashesMatch,
   assertSourceUsersReady,
@@ -29,11 +30,13 @@ import {
   createdSince,
   dropCreatedSql,
   filterRestoreToc,
+  formatChecksumReport,
   formatNonEmptyTargetAbort,
   isNonEmptyTargetObject,
   parseAuthUsersCsv,
   parseCounts,
   parseHashes,
+  parseIdEmailRows,
   parseIdentitiesCsv,
   parseObjectList,
 } from "./migrate-users.lib.mjs";
@@ -130,6 +133,57 @@ ok(CHECKSUM_TABLES.length === 21, "21 public tables checksummed");
 ok(contentHashQuery().includes("md5"), "content hash query uses md5");
 ok(contentHashQuery().includes('COLLATE "C"'), "hash order is collation-independent");
 ok(parseCounts("profiles|3\n").profiles === 3, "parseCounts");
+
+const idEmail = parseIdEmailRows("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa|phil@example.com\n");
+ok(idEmail[0]?.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "parseIdEmailRows id");
+ok(idEmail[0]?.email === "phil@example.com", "parseIdEmailRows email");
+const carried = assertAuthUsersCarriedOver(idEmail, [
+  { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", email: "Phil@Example.com" },
+]);
+ok(carried.length === 1 && carried[0] === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "auth user id carried over");
+let authMissing = false;
+try {
+  assertAuthUsersCarriedOver(idEmail, []);
+} catch (err) {
+  authMissing = String(err.message).includes("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+  ok(!String(err.message).includes("phil@example.com"), "carry-over errors omit email");
+}
+ok(authMissing, "missing auth user aborted");
+let authMismatch = false;
+try {
+  assertAuthUsersCarriedOver(idEmail, [
+    { id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", email: "other@example.com" },
+  ]);
+} catch (err) {
+  authMismatch = String(err.message).includes("email mismatch");
+  ok(!String(err.message).includes("other@example.com"), "email mismatch omits email");
+}
+ok(authMismatch, "auth email mismatch aborted");
+const report = formatChecksumReport(
+  { profiles: { n: 1, hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } },
+  { profiles: { n: 1, hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } },
+  ["profiles"],
+);
+ok(report.includes("yes") && report.includes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), "checksum report markdown");
+
+const workflow = readFileSync(join(root, ".github/workflows/cutover-migrate.yml"), "utf8");
+ok(workflow.includes("workflow_dispatch"), "cutover workflow is workflow_dispatch");
+ok(!/^\s+(push|pull_request):/m.test(workflow), "cutover workflow is not on push or pull_request");
+ok(/dry_run:[\s\S]*default:\s*true/.test(workflow), "dry_run defaults true");
+ok(!/^\s*set -x\b/m.test(workflow), "cutover workflow never set -x");
+ok(workflow.includes("::add-mask::") || workflow.includes("githubAddMaskLines"), "cutover workflow masks secrets");
+ok(
+  /actions\/checkout@[0-9a-f]{40}/.test(workflow) &&
+    /actions\/setup-node@[0-9a-f]{40}/.test(workflow) &&
+    /actions\/upload-artifact@[0-9a-f]{40}/.test(workflow),
+  "cutover actions are SHA-pinned",
+);
+ok(/name: leadwell-source-dump[\s\S]*?retention-days:\s*1/.test(workflow), "dump artifact retained 1 day");
+ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
+ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
+ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
+ok(workflow.includes("scripts/migrate-supabase-to-neon.mjs"), "cutover runs the existing migrate script");
+ok(workflow.includes("scripts/cutover-verify.mjs"), "cutover writes checksums via cutover-verify");
 
 // --- dry-run with no URLs --------------------------------------------------
 const dry = spawnSync(process.execPath, [join(here, "migrate-supabase-to-neon.mjs"), "--dry-run"], {
@@ -251,6 +305,23 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
       mapped.startsWith("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa|phil@example.com"),
       "Better Auth user keeps the Supabase UUID",
     );
+    const verified = spawnSync(process.execPath, [join(here, "cutover-verify.mjs"), "--report", join(dir, "report.md")], {
+      encoding: "utf8",
+      cwd: root,
+      env: {
+        ...process.env,
+        SOURCE_DATABASE_URL: source,
+        TARGET_DATABASE_URL: target,
+        LEADWELL_MIGRATE_TEST: "1",
+        DRY_RUN: "true",
+      },
+    });
+    const verifiedOut = `${verified.stdout || ""}\n${verified.stderr || ""}`;
+    console.log(verifiedOut.trim());
+    ok(verified.status === 0, "cutover-verify on loopback prove exits 0");
+    ok(verifiedOut.includes("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "cutover-verify prints Phil id");
+    ok(!verifiedOut.includes("phil@example.com"), "cutover-verify omits Phil email");
+    ok(readFileSync(join(dir, "report.md"), "utf8").includes("source_md5"), "cutover-verify writes report");
     const google = run("psql", [
       "-v",
       "ON_ERROR_STOP=1",

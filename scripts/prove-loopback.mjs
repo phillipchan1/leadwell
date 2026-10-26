@@ -5,8 +5,13 @@
  */
 import {
   assertLoopbackDatabaseUrl,
+  ensureSslMode,
+  githubAddMaskLines,
   libpqCleanEnv,
+  redactSecrets,
   refuseUnsafeTestUrl,
+  SOURCE_READ_PGOPTIONS,
+  sourceReadEnv,
 } from "./loopback.mjs";
 
 const fails = [];
@@ -90,6 +95,14 @@ const cleaned = libpqCleanEnv(dirty);
 ok(!cleaned.PGHOST && !cleaned.PGHOSTADDR, "libpqCleanEnv drops PGHOST/PGHOSTADDR");
 ok(!cleaned.PGSERVICE && !cleaned.PGSERVICEFILE && !cleaned.PGSYSCONFDIR, "libpqCleanEnv drops service vars");
 ok(cleaned.KEEP === "yes", "libpqCleanEnv keeps unrelated vars");
+ok(
+  SOURCE_READ_PGOPTIONS === "-c default_transaction_read_only=on",
+  "source PGOPTIONS force default_transaction_read_only",
+);
+const sourceEnv = sourceReadEnv(dirty);
+ok(!sourceEnv.PGHOST && !sourceEnv.PGSERVICE, "sourceReadEnv drops libpq redirect vars");
+ok(sourceEnv.PGOPTIONS === SOURCE_READ_PGOPTIONS, "sourceReadEnv sets read-only PGOPTIONS");
+ok(sourceEnv.KEEP === "yes", "sourceReadEnv keeps unrelated vars");
 
 let missing = false;
 try {
@@ -98,6 +111,36 @@ try {
   missing = true;
 }
 ok(missing, "empty URL required-and-loopback");
+
+ok(
+  redactSecrets("pg_dump failed: postgres://u:s3cret@db.example.com/leadwell") ===
+    "pg_dump failed: postgres://***",
+  "redactSecrets strips postgres URIs",
+);
+ok(
+  redactSecrets("postgresql://u:s3cret@db.example.com/leadwell?sslmode=require").includes("***") &&
+    !redactSecrets("postgresql://u:s3cret@db.example.com/leadwell?sslmode=require").includes("s3cret"),
+  "redactSecrets strips postgresql URIs and passwords",
+);
+ok(ensureSslMode("") === "", "ensureSslMode empty");
+ok(
+  ensureSslMode("postgres://u@h/db") === "postgres://u@h/db?sslmode=require",
+  "ensureSslMode appends when missing",
+);
+ok(
+  ensureSslMode("postgres://u@h/db?sslmode=prefer") === "postgres://u@h/db?sslmode=prefer",
+  "ensureSslMode keeps an existing sslmode",
+);
+ok(
+  ensureSslMode("postgres://u@h/db?foo=1") === "postgres://u@h/db?foo=1&sslmode=require",
+  "ensureSslMode appends with &",
+);
+
+const masked = githubAddMaskLines("postgres://phil:p%40ss@db.example.com/leadwell");
+ok(masked.some((l) => l === "::add-mask::postgres://phil:p%40ss@db.example.com/leadwell"), "mask raw URI");
+ok(masked.some((l) => l === "::add-mask::p%40ss"), "mask encoded password");
+ok(masked.some((l) => l === "::add-mask::p@ss"), "mask decoded password");
+ok(masked.every((l) => l.startsWith("::add-mask::")), "mask lines are add-mask only");
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);
