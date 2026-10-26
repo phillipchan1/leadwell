@@ -22,6 +22,48 @@ export function libpqCleanEnv(env = process.env) {
   return next;
 }
 
+/** Strip postgres URIs so logs never echo a connection string. */
+export function redactSecrets(text) {
+  return String(text).replace(/(?:postgres(?:ql)?):\/\/[^\s"'\\<>]+/gi, "postgres://***");
+}
+
+/** Append sslmode=require when the URI has no sslmode (Supabase / Neon). */
+export function ensureSslMode(url) {
+  const u = String(url || "");
+  if (!u) return u;
+  if (/[?&]sslmode=/i.test(u)) return u;
+  return `${u}${u.includes("?") ? "&" : "?"}sslmode=require`;
+}
+
+/** GitHub Actions ::add-mask:: lines for a URI and its userinfo. Never logs. */
+export function githubAddMaskLines(value) {
+  const lines = [];
+  const add = (v) => {
+    if (v == null) return;
+    const s = String(v);
+    if (!s) return;
+    lines.push(`::add-mask::${s}`);
+  };
+  add(value);
+  add(String(value).trim());
+  try {
+    const u = new URL(String(value).trim());
+    if (u.password) {
+      add(u.password);
+      try {
+        add(decodeURIComponent(u.password));
+      } catch {
+        /* keep encoded form only */
+      }
+    }
+    if (u.username) add(u.username);
+    if (u.username && u.password) add(`${u.username}:${u.password}`);
+  } catch {
+    /* not a URL — still mask the raw value */
+  }
+  return lines;
+}
+
 function parseConnectionString(url) {
   const parse =
     typeof parsePgConnectionString === "function"

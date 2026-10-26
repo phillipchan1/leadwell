@@ -31,7 +31,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { libpqCleanEnv, refuseUnsafeTestUrl } from "./loopback.mjs";
+import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl } from "./loopback.mjs";
 import {
   BETTER_AUTH_TABLES_SQL,
   CHECKSUM_TABLES,
@@ -71,7 +71,7 @@ function run(cmd, args, opts = {}) {
   });
   if (res.status !== 0) {
     const err = (res.stderr || res.stdout || "").trim();
-    throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${err}`);
+    throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
   }
   return res.stdout;
 }
@@ -86,7 +86,7 @@ function runToFile(cmd, args, file) {
     });
     if (res.status !== 0) {
       const err = (res.stderr || "").trim();
-      throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${err}`);
+      throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
     }
   } finally {
     closeSync(fd);
