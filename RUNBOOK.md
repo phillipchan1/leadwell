@@ -83,7 +83,13 @@ Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
 
 Apply `worker/schema/001_leadwell.sql`, `002_better_auth.sql`,
 `003_rate_limit.sql`, then `004_rate_limit_window_start.sql` to a local
-Postgres or Neon branch before signing in.
+Postgres or Neon branch before signing in. `004` is a `BEGIN`/`COMMIT`
+transaction. To undo just that column (same statement as
+`worker/schema/rollback/004_rate_limit_window_start.sql`):
+
+```sql
+ALTER TABLE rate_limit DROP COLUMN IF EXISTS window_start;
+```
 
 ---
 
@@ -207,9 +213,10 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
   still returns 200 with the same timing but skips the send and logs once.
   That soft cap is email-only — see below. Verify is 10/minute per IP. Prod
   keys IP on `CF-Connecting-IP` only. Extra hard-limit requests return 429.
-  Mail (or the skip no-op) is dispatched in `waitUntil` so timing does not
-  leak the allowlist or the cap. Background send failures log kind/status
-  only (no email, token, or IP).
+  Mail (or the first-skip console log) is dispatched in `waitUntil` so timing
+  does not leak the allowlist or the cap. Soft-cap DB work (email + log keys)
+  is awaited on the request; background send failures log kind/status only
+  (no email, token, or IP).
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---
@@ -266,6 +273,12 @@ the current deployment (`a147830`). That is the fallback.
    Neon to Supabase.
 5. Re-migrate later only into a **new empty** Neon database (the script
    refuses a dirty target).
+6. If you applied `004_rate_limit_window_start.sql` and need to drop the
+   fixed-window column without a full cutover rollback:
+
+   ```sql
+   ALTER TABLE rate_limit DROP COLUMN IF EXISTS window_start;
+   ```
 
 ---
 

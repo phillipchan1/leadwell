@@ -162,7 +162,7 @@ export async function consumeRateLimitKey(
   key: string,
   rule: RateLimitRule,
   nowMs = Date.now(),
-): Promise<{ allowed: boolean; retryAfter: number | null }> {
+): Promise<{ allowed: boolean; retryAfter: number | null; count: number }> {
   const now = nowMs;
   const windowMs = rule.window * 1000;
   const client = await db.connect();
@@ -190,11 +190,12 @@ export async function consumeRateLimitKey(
     const count = Number(row.count);
     const start = Number(row.window_start);
     if (count <= rule.max) {
-      return { allowed: true, retryAfter: null };
+      return { allowed: true, retryAfter: null, count };
     }
     return {
       allowed: false,
       retryAfter: Math.max(1, Math.ceil((start + windowMs - now) / 1000)),
+      count,
     };
   } finally {
     client.release();
@@ -236,22 +237,31 @@ export async function consumeEmailMagicLinkLimit(
 }
 
 /**
- * Silent 200/hr per-email soft cap. One consume only — first-skip logging
- * is `recordEmailMagicLinkSoftCapSkip`, scheduled on the same waitUntil
- * path as a real send so capped and uncapped requests await the same work.
+ * Silent 200/hr per-email soft cap. Capped and uncapped paths await the
+ * same two consumes (soft key + first-skip log key) so timing stays
+ * aligned. The console log itself is scheduled separately — do not do
+ * more DB work on the waitUntil path, or `closeAuth` / `pool.end()` can
+ * hang the skip task and drop the log.
  */
 export async function consumeEmailMagicLinkSoftCap(
   db: RateLimitDatabase,
   email: string,
-): Promise<{ allowed: boolean }> {
+): Promise<{ allowed: boolean; firstSkip: boolean }> {
   const trimmed = email.trim().toLowerCase();
-  if (!trimmed) return { allowed: true };
+  if (!trimmed) return { allowed: true, firstSkip: false };
   const result = await consumeRateLimitKey(
     db,
     emailSoftMagicLinkRateLimitKey(trimmed),
     MAGIC_LINK_EMAIL_SOFT_RULE,
   );
-  return { allowed: result.allowed };
+  // Same second consume on both paths (timing parity). firstSkip is the
+  // first request over the cap, not "log key allowed" — the log key is
+  // incremented on every allowlisted send in the window.
+  await recordEmailMagicLinkSoftCapSkip(db, trimmed);
+  return {
+    allowed: result.allowed,
+    firstSkip: !result.allowed && result.count === MAGIC_LINK_EMAIL_SOFT_MAX + 1,
+  };
 }
 
 /** First skip in the window returns true so the caller can log once. */

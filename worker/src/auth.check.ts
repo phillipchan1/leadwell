@@ -238,6 +238,23 @@ ok(orphanMs < 50, `missing waitUntil still does not await the task (${orphanMs}m
 ok(!orphanDone, "missing-waitUntil path does not await Resend or the no-op");
 await orphan;
 
+let waitUntilUnhandled = 0;
+const onWaitUntilUnhandled = () => {
+  waitUntilUnhandled += 1;
+};
+process.on("unhandledRejection", onWaitUntilUnhandled);
+const rejectedSkip = Promise.reject(new MagicLinkSendError("resend_http", 503));
+const realSkipError = console.error;
+console.error = () => {};
+scheduleAuthBackground((task) => {
+  void task;
+}, rejectedSkip);
+await Promise.resolve();
+await Promise.resolve();
+ok(waitUntilUnhandled === 0, "waitUntil skip task has a catch");
+process.off("unhandledRejection", onWaitUntilUnhandled);
+console.error = realSkipError;
+
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);
   for (const f of fails) console.error("  -", f);

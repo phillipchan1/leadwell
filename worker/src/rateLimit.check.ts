@@ -1,8 +1,9 @@
 /**
- * Prove the silent soft cap awaits one consume on both paths, and that
+ * Prove the silent soft cap awaits the same DB work on both paths, and that
  * consumeRateLimitKey uses a fixed window (200 hits over >1h do not cap).
  */
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { deliverMagicLinkOrSkip } from "./auth.ts";
 import { applySchema, nextMigrationVersions, SCHEMA_DIR } from "./isolationDb.ts";
@@ -66,6 +67,12 @@ ok(
   nextMigrationVersions(readdirSync(SCHEMA_DIR)).includes(4),
   "window_start lives in migration 004",
 );
+const migration004 = readFileSync(join(SCHEMA_DIR, "004_rate_limit_window_start.sql"), "utf8");
+ok(/\bBEGIN\s*;/.test(migration004) && /\bCOMMIT\s*;/.test(migration004), "004 is wrapped in BEGIN/COMMIT");
+ok(
+  /ALTER TABLE rate_limit\s+DROP COLUMN(?: IF EXISTS)? window_start/.test(migration004),
+  "004 documents ALTER TABLE ... DROP COLUMN window_start rollback",
+);
 ok(
   !emailSoftMagicLinkRateLimitKey("phil@example.com").includes("203."),
   "soft cap key is email-only (no IP)",
@@ -99,7 +106,8 @@ try {
 
   const allowed = await consumeEmailMagicLinkSoftCap(allowDb, "phil@example.com");
   ok(allowed.allowed, "first soft-cap consume is allowed");
-  ok(allowHits.length === 1, `uncapped soft cap awaits one consume (got ${allowHits.length})`);
+  ok(!allowed.firstSkip, "allowed soft cap is not a first skip");
+  ok(allowHits.length === 2, `uncapped soft cap awaits soft+log consume (got ${allowHits.length})`);
 
   await db.query("DELETE FROM rate_limit");
   const seeded = Date.now();
@@ -115,7 +123,8 @@ try {
   );
   const denied = await consumeEmailMagicLinkSoftCap(denyDb, "phil@example.com");
   ok(!denied.allowed, "seeded soft cap is denied");
-  ok(denyHits.length === 1, `capped soft cap awaits one consume (got ${denyHits.length})`);
+  ok(denied.firstSkip, "first denial in the window is the first skip");
+  ok(denyHits.length === 2, `capped soft cap awaits soft+log consume (got ${denyHits.length})`);
   ok(
     allowHits.length === denyHits.length,
     "capped and uncapped soft-cap consumes await the same number of round trips",
@@ -123,10 +132,15 @@ try {
   ok(
     (await db.query("SELECT key FROM rate_limit WHERE key = $1", [
       emailSoftLogMagicLinkRateLimitKey("phil@example.com"),
-    ])).rows.length === 0,
-    "denied soft cap does not consume the log key",
+    ])).rows.length === 1,
+    "denied soft cap consumes the log key on the awaited path",
   );
 
+  const secondDenied = await consumeEmailMagicLinkSoftCap(pool, "phil@example.com");
+  ok(!secondDenied.allowed, "later denial stays capped");
+  ok(!secondDenied.firstSkip, "later denial is not a first skip");
+
+  await db.query("DELETE FROM rate_limit");
   const firstSkip = await recordEmailMagicLinkSoftCapSkip(pool, "phil@example.com");
   const secondSkip = await recordEmailMagicLinkSoftCapSkip(pool, "phil@example.com");
   ok(firstSkip, "first skip record is logged once");
@@ -152,11 +166,12 @@ try {
   };
   try {
     const tSkip = Date.now();
-    const skipTask = deliverMagicLinkOrSkip(env, pool, {
+    const skipTask = deliverMagicLinkOrSkip(env, {
       email: "phil@example.com",
       url: "http://localhost:8787/signin",
       token: "visible-token",
       send: false,
+      firstSkip: true,
     });
     const skipReturnMs = Date.now() - tSkip;
     ok(skipReturnMs < 50, `deliver no-op returns a promise without awaiting Resend (${skipReturnMs}ms)`);
@@ -172,7 +187,7 @@ try {
 
     skipLogs.length = 0;
     const tSend = Date.now();
-    const sendTask = deliverMagicLinkOrSkip(env, pool, {
+    const sendTask = deliverMagicLinkOrSkip(env, {
       email: "phil@example.com",
       url: "http://localhost:8787/signin",
       token: "visible-token",
@@ -244,7 +259,7 @@ try {
 
   await db.query("DELETE FROM rate_limit");
   const empty = await consumeEmailMagicLinkSoftCap(pool, "   ");
-  ok(empty.allowed, "blank email does not consume a soft-cap key");
+  ok(empty.allowed && !empty.firstSkip, "blank email does not consume a soft-cap key");
 } finally {
   await db.close();
 }

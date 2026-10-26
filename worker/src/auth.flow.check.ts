@@ -1,7 +1,8 @@
 /**
  * Prove magic-link rate limits, waitUntil mail, CF-Connecting-IP keying,
  * allowlist-before-email-counter, email+IP and email+prefix, silent 200/hr
- * soft cap, invalid-IP prefix bucket, send-failure logs, and no password auth.
+ * soft cap, closeAuth-vs-skip hang, invalid-IP prefix bucket, send-failure
+ * logs, and no password auth.
  */
 import { PGlite } from "@electric-sql/pglite";
 import { closeAuth, createAuth, handleAuthRequest, type AuthDatabase } from "./auth.ts";
@@ -351,6 +352,82 @@ try {
     ok(resendCalls.length === 1, "uncapped without waitUntil still dispatches the send");
   } finally {
     await closeAuth(noWaitAuth);
+  }
+
+  {
+    const hangDb = new PGlite();
+    await applySchema(hangDb);
+    let ended = false;
+    const hangPool: AuthDatabase = {
+      async connect() {
+        if (ended) return new Promise(() => {});
+        return {
+          async query(sql: string, parameters: readonly unknown[] = []) {
+            if (ended) return new Promise(() => {});
+            const result = await hangDb.query(sql, parameters as never[]);
+            return {
+              command: "SELECT",
+              rowCount: result.affectedRows ?? result.rows.length,
+              rows: result.rows,
+            };
+          },
+          release() {},
+        };
+      },
+      async end() {
+        ended = true;
+      },
+      options: {},
+    };
+    const hangBg: Promise<unknown>[] = [];
+    const hangAuth = createAuth(env, hangPool, {
+      waitUntil: (task) => {
+        hangBg.push(task);
+      },
+      closeDatabase: true,
+    });
+    const hangStart = Date.now();
+    await hangDb.query(
+      "INSERT INTO rate_limit (id, key, count, last_request, window_start) VALUES ($1, $2, $3, $4, $5)",
+      [
+        crypto.randomUUID(),
+        emailSoftMagicLinkRateLimitKey("phil@example.com"),
+        MAGIC_LINK_EMAIL_SOFT_MAX,
+        hangStart,
+        hangStart,
+      ],
+    );
+    const hangLogs: unknown[][] = [];
+    const realHangError = console.error;
+    console.error = (...args: unknown[]) => {
+      hangLogs.push(args);
+    };
+    try {
+      const hangRes = await sendLink(
+        "phil@example.com",
+        { "cf-connecting-ip": "203.0.90.1" },
+        hangAuth,
+      );
+      ok(hangRes.status === 200, `hang-repro send is 200 (got ${hangRes.status})`);
+      const closed = Promise.all([closeAuth(hangAuth), ...hangBg]);
+      const outcome = await Promise.race([
+        closed.then(() => "ok" as const),
+        new Promise<"hang">((resolve) => {
+          setTimeout(() => resolve("hang"), 1000);
+        }),
+      ]);
+      ok(
+        outcome === "ok",
+        "closeAuth awaits the skip task before pool.end() (no hang, log not lost)",
+      );
+      ok(
+        hangLogs.some((args) => (args[1] as { kind?: string } | undefined)?.kind === "soft_cap"),
+        "magic-link send skipped log survives closeAuth",
+      );
+    } finally {
+      console.error = realHangError;
+      await hangDb.close();
+    }
   }
 
   await db.query("DELETE FROM rate_limit");
