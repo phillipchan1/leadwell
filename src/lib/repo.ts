@@ -1,5 +1,5 @@
 /**
- * Normalized Supabase persistence for LeadWell.
+ * Normalized Worker persistence for LeadWell.
  *
  * The zustand store keeps working entirely in memory with optimistic updates —
  * exactly as it did against localStorage. This module is the seam that turns
@@ -16,8 +16,9 @@
  * Each collection has a small mapper pair (row ⇄ app type). Sync writes only
  * the rows this device changed and deletes only the rows it removed — see
  * `diffRows`. Whole-table replacement is reserved for seeding (`writeAll`).
+ * The Worker scopes every query to the signed-in session (`user_id`).
  */
-import { supabase } from "./supabase";
+import { apiDelete, apiGet, apiPatch, apiPut, readApiError } from "./api";
 import type {
   Action,
   Capacity,
@@ -189,49 +190,10 @@ export function emptyMe(partial: Partial<Me> & { name: string }): Me {
   };
 }
 
-/**
- * Replace a whole id-keyed collection: upsert every row, delete the rest.
- *
- * Only for `writeAll` — seeding a brand-new account or a deliberate reset,
- * where the document really is the whole truth. Everyday sync must never do
- * this; see `syncData`.
- */
-async function pushRows(
-  table: string,
-  keyField: string,
-  userId: string,
-  rows: Row[],
-  prune: boolean
-): Promise<void> {
-  if (rows.length) {
-    const { error } = await supabase.from(table).upsert(rows);
-    if (error) throw new Error(`${table} upsert: ${error.message}`);
-  }
-
-  if (!prune) return;
-
-  // Delete rows that are no longer in the client collection. Prefer an
-  // explicit id list over `.not(...).in(...)` string filters (those have been
-  // flaky with some PostgREST versions and can silently leave orphans).
-  const { data: existing, error: readErr } = await supabase
-    .from(table)
-    .select(keyField)
-    .eq("user_id", userId);
-  if (readErr) throw new Error(`${table} list: ${readErr.message}`);
-
-  const keep = new Set(rows.map((r) => r[keyField] as string));
-  const toDelete = ((existing ?? []) as unknown as Row[])
-    .map((r) => r[keyField] as string)
-    .filter((k) => Boolean(k) && !keep.has(k));
-  if (!toDelete.length) return;
-
-  const { error: delErr } = await supabase
-    .from(table)
-    .delete()
-    .eq("user_id", userId)
-    .in(keyField, toDelete);
-  if (delErr) throw new Error(`${table} delete-missing: ${delErr.message}`);
-}
+type DataDoc = {
+  profile: Row | null;
+  tables: Record<string, Row[]>;
+};
 
 // --- mappers: app type ⇄ db row ---------------------------------------------
 const map = {
@@ -779,66 +741,35 @@ export function getBaseline(): PersistedData | null {
  * yet (a brand-new account that still needs seeding).
  */
 export async function loadAll(userId: string): Promise<PersistedData | null> {
-  const { data: prof, error: profErr } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (profErr) throw new Error(`profiles load: ${profErr.message}`);
+  void userId;
+  const res = await apiGet("/api/data");
+  if (!res.ok) await readApiError(res, "load");
+  const doc = (await res.json()) as DataDoc;
+  const prof = doc.profile;
   if (!prof) return null; // fresh user
 
-  const grab = async (table: string): Promise<Row[]> => {
-    const { data, error } = await supabase
-      .from(table)
-      .select("*")
-      .eq("user_id", userId);
-    if (error) throw new Error(`${table} load: ${error.message}`);
-    return (data ?? []) as Row[];
-  };
+  const grab = (table: string): Row[] => (doc.tables?.[table] ?? []) as Row[];
 
-  const [
-    capacities,
-    domains,
-    managers,
-    teams,
-    people,
-    actions,
-    meetings,
-    tags,
-    topics,
-    followUps,
-    sessions,
-    goals,
-    notes,
-    wins,
-    prayers,
-    teamActions,
-    teamGoals,
-    teamNotes,
-    chats,
-    positions,
-  ] = await Promise.all([
-    grab("capacities"),
-    grab("domains"),
-    grab("managers"),
-    grab("teams"),
-    grab("people"),
-    grab("actions"),
-    grab("meetings"),
-    grab("tags"),
-    grab("topics"),
-    grab("follow_ups"),
-    grab("one_on_ones"),
-    grab("goals"),
-    grab("notes"),
-    grab("wins"),
-    grab("prayers"),
-    grab("team_actions"),
-    grab("team_goals"),
-    grab("team_notes"),
-    grab("chats"),
-    grab("node_positions"),
-  ]);
+  const capacities = grab("capacities");
+  const domains = grab("domains");
+  const managers = grab("managers");
+  const teams = grab("teams");
+  const people = grab("people");
+  const actions = grab("actions");
+  const meetings = grab("meetings");
+  const tags = grab("tags");
+  const topics = grab("topics");
+  const followUps = grab("follow_ups");
+  const sessions = grab("one_on_ones");
+  const goals = grab("goals");
+  const notes = grab("notes");
+  const wins = grab("wins");
+  const prayers = grab("prayers");
+  const teamActions = grab("team_actions");
+  const teamGoals = grab("team_goals");
+  const teamNotes = grab("team_notes");
+  const chats = grab("chats");
+  const positions = grab("node_positions");
 
   const data: PersistedData = {
     me: meFromRow(prof as Parameters<typeof meFromRow>[0]),
@@ -875,34 +806,24 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
 
 /** Insert a full document for a user (first-time seed or import). */
 export async function writeAll(userId: string, d: PersistedData): Promise<void> {
-  const { error } = await supabase.from("profiles").upsert(meToRow(userId, d.me));
-  if (error) throw new Error(`profiles upsert: ${error.message}`);
-
-  await Promise.all([
-    ...COLLECTIONS.map((k) => {
-      const items = d[k] as unknown[] | undefined;
-      if (!Array.isArray(items)) {
-        throw new Error(
-          `writeAll: missing collection "${k}" — refusing to wipe the table`
-        );
-      }
-      return pushRows(
-        map[k].table,
-        "id",
-        userId,
-        collectionRows(userId, k, d, items),
-        true
+  const upserts: Record<string, Row[]> = {};
+  for (const k of COLLECTIONS) {
+    const items = d[k] as unknown[] | undefined;
+    if (!Array.isArray(items)) {
+      throw new Error(
+        `writeAll: missing collection "${k}" — refusing to wipe the table`
       );
-    }),
-    pushRows("chats", "chat_key", userId, chatRows(userId, d.chats), true),
-    pushRows(
-      "node_positions",
-      "node_id",
-      userId,
-      posRows(userId, d.nodePositions),
-      true
-    ),
-  ]);
+    }
+    upserts[map[k].table] = collectionRows(userId, k, d, items);
+  }
+  upserts.chats = chatRows(userId, d.chats);
+  upserts.node_positions = posRows(userId, d.nodePositions);
+
+  const res = await apiPut("/api/data", {
+    profile: meToRow(userId, d.me),
+    upserts,
+  });
+  if (!res.ok) await readApiError(res, "write");
 
   setBaseline(d);
 }
@@ -947,25 +868,20 @@ function diffRecord<V>(
   return { changed, removed };
 }
 
-async function upsertRows(table: string, rows: Row[]): Promise<void> {
+type SyncPayload = {
+  profile?: Row;
+  upserts: Record<string, Row[]>;
+  deletes: Record<string, string[]>;
+};
+
+function addUpserts(payload: SyncPayload, table: string, rows: Row[]): void {
   if (!rows.length) return;
-  const { error } = await supabase.from(table).upsert(rows);
-  if (error) throw new Error(`${table} upsert: ${error.message}`);
+  payload.upserts[table] = rows;
 }
 
-async function deleteRows(
-  table: string,
-  keyField: string,
-  userId: string,
-  keys: string[]
-): Promise<void> {
+function addDeletes(payload: SyncPayload, table: string, keys: string[]): void {
   if (!keys.length) return;
-  const { error } = await supabase
-    .from(table)
-    .delete()
-    .eq("user_id", userId)
-    .in(keyField, keys);
-  if (error) throw new Error(`${table} delete: ${error.message}`);
+  payload.deletes[table] = keys;
 }
 
 /**
@@ -977,17 +893,10 @@ async function deleteRows(
  */
 export async function syncData(userId: string, d: PersistedData): Promise<void> {
   const base = baseline;
-  const jobs: Promise<void>[] = [];
+  const payload: SyncPayload = { upserts: {}, deletes: {} };
 
   if (!base || base.me !== d.me) {
-    jobs.push(
-      (async () => {
-        const { error } = await supabase
-          .from("profiles")
-          .upsert(meToRow(userId, d.me));
-        if (error) throw new Error(`profiles upsert: ${error.message}`);
-      })()
-    );
+    payload.profile = meToRow(userId, d.me);
   }
 
   for (const k of COLLECTIONS) {
@@ -1006,25 +915,15 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
       (x) => x.id
     );
     const table = map[k].table;
-    // Upserts before deletes: a topic moving to a new session must not be
-    // briefly pointed at nothing if one half fails.
-    jobs.push(
-      (async () => {
-        await upsertRows(table, collectionRows(userId, k, d, changed));
-        await deleteRows(table, "id", userId, removed);
-      })()
-    );
+    addUpserts(payload, table, collectionRows(userId, k, d, changed));
+    addDeletes(payload, table, removed);
   }
 
   if (!base || base.chats !== d.chats) {
     if (d.chats && typeof d.chats === "object") {
       const { changed, removed } = diffRecord(base?.chats, d.chats);
-      jobs.push(
-        (async () => {
-          await upsertRows("chats", chatRows(userId, changed));
-          await deleteRows("chats", "chat_key", userId, removed);
-        })()
-      );
+      addUpserts(payload, "chats", chatRows(userId, changed));
+      addDeletes(payload, "chats", removed);
     } else {
       console.error('LeadWell: sync skipped missing collection "chats"');
     }
@@ -1032,34 +931,31 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
   if (!base || base.nodePositions !== d.nodePositions) {
     if (d.nodePositions && typeof d.nodePositions === "object") {
       const { changed, removed } = diffRecord(base?.nodePositions, d.nodePositions);
-      jobs.push(
-        (async () => {
-          await upsertRows("node_positions", posRows(userId, changed));
-          await deleteRows("node_positions", "node_id", userId, removed);
-        })()
-      );
+      addUpserts(payload, "node_positions", posRows(userId, changed));
+      addDeletes(payload, "node_positions", removed);
     } else {
       console.error('LeadWell: sync skipped missing collection "nodePositions"');
     }
   }
 
-  await Promise.all(jobs);
+  if (
+    !payload.profile &&
+    Object.keys(payload.upserts).length === 0 &&
+    Object.keys(payload.deletes).length === 0
+  ) {
+    setBaseline(d);
+    return;
+  }
+
+  const res = await apiPatch("/api/data", payload);
+  if (!res.ok) await readApiError(res, "sync");
   setBaseline(d);
 }
 
 /** Delete every row this user owns (used by the cloud "reset to seed"). */
 export async function wipeUser(userId: string): Promise<void> {
-  const tables = [
-    ...COLLECTIONS.map((k) => map[k].table),
-    "chats",
-    "node_positions",
-    "profiles",
-  ];
-  await Promise.all(
-    tables.map(async (t) => {
-      const { error } = await supabase.from(t).delete().eq("user_id", userId);
-      if (error) throw new Error(`${t} wipe: ${error.message}`);
-    })
-  );
+  void userId;
+  const res = await apiDelete("/api/data");
+  if (!res.ok) await readApiError(res, "wipe");
   baseline = null;
 }

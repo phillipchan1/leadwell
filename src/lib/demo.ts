@@ -4,7 +4,7 @@
  * normal build, where this constant is statically false and Vite drops every
  * branch it guards.
  *
- *   VITE_DEMO=1 VITE_SUPABASE_URL=https://demo.invalid VITE_SUPABASE_ANON_KEY=demo npx vite build
+ *   VITE_DEMO=1 npx vite build
  */
 export const DEMO = import.meta.env.VITE_DEMO === "1";
 

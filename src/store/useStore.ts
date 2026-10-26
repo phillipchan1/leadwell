@@ -40,7 +40,7 @@ import {
 import type { PrayerFilterValue } from "../lib/prayer";
 import type { TreeMode } from "../lib/treeMode";
 import { isDescendant, personDomainId } from "../lib/teams";
-import { supabase } from "../lib/supabase";
+import { getSession, hydrateAuth, onAuthChange, signOut as authSignOut } from "../lib/auth";
 import * as repo from "../lib/repo";
 import type { NodePosition, PersistedData } from "../lib/repo";
 import { clearDoc, loadDoc, saveDoc } from "../lib/docCache";
@@ -2885,15 +2885,14 @@ export const useStore = create<Store>((set, get) => ({
       });
       return;
     }
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
+    const session = await getSession();
     if (!session) {
       repo.clearBaseline(); // clear any prior baseline
       set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
       return;
     }
-    const userId = session.user.id;
-    const email = session.user.email ?? null;
+    const userId = session.id;
+    const email = session.email ?? null;
     // Avoid redundant reloads if we're already ready for this user.
     if (get().phase === "ready" && get().userId === userId) return;
 
@@ -3029,7 +3028,7 @@ export const useStore = create<Store>((set, get) => ({
     // last ~600ms is lost when we clear the session.
     await flushPendingSync();
     const userId = get().userId;
-    await supabase.auth.signOut();
+    await authSignOut();
     // The local copy outlives the session unless we say otherwise, and the
     // next person to open this browser is not necessarily the same person.
     // The search index and what it was recently asked for are that same copy,
@@ -3062,7 +3061,7 @@ setMeetingSlugResolver(
 );
 
 
-// Persist data changes to Supabase, debounced. UI state stays session-only
+// Persist data changes to the Worker / Neon, debounced. UI state stays session-only
 // (dark mode persists to localStorage in toggleDark). repo.syncData compares
 // each collection by reference against the last baseline and writes only the
 // tables that actually changed. PERSISTED_KEYS is declared with the document
@@ -3205,7 +3204,7 @@ function extractData(state: Store): PersistedData {
 }
 
 /**
- * Persist the latest store to Supabase. Overlapping syncs are serialized and
+ * Persist the latest store to the Worker. Overlapping syncs are serialized and
  * coalesced so a slow earlier write cannot upsert a stale people list after a
  * delete/move (which was resurrecting removed pod members on reload).
  */
@@ -3257,7 +3256,7 @@ function runSync(userId: string): Promise<void> {
   return job;
 }
 
-/** Write the current store to Supabase immediately (cancels a pending debounce). */
+/** Write the current store immediately (cancels a pending debounce). */
 async function flushPendingSync(): Promise<void> {
   if (syncTimer) {
     clearTimeout(syncTimer);
@@ -3340,11 +3339,11 @@ if (typeof window !== "undefined") {
   }, 30_000);
 }
 
-// Re-run bootstrap on sign-in / sign-out / token refresh from Supabase.
-supabase.auth.onAuthStateChange((event) => {
+// Re-run bootstrap on sign-in / sign-out / first session read.
+onAuthChange((event) => {
   if (event === "SIGNED_OUT") {
-    // Covers the sign-outs the store didn't initiate — an expired refresh
-    // token, a sign-out in another tab. The local copy must not outlive the
+    // Covers the sign-outs the store didn't initiate — an expired session,
+    // a sign-out in another tab. The local copy must not outlive the
     // session that was allowed to read it.
     const { userId } = useStore.getState();
     if (userId) {
@@ -3364,8 +3363,8 @@ supabase.auth.onAuthStateChange((event) => {
     return;
   }
   if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-    // Defer: calling Supabase inside the auth callback can deadlock the lock
-    // it holds, so hop out of the callback before loading data.
     setTimeout(() => void useStore.getState().bootstrap(), 0);
   }
 });
+
+void hydrateAuth();

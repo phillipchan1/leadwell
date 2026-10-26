@@ -241,7 +241,7 @@ Meghan above three M-names you've never touched.
 
 ## Stack & structure
 
-React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Supabase (`@supabase/supabase-js`).
+React + TypeScript + Vite · Tailwind CSS 4 (light/dark) · Zustand · React Router · React Flow (`@xyflow/react`) · Cloudflare Workers + Neon + Better Auth. See [RUNBOOK.md](RUNBOOK.md).
 
 The org tree is an **infinite canvas** (React Flow): pan, zoom (scroll/pinch), a minimap, and freely draggable team cards whose positions persist. Teams live on one visual rank no matter how many there are — no wrapping into rows that would falsely read as another tier. Teams marked **"Above me — I report up"** render above your node with the connector flowing down into you; their people get full profiles framed as *leading up*. The cards themselves are driven by **mode** (see below), not by a row of toggles, and mode composes with the domain filter. **Reset layout** snaps everything back to the automatic arrangement. Reassigning a person between teams is `movePerson(personId, teamId)` in the store (drag-reorg seam).
 

@@ -1,0 +1,11 @@
+# wrangler secrets / local vars. Copy to .dev.vars — never commit values.
+# Names only in RUNBOOK.md.
+
+ENVIRONMENT=local
+# BETTER_AUTH_URL=http://localhost:8787
+BETTER_AUTH_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+ANTHROPIC_API_KEY=
+# ANTHROPIC_MODEL=claude-sonnet-4-20250514
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell

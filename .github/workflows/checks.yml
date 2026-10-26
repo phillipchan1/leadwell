@@ -1,0 +1,61 @@
+# Typecheck, lint, and the unit / prove scripts.
+# Deliberately not a production deploy. Vercel and Supabase stay intact.
+name: checks
+
+on:
+  push:
+    branches-ignore: []
+  pull_request:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Worker + loopback + migrate (no live DB)
+        run: npm test
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+      - name: Create prove databases
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_src;"
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_dst;"
+      - name: Live migrate prove (loopback only)
+        env:
+          LEADWELL_PROVE_SOURCE_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_src
+          LEADWELL_PROVE_TARGET_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_dst
+        run: npm run test:migrate
+      - name: Preview wrangler dry-run
+        run: |
+          mkdir -p dist
+          test -f dist/index.html || printf '<!doctype html><title>leadwell</title>\n' > dist/index.html
+          npx wrangler deploy --env preview --dry-run
