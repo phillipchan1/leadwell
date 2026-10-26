@@ -477,8 +477,13 @@ export function meetingReadiness(
   const exception = mine.find(
     (s) => s.date >= today && (s.kind === "extra" || (s.seriesDate && s.seriesDate !== s.date))
   )?.date;
+  // A meeting dated today is still ahead of you until the day is over. It has
+  // a session as soon as anything is planned into it, and the projection reads
+  // that session as "last met" and steps a week past it — so a Monday meeting
+  // read as "in 7 days" on the Monday itself.
+  const heldToday = mine.some((s) => s.date === today) ? today : null;
   const nextDate =
-    [explicit, exception, explicit ? null : projectedDate]
+    [explicit, exception, explicit ? null : projectedDate, heldToday]
       .filter((d): d is string => Boolean(d))
       .sort()[0] ?? null;
   const onTheBooks = Boolean(
