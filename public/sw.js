@@ -1,5 +1,5 @@
 /**
- * LeadWell service worker — hand-rolled so the PWA needs no build plugin.
+ * Polarch service worker — hand-rolled so the PWA needs no build plugin.
  *
  * Vite fingerprints its bundles, so there is no build-time asset list to
  * precache. Instead: cache the shell on install, then cache hashed assets as
@@ -8,7 +8,7 @@
  *
  * Bump CACHE_VERSION to evict every cache on the next deploy.
  */
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const SHELL_CACHE = `leadwell-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `leadwell-assets-${CACHE_VERSION}`;
 const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE];
@@ -19,15 +19,17 @@ const SHELL_URLS = [
   "/landing/index.html",
   "/landing/landing.css",
   "/landing/landing.js",
-  "/landing/assets/fonts/newsreader.woff2",
-  "/landing/assets/fonts/newsreader-italic.woff2",
-  "/landing/assets/fonts/instrument-sans.woff2",
-  "/landing/assets/fonts/plex-mono-400.woff2",
-  "/landing/assets/fonts/plex-mono-500.woff2",
+  "/landing/assets/fonts/manrope-700.woff2",
+  "/landing/assets/fonts/dm-sans-400.woff2",
+  "/landing/assets/fonts/dm-sans-600.woff2",
   "/offline.html",
+  "/site.webmanifest",
   "/manifest.webmanifest",
+  "/favicon.svg",
+  "/favicon.ico",
   "/icon-192.png",
   "/icon-512.png",
+  "/maskable-512.png",
   "/apple-touch-icon.png",
 ];
 

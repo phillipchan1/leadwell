@@ -44,7 +44,7 @@ export function Sidebar({
           goPlace("today");
         }}
         className="flex items-center gap-2.5 rounded-lg px-1.5 py-0.5 text-[19px] text-leather-fg"
-        aria-label="LeadWell, go to Today"
+        aria-label="Polarch, go to Today"
       >
         <Mark size={28} />
         <Wordmark />
@@ -67,7 +67,7 @@ export function Sidebar({
           aria-label="Capture (C)"
           title="Capture (C)"
           onClick={() => openModal({ kind: "capture" })}
-          className="flex size-9 items-center justify-center rounded-[9px] bg-gilt text-[#013133] transition-transform hover:brightness-105 active:scale-95"
+          className="flex size-9 items-center justify-center rounded-[9px] bg-teal-400 text-stone-950 transition-transform hover:brightness-105 active:scale-95"
         >
           <PlusIcon className="size-4" />
         </button>
@@ -97,7 +97,7 @@ export function Sidebar({
                 <span
                   className={cx(
                     "size-[17px] shrink-0",
-                    isActive ? (p.id === "prayer" ? "text-vesper-glow" : "text-gilt") : p.id === "prayer" ? "text-vesper-glow" : ""
+                    isActive ? (p.id === "prayer" ? "text-vesper-glow" : "text-teal-400") : p.id === "prayer" ? "text-vesper-glow" : ""
                   )}
                 >
                   {p.icon({ className: "size-[17px]", active: isActive })}
@@ -107,7 +107,7 @@ export function Sidebar({
                   <span
                     className={cx(
                       "ml-auto font-mono text-[11px]",
-                      p.id === "ideas" ? "text-leather-ink" : "text-gilt"
+                      p.id === "ideas" ? "text-leather-ink" : "text-teal-400"
                     )}
                   >
                     {count}

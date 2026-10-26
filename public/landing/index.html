@@ -63,42 +63,43 @@
       }
     })();
   </script>
-  <title>LeadWell — A quiet instrument for leading people well</title>
-  <meta name="description" content="LeadWell keeps the teams and people you lead in one place: their profiles, your meetings, how they're doing and who you're carrying. At work, at church and at home." />
-  <meta name="theme-color" content="#013133" />
-  <meta property="og:title" content="LeadWell — A quiet instrument for leading people well" />
+  <title>Polarch — A quiet instrument for leading people well</title>
+  <meta name="description" content="Polarch keeps the teams and people you lead in one place: their profiles, your meetings, how they're doing and who you're carrying. At work, at church and at home." />
+  <meta name="theme-color" content="#F7F6F4" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#181615" media="(prefers-color-scheme: dark)" />
+  <meta property="og:title" content="Polarch — A quiet instrument for leading people well" />
   <meta property="og:description" content="Your people, your meetings and your prayer list, in one private workspace. At work, at church and at home." />
-  <link rel="icon" type="image/svg+xml" href="/landing/assets/mark.svg" />
-  <link rel="preload" href="/landing/assets/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/landing/assets/fonts/instrument-sans.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="icon" href="/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <link rel="preload" href="/landing/assets/fonts/manrope-700.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/landing/assets/fonts/dm-sans-400.woff2" as="font" type="font/woff2" crossorigin />
   <script>
     document.documentElement.classList.add("js");
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");
   </script>
   <!-- Critical CSS (tokens, header, hero) is inline so the first screen paints without a round trip. -->
   <style>
-    @font-face { font-family: "Newsreader"; src: url("/landing/assets/fonts/newsreader.woff2") format("woff2"); font-weight: 400 500; font-style: normal; font-display: swap; }
-    @font-face { font-family: "Newsreader"; src: url("/landing/assets/fonts/newsreader-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
-    @font-face { font-family: "Instrument Sans"; src: url("/landing/assets/fonts/instrument-sans.woff2") format("woff2"); font-weight: 400 600; font-style: normal; font-display: swap; }
-    @font-face { font-family: "IBM Plex Mono"; src: url("/landing/assets/fonts/plex-mono-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-    @font-face { font-family: "IBM Plex Mono"; src: url("/landing/assets/fonts/plex-mono-500.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+    @font-face { font-family: "Manrope"; src: url("/landing/assets/fonts/manrope-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+    @font-face { font-family: "DM Sans"; src: url("/landing/assets/fonts/dm-sans-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+    @font-face { font-family: "DM Sans"; src: url("/landing/assets/fonts/dm-sans-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
     :root {
-      --leather: #013133; --leather-hi: #114143; --leather-deep: #04191b; --leather-fg: #eef3f1; --leather-ink: #acc3c1; --leather-line: rgba(172, 195, 193, .22);
-      --paper: #eef3f1; --paper-card: #fbfcfc; --paper-2: #e3eae8; --ink: #102322; --ink-2: #3a4e4c; --ink-3: #50625f; --line: #d3dcd9;
-      --teal: #0b6a66; --gilt: #e1b34d; --gilt-hi: #f3d58a; --gilt-lo: #c99a35; --gilt-ink: #7a5710;
-      --night: #15122b; --night-fg: #ece8f7; --night-ink: #bfb6de; --vesper: #8d74e0; --vesper-hi: #c3b3f6;
-      --thriving: #2e8b57; --solid: #5d8f86; --watch: #b98014; --strained: #cc5f2f; --critical: #b8323a; --meter-off: #cfd9d6;
-      /* Generic fallbacks only: the faces are self-hosted, and every named
-         fallback a device lacks costs a font lookup in the first layout. */
-      --serif: "Newsreader", serif;
-      --sans: "Instrument Sans", sans-serif;
-      --mono: "IBM Plex Mono", monospace;
+      --leather: #181615; --leather-hi: #221f1d; --leather-deep: #181615; --leather-fg: #f1efec; --leather-ink: #a39d97; --leather-line: rgba(163, 157, 151, .22);
+      --paper: #f7f6f4; --paper-card: #ffffff; --paper-2: #eeece9; --ink: #22201e; --ink-2: #67615c; --ink-3: #8e8882; --line: #e3e0dc;
+      --teal: #b04528; --ember: #ec7c58; --star: #cc5533; --gilt: #b04528; --gilt-hi: #ec7c58; --gilt-lo: #8f3820; --gilt-ink: #b04528;
+      --night: #181615; --night-fg: #f1efec; --night-ink: #a39d97; --vesper: #8d74e0; --vesper-hi: #c3b3f6;
+      --thriving: #2e8b57; --solid: #5d8f86; --watch: #b98014; --strained: #cc5f2f; --critical: #b8323a; --meter-off: #c9c4be;
+      --serif: "Manrope", "Helvetica Neue", Arial, sans-serif;
+      --sans: "DM Sans", "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       --wrap: 1180px; --gutter: clamp(20px, 5vw, 48px); --ease: cubic-bezier(.2, .7, .1, 1);
       --fg: var(--ink); --fg-2: var(--ink-2); --fg-3: var(--ink-3); --hair: var(--line); --focus: var(--teal);
     }
     *, *::before, *::after { box-sizing: border-box; }
     html { -webkit-text-size-adjust: 100%; scroll-padding-top: 76px; background: var(--leather); }
     body { margin: 0; background: var(--leather); color: var(--ink); font: 400 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: clip; }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 700; letter-spacing: -0.015em; }
     h1, h2, h3, p, ul, ol, dl, dd, figure, blockquote { margin: 0; }
     ul, ol { padding: 0; list-style: none; }
     a { color: inherit; }
@@ -106,7 +107,7 @@
     .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
     .defs { position: absolute; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-    .skip { position: absolute; left: 12px; top: -80px; z-index: 100; background: var(--gilt); color: var(--leather); padding: 12px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; }
+    .skip { position: absolute; left: 12px; top: -80px; z-index: 100; background: var(--ember); color: var(--leather); padding: 12px 16px; border-radius: 10px; font-weight: 600; text-decoration: none; }
     .skip:focus { top: 12px; }
     :focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 6px; }
     .wrap { width: min(100% - 2 * var(--gutter), var(--wrap)); margin-inline: auto; }
@@ -116,15 +117,15 @@
     .tone-dark { --fg: var(--leather-fg); --fg-2: var(--leather-ink); --fg-3: var(--leather-ink); --hair: var(--leather-line); --focus: var(--gilt); color: var(--fg); }
     .tone-night { --fg: var(--night-fg); --fg-2: var(--night-ink); --fg-3: var(--night-ink); --hair: rgba(191, 182, 222, .2); --focus: var(--gilt); color: var(--fg); }
     .tone-light { color: var(--fg); }
-    [data-pal="dawn"] { background-color: #013133; }
-    [data-pal="morning"], [data-pal="late-morning"] { background-color: #eef3f1; }
-    [data-pal="forenoon"] { background-color: #023436; }
-    [data-pal="noon"] { background-color: #f3f5f1; }
-    [data-pal="afternoon"] { background-color: #f0f2ec; }
-    [data-pal="late"] { background-color: #f4f0e6; }
-    [data-pal="golden"] { background-color: #0b2e30; }
-    [data-pal="dusk"], [data-pal="night"] { background-color: #15122b; }
-    [data-pal="deep"] { background-color: #0f1427; }
+    [data-pal="dawn"] { background-color: #181615; }
+    [data-pal="morning"], [data-pal="late-morning"] { background-color: #f7f6f4; }
+    [data-pal="forenoon"] { background-color: #221f1d; }
+    [data-pal="noon"] { background-color: #f7f6f4; }
+    [data-pal="afternoon"] { background-color: #eeece9; }
+    [data-pal="late"] { background-color: #f7f6f4; }
+    [data-pal="golden"] { background-color: #221f1d; }
+    [data-pal="dusk"], [data-pal="night"] { background-color: #181615; }
+    [data-pal="deep"] { background-color: #181615; }
     
     /* Everything in a chapter sits above the water; the chapter's own background sits below it. */
     main > section > *, .foot > * { position: relative; }
@@ -145,12 +146,9 @@
     .top { --hdr-fg2: #c3d4d2; }
     .top.is-light { --hdr-fg: #102322; --hdr-fg2: #33474a; --hdr-line: rgba(16, 35, 34, .1); }
     .top__inner { width: min(100% - 2 * var(--gutter), var(--wrap)); margin-inline: auto; height: 68px; display: flex; align-items: center; gap: 24px; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; font-size: 21px; }
-    .brand__mark { border-radius: 9px; }
-    .wordmark { display: inline-flex; align-items: baseline; line-height: 1; }
-    .wordmark__lead { font: 600 1em/1 var(--sans); letter-spacing: -.01em; }
-    .wordmark__well { font: italic 400 1.08em/1 var(--serif); color: var(--gilt); }
-    .top.is-light .wordmark__well { color: #8a6514; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; color: inherit; }
+    .brand__mark { color: currentColor; }
+    .wordmark { display: block; height: 18px; width: auto; }
     .top__nav { margin-left: auto; }
     .top__nav ul { display: flex; gap: 4px; }
     .top__nav a { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 999px; font-size: 14.5px; text-decoration: none; color: var(--hdr-fg2); transition: color .2s, background-color .2s; }
@@ -158,14 +156,15 @@
     .top :focus-visible { outline-color: var(--gilt); }
     .top.is-light :focus-visible { outline-color: var(--teal); }
     .clock { display: inline-flex; align-items: center; gap: 8px; margin-left: 20px; height: 30px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid var(--hdr-line, rgba(172, 195, 193, .22)); color: var(--hdr-fg2); font-size: 13px; letter-spacing: .04em; }
-    .clock__sun { width: 10px; height: 10px; border-radius: 50%; background: var(--gilt); box-shadow: 0 0 10px rgba(225, 179, 77, .6); transition: background-color .6s, box-shadow .6s; }
+    .clock__sun { width: 10px; height: 10px; border-radius: 50%; background: var(--star); transition: background-color .6s; }
     .clock.is-night .clock__sun { background: transparent; box-shadow: inset -3px -1px 0 0 var(--vesper-hi); }
     html:not(.js) .clock { display: none; }
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 22px; border-radius: 12px; font: 600 15.5px/1 var(--sans); text-decoration: none; white-space: nowrap; transition: transform .25s var(--ease), box-shadow .25s, background-color .2s, color .2s, border-color .2s; }
-    .btn--gilt { min-height: 44px; min-width: 44px; padding: 0 18px; font-size: 14.5px; color: #013133; background: var(--gilt); }
-    .btn--gilt:hover { background: var(--gilt-hi); transform: translateY(-1px); }
+    .btn--gilt { min-height: 44px; min-width: 44px; padding: 0 18px; font-size: 14.5px; color: #181615; background: var(--ember); }
+    .top.is-light .btn--gilt { color: #ffffff; background: var(--teal); }
+    .btn--gilt:hover { filter: brightness(1.06); transform: translateY(-1px); }
     .btn--google { background: #fff; color: #1f2a29; box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .55), 0 0 0 1px rgba(0, 0, 0, .06); }
-    .btn--google:hover { transform: translateY(-2px); box-shadow: 0 16px 36px -12px rgba(0, 0, 0, .6), 0 0 0 3px rgba(225, 179, 77, .55); }
+    .btn--google:hover { transform: translateY(-2px); box-shadow: 0 16px 36px -12px rgba(0, 0, 0, .6), 0 0 0 3px rgba(176, 69, 40, .45); }
     .btn--line { color: var(--leather-fg); border: 1px solid rgba(172, 195, 193, .5); }
     .btn--line:hover { border-color: var(--gilt); color: #fff; }
     .top__cta { margin-left: 8px; }
@@ -177,16 +176,16 @@
     .hero[data-pal] { background-color: transparent; }
     .hero { position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-items: center; padding: calc(104px + env(safe-area-inset-top)) 0 96px; overflow: hidden; }
     .hero__well { position: absolute; inset: 0; pointer-events: none; }
-    .hero__well::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(1, 40, 42, .78) 0%, rgba(1, 40, 42, .4) 36%, rgba(1, 40, 42, 0) 60%); }
+    .hero__well::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(24, 22, 21, .78) 0%, rgba(24, 22, 21, .4) 36%, rgba(24, 22, 21, 0) 60%); }
     .well-canvas { display: block; width: 100%; height: 100%; }
     .hero__stitch { position: absolute; inset: 14px; border-radius: 22px; pointer-events: none; border: 1.5px dashed rgba(172, 195, 193, .22); }
     .hero__eyebrow { color: var(--leather-ink); }
-    .hero__title { font: 400 clamp(48px, min(7.2vw, 12.5vh), 118px)/.95 var(--serif); letter-spacing: -.03em; max-width: 10.5ch; color: var(--leather-fg); }
+    .hero__title { font: 700 clamp(40px, min(6.4vw, 10vh), 88px)/1.05 var(--serif); letter-spacing: -.02em; max-width: 14ch; color: var(--leather-fg); }
     .hero__words { display: inline; }
     .letter { display: inline-block; height: .98em; width: auto; vertical-align: -.2em; overflow: visible; margin-left: .04em; }
     .letter--well { aspect-ratio: 3600 / 1940; }
-    .letter path { fill: url(#gilt-sheen); stroke: #e1b34d; stroke-width: 12; stroke-linejoin: round; }
-    .letter__drop { fill: #f6dc97; }
+    .letter path { fill: url(#gilt-sheen); stroke: #b04528; stroke-width: 12; stroke-linejoin: round; }
+    .letter__drop { fill: #cc5533; }
     html.motion .letter path { stroke-dasharray: 1 1; stroke-dashoffset: 1; fill-opacity: 0; }
     html.motion .letter.is-drawn path { animation: letter-draw 1.6s cubic-bezier(.45, .1, .2, 1) forwards, letter-fill .9s ease forwards; animation-delay: calc(var(--g, 0) * 120ms + 250ms), calc(var(--g, 0) * 120ms + 1250ms); }
     html.motion .letter .letter__drop { transform-box: fill-box; transform-origin: 50% 50%; transform: translateY(-900%) scale(.6); opacity: 0; }
@@ -206,11 +205,11 @@
     @keyframes hero-words { from { transform: translateY(.14em); letter-spacing: -.01em; } }
     @media (max-width: 900px) {
       .hero { align-items: end; padding-top: calc(42vh + env(safe-area-inset-top)); padding-bottom: 64px; }
-      .hero__well::after { background: linear-gradient(180deg, rgba(1, 40, 42, 0) 22%, rgba(1, 40, 42, .55) 46%, rgba(1, 40, 42, .82) 64%); }
+      .hero__well::after { background: linear-gradient(180deg, rgba(24, 22, 21, 0) 22%, rgba(24, 22, 21, .55) 46%, rgba(24, 22, 21, .82) 64%); }
       .hero__caption { left: var(--gutter); right: auto; top: calc(84px + env(safe-area-inset-top)); bottom: auto; text-align: left; max-width: 20ch; font-size: 14px; }
     }
     @media (max-width: 480px) { .hero__stitch { inset: 8px; border-radius: 16px; } .hero__actions .btn { width: 100%; } .top__inner { height: 60px; } .brand { font-size: 19px; } .clock { padding: 0 9px; } }
-    @media (prefers-reduced-transparency: reduce) { .top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--hdr-solid, #013133); } }
+    @media (prefers-reduced-transparency: reduce) { .top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--hdr-solid, #181615); } }
   </style>
   <link rel="stylesheet" href="/landing/landing.css" media="print" onload="this.media='all'" />
   <noscript><link rel="stylesheet" href="/landing/landing.css" /></noscript>
@@ -222,11 +221,9 @@
   <svg width="0" height="0" class="defs" aria-hidden="true" focusable="false">
     <defs>
       <path id="flame" d="M12 3.2c2.7 3.2 4.8 5.8 4.8 9a4.8 4.8 0 0 1-9.6 0c0-3.2 2.1-5.8 4.8-9z" />
-      <symbol id="mark" viewBox="0 0 48 48">
-        <rect width="48" height="48" rx="13" fill="#114143" />
-        <circle cx="24" cy="24" r="15" fill="none" stroke="#ACC3C1" stroke-opacity=".45" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="72 22.25" transform="rotate(-20 24 24)" />
-        <circle cx="24" cy="24" r="9" fill="none" stroke="#ACC3C1" stroke-width="2.4" />
-        <circle cx="24" cy="24" r="3.8" fill="#E1B34D" />
+      <symbol id="mark" viewBox="0 0 16 16">
+        <path d="M3 2h2v12h-2ZM3 7A5 5 0 1 1 13 7A5 5 0 1 1 3 7ZM5 7A3 3 0 1 0 11 7A3 3 0 1 0 5 7Z" fill="currentColor" />
+        <path d="M7 7A1 1 0 1 1 9 7A1 1 0 1 1 7 7Z" fill="#CC5533" />
       </symbol>
       <symbol id="google" viewBox="0 0 18 18">
         <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z" />
@@ -236,20 +233,20 @@
       </symbol>
       <!-- The gilt on the lettering; landing.js moves its highlight with the water's light. -->
       <linearGradient id="gilt-sheen" x1="0" y1="0" x2="1" y2=".25" data-sheen>
-        <stop offset="0" stop-color="#c99a35" />
-        <stop offset=".38" stop-color="#e1b34d" />
-        <stop offset=".5" stop-color="#fbe7b0" />
-        <stop offset=".62" stop-color="#e1b34d" />
-        <stop offset="1" stop-color="#b8892a" />
+        <stop offset="0" stop-color="#8f3820" />
+        <stop offset=".38" stop-color="#b04528" />
+        <stop offset=".5" stop-color="#ec7c58" />
+        <stop offset=".62" stop-color="#b04528" />
+        <stop offset="1" stop-color="#8f3820" />
       </linearGradient>
     </defs>
   </svg>
 
   <header class="top" data-top>
     <div class="top__inner">
-      <a class="brand" href="#top" aria-label="LeadWell, back to top">
+      <a class="brand" href="#top" aria-label="Polarch, back to top">
         <svg class="brand__mark" width="30" height="30" aria-hidden="true"><use href="#mark" /></svg>
-        <span class="wordmark"><span class="wordmark__lead">Lead</span><span class="wordmark__well">Well</span></span>
+        <svg class="wordmark" viewBox="0 0 798 203" aria-hidden="true"><path fill="currentColor" d="M4 43h22.64v156h-22.64ZM4 97A54.72 54.72 0 1 1 113.44 97A54.72 54.72 0 1 1 4 97ZM26.64 97A32.08 32.08 0 1 0 90.8 97A32.08 32.08 0 1 0 26.64 97ZM130.64 97A54.72 54.72 0 1 1 240.08 97A54.72 54.72 0 1 1 130.64 97ZM153.28 97A32.08 32.08 0 1 0 217.44 97A32.08 32.08 0 1 0 153.28 97ZM263.68 4h22.64v147h-22.64ZM309.92 97A54.72 54.72 0 1 1 419.36 97A54.72 54.72 0 1 1 309.92 97ZM332.57 97A32.08 32.08 0 1 0 396.72 97A32.08 32.08 0 1 0 332.57 97ZM396.72 43h22.64v108h-22.64ZM448.56 43h22.64v108h-22.64ZM448.56 97A54.72 54.72 0 0 1 549.69 68A11.32 11.32 0 0 1 530.49 80A32.08 32.08 0 0 0 471.21 97ZM657.99 133.61A54.72 54.72 0 1 1 657.99 60.39A11.32 11.32 0 0 1 641.17 75.54A32.08 32.08 0 1 0 641.17 118.46A11.32 11.32 0 0 1 657.99 133.61ZM684.1 4h22.64v147h-22.64ZM684.1 97A54.72 54.72 0 0 1 793.54 97L770.9 97A32.08 32.08 0 0 0 706.75 97ZM770.9 97h22.64v54h-22.64Z"/></svg>
       </a>
       <!-- The page is one day. This is only the page's clock, not a feature. -->
       <p class="clock" aria-hidden="true" data-clock><i class="clock__sun"></i><span class="mono" data-clock-time>06:30</span></p>
@@ -272,11 +269,10 @@
       <div class="hero__stitch" aria-hidden="true"></div>
       <div class="wrap hero__inner" data-hero-copy>
         <p class="eyebrow hero__eyebrow" data-hero-in>At work, at church and at home</p>
-        <h1 id="hero-title" class="hero__title" aria-label="A quiet instrument for leading people well.">
-          <span class="hero__words">A quiet instrument for leading people</span>
-          <svg class="letter letter--well" viewBox="-20 -1560 3600 1940" aria-hidden="true" focusable="false" data-letter><path pathLength="1" d="M855 -1024H996L822 -284Q812 -242 806 -208Q799 -175 799 -149Q799 -112 817 -94Q835 -77 878 -77Q941 -77 1002 -113Q1062 -149 1116 -210Q1171 -272 1212 -350Q1253 -429 1276 -515Q1300 -601 1300 -684Q1300 -756 1278 -791Q1256 -826 1226 -845Q1197 -864 1175 -884Q1153 -905 1153 -948Q1153 -988 1177 -1015Q1201 -1042 1247 -1042Q1284 -1042 1311 -1022Q1338 -1003 1352 -960Q1367 -916 1367 -845Q1367 -703 1332 -574Q1298 -445 1240 -337Q1183 -229 1111 -148Q1039 -68 963 -24Q887 20 817 20Q733 20 692 -14Q652 -48 652 -119Q652 -144 658 -173Q663 -202 672 -236L736 -469H740Q697 -344 642 -252Q587 -161 526 -100Q466 -39 406 -10Q345 20 291 20Q218 20 177 -16Q136 -51 136 -130Q136 -199 168 -298L347 -868Q354 -889 350 -902Q345 -915 328 -915Q307 -915 270 -890Q232 -866 178 -801Q125 -736 56 -612L45 -617Q98 -739 145 -822Q192 -904 237 -952Q282 -1001 328 -1022Q374 -1043 424 -1043Q448 -1043 466 -1040Q484 -1037 500 -1032Q517 -1027 535 -1019L315 -312Q298 -257 290 -217Q282 -177 282 -150Q282 -108 302 -92Q322 -77 359 -77Q421 -77 498 -137Q576 -197 647 -314Q718 -430 759 -603Z"/><path pathLength="1" d="M2002 -1006Q1935 -1006 1875 -958Q1815 -910 1766 -832Q1717 -754 1682 -660Q1646 -565 1626 -472Q1607 -379 1607 -304Q1607 -193 1646 -147Q1685 -101 1759 -101Q1818 -101 1875 -128Q1932 -155 1990 -220Q2048 -284 2108 -397L2119 -395Q2054 -233 1987 -142Q1920 -52 1850 -16Q1780 20 1706 20Q1625 20 1568 -10Q1511 -40 1480 -100Q1450 -159 1450 -246Q1450 -356 1480 -470Q1509 -583 1564 -686Q1618 -789 1692 -870Q1765 -950 1853 -997Q1941 -1044 2038 -1044Q2107 -1044 2149 -1022Q2191 -1000 2212 -962Q2232 -925 2232 -879Q2232 -835 2220 -791Q2207 -747 2178 -705Q2146 -686 2083 -660Q2020 -633 1939 -604Q1858 -575 1768 -548Q1678 -520 1592 -498L1597 -527Q1712 -564 1796 -598Q1879 -632 1936 -666Q1992 -699 2026 -734Q2060 -768 2076 -804Q2092 -841 2094 -881Q2098 -918 2088 -946Q2079 -975 2057 -990Q2035 -1006 2002 -1006Z"/><path pathLength="1" d="M2633 -1314Q2615 -1325 2590 -1339Q2564 -1353 2536 -1370Q2507 -1387 2478 -1404L2479 -1411L2830 -1484H2834L2385 -77L2364 -115Q2382 -103 2424 -114Q2466 -125 2534 -174Q2603 -222 2698 -323L2707 -316Q2621 -196 2549 -122Q2477 -48 2419 -14Q2361 20 2317 20Q2257 20 2240 -4Q2223 -28 2242 -88Z"/><path pathLength="1" d="M3153 -1314Q3135 -1325 3110 -1339Q3084 -1353 3056 -1370Q3027 -1387 2998 -1404L2999 -1411L3350 -1484H3354L2905 -77L2884 -115Q2902 -103 2944 -114Q2986 -125 3054 -174Q3123 -222 3218 -323L3227 -316Q3141 -196 3069 -122Q2997 -48 2939 -14Q2881 20 2837 20Q2777 20 2760 -4Q2743 -28 2762 -88Z"/><path class="letter__swash" pathLength="1" d="M3338 -36C3060 214 2010 300 980 262C560 246 300 206 96 150L92 166C300 236 566 292 980 316C2030 362 3092 272 3366 -14Z"/><circle class="letter__drop" cx="3380" cy="-114" r="145"/></svg>
+        <h1 id="hero-title" class="hero__title" data-hero-in>
+          A quiet instrument for leading people well.
         </h1>
-        <p class="hero__lede" data-hero-in style="--i:2">LeadWell keeps the teams and people you lead in one place: who they are, how they’re doing, whether you’re ready for the next time you sit down, and who you’re carrying in prayer.</p>
+        <p class="hero__lede" data-hero-in style="--i:2">Polarch keeps the teams and people you lead in one place: who they are, how they’re doing, whether you’re ready for the next time you sit down, and who you’re carrying in prayer.</p>
         <div class="hero__actions" data-hero-in style="--i:3">
           <a class="btn btn--gilt" href="/signin">Sign in</a>
           <a class="btn btn--line" href="#today">Walk through a day</a>
@@ -470,7 +466,7 @@
                 <li data-at="5.6"><span class="checks__box" aria-hidden="true"></span>Agenda has something queued</li>
                 <li data-at="6.2"><span class="checks__box" aria-hidden="true"></span>No overdue commitments</li>
               </ul>
-              <p class="ready__lede">Give a meeting a rhythm and LeadWell projects the next one from the last, so nothing has to be on a calendar for the signal to work.</p>
+              <p class="ready__lede">Give a meeting a rhythm and Polarch projects the next one from the last, so nothing has to be on a calendar for the signal to work.</p>
             </div>
 
             <figure class="dial" data-dial data-state="loose" aria-labelledby="dial-cap">
@@ -630,7 +626,7 @@
         <div class="prayer__copy">
           <p class="eyebrow" data-reveal><span class="eyebrow__t">21:30</span>Prayer · who you’re carrying</p>
           <h2 id="prayer-title" class="h2" data-split>There is no scale, <em>and there is no score.</em></h2>
-          <p class="lede" data-reveal>Taking someone up in prayer is a deliberate act, and so is laying them down. LeadWell only measures the one honest thing it can: how long it’s been.</p>
+          <p class="lede" data-reveal>Taking someone up in prayer is a deliberate act, and so is laying them down. Polarch only measures the one honest thing it can: how long it’s been.</p>
           <ul class="flames" data-reveal>
             <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--fresh" /></svg><b>Prayed this week</b><span>Filled.</span></li>
             <li><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><use href="#flame" class="fl fl--carrying" /></svg><b>Carrying</b><span>Outlined.</span></li>
@@ -673,9 +669,9 @@
 
   <footer class="foot tone-night" data-pal="deep">
     <div class="wrap foot__inner">
-      <a class="brand" href="#top" aria-label="LeadWell, back to top">
+      <a class="brand" href="#top" aria-label="Polarch, back to top">
         <svg class="brand__mark" width="24" height="24" aria-hidden="true"><use href="#mark" /></svg>
-        <span class="wordmark"><span class="wordmark__lead">Lead</span><span class="wordmark__well">Well</span></span>
+        <svg class="wordmark" viewBox="0 0 798 203" aria-hidden="true"><path fill="currentColor" d="M4 43h22.64v156h-22.64ZM4 97A54.72 54.72 0 1 1 113.44 97A54.72 54.72 0 1 1 4 97ZM26.64 97A32.08 32.08 0 1 0 90.8 97A32.08 32.08 0 1 0 26.64 97ZM130.64 97A54.72 54.72 0 1 1 240.08 97A54.72 54.72 0 1 1 130.64 97ZM153.28 97A32.08 32.08 0 1 0 217.44 97A32.08 32.08 0 1 0 153.28 97ZM263.68 4h22.64v147h-22.64ZM309.92 97A54.72 54.72 0 1 1 419.36 97A54.72 54.72 0 1 1 309.92 97ZM332.57 97A32.08 32.08 0 1 0 396.72 97A32.08 32.08 0 1 0 332.57 97ZM396.72 43h22.64v108h-22.64ZM448.56 43h22.64v108h-22.64ZM448.56 97A54.72 54.72 0 0 1 549.69 68A11.32 11.32 0 0 1 530.49 80A32.08 32.08 0 0 0 471.21 97ZM657.99 133.61A54.72 54.72 0 1 1 657.99 60.39A11.32 11.32 0 0 1 641.17 75.54A32.08 32.08 0 1 0 641.17 118.46A11.32 11.32 0 0 1 657.99 133.61ZM684.1 4h22.64v147h-22.64ZM684.1 97A54.72 54.72 0 0 1 793.54 97L770.9 97A32.08 32.08 0 0 0 706.75 97ZM770.9 97h22.64v54h-22.64Z"/></svg>
       </a>
       <p>A quiet instrument for leading people well. At work, at church and at home.</p>
       <a class="foot__link" href="/signin">Sign in</a>

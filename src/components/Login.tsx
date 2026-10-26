@@ -48,7 +48,7 @@ export function Login() {
           <Wordmark />
         </div>
         <div className="flex flex-col gap-3">
-          <h1 className="font-serif text-[30px] leading-[36px] font-normal text-balance">
+          <h1 className="font-display text-[30px] leading-[36px] font-bold tracking-[-0.015em] text-balance">
             A quiet instrument for leading people well.
           </h1>
           <p className="text-[15px] leading-[23px] text-leather-ink">
@@ -110,7 +110,7 @@ export function Login() {
           </Button>
         )}
 
-        {error && <p className="text-[13px] text-gilt">{error}</p>}
+        {error && <p className="text-[13px] text-teal-400">{error}</p>}
       </div>
     </div>
   );

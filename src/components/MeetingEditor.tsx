@@ -299,7 +299,7 @@ export function MeetingEditor({
         <button
           type="button"
           onClick={onClose}
-          className="h-9 shrink-0 rounded-[9px] bg-gilt px-4 text-[13.5px] font-semibold text-[#013133] transition-[filter] hover:brightness-105"
+          className="h-9 shrink-0 rounded-[9px] bg-teal-400 px-4 text-[13.5px] font-semibold text-stone-950 transition-[filter] hover:brightness-105"
         >
           Done
         </button>

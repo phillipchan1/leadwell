@@ -1,4 +1,4 @@
-/* LeadWell landing — vanilla, no dependencies.
+/* Polarch landing — vanilla, no dependencies.
  *
  * The page is one day at the well, 06:30 to 22:50. One water surface sits
  * behind the whole page (WebGL, with a 2D canvas fallback). Its color, light
@@ -1099,7 +1099,7 @@ void main(){
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = far ? "#acc3c1" : "#eef3f1";
-      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "Instrument Sans", sans-serif`;
+      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "DM Sans", sans-serif`;
       ctx.fillText(n.ini, x, y + 0.5);
       if (n.g) glyph(ctx, n.g, x + rad * 0.55, y - rad * 1.55, sc, n.v);
       ctx.globalAlpha = 1;

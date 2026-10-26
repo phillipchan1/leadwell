@@ -187,7 +187,7 @@ function useDropStaleSelection() {
 
 /**
  * Every page names itself, so a bookmark reads "Staff meeting" instead of a
- * bookmarks bar full of "LeadWell". A meeting's own address is the page people
+ * bookmarks bar full of "Polarch". A meeting's own address is the page people
  * save, which is why its title leads with the meeting and only names the mode
  * when it isn't the one the meeting opens on.
  */
@@ -221,7 +221,7 @@ function useDocumentTitle() {
   }
 
   useEffect(() => {
-    document.title = title ? `${title} — LeadWell` : "LeadWell";
+    document.title = title ? `${title} — Polarch` : "Polarch";
   }, [title]);
 }
 
