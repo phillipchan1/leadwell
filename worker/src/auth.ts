@@ -3,13 +3,14 @@ import { bearer, magicLink } from "better-auth/plugins";
 import { Pool } from "pg";
 import {
   authCookieSecure,
+  isLocalAuthRuntime,
   resolveAuthBaseURL,
   resolveAuthCookieDomain,
   resolveTrustedOrigins,
 } from "./authUrl.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
-import { sendMagicLinkEmail, settleMagicLinkSend } from "./mail.ts";
+import { sendMagicLinkEmail } from "./mail.ts";
 import {
   authRateLimitCustomRules,
   consumeEmailMagicLinkLimit,
@@ -21,6 +22,7 @@ export type AuthInstance = ReturnType<typeof createAuth>;
 
 const ownedPools = new WeakMap<object, Pool>();
 const authDatabases = new WeakMap<object, AuthDatabase>();
+const authEnvs = new WeakMap<object, Env>();
 
 /**
  * Neon / PGlite columns are snake_case. Better Auth's default identifiers are
@@ -91,6 +93,18 @@ export function isAllowedEmail(
   return allowedEmails(env).has(trimmed);
 }
 
+/** Prod keys rate limits on CF-Connecting-IP only so XFF/X-Real-IP cannot spoof. */
+export const PROD_AUTH_IP_HEADERS = ["cf-connecting-ip"] as const;
+export const LOCAL_AUTH_IP_HEADERS = [
+  "cf-connecting-ip",
+  "x-real-ip",
+  "x-forwarded-for",
+] as const;
+
+export function authIpAddressHeaders(env: Pick<Env, "ENVIRONMENT">): string[] {
+  return isLocalAuthRuntime(env) ? [...LOCAL_AUTH_IP_HEADERS] : [...PROD_AUTH_IP_HEADERS];
+}
+
 /**
  * Better Auth magic-link verify looks up `user` by lowercased email and
  * only creates a row when none exists. A migrated Supabase user (same
@@ -120,7 +134,12 @@ export type AuthDatabase =
       options: object;
     };
 
-export function createAuth(env: Env, database?: AuthDatabase) {
+export type CreateAuthOptions = {
+  /** Workers: `ctx.waitUntil`. Mail is scheduled here so the HTTP response stays fast. */
+  waitUntil?: (task: Promise<unknown>) => void;
+};
+
+export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAuthOptions) {
   const url = databaseUrl(env);
   if (!database && !url) {
     throw new Error("database is not configured (HYPERDRIVE or DATABASE_URL)");
@@ -143,7 +162,7 @@ export function createAuth(env: Env, database?: AuthDatabase) {
     baseURL,
     basePath: "/api/auth",
     database: db as Pool,
-    emailAndPassword: { enabled: true, disableSignUp: true },
+    emailAndPassword: { enabled: false },
     rateLimit: {
       enabled: true,
       storage: "database",
@@ -192,7 +211,7 @@ export function createAuth(env: Env, database?: AuthDatabase) {
         ...(cookieDomain ? { domain: cookieDomain } : {}),
       },
       ipAddress: {
-        ipAddressHeaders: ["cf-connecting-ip", "x-real-ip", "x-forwarded-for"],
+        ipAddressHeaders: authIpAddressHeaders(env),
       },
     },
     plugins: [
@@ -200,19 +219,20 @@ export function createAuth(env: Env, database?: AuthDatabase) {
       magicLink({
         expiresIn: 60 * 10,
         sendMagicLink: async ({ email, url, token }) => {
-          const started = Date.now();
-          try {
-            if (!isAllowedEmail(env, email)) return;
-            await sendMagicLinkEmail(env, { email, url, token });
-          } finally {
-            await settleMagicLinkSend(started);
+          if (!isAllowedEmail(env, email)) return;
+          const sending = sendMagicLinkEmail(env, { email, url, token });
+          if (options?.waitUntil) {
+            options.waitUntil(sending);
+            return;
           }
+          await sending;
         },
       }),
     ],
   });
   if (owned) ownedPools.set(auth, owned);
   authDatabases.set(auth, db);
+  authEnvs.set(auth, env);
   return auth;
 }
 
@@ -242,7 +262,8 @@ export async function handleAuthRequest(auth: AuthInstance, req: Request): Promi
       } catch {
         /* Better Auth answers invalid JSON */
       }
-      if (email) {
+      const gate = authEnvs.get(auth);
+      if (email && gate && isAllowedEmail(gate, email)) {
         const result = await consumeEmailMagicLinkLimit(db, email);
         if (!result.allowed) return rateLimitDeniedResponse(result.retryAfter ?? 60);
       }

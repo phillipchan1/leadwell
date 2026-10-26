@@ -21,7 +21,15 @@ export function sqlOf(c: WorkerContext): Sql {
 export function authOf(c: WorkerContext): AuthInstance {
   const existing = c.get("auth");
   if (existing) return existing;
-  const auth = createAuth(c.env);
+  const auth = createAuth(c.env, undefined, {
+    waitUntil: (task) => {
+      try {
+        c.executionCtx.waitUntil(task);
+      } catch {
+        void task;
+      }
+    },
+  });
   c.set("auth", auth);
   return auth;
 }

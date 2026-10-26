@@ -1,6 +1,8 @@
 import {
+  authIpAddressHeaders,
   existingUserForMagicLinkEmail,
   isAllowedEmail,
+  PROD_AUTH_IP_HEADERS,
 } from "./auth.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { magicLinkEmail, resendIdempotencyKey } from "./mail.ts";
@@ -53,6 +55,17 @@ ok(idem.startsWith("ml/"), "Resend idempotency key is hashed");
 ok(!idem.includes(token), "Resend idempotency key does not contain the token");
 ok(MAGIC_LINK_SEND_MAX === 3, "magic-link send is 3 per window");
 ok(MAGIC_LINK_VERIFY_MAX === 10, "magic-link verify is tightly capped");
+
+ok(
+  authIpAddressHeaders({}).join(",") === PROD_AUTH_IP_HEADERS.join(","),
+  "prod IP limit reads only CF-Connecting-IP",
+);
+ok(!authIpAddressHeaders({}).includes("x-forwarded-for"), "prod ignores X-Forwarded-For");
+ok(!authIpAddressHeaders({}).includes("x-real-ip"), "prod ignores X-Real-IP");
+ok(
+  authIpAddressHeaders({ ENVIRONMENT: "local" }).includes("x-forwarded-for"),
+  "local still accepts XFF for wrangler/vite",
+);
 
 const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/leadwell?sslmode=disable";
 const loopback = "postgresql://postgres@127.0.0.1:5432/leadwell";

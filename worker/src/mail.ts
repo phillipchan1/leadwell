@@ -2,9 +2,6 @@ import type { Env } from "./env.ts";
 
 const RESEND_URL = "https://api.resend.com/emails";
 
-/** Both allowlisted send and silent skip wait at least this long. */
-export const MAGIC_LINK_SEND_FLOOR_MS = 200;
-
 export function authEmailFrom(env: Pick<Env, "AUTH_EMAIL_FROM">): string {
   return env.AUTH_EMAIL_FROM?.trim() || "";
 }
@@ -21,14 +18,6 @@ export async function resendIdempotencyKey(token: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
   const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `ml/${hex}`;
-}
-
-export async function settleMagicLinkSend(
-  startedAt: number,
-  floorMs: number = MAGIC_LINK_SEND_FLOOR_MS,
-): Promise<void> {
-  const wait = floorMs - (Date.now() - startedAt);
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
 }
 
 /**

@@ -40,8 +40,6 @@ Never put values here.
 
 | Name | Where | Notes |
 | --- | --- | --- |
-| `VITE_DEV_TEST_EMAIL` | `.env.local` | Dev-only email/password button. Compiled out of production. |
-| `VITE_DEV_TEST_PASSWORD` | `.env.local` | Same. |
 | `VITE_DEMO` | build env | `1` for the offline sample-org build. |
 | `LEADWELL_WORKER_ORIGIN` | `.env.local` | Optional Vite proxy target. Defaults to `http://127.0.0.1:8787`. |
 
@@ -200,11 +198,11 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 - Signed-out `https://polarch.day/` still shows the marketing landing.
 - Magic-link sign-in returns to the app; the org loads (people, meetings, prayer).
 - An edit syncs (chrome leaves "saving"); reload keeps it.
-- Dev-only: email/password test user if `VITE_DEV_*` is set.
 - `POST /api/openai` with a signed-in session and no client API key.
   Without `OPENAI_API_KEY` the Worker returns 501; with it, OpenAI answers.
-- Magic-link send is 3/minute per IP and per email; verify is 10/minute per IP.
-  Extra requests return 429. Rate counts live in `rate_limit` (not process memory).
+- Magic-link send is 3/minute per IP and per allowlisted email; verify is
+  10/minute per IP. Prod keys IP on `CF-Connecting-IP` only. Extra requests
+  return 429. Mail is sent in `waitUntil` so timing does not leak the allowlist.
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---
