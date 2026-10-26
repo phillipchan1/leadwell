@@ -1,4 +1,4 @@
-/* LeadWell landing — vanilla, no dependencies.
+/* Polarch landing — vanilla, no dependencies.
  *
  * The page is one day at the well, 06:30 to 22:50. One water surface sits
  * behind the whole page (WebGL, with a 2D canvas fallback). Its color, light
@@ -120,19 +120,20 @@ setTimeout(() => {
   const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
   const pal = (bg, base, lite, acc, prm, glow) => ({ bg: hex(bg), base: hex(base), lite: hex(lite), acc: hex(acc), prm, glow });
   const PAL = {
-    dawn: pal("#013133", "#013133", "#3f9a91", "#e1b34d", [0.3, 0.9, 0.7], 0.3),
-    // The day's light chapters sit a shade deeper than their paper, so the
-    // caustics, the light pool and every ring read as moving light around the cards.
-    morning: pal("#eef3f1", "#dde8e4", "#ffffff", "#e8c470", [1.0, 0.9, 0.45], 0.24),
-    forenoon: pal("#023436", "#023436", "#46a399", "#e1b34d", [0.28, 0.9, 0.6], 0.16),
-    "late-morning": pal("#eef3f1", "#dce7e3", "#ffffff", "#e8c470", [1.05, 0.9, 0.45], 0.26),
-    noon: pal("#f3f5f1", "#e3e9e2", "#ffffff", "#f0d590", [1.05, 0.9, 0.5], 0.28),
-    afternoon: pal("#f0f2ec", "#dfe5da", "#ffffff", "#ebc77c", [1.1, 0.95, 0.5], 0.32),
-    late: pal("#f4f0e6", "#e7dfcf", "#fffbf2", "#e8b964", [1.1, 0.95, 0.5], 0.34),
-    golden: pal("#0b2e30", "#0b2e30", "#7a9a78", "#eaa64e", [0.28, 0.9, 0.8], 0.3),
-    dusk: pal("#15122b", "#15122b", "#4b3f7a", "#f0a868", [0.2, 0.8, 0.6], 0.1),
-    night: pal("#15122b", "#15122b", "#463c84", "#c3b3f6", [0.22, 0.8, 0.5], 0.08),
-    deep: pal("#0f1427", "#0f1427", "#33427a", "#c3b3f6", [0.24, 0.85, 0.5], 0.08),
+    // Night / Daylight / Night Surface / Subtle. Light is Ember; accent is Star.
+    // Matches the [data-pal] chapter colors in index.html and tokens.css.
+    dawn: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.3, 0.9, 0.7], 0.3),
+    // Light chapters sit a shade deeper than Daylight so caustics read as light.
+    morning: pal("#f7f6f4", "#eeece9", "#ffffff", "#cc5533", [1.0, 0.9, 0.45], 0.24),
+    forenoon: pal("#221f1d", "#221f1d", "#ec7c58", "#cc5533", [0.28, 0.9, 0.6], 0.16),
+    "late-morning": pal("#f7f6f4", "#eeece9", "#ffffff", "#cc5533", [1.05, 0.9, 0.45], 0.26),
+    noon: pal("#f7f6f4", "#eeece9", "#ffffff", "#cc5533", [1.05, 0.9, 0.5], 0.28),
+    afternoon: pal("#eeece9", "#e3e0dc", "#ffffff", "#cc5533", [1.1, 0.95, 0.5], 0.32),
+    late: pal("#f7f6f4", "#eeece9", "#fffbf2", "#cc5533", [1.1, 0.95, 0.5], 0.34),
+    golden: pal("#221f1d", "#221f1d", "#ec7c58", "#cc5533", [0.28, 0.9, 0.8], 0.3),
+    dusk: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.2, 0.8, 0.6], 0.1),
+    night: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.22, 0.8, 0.5], 0.08),
+    deep: pal("#181615", "#181615", "#ec7c58", "#cc5533", [0.24, 0.85, 0.5], 0.08),
   };
   const mixPal = (a, b, t) => {
     if (t <= 0 || a === b) return a;
@@ -897,8 +898,6 @@ void main(){
 
   /* ── Hero: the people on the rings, over the water ────────────────── */
 
-  const FLAME = typeof Path2D === "function" ? new Path2D("M12 3.2c2.7 3.2 4.8 5.8 4.8 9a4.8 4.8 0 0 1-9.6 0c0-3.2 2.1-5.8 4.8-9z") : null;
-  const LEVEL = { thriving: "#6fcf97", solid: "#8fc1b7", watch: "#e9b54c", strained: "#f08a5b" };
   const heroWell = { canvas: $("[data-well]"), wrap: $("[data-hero-well]"), raf: 0, visible: true, t: 0 };
   const heroEl = $(".hero");
   const heroCopy = $("[data-hero-copy]");
@@ -1021,26 +1020,25 @@ void main(){
     const t = still ? 4 : hw.t;
     ctx.clearRect(0, 0, w, h);
     const show = (delay, dur = 0.8) => smooth(clamp((t - delay) / dur));
-    const line = "172,195,193";
-    const gilt = "225,179,77";
+    const ash = "163,157,151"; // Ash Dark #A39D97
+    const star = "204,85,51"; // Star #CC5533
     ctx.lineCap = "round";
     ctx.save();
     ctx.translate(cx, cy);
     ctx.globalAlpha = show(1.0, 1.2);
-    ctx.strokeStyle = `rgba(${line},.42)`;
-    ctx.lineWidth = 2.2 * sc;
+    ctx.strokeStyle = `rgba(${ash},.42)`;
+    ctx.lineWidth = 1;
     ctx.rotate(-0.35 + t * 0.02);
     ctx.beginPath();
     ctx.arc(0, 0, R * 0.36, 0, TAU * 0.76);
     ctx.stroke();
     ctx.rotate(-t * 0.02);
-    ctx.lineWidth = 1.1;
-    ctx.strokeStyle = `rgba(${line},.2)`;
+    ctx.strokeStyle = `rgba(${ash},.28)`;
     ctx.beginPath();
     ctx.arc(0, 0, R * 0.62, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([2, 7]);
-    ctx.strokeStyle = `rgba(${line},.2)`;
+    ctx.strokeStyle = `rgba(${ash},.22)`;
     ctx.beginPath();
     ctx.arc(0, 0, R * 0.9, 0, TAU);
     ctx.stroke();
@@ -1055,7 +1053,7 @@ void main(){
         const a = r.s * Math.exp(-age * 0.55) * 0.5;
         if (a < 0.01) continue;
         ctx.globalAlpha = 1;
-        ctx.strokeStyle = `rgba(${gilt},${a.toFixed(3)})`;
+        ctx.strokeStyle = `rgba(${star},${a.toFixed(3)})`;
         ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.arc(r.x, r.y, age * 230, 0, TAU);
@@ -1075,55 +1073,35 @@ void main(){
       const full = (far ? 12 : n.ring > 0.5 ? 17 : 20) * sc;
       const gx = x + full * 0.55;
       const gy = y - full * 1.55;
-      const clear = Math.min(clearOf(x + 3, y + 3, full * 1.1, sy), n.g ? clearOf(gx, gy, 13 * sc, sy) : 1);
+      const clear = Math.min(clearOf(x + 3, y + 3, full * 1.1, sy), n.g ? clearOf(gx, gy, 8 * sc, sy) : 1);
       const appear = show(1.15 + n.ring * 0.45 + i * 0.04, 0.9) * clear;
       if (appear <= 0.01) return;
       const rad = full * (0.6 + 0.4 * appear);
       seen.push({ ini: n.ini, x, y, r: full * 1.1, gx: n.g ? gx : null, gy, a: appear });
-      ctx.globalAlpha = appear * 0.5;
-      ctx.fillStyle = "rgba(0,12,14,.6)";
-      ctx.beginPath();
-      ctx.ellipse(x + 3, y + 5, rad * 1.05, rad * 0.95, 0, 0, TAU);
-      ctx.fill();
       ctx.globalAlpha = appear;
-      const pg = ctx.createRadialGradient(x - rad * 0.4, y - rad * 0.5, rad * 0.1, x, y, rad);
-      pg.addColorStop(0, far ? "#2a5a5a" : "#3d7d72");
-      pg.addColorStop(1, far ? "#0f3e40" : "#16483f");
-      ctx.fillStyle = pg;
-      ctx.strokeStyle = `rgba(${line},${far ? 0.3 : 0.55})`;
-      ctx.lineWidth = 1.3;
+      ctx.fillStyle = "#221F1D";
+      ctx.strokeStyle = "#A39D97";
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.arc(x, y, rad, n.a + 0.2, n.a + TAU - 0.2);
-      ctx.closePath();
+      ctx.arc(x, y, rad, 0, TAU);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = far ? "#acc3c1" : "#eef3f1";
-      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "Instrument Sans", sans-serif`;
+      ctx.fillStyle = "#F1EFEC";
+      ctx.font = `600 ${Math.round((far ? 10.5 : 14) * sc)}px "DM Sans", sans-serif`;
       ctx.fillText(n.ini, x, y + 0.5);
-      if (n.g) glyph(ctx, n.g, x + rad * 0.55, y - rad * 1.55, sc, n.v);
+      if (n.g) {
+        ctx.fillStyle = "#CC5533";
+        ctx.beginPath();
+        ctx.arc(gx, gy, 3 * sc, 0, TAU);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     });
 
     const landed = show(0.9, 0.5);
+    const gr = Math.max(3.5, R * 0.028) * landed;
     ctx.globalAlpha = landed;
-    ctx.strokeStyle = `rgba(${line},.95)`;
-    ctx.lineWidth = 3 * sc;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R * 0.15 * (0.7 + 0.3 * landed), 0, TAU);
-    ctx.stroke();
-    // The glow is a gradient, not shadowBlur: a blur every frame is costly on phones.
-    const gr = R * 0.062 * landed;
-    if (gr > 0.5) {
-      const glow = ctx.createRadialGradient(cx, cy, gr * 0.6, cx, cy, gr + 22);
-      glow.addColorStop(0, `rgba(${gilt},.55)`);
-      glow.addColorStop(1, `rgba(${gilt},0)`);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(cx, cy, gr + 22, 0, TAU);
-      ctx.fill();
-    }
-    ctx.fillStyle = `rgb(${gilt})`;
+    ctx.fillStyle = "#CC5533";
     ctx.beginPath();
     ctx.arc(cx, cy, gr, 0, TAU);
     ctx.fill();
@@ -1131,60 +1109,12 @@ void main(){
       const k = t / 0.9;
       const y = lerp(-40, cy, k * k);
       ctx.globalAlpha = 1;
-      const tail = ctx.createLinearGradient(cx, y - 90 * k, cx, y);
-      tail.addColorStop(0, `rgba(${gilt},0)`);
-      tail.addColorStop(1, `rgba(${gilt},.6)`);
-      ctx.strokeStyle = tail;
-      ctx.lineWidth = 2;
+      ctx.fillStyle = "#CC5533";
       ctx.beginPath();
-      ctx.moveTo(cx, y - 90 * k);
-      ctx.lineTo(cx, y);
-      ctx.stroke();
-      ctx.fillStyle = `rgb(${gilt})`;
-      ctx.beginPath();
-      ctx.arc(cx, y, R * 0.04, 0, TAU);
+      ctx.arc(cx, y, Math.max(3.5, R * 0.028), 0, TAU);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-  }
-
-  function glyph(ctx, kind, x, y, sc, v) {
-    const s = 0.85 * sc;
-    if (kind.startsWith("flame") && FLAME) {
-      ctx.save();
-      ctx.translate(x - 12 * s, y - 12 * s);
-      ctx.scale(s, s);
-      ctx.lineWidth = 1.9;
-      if (kind === "flame") {
-        ctx.fillStyle = "#8d74e0";
-        ctx.fill(FLAME);
-      } else if (kind === "flame-answered") {
-        ctx.fillStyle = "#e1b34d";
-        ctx.fill(FLAME);
-      } else {
-        ctx.strokeStyle = "#c3b3f6";
-        ctx.stroke(FLAME);
-      }
-      ctx.restore();
-    } else if (kind === "meter") {
-      ctx.fillStyle = "rgba(4,25,27,.85)";
-      ctx.fillRect(x - 13 * s, y - 9 * s, 27 * s, 18 * s);
-      for (let i = 0; i < 5; i++) {
-        const bh = (4 + i * 2) * s;
-        ctx.fillStyle = i < v[1] ? LEVEL[v[0]] : "rgba(172,195,193,.28)";
-        ctx.fillRect(x - 10 * s + i * 4.4 * s, y + 6 * s - bh, 2.6 * s, bh);
-      }
-    } else if (kind === "ring") {
-      ctx.lineWidth = 2.4 * s;
-      ctx.strokeStyle = "rgba(172,195,193,.28)";
-      ctx.beginPath();
-      ctx.arc(x, y, 7 * s, 0, TAU);
-      ctx.stroke();
-      ctx.strokeStyle = LEVEL.thriving;
-      ctx.beginPath();
-      ctx.arc(x, y, 7 * s, -Math.PI / 2, -Math.PI / 2 + TAU * v);
-      ctx.stroke();
-    }
   }
 
   if (heroWell.canvas && heroWell.canvas.getContext) {

@@ -1,12 +1,10 @@
 @import "tailwindcss";
-/* Self-hosted so every face survives offline and costs no third-party DNS +
-   TLS round trip before first paint. Newsreader ships its optical-size axis
-   (opsz) in both styles; italic is the scripture and prayer voice. */
-@import "@fontsource-variable/instrument-sans";
-@import "@fontsource-variable/newsreader/opsz.css";
-@import "@fontsource-variable/newsreader/opsz-italic.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
+/* Self-hosted so every face survives offline. Manrope 700 for headings,
+   DM Sans 400/600 for body and UI. */
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/dm-sans/400.css";
+@import "@fontsource/dm-sans/600.css";
+@import "./styles/tokens.css";
 @import "./styles/theme.css";
 @import "./styles/brand.css";
 @import "./styles/typography.css";
@@ -52,7 +50,7 @@
 @layer base {
   :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
   :where([role="button"], [role="option"], [role="menuitem"], [role="tab"], [role="separator"]):focus-visible {
-    outline: 2px solid var(--color-focus-ring, #006967);
+    outline: 2px solid var(--color-focus-ring, #b04528);
     outline-offset: 2px;
     border-radius: inherit;
     box-shadow: 0 0 0 4px rgb(255 255 255 / 0.9);
@@ -62,7 +60,7 @@
     :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible,
   .dark
     :where([role="button"], [role="option"], [role="menuitem"], [role="tab"], [role="separator"]):focus-visible {
-    box-shadow: 0 0 0 4px rgb(8 20 21 / 0.9);
+    box-shadow: 0 0 0 4px rgb(24 22 21 / 0.9);
   }
 
   /* Text fields style their own focus (border and background shift) and sit
@@ -70,7 +68,7 @@
      shift alone is a weak indicator, so they keep a ring — inset, no offset. */
   :where(.journal-textarea, .notion-markdown-source):focus-visible,
   .notion-block-editor .ProseMirror:focus-visible {
-    outline: 2px solid var(--color-focus-ring, #006967);
+    outline: 2px solid var(--color-focus-ring, #b04528);
     outline-offset: -2px;
     box-shadow: none;
   }
@@ -80,7 +78,7 @@
      rows above and below, and the halo — a 4px spread shadow — paints across
      the row's own cells and washes the text out. */
   tr:focus-visible {
-    outline: 2px solid var(--color-focus-ring, #006967);
+    outline: 2px solid var(--color-focus-ring, #b04528);
     outline-offset: -2px;
     box-shadow: none;
   }
@@ -404,14 +402,14 @@ body {
 }
 
 .journal-prose a {
-  color: rgb(0 105 103);
+  color: #b04528;
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
 }
 
 .journal-prose a:hover {
-  color: rgb(0 84 82);
+  color: #8f3820;
 }
 
 .journal-prose ul,
@@ -444,13 +442,13 @@ body {
 .journal-prose blockquote {
   margin: 1.1em 0;
   padding: 0.15em 0 0.15em 1em;
-  border-left: 2.5px solid rgb(0 105 103 / 0.55);
+  border-left: 2.5px solid rgb(176 69 40 / 0.55);
   color: rgb(63 81 83);
   font-style: italic;
 }
 
 .dark .journal-prose blockquote {
-  border-left-color: rgb(86 188 185 / 0.45);
+  border-left-color: rgb(236 124 88 / 0.55);
   color: rgb(200 212 212);
 }
 
@@ -545,7 +543,7 @@ body {
 
 .journal-prose input[type="checkbox"] {
   margin-right: 0.45em;
-  accent-color: rgb(0 105 103);
+  accent-color: #b04528;
 }
 
 /* Meeting journal shell */
@@ -656,7 +654,7 @@ body {
 
 label:focus-within > .field-label,
 .field:focus-within > .field-label {
-  color: var(--field-accent, #006967);
+  color: var(--field-accent, #b04528);
 }
 
 
@@ -666,7 +664,7 @@ label:focus-within > .field-label,
 
 .dark label:focus-within > .field-label,
 .dark .field:focus-within > .field-label {
-  color: color-mix(in srgb, var(--field-accent, #006967) 85%, white);
+  color: color-mix(in srgb, var(--field-accent, #b04528) 85%, white);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -698,7 +696,7 @@ label:focus-within > .field-label,
 /* Org tree — snappy team / person selection */
 
 .team-card {
-  --team-accent: #006967;
+  --team-accent: #b04528;
   transition:
     transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 140ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -761,7 +759,7 @@ label:focus-within > .field-label,
 }
 
 .person-row {
-  --person-accent: #006967;
+  --person-accent: #b04528;
   transition:
     background-color 120ms ease,
     transform 120ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -892,7 +890,7 @@ label:focus-within > .field-label,
 .profile-build__bar-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #005452, #22928f);
+  background: linear-gradient(90deg, #8f3820, #b04528);
   transition: width 480ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -925,7 +923,7 @@ label:focus-within > .field-label,
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #006967;
+  background: #b04528;
   animation: profile-pulse-dot 1.6s ease-in-out infinite;
 }
 
@@ -1071,7 +1069,7 @@ label:focus-within > .field-label,
 }
 
 .meeting-editor-chip.is-primary {
-  @apply bg-teal-600 font-medium text-white hover:bg-teal-700 hover:text-white;
+  @apply bg-teal-600 font-medium text-white hover:bg-teal-700 hover:text-white dark:bg-teal-400 dark:text-stone-950 dark:hover:bg-teal-400 dark:hover:text-stone-950;
 }
 
 .meeting-editor-error {
@@ -1180,7 +1178,7 @@ label:focus-within > .field-label,
 }
 
 .notion-editor-content a {
-  @apply text-teal-700 underline underline-offset-2 dark:text-teal-400;
+  @apply text-teal-600 underline underline-offset-2 dark:text-teal-400;
 }
 
 .notion-bubble-menu {
@@ -1324,7 +1322,7 @@ label:focus-within > .field-label,
   /* Centres the thumb on the 4px track: (track - thumb) / 2. */
   margin-top: -6px;
   border-radius: 999px;
-  background: #006967;
+  background: #b04528;
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgb(15 29 31 / 0.25);
   transition: transform 120ms ease;
@@ -1334,14 +1332,15 @@ label:focus-within > .field-label,
   height: 16px;
   width: 16px;
   border-radius: 999px;
-  background: #006967;
+  background: #b04528;
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgb(15 29 31 / 0.25);
 }
 
 .dark .goal-range::-webkit-slider-thumb,
 .dark .goal-range::-moz-range-thumb {
-  border-color: rgb(15 29 31);
+  background: #ec7c58;
+  border-color: #181615;
 }
 
 .goal-range:active::-webkit-slider-thumb {
@@ -1349,7 +1348,7 @@ label:focus-within > .field-label,
 }
 
 .goal-range:focus-visible {
-  outline: 2px solid #006967;
+  outline: 2px solid var(--color-focus-ring, #b04528);
   outline-offset: 2px;
   border-radius: 999px;
 }
@@ -1551,7 +1550,7 @@ label:focus-within > .field-label,
   .notion-editor-content li[data-type="taskItem"] input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    accent-color: #006967;
+    accent-color: #b04528;
   }
 
   .notion-editor-content li[data-type="taskItem"] > label::after {

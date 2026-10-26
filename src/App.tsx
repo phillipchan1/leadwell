@@ -187,11 +187,13 @@ function useDropStaleSelection() {
 
 /**
  * Every page names itself, so a bookmark reads "Staff meeting" instead of a
- * bookmarks bar full of "LeadWell". A meeting's own address is the page people
+ * bookmarks bar full of "Polarch". A meeting's own address is the page people
  * save, which is why its title leads with the meeting and only names the mode
  * when it isn't the one the meeting opens on.
  */
 function useDocumentTitle() {
+  const location = useLocation();
+  const phase = useStore((s) => s.phase);
   const selected = useSelectedEntity();
   const tab = useStore((s) => s.tab);
   const section = useStore((s) => s.section);
@@ -199,6 +201,8 @@ function useDocumentTitle() {
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
+  const signIn =
+    phase === "anon" || location.pathname.replace(/\/$/, "") === "/signin";
 
   let title: string | undefined;
   if (!selected) {
@@ -221,8 +225,8 @@ function useDocumentTitle() {
   }
 
   useEffect(() => {
-    document.title = title ? `${title} — LeadWell` : "LeadWell";
-  }, [title]);
+    document.title = signIn ? "Sign in — Polarch" : title ? `${title} — Polarch` : "Polarch";
+  }, [signIn, title]);
 }
 
 /**
@@ -385,7 +389,11 @@ export default function App() {
       }
       return null;
     }
-    return <Login />;
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <Login />
+      </div>
+    );
   }
 
   const inSessionEditor = Boolean(sessionId);

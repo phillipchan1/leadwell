@@ -761,7 +761,7 @@ export function IdeasBoard() {
           className="sticky bottom-4 z-30 mx-auto flex max-w-full flex-wrap items-center gap-1.5 rounded-[14px] bg-leather py-2 pr-2 pl-4 text-leather-fg shadow-[0_14px_32px_-10px_rgba(10,34,37,0.45),0_2px_6px_rgba(10,34,37,0.18)]"
         >
           <span className="text-[13px] font-semibold">
-            <span className="font-mono text-gilt">{ids.length}</span> selected
+            <span className="font-mono text-teal-400">{ids.length}</span> selected
           </span>
           <i aria-hidden className="mx-1.5 h-5 w-px bg-leather-line" />
           <span className="text-[12px] text-leather-ink">Tag</span>

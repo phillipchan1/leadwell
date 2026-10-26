@@ -729,7 +729,7 @@ function ActionRow({
         <span
           className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-colors ${
             done
-              ? "border-teal-600 bg-teal-600 text-white"
+              ? "border-teal-600 bg-teal-600 text-white dark:border-teal-400 dark:bg-teal-400 dark:text-stone-950"
               : "border-stone-300 bg-white hover:border-teal-500 dark:border-stone-600 dark:bg-stone-950 dark:hover:border-teal-500"
           }`}
         >

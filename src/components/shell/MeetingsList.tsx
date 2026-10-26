@@ -86,7 +86,7 @@ export function MeetingsList({ onAll }: { onAll: () => void }) {
               <span
                 className={cx(
                   "shrink-0 font-mono text-[11px]",
-                  when === "Today" ? "text-gilt" : "text-leather-mute"
+                  when === "Today" ? "text-teal-400" : "text-leather-mute"
                 )}
               >
                 {when}

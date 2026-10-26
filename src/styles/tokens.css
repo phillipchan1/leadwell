@@ -1,0 +1,63 @@
+/* Polarch design tokens — Direction B Fixed Point.
+   Values from the Creative Director package (tokens.css / tokens.json).
+   Dark is driven by the app's `.dark` class; landing/offline can also set
+   `[data-theme]`. Star `#CC5533` is graphics only — never body text. */
+
+:root {
+  color-scheme: light dark;
+  --pl-font-display: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  --pl-font-ui: "DM Sans", "Helvetica Neue", Arial, sans-serif;
+  --pl-type-display: 700 48px/56px var(--pl-font-display);
+  --pl-type-display-tracking: -0.02em;
+  --pl-type-h1: 700 32px/40px var(--pl-font-display);
+  --pl-type-h1-tracking: -0.015em;
+  --pl-type-h2: 700 24px/32px var(--pl-font-display);
+  --pl-type-h2-tracking: -0.01em;
+  --pl-type-h3: 700 20px/28px var(--pl-font-display);
+  --pl-type-h3-tracking: -0.005em;
+  --pl-type-body-lg: 400 18px/28px var(--pl-font-ui);
+  --pl-type-body-lg-tracking: 0em;
+  --pl-type-body: 400 16px/24px var(--pl-font-ui);
+  --pl-type-body-tracking: 0em;
+  --pl-type-body-sm: 400 14px/20px var(--pl-font-ui);
+  --pl-type-body-sm-tracking: 0em;
+  --pl-type-label: 600 14px/20px var(--pl-font-ui);
+  --pl-type-label-tracking: 0.005em;
+  --pl-type-caption: 500 12px/16px var(--pl-font-ui);
+  --pl-type-caption-tracking: 0.01em;
+  --pl-type-overline: 600 12px/16px var(--pl-font-ui);
+  --pl-type-overline-tracking: 0.06em;
+  --pl-radius-sm: 6px;
+  --pl-radius-md: 10px;
+  --pl-radius-lg: 16px;
+  /* the star — always the same terracotta, never a second hue, never text */
+  --pl-star: #cc5533;
+}
+
+:root,
+[data-theme="light"] {
+  --pl-bg: #f7f6f4;
+  --pl-surface: #ffffff;
+  --pl-subtle: #eeece9;
+  --pl-text: #22201e;
+  --pl-text-muted: #67615c;
+  --pl-primary: #b04528;
+  --pl-primary-contrast: #ffffff;
+  --pl-accent: #cc5533;
+  --pl-border: #e3e0dc;
+  --pl-border-strong: #8e8882;
+}
+
+.dark,
+[data-theme="dark"] {
+  --pl-bg: #181615;
+  --pl-surface: #221f1d;
+  --pl-subtle: #2d2a27;
+  --pl-text: #f1efec;
+  --pl-text-muted: #a39d97;
+  --pl-primary: #ec7c58;
+  --pl-primary-contrast: #181615;
+  --pl-accent: #cc5533;
+  --pl-border: #3a3633;
+  --pl-border-strong: #77716b;
+}

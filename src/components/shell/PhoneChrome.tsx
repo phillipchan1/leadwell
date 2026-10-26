@@ -143,7 +143,7 @@ export function PhoneTabBar() {
         <span
           className={cx(
             "size-[22px]",
-            p.id === "prayer" ? "text-vesper-glow" : isActive ? "text-gilt" : ""
+            p.id === "prayer" ? "text-vesper-glow" : isActive ? "text-teal-400" : ""
           )}
         >
           {p.icon({ className: "size-[22px]", active: isActive })}
@@ -164,7 +164,7 @@ export function PhoneTabBar() {
           type="button"
           aria-label="Capture"
           onClick={() => openModal({ kind: "capture" })}
-          className="flex size-[52px] items-center justify-center rounded-[18px] bg-gilt text-[#013133] shadow-[0_8px_18px_-6px_rgba(0,0,0,0.45)] active:scale-95"
+          className="flex size-[52px] items-center justify-center rounded-[18px] bg-teal-400 text-stone-950 shadow-[0_8px_18px_-6px_rgba(0,0,0,0.45)] active:scale-95"
         >
           <PlusIcon className="size-6" />
         </button>

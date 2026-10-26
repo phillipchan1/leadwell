@@ -91,7 +91,7 @@ export function ShortcutsPanel({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       title="Keyboard shortcuts"
-      subtitle="Leadwell is built to run without a mouse. Press ? any time to bring this back."
+      subtitle="Polarch is built to run without a mouse. Press ? any time to bring this back."
       size="lg"
       onClose={onClose}
       footer={

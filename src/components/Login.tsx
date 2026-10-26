@@ -25,14 +25,14 @@ export function Login() {
   };
 
   return (
-    <div className="pad-safe-top pad-safe-bottom flex h-full items-center justify-center bg-leather px-6 text-leather-fg">
+    <div className="pad-safe-top pad-safe-bottom flex h-full min-h-0 w-full flex-1 items-center justify-center bg-leather px-6 text-leather-fg">
       <div className="flex w-full max-w-[380px] flex-col items-center gap-8 text-center">
         <div className="flex items-center gap-3.5 text-[34px]">
           <Mark size={52} />
           <Wordmark />
         </div>
         <div className="flex flex-col gap-3">
-          <h1 className="font-serif text-[30px] leading-[36px] font-normal text-balance">
+          <h1 className="font-display text-[30px] leading-[36px] font-bold tracking-[-0.015em] text-balance">
             A quiet instrument for leading people well.
           </h1>
           <p className="text-[15px] leading-[23px] text-leather-ink">
@@ -63,23 +63,23 @@ export function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="h-12 w-full rounded-xl border border-leather-line bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-gilt"
+              className="h-12 w-full rounded-xl border-2 border-leather-mute bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-leather-mute"
             />
             <Button
               type="submit"
               size="lg"
-              color="secondary"
+              color="primary"
               isDisabled={busy}
               isLoading={busy}
               showTextWhileLoading
-              className="w-full"
+              className="w-full bg-[#ec7c58] text-[#181615] hover:bg-[#d4623e] before:hidden"
             >
               {busy ? "Sending…" : "Email me a sign-in link"}
             </Button>
           </form>
         )}
 
-        {error && <p className="text-[13px] text-gilt">{error}</p>}
+        {error && <p className="text-[13px] text-gilt-ink">{error}</p>}
       </div>
     </div>
   );

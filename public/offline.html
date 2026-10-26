@@ -6,24 +6,30 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>LeadWell — offline</title>
-    <meta name="theme-color" content="#013133" />
+    <title>Polarch — offline</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#F7F6F4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#181615" media="(prefers-color-scheme: dark)" />
     <style>
       :root {
         color-scheme: light dark;
-        --bg: #f2f7f7;
-        --fg: #0f1d1f;
-        --muted: #3f5153;
-        --card: #fcfefe;
-        --line: #d8e2e2;
+        --bg: #f7f6f4;
+        --fg: #22201e;
+        --muted: #67615c;
+        --card: #ffffff;
+        --line: #e3e0dc;
+        --primary: #b04528;
+        --primary-contrast: #ffffff;
       }
       @media (prefers-color-scheme: dark) {
         :root {
-          --bg: #081415;
-          --fg: #e6efee;
-          --muted: #b1bdbd;
-          --card: #0f1d1f;
-          --line: #223133;
+          --bg: #181615;
+          --fg: #f1efec;
+          --muted: #a39d97;
+          --card: #221f1d;
+          --line: #3a3633;
+          --primary: #ec7c58;
+          --primary-contrast: #181615;
         }
       }
       * {
@@ -39,8 +45,8 @@
           calc(env(safe-area-inset-bottom) + 24px);
         background: var(--bg);
         color: var(--fg);
-        font-family:
-          "Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-weight: 400;
         -webkit-font-smoothing: antialiased;
       }
       .card {
@@ -53,14 +59,15 @@
         padding: 2rem 1.5rem;
       }
       img {
-        width: 56px;
-        height: 56px;
-        border-radius: 14px;
+        width: 40px;
+        height: 40px;
       }
       h1 {
         margin: 1.25rem 0 0.5rem;
+        font-family: "Manrope", "Helvetica Neue", Arial, sans-serif;
         font-size: 1.125rem;
-        letter-spacing: -0.01em;
+        font-weight: 700;
+        letter-spacing: -0.015em;
       }
       p {
         margin: 0;
@@ -74,30 +81,29 @@
         width: 100%;
         border: 0;
         border-radius: 0.625rem;
-        background: #006967;
-        color: #fff;
+        background: var(--primary);
+        color: var(--primary-contrast);
         font: inherit;
         font-weight: 600;
         font-size: 0.9375rem;
         cursor: pointer;
       }
       button:active {
-        background: #005452;
+        filter: brightness(0.95);
       }
     </style>
   </head>
   <body>
     <div class="card">
-      <img src="/icon-192.png" alt="" />
+      <img src="/favicon.svg" alt="" />
       <h1>You're offline</h1>
       <p>
-        LeadWell can't reach the network right now. Your saved work is safe —
+        Polarch can't reach the network right now. Your saved work is safe —
         reconnect and try again.
       </p>
       <button type="button" onclick="location.replace('/')">Try again</button>
     </div>
     <script>
-      // Bounce back into the app the moment connectivity returns.
       addEventListener("online", () => location.replace("/"));
     </script>
   </body>

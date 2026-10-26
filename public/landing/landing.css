@@ -1,4 +1,4 @@
-/* LeadWell — Leather & Gilt, for the public page.
+/* Polarch — public page. Tokens match src/styles/tokens.css.
  *
  * The critical rules (tokens, fonts, header, hero) are inline in index.html.
  * This file is everything below the first screen. Leather frames, paper is
@@ -21,11 +21,11 @@ section { --pt: clamp(104px, 13vw, 168px); padding: var(--pt) 0; }
    what keeps the day from hard-cutting. */
 .tide { display: block; height: 26vh; margin: calc(-1 * var(--pt)) 0 calc(var(--pt) - 26vh); background: linear-gradient(var(--from), rgba(0, 0, 0, 0)); pointer-events: none; }
 main > section > .tide { position: static; }
-.today { --from: #013133; }
-.people { --from: #eef3f1; }
-.profile { --from: #023436; }
-.anywhere { --from: #f4f0e6; }
-.nightfall { --from: #0b2e30; }
+.today { --from: #181615; }
+.people { --from: #f7f6f4; }
+.profile { --from: #221f1d; }
+.anywhere { --from: #f7f6f4; }
+.nightfall { --from: #221f1d; }
 /* A pinned chapter is taller than its stage. Off screen, the stretch the stage
    travels over carries a still of the water rather than a blank band. */
 html.motion .pin { position: relative; }
@@ -37,18 +37,17 @@ html.motion .pin.is-near::before, html.has-water .pin.is-near .nightfall__still 
 
 .h2 { font: 400 clamp(32px, 4.6vw, 56px)/1.06 var(--serif); letter-spacing: -.015em; text-wrap: balance; color: var(--fg); }
 .h2 em { color: var(--fg-2); }
-.tone-light .h2 em { color: #4a5e5b; }
+.tone-light .h2 em { color: #67615c; }
 .tone-night .h2 em { color: var(--vesper-hi); }
 .h2--pin { font-size: clamp(30px, 3.3vw, 48px); }
 .lede { margin-top: 20px; max-width: 60ch; font-size: clamp(17px, 1.5vw, 19px); line-height: 1.6; color: var(--fg-2); text-wrap: pretty; }
 
 .gilt-text {
-  font-style: italic; color: var(--gilt);
-  background: linear-gradient(100deg, var(--gilt-lo) 0%, var(--gilt) 30%, var(--gilt-hi) 48%, var(--gilt) 62%, var(--gilt-lo) 100%);
-  background-size: 250% 100%; background-position: 0 0;
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  font-style: italic; color: var(--teal);
+  -webkit-text-fill-color: var(--teal);
 }
-.tone-dark .h2 em.gilt-text { color: var(--gilt); }
+.tone-dark .h2 em.gilt-text,
+.tone-night .h2 em.gilt-text { color: var(--ember); -webkit-text-fill-color: var(--ember); }
 
 /* ── Cards: paper floating on the water ─────────────────────────────── */
 
@@ -540,8 +539,9 @@ html.motion .nightfall__copy { margin: 12vh auto 0; }
 .w__i { display: inline-block; }
 html.motion .is-split .w__i { transform: translateY(108%) rotate(5deg); transform-origin: 0 100%; transition: transform 1.1s var(--ease) calc(var(--wi, 0) * 34ms); }
 html.motion .is-split.is-in .w__i { transform: none; }
-.is-split .gilt-text { background: none; -webkit-text-fill-color: currentColor; }
-.is-split .gilt-text .w__i { background: linear-gradient(100deg, var(--gilt-lo) 0%, var(--gilt) 30%, var(--gilt-hi) 48%, var(--gilt) 62%, var(--gilt-lo) 100%); background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: var(--gilt); -webkit-text-fill-color: transparent; }
+.is-split .gilt-text { background: none; -webkit-text-fill-color: var(--teal); }
+.tone-dark .is-split .gilt-text, .tone-night .is-split .gilt-text { -webkit-text-fill-color: var(--ember); }
+.is-split .gilt-text .w__i { background: none; color: inherit; -webkit-text-fill-color: inherit; }
 
 /* ── Reveal on scroll ───────────────────────────────────────────────── */
 
@@ -564,7 +564,7 @@ html.motion .flames li:nth-child(4) svg { animation-delay: -2.1s; }
   .caret { animation: none !important; }
 }
 @media (forced-colors: active) {
-  .gilt-text, .is-split .gilt-text .w__i { -webkit-text-fill-color: currentColor; background: none; }
+  .gilt-text, .is-split .gilt-text .w__i { -webkit-text-fill-color: inherit; background: none; }
   .meter i, .ring-ico, .dot { forced-color-adjust: none; }
   .letter path { fill: CanvasText; stroke: none; }
 }

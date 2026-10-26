@@ -11,7 +11,23 @@ import { cx } from "@/utils/cx";
  * arc and a fill, the prayer flame is filled, outlined or dashed.
  */
 
-/** The mark: ripples in a well, with the gilt drop at the center. */
+/* Polarch mark: a p that holds one Star in its counter.
+   Small master at 40px and under (pixel-hinted 16-grid). Star is always
+   `#CC5533`. Ink follows `currentColor` so leather chrome stays pale and
+   paper chrome follows the theme. */
+const MARK_P =
+  "M14 7h8v51h-8ZM14 25A18 18 0 1 1 50 25A18 18 0 1 1 14 25ZM22 25A10 10 0 1 0 42 25A10 10 0 1 0 22 25Z";
+const MARK_STAR = "M26.5 25A5.5 5.5 0 1 1 37.5 25A5.5 5.5 0 1 1 26.5 25Z";
+const MARK_SMALL_P =
+  "M3 2h2v12h-2ZM3 7A5 5 0 1 1 13 7A5 5 0 1 1 3 7ZM5 7A3 3 0 1 0 11 7A3 3 0 1 0 5 7Z";
+const MARK_SMALL_STAR = "M7 7A1 1 0 1 1 9 7A1 1 0 1 1 7 7Z";
+const STAR = "#CC5533";
+
+/** Wordmark paths without the star — used next to the mark (one star per lockup). */
+const WORDMARK_OPEN =
+  "M4 43h22.64v156h-22.64ZM4 97A54.72 54.72 0 1 1 113.44 97A54.72 54.72 0 1 1 4 97ZM26.64 97A32.08 32.08 0 1 0 90.8 97A32.08 32.08 0 1 0 26.64 97ZM130.64 97A54.72 54.72 0 1 1 240.08 97A54.72 54.72 0 1 1 130.64 97ZM153.28 97A32.08 32.08 0 1 0 217.44 97A32.08 32.08 0 1 0 153.28 97ZM263.68 4h22.64v147h-22.64ZM309.92 97A54.72 54.72 0 1 1 419.36 97A54.72 54.72 0 1 1 309.92 97ZM332.57 97A32.08 32.08 0 1 0 396.72 97A32.08 32.08 0 1 0 332.57 97ZM396.72 43h22.64v108h-22.64ZM448.56 43h22.64v108h-22.64ZM448.56 97A54.72 54.72 0 0 1 549.69 68A11.32 11.32 0 0 1 530.49 80A32.08 32.08 0 0 0 471.21 97ZM657.99 133.61A54.72 54.72 0 1 1 657.99 60.39A11.32 11.32 0 0 1 641.17 75.54A32.08 32.08 0 1 0 641.17 118.46A11.32 11.32 0 0 1 657.99 133.61ZM684.1 4h22.64v147h-22.64ZM684.1 97A54.72 54.72 0 0 1 793.54 97L770.9 97A32.08 32.08 0 0 0 706.75 97ZM770.9 97h22.64v54h-22.64Z";
+const WORDMARK_STAR = "M41.08 97A17.64 17.64 0 1 1 76.36 97A17.64 17.64 0 1 1 41.08 97Z";
+
 export function Mark({
   size = 28,
   className,
@@ -19,40 +35,39 @@ export function Mark({
   size?: number;
   className?: string;
 }) {
+  const small = size <= 40;
+  const box = small ? 16 : 64;
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 48 48"
+      viewBox={`0 0 ${box} ${box}`}
       aria-hidden="true"
       className={cx("shrink-0", className)}
     >
-      <rect width="48" height="48" rx="13" fill="#114143" />
-      <circle
-        cx="24"
-        cy="24"
-        r="15"
-        fill="none"
-        stroke="#ACC3C1"
-        strokeOpacity="0.45"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeDasharray="72 22.25"
-        transform="rotate(-20 24 24)"
-      />
-      <circle cx="24" cy="24" r="9" fill="none" stroke="#ACC3C1" strokeWidth="2.4" />
-      <circle cx="24" cy="24" r="3.8" fill="#E1B34D" />
+      <path d={small ? MARK_SMALL_P : MARK_P} fill="currentColor" />
+      <path d={small ? MARK_SMALL_STAR : MARK_STAR} fill={STAR} />
     </svg>
   );
 }
 
-/** "Lead" is the action, in the sans; "Well" is the quality, in the serif. */
-export function Wordmark({ className }: { className?: string }) {
+/** Drawn wordmark, not live type. Omit the star when the mark sits beside it. */
+export function Wordmark({
+  className,
+  withStar = false,
+}: {
+  className?: string;
+  withStar?: boolean;
+}) {
   return (
-    <span className={cx("inline-flex items-baseline leading-none", className)}>
-      <span className="font-sans font-semibold">Lead</span>
-      <span className="font-serif italic text-gilt">Well</span>
-    </span>
+    <svg
+      viewBox="0 0 798 203"
+      aria-hidden="true"
+      className={cx("h-[0.72em] w-auto", className)}
+    >
+      <path d={WORDMARK_OPEN} fill="currentColor" />
+      {withStar ? <path d={WORDMARK_STAR} fill={STAR} /> : null}
+    </svg>
   );
 }
 
@@ -272,7 +287,7 @@ export function PrayerFlame({
           <path
             d="M9.6 13.2l1.7 1.7 3.2-3.4"
             fill="none"
-            stroke="#013133"
+            stroke="#181615"
             strokeWidth="1.6"
             strokeLinecap="round"
             strokeLinejoin="round"

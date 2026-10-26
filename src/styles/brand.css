@@ -1,67 +1,64 @@
-/* ── Leather & Gilt ──────────────────────────────────────────────────────
-   The design language, stated once. See the redesign canvas for the why;
-   this file is the what.
+/* ── Polarch ────────────────────────────────────────────────────────────
+   Direction B · Fixed Point. Tokens live in tokens.css / tokens.json.
+   Two moves still do most of the work:
 
-   Two moves do most of the work:
+   1. The `stone` and `teal` ramps are *redefined* rather than replaced.
+      stone becomes Polarch's warm neutrals (Daylight → Night). teal becomes
+      Clay / Ember — the text-safe terracotta. Star `#CC5533` is *not* on
+      this ramp; it is graphics only (the point, fills, dots).
 
-   1. The `stone` and `teal` ramps are *redefined* rather than replaced. Every
-      screen in the app was written against `stone-*` (warm grey) and
-      `teal-*` (brand), so re-pointing those two ramps re-skins all of them in
-      one place: stone becomes a grey tinted toward the leather, teal becomes
-      the deeper Wellwater. A component migrated to semantic tokens later
-      renders the same pixels it does now.
+   2. Named tokens carry a light value here and a dark value in `.dark`:
+      Night chrome, Star (graphics), Clay/Ember (press), vesper (prayer),
+      the condition ramp, avatar tints and tag pigments.
 
-   2. Everything that means something gets a named token with a light value
-      here and a dark value in the `.dark` block below: the leather that
-      frames the app, gilt, vesper (prayer), the condition ramp shared by
-      health and readiness, avatar tints and tag pigments.
-
-   Rule of thumb: teal means you can press it. Gilt is something to
-   celebrate. Vesper is prayer and nothing else. Condition colors are state,
-   and state is always round; identity (life areas, strengths) is square. */
+   Press colors: Clay `#B04528` + white in light; Ember `#EC7C58` + Night
+   in dark. Both pairings are ≥ 4.5:1 (see contrast.md). */
 
 @theme {
-  /* Neutrals, tinted toward the leather. One ramp serves both themes: light
-     pages are 50, light ink is 900; dark pages are 950, dark cards are 900. */
-  --color-stone-50: #f2f7f7;
-  --color-stone-100: #e9f1f0;
-  --color-stone-200: #d8e2e2;
-  --color-stone-300: #c8d4d4;
-  --color-stone-400: #8e9c9c;
-  --color-stone-500: #5f6d6e;
-  --color-stone-600: #3f5153;
-  --color-stone-700: #2e3f41;
-  --color-stone-800: #223133;
-  --color-stone-900: #0f1d1f;
-  --color-stone-950: #081415;
+  /* Neutrals. Light pages are 50, light ink is 900; dark pages are 950,
+     dark cards are 900. */
+  --color-stone-50: #f7f6f4;
+  --color-stone-100: #eeece9;
+  --color-stone-200: #e3e0dc;
+  --color-stone-300: #c9c4be;
+  --color-stone-400: #8e8882;
+  --color-stone-500: #67615c;
+  --color-stone-600: #4f4a46;
+  --color-stone-700: #3a3633;
+  --color-stone-800: #2d2a27;
+  --color-stone-900: #22201e;
+  --color-stone-950: #181615;
 
-  /* Wellwater. 600 is the press color in light, 400 in dark. */
-  --color-teal-50: #edfaf9;
-  --color-teal-100: #d7f4f2;
-  --color-teal-200: #b0e5e2;
-  --color-teal-300: #80d2ce;
-  --color-teal-400: #56bcb9;
-  --color-teal-500: #22928f;
-  --color-teal-600: #006967;
-  --color-teal-700: #005452;
-  --color-teal-800: #00403f;
-  --color-teal-900: #00302f;
-  --color-teal-950: #001d1c;
+  /* Terracotta. 600 is Clay (light press + links). 400/500 are Ember
+     (dark press + links). Star is never a step on this ramp. */
+  --color-teal-50: #f8ebe6;
+  --color-teal-100: #f3d8cf;
+  --color-teal-200: #e8b8a8;
+  --color-teal-300: #e8a08a;
+  --color-teal-400: #ec7c58;
+  --color-teal-500: #ec7c58;
+  --color-teal-600: #b04528;
+  --color-teal-700: #8f3820;
+  --color-teal-800: #6e2b19;
+  --color-teal-900: #4a1d11;
+  --color-teal-950: #2a110a;
 
-  /* The leather that frames the app: sidebar, tab bar, the Run header. It
-     stays dark in both themes; only its depth changes. */
-  --color-leather: #013133;
-  --color-leather-hi: #114143;
-  --color-leather-line: #244648;
-  --color-leather-ink: #acc3c1;
-  --color-leather-fg: #e6efee;
-  --color-leather-mute: #7e9997;
+  /* Night chrome: sidebar, tab bar, the Run header. Stays dark in both
+     themes — Night, not the old teal leather. */
+  --color-leather: #181615;
+  --color-leather-hi: #221f1d;
+  --color-leather-line: #3a3633;
+  --color-leather-ink: #a39d97;
+  --color-leather-fg: #f1efec;
+  --color-leather-mute: #77716b;
 
-  /* Gilt: the mark, wins banked, answered prayer. */
-  --color-gilt: #e1b34d;
-  --color-gilt-ink: #8a5f18;
-  --color-gilt-soft: #fcf2d6;
-  --color-gilt-line: #f1dda6;
+  /* Star: the point and other non-text accents. Ink/soft are Clay so any
+     leftover `text-gilt` still meets AA and is not Star. */
+  --color-gilt: #cc5533;
+  --color-gilt-ink: #b04528;
+  --color-gilt-soft: #f3d8cf;
+  --color-gilt-line: #e8b8a8;
+  --color-star: #cc5533;
 
   /* Vesper: prayer, and only prayer. */
   --color-vesper: #6a51a4;
@@ -124,28 +121,49 @@
   --color-tag6-soft: #eaf2e0;
   --color-tag6-ink: #4b5d28;
 
-  /* Three voices. Newsreader for people and the words written about them,
-     Instrument Sans for everything you operate, Plex Mono for time. */
-  --font-sans: "Instrument Sans Variable", "Instrument Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  --font-serif: "Newsreader Variable", "Newsreader", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  /* Manrope 700 for headings; DM Sans 400/600 for UI and body. No serif. */
+  --font-sans: "DM Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Manrope", "Helvetica Neue", Arial, sans-serif;
   --font-body: var(--font-sans);
   --font-display: var(--font-serif);
-  --font-journal: var(--font-serif);
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-journal: var(--font-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @layer base {
-  .dark {
-    --color-leather: #04191b;
-    --color-leather-hi: #0e2a2c;
-    --color-leather-line: #163133;
-    --color-leather-ink: #9db0af;
-    --color-leather-mute: #6f8584;
+  :root {
+    --color-bg-brand-solid: #b04528;
+    --color-bg-brand-solid_hover: #8f3820;
+    --color-text-primary_on-brand: #ffffff;
+    --color-focus-ring: #b04528;
+  }
 
-    --color-gilt: #ebc166;
-    --color-gilt-ink: #ebc166;
-    --color-gilt-soft: #2a2110;
-    --color-gilt-line: #4a3a18;
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+
+  .dark {
+    --color-leather: #181615;
+    --color-leather-hi: #221f1d;
+    --color-leather-line: #3a3633;
+    --color-leather-ink: #a39d97;
+    --color-leather-mute: #77716b;
+
+    --color-gilt: #cc5533;
+    --color-gilt-ink: #ec7c58;
+    --color-gilt-soft: #2a1814;
+    --color-gilt-line: #4a2a22;
+
+    /* Ember fill, Night label — AA 6.52:1. Do not put white on Ember. */
+    --color-bg-brand-solid: #ec7c58;
+    --color-bg-brand-solid_hover: #d4623e;
+    --color-text-primary_on-brand: #181615;
+    --color-fg-brand-primary: #ec7c58;
+    --color-focus-ring: #ec7c58;
 
     --color-vesper: #bcabf1;
     --color-vesper-soft: #1f1b33;
@@ -196,13 +214,11 @@
     --color-tag6-ink: #bacd9b;
   }
 
-  /* Names are always serif. Opt in with `.name`; the optical-size axis keeps
-     Newsreader crisp from a 13px list row to a 44px page title. */
+  /* Names are display type — Manrope 700, tracked like headings. */
   .name {
-    font-family: var(--font-serif);
-    font-optical-sizing: auto;
-    font-weight: 500;
-    letter-spacing: -0.005em;
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.015em;
   }
 
   /* Countdowns and dates line up like a ticker. */

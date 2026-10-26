@@ -524,12 +524,12 @@ function Carrying({ rows }: { rows: ReturnType<typeof buildToday>["carrying"] })
                 <span className="flex items-center gap-2">
                   <PrayerFlame state={r.state} size={14} className="[&_path]:fill-vesper-glow [&_path]:stroke-vesper-glow" />
                   <span className="truncate font-serif text-[17px] font-medium">{r.name}</span>
-                  <span className={cx("ml-auto shrink-0 font-mono text-[11px]", r.state === "cold" ? "text-gilt" : "text-leather-ink")}>
+                  <span className={cx("ml-auto shrink-0 font-mono text-[11px]", r.state === "cold" ? "text-teal-400" : "text-leather-ink")}>
                     {r.state === "cold" ? `QUIET · ${r.silence ?? "?"}D` : shortSincePrayed(r.prayer).toUpperCase()}
                   </span>
                 </span>
                 {r.prayer?.focus && (
-                  <span className="pl-[22px] font-serif text-[15px] leading-[21px] text-[#c9d7d5] italic">{r.prayer.focus}</span>
+                  <span className="pl-[22px] font-serif text-[15px] leading-[21px] text-leather-ink italic">{r.prayer.focus}</span>
                 )}
               </button>
             </li>
