@@ -7,8 +7,11 @@ export const MAGIC_LINK_SEND_WINDOW_SEC = 60;
 export const MAGIC_LINK_SEND_MAX = 3;
 export const MAGIC_LINK_EMAIL_PREFIX_WINDOW_SEC = 60 * 60;
 export const MAGIC_LINK_EMAIL_PREFIX_MAX = 10;
+export const MAGIC_LINK_EMAIL_SOFT_WINDOW_SEC = 60 * 60;
+export const MAGIC_LINK_EMAIL_SOFT_MAX = 200;
 export const MAGIC_LINK_VERIFY_WINDOW_SEC = 60;
 export const MAGIC_LINK_VERIFY_MAX = 10;
+export const AUTH_IP_PREFIX_INVALID = "invalid";
 
 export const MAGIC_LINK_SEND_RULE = {
   window: MAGIC_LINK_SEND_WINDOW_SEC,
@@ -20,6 +23,16 @@ export const MAGIC_LINK_EMAIL_IP_RULE = MAGIC_LINK_SEND_RULE;
 export const MAGIC_LINK_EMAIL_PREFIX_RULE = {
   window: MAGIC_LINK_EMAIL_PREFIX_WINDOW_SEC,
   max: MAGIC_LINK_EMAIL_PREFIX_MAX,
+} as const;
+
+export const MAGIC_LINK_EMAIL_SOFT_RULE = {
+  window: MAGIC_LINK_EMAIL_SOFT_WINDOW_SEC,
+  max: MAGIC_LINK_EMAIL_SOFT_MAX,
+} as const;
+
+export const MAGIC_LINK_EMAIL_SOFT_LOG_RULE = {
+  window: MAGIC_LINK_EMAIL_SOFT_WINDOW_SEC,
+  max: 1,
 } as const;
 
 export const MAGIC_LINK_VERIFY_RULE = {
@@ -58,6 +71,14 @@ export function emailIpPrefixMagicLinkRateLimitKey(email: string, prefix: string
   return `email-prefix|/sign-in/magic-link|${email.trim().toLowerCase()}|${prefix}`;
 }
 
+export function emailSoftMagicLinkRateLimitKey(email: string): string {
+  return `email-soft|/sign-in/magic-link|${email.trim().toLowerCase()}`;
+}
+
+export function emailSoftLogMagicLinkRateLimitKey(email: string): string {
+  return `email-soft-log|/sign-in/magic-link|${email.trim().toLowerCase()}`;
+}
+
 function parseIpv4(value: string): [number, number, number, number] | null {
   const match = value.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (!match) return null;
@@ -83,10 +104,10 @@ function parseIpv6Groups(side: string | undefined): string[] | null {
   return out;
 }
 
-/** IPv4 /24 or IPv6 /48. Never used as an email-only key. */
+/** IPv4 /24 or IPv6 /48. Unparseable strings share one `invalid` bucket. */
 export function authIpPrefix(ip: string): string {
   const raw = ip.trim().toLowerCase();
-  if (!raw) return "unknown";
+  if (!raw) return AUTH_IP_PREFIX_INVALID;
   const unwrapped = raw.startsWith("[") && raw.endsWith("]") ? raw.slice(1, -1) : raw;
   const noZone = unwrapped.split("%")[0] ?? unwrapped;
   const v4 = parseIpv4(noZone);
@@ -96,17 +117,17 @@ export function authIpPrefix(ip: string): string {
     const inner = parseIpv4(mapped[1] ?? "");
     if (inner) return `${inner[0]}.${inner[1]}.${inner[2]}.0/24`;
   }
-  if (!noZone.includes(":")) return noZone;
+  if (!noZone.includes(":")) return AUTH_IP_PREFIX_INVALID;
   const halves = noZone.split("::");
-  if (halves.length > 2) return noZone;
+  if (halves.length > 2) return AUTH_IP_PREFIX_INVALID;
   const left = parseIpv6Groups(halves[0]);
   const right = halves.length === 1 ? [] : parseIpv6Groups(halves[1]);
-  if (!left || !right) return noZone;
+  if (!left || !right) return AUTH_IP_PREFIX_INVALID;
   const groups =
     halves.length === 1
       ? left
       : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill("0000"), ...right];
-  if (groups.length !== 8) return noZone;
+  if (groups.length !== 8) return AUTH_IP_PREFIX_INVALID;
   return `${groups[0]}:${groups[1]}:${groups[2]}::/48`;
 }
 
@@ -204,4 +225,29 @@ export async function consumeEmailMagicLinkLimit(
     emailIpPrefixMagicLinkRateLimitKey(trimmed, authIpPrefix(address)),
     MAGIC_LINK_EMAIL_PREFIX_RULE,
   );
+}
+
+/**
+ * Silent 200/hr per-email soft cap. Past it we still return 200 and skip
+ * the send. `firstSkip` is true only on the first trip this window so we
+ * log once.
+ */
+export async function consumeEmailMagicLinkSoftCap(
+  db: RateLimitDatabase,
+  email: string,
+): Promise<{ allowed: boolean; firstSkip: boolean }> {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) return { allowed: true, firstSkip: false };
+  const result = await consumeRateLimitKey(
+    db,
+    emailSoftMagicLinkRateLimitKey(trimmed),
+    MAGIC_LINK_EMAIL_SOFT_RULE,
+  );
+  if (result.allowed) return { allowed: true, firstSkip: false };
+  const logged = await consumeRateLimitKey(
+    db,
+    emailSoftLogMagicLinkRateLimitKey(trimmed),
+    MAGIC_LINK_EMAIL_SOFT_LOG_RULE,
+  );
+  return { allowed: false, firstSkip: logged.allowed };
 }

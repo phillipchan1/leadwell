@@ -10,10 +10,11 @@ import {
 } from "./authUrl.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
-import { logMagicLinkSendFailure, sendMagicLinkEmail } from "./mail.ts";
+import { logMagicLinkSendFailure, logMagicLinkSoftCapSkip, sendMagicLinkEmail } from "./mail.ts";
 import {
   authRateLimitCustomRules,
   consumeEmailMagicLinkLimit,
+  consumeEmailMagicLinkSoftCap,
   createDatabaseRateLimitStorage,
   rateLimitDeniedResponse,
 } from "./rateLimit.ts";
@@ -231,6 +232,11 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
         expiresIn: 60 * 10,
         sendMagicLink: async ({ email, url, token }) => {
           if (!isAllowedEmail(env, email)) return;
+          const soft = await consumeEmailMagicLinkSoftCap(db, email);
+          if (!soft.allowed) {
+            if (soft.firstSkip) logMagicLinkSoftCapSkip();
+            return;
+          }
           const sending = sendMagicLinkEmail(env, { email, url, token }).catch((err) => {
             logMagicLinkSendFailure(err);
           });
@@ -262,7 +268,8 @@ export async function closeAuth(auth: AuthInstance): Promise<void> {
 /**
  * Better Auth handler plus the extra email buckets.
  * Built-in limiter is IP + path only; this adds 3/min per email+IP,
- * then 10/hr per email+IP-prefix (/24 or /48). Nothing is keyed on email alone.
+ * then 10/hr per email+IP-prefix (/24 or /48). A 200/hr per-email soft
+ * cap is applied in sendMagicLink (200 + skip send), not here.
  */
 export async function handleAuthRequest(auth: AuthInstance, req: Request): Promise<Response> {
   const path = new URL(req.url).pathname;
