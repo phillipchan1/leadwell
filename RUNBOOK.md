@@ -167,12 +167,15 @@ The script:
 2. `COPY`s `migration_tmp.auth_users()` (and `migration_tmp.auth_identities()`, unused). The functions `RETURNS TABLE` only the columns Better Auth needs. Never `SELECT`s `auth.users` / `auth.identities` — the source role cannot get `USAGE` on `auth`.
 3. Aborts on blank or case-insensitive-duplicate emails.
 4. Refuses a non-empty Neon target.
-5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, and stub Supabase
-   roles (`anon`, `authenticated`, `service_role`, plus any other names in
-   the dump's `CREATE POLICY … TO` / `GRANT … TO` clauses) as `NOLOGIN`.
-   Then restores public. The same stubs run on the Actions scratch target
-   (`dry_run=true`) and on Neon (`dry_run=false`). Without them,
-   `pg_restore` fails with `role "authenticated" does not exist` on
+5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, and stub **only**
+   `anon`, `authenticated`, and `service_role` as `NOLOGIN` (tagged
+   `DO $leadwell_stub_roles$`, `IF NOT EXISTS`). The dump is scanned for
+   `CREATE POLICY … TO` and privilege `GRANT … ON … TO` only — not
+   function bodies and not membership `GRANT role TO role`. Any other
+   role in those clauses is a hard error. Then restores public. The same
+   stubs run on the Actions scratch target (`dry_run=true`) and on Neon
+   (`dry_run=false`). Without them, `pg_restore` fails with
+   `role "authenticated" does not exist` on
    `CREATE POLICY actions_owner … TO authenticated`.
 6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
 7. Does **not** map Google identities.
@@ -202,6 +205,42 @@ call stub `auth.uid()`, so a future `SET ROLE authenticated` session
 would see the RLS expression. That is dump fidelity, not the Worker
 path. Do not grant `LOGIN` on the stubs and do not point Hyperdrive at
 `authenticated`.
+
+### `pg_dump` and RLS on the source
+
+`pg_dump` (default, no `--enable-row-security`) sets `row_security=off`
+and then `COPY`s each table. That is **not** the same as `GRANT SELECT`.
+A non-owner without `BYPASSRLS` gets:
+
+```
+ERROR: query would be affected by row-level security policy for table "actions"
+```
+
+`--enable-row-security` would only dump rows a policy allows. The LeadWell
+policies are `TO authenticated` + `auth.uid()`. `migration_reader` is
+neither `authenticated` nor the table owner, so it would dump **empty**
+tables. Do not use that flag.
+
+**Prod finding (do not guess attributes):** cutover
+[40377053881](https://github.com/phillipchan1/leadwell/actions/runs/40377053881)
+dumped `public` from real Supabase as `migration_reader` and then failed
+later on `CREATE POLICY … TO authenticated`. So the prod dump role
+**already can** `COPY` RLS-protected tables under `row_security=off`.
+This environment cannot `SELECT rolbypassrls` on that role (no source
+URI). If a later dump hits the error above, grant `BYPASSRLS` to
+`migration_reader` (or dump as the table owner / a superuser). Confirm
+as a privileged role, never print row values:
+
+```sql
+-- expect t if this is how the role dumps (or rolsuper / table owner)
+SELECT rolname, rolsuper, rolbypassrls
+FROM pg_roles
+WHERE rolname = 'migration_reader';
+```
+
+The loopback prove dumps as `migration_reader` after `ALTER ROLE …
+BYPASSRLS` so CI matches that `row_security=off` COPY, not the owner
+session that created the tables.
 
 Loopback prove that a restore with role-scoped policies succeeds:
 

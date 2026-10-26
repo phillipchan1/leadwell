@@ -160,6 +160,7 @@ ok(parseCounts("profiles|3\n").profiles === 3, "parseCounts");
 
 ok(PG_DUMP_PUBLIC_ARGS.includes("--schema=public"), "pg_dump dumps public only");
 ok(PG_DUMP_PUBLIC_ARGS.includes("--exclude-schema=auth"), "pg_dump excludes auth");
+ok(!PG_DUMP_PUBLIC_ARGS.includes("--enable-row-security"), "pg_dump does not enable row security");
 ok(SOURCE_AUTH_USERS_FN === "migration_tmp.auth_users()", "source users function name");
 ok(SOURCE_AUTH_IDENTITIES_FN === "migration_tmp.auth_identities()", "source identities function name");
 ok(EXPORT_AUTH_USERS_COPY_SQL.includes(SOURCE_AUTH_USERS_FN), "users COPY uses the function");
@@ -212,27 +213,53 @@ const policyDumpSql = `
 CREATE POLICY actions_owner ON public.actions TO authenticated USING ((user_id = auth.uid())) WITH CHECK ((user_id = auth.uid()));
 GRANT ALL ON TABLE public.actions TO authenticated;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-CREATE POLICY extra ON public.profiles TO "dashboard_user", PUBLIC USING (true);
 SET search_path TO public;
 ALTER TABLE public.actions OWNER TO postgres;
 GRANT authenticated TO postgres;
+CREATE FUNCTION sneak() RETURNS void LANGUAGE sql AS $function$
+CREATE POLICY hidden ON public.profiles TO dashboard_user USING (true);
+GRANT SELECT ON TABLE public.profiles TO dashboard_user;
+$function$;
 `;
 const scanned = collectRolesFromDumpSql(policyDumpSql);
 ok(scanned.includes("authenticated"), "scan finds POLICY TO authenticated");
 ok(scanned.includes("anon") && scanned.includes("service_role"), "scan finds GRANT TO anon/service_role");
-ok(scanned.includes("dashboard_user"), "scan finds quoted TO role");
+ok(!scanned.includes("dashboard_user"), "scan ignores roles inside function bodies");
 ok(!scanned.includes("public") && !scanned.includes("PUBLIC"), "scan skips PUBLIC");
-ok(!scanned.includes("postgres"), "scan skips OWNER TO / GRANT … TO postgres");
+ok(!scanned.includes("postgres"), "scan skips membership GRANT role TO role");
+ok(
+  collectRolesFromDumpSql(
+    "-- Name: actions_owner; Type: POLICY; Schema: public; Owner: -\nCREATE POLICY actions_owner ON public.actions TO authenticated USING (true);",
+  ).includes("authenticated"),
+  "scan finds POLICY after dump comment that contains semicolons",
+);
 const stubbed = rolesToStubFromDumpSql("");
 ok(
   stubbed.join(",") === "anon,authenticated,service_role",
   "empty dump still stubs anon, authenticated, service_role",
 );
-ok(rolesToStubFromDumpSql(policyDumpSql).includes("dashboard_user"), "stub list includes scanned extras");
+ok(rolesToStubFromDumpSql(policyDumpSql).join(",") === "anon,authenticated,service_role", "allowlisted dump stubs only the three roles");
+let extraThrew = false;
+try {
+  rolesToStubFromDumpSql("CREATE POLICY extra ON public.profiles TO dashboard_user USING (true);");
+} catch (err) {
+  extraThrew = String(err.message).includes("dashboard_user");
+}
+ok(extraThrew, "non-allowlisted TO role fails loudly");
+let stubExtraThrew = false;
+try {
+  stubSupabaseRolesSql(["authenticated", "dashboard_user"]);
+} catch (err) {
+  stubExtraThrew = String(err.message).includes("dashboard_user");
+}
+ok(stubExtraThrew, "stub SQL refuses non-allowlisted roles");
 const roleSql = stubSupabaseRolesSql(["authenticated", "anon"]);
 ok(/CREATE ROLE "anon" NOLOGIN/.test(roleSql), "stub SQL creates anon NOLOGIN");
 ok(/CREATE ROLE "authenticated" NOLOGIN/.test(roleSql), "stub SQL creates authenticated NOLOGIN");
 ok(/IF NOT EXISTS \(SELECT 1 FROM pg_roles WHERE rolname = 'authenticated'\)/.test(roleSql), "stub SQL is idempotent");
+ok(roleSql.includes("$leadwell_stub_roles$"), "stub SQL uses a tagged dollar-quote");
+ok(!/DO \$\$/.test(roleSql), "stub SQL does not use untagged DO $$");
+ok(proveMigrationReaderSetupSql("leadwell_src").includes("BYPASSRLS"), "prove reader is BYPASSRLS for pg_dump");
 ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
 ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
 ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
@@ -343,10 +370,13 @@ ok(runbook.includes("DROP SCHEMA migration_tmp CASCADE"), "runbook drops migrati
 ok(runbook.includes("encrypted_password"), "runbook documents that password hashes stay off the TABLE");
 ok(runbook.includes('role "authenticated" does not exist'), "runbook documents the restore role failure");
 ok(runbook.includes("NOLOGIN"), "runbook documents NOLOGIN role stubs");
-ok(runbook.includes("dump's `CREATE POLICY"), "runbook documents scanning dump TO/GRANT roles");
+ok(runbook.includes("CREATE POLICY … TO"), "runbook documents scanning dump TO/GRANT roles");
+ok(runbook.includes("function bodies"), "runbook documents not scanning function bodies");
 ok(runbook.includes("FORCE ROW LEVEL SECURITY") || runbook.includes("FORCE RLS"), "runbook documents Worker vs RLS");
 ok(runbook.includes("user_id"), "runbook documents Worker user_id scoping");
 ok(!runbook.includes("uploads the dump"), "runbook no longer says the dump is uploaded");
+ok(runbook.includes("BYPASSRLS"), "runbook documents dump-role BYPASSRLS");
+ok(runbook.includes("--enable-row-security"), "runbook documents why --enable-row-security is not the dump fix");
 const setupMd = readFileSync(join(root, "SETUP.md"), "utf8");
 ok(!/Continue as test user/.test(setupMd), "SETUP.md has no Continue as test user");
 const designPrompt = readFileSync(join(root, "docs/design-audit-implementation-prompt.md"), "utf8");
@@ -587,6 +617,17 @@ GRANT SELECT ON public.actions TO authenticated;
     );
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", policyPath]);
 
+    const readerBypass = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      source,
+      "-c",
+      "SELECT rolbypassrls::text FROM pg_roles WHERE rolname = 'migration_reader'",
+    ]).trim();
+    ok(readerBypass === "t", "prove migration_reader has BYPASSRLS for pg_dump COPY");
+
     const migrated = spawnSync(
       process.execPath,
       [join(here, "migrate-supabase-to-neon.mjs")],
@@ -610,6 +651,9 @@ GRANT SELECT ON public.actions TO authenticated;
       /creating stub roles \(.*authenticated.*\) as NOLOGIN/.test(migratedOut),
       "live migrate stubs dump roles before restore",
     );
+    if (migrated.status !== 0) {
+      throw new Error(`live migrate failed:\n${migratedOut.trim()}`);
+    }
 
     const roleBits = run("psql", [
       "-v",

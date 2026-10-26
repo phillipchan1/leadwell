@@ -179,7 +179,10 @@ export const SOURCE_AUTH_USERS_FN = "migration_tmp.auth_users()";
 export const SOURCE_AUTH_IDENTITIES_FN = "migration_tmp.auth_identities()";
 export const MIGRATION_READER_ROLE = "migration_reader";
 
-/** pg_dump public only. Never dump auth — those rows come from the functions. */
+/** pg_dump public only. Never dump auth — those rows come from the functions.
+ * Do not add --enable-row-security: that would COPY only rows a policy
+ * allows, and migration_reader has no policy (empty dump).
+ */
 export const PG_DUMP_PUBLIC_ARGS = [
   "--format=custom",
   "--no-owner",
@@ -614,28 +617,47 @@ const SKIP_DUMP_ROLES = new Set([
   "current_user",
   "session_user",
   "current_role",
-  "postgres",
 ]);
+
+const ALLOWED_STUB_ROLE_SET = new Set(DEFAULT_SUPABASE_ROLES.map((role) => role.toLowerCase()));
 
 export function isSkippedDumpRole(name) {
   const n = String(name).toLowerCase();
-  return !n || SKIP_DUMP_ROLES.has(n) || n.startsWith("pg_");
+  return !n || SKIP_DUMP_ROLES.has(n);
 }
 
+/** Drop $tag$…$tag$ bodies so CREATE FUNCTION / PROCEDURE SQL is not scanned. */
+export function stripDollarQuotedBodies(sql) {
+  return String(sql).replace(/\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$/g, " ");
+}
+
+function stripSqlCommentsAndBodies(sql) {
+  return stripDollarQuotedBodies(sql)
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\n]*/g, " ");
+}
+
+const DUMP_IDENT = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const DUMP_ROLE_LIST = new RegExp(
+  String.raw`\bTO\s+((?:${DUMP_IDENT})(?:\s*,\s*(?:${DUMP_IDENT}))*)`,
+  "i",
+);
+
 /**
- * Roles named by CREATE POLICY … TO and GRANT … TO in pg_restore SQL.
- * Skips PUBLIC / session keywords / postgres / pg_* reserved roles.
+ * Roles named by CREATE POLICY … TO and privilege GRANT … ON … TO.
+ * Skips function bodies, membership GRANT role TO role, and PUBLIC /
+ * session keywords. Does not invent extras.
  */
 export function collectRolesFromDumpSql(sql) {
   const roles = new Set();
-  const ident = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
-  const list = new RegExp(
-    String.raw`\bTO\s+((?:${ident})(?:\s*,\s*(?:${ident}))*)`,
-    "i",
-  );
-  for (const stmt of String(sql).split(";")) {
-    if (!/\bCREATE\s+POLICY\b/i.test(stmt) && !/\bGRANT\b/i.test(stmt)) continue;
-    const match = stmt.match(list);
+  const text = stripSqlCommentsAndBodies(sql);
+  for (const raw of text.split(";")) {
+    const stmt = raw.trim();
+    if (!stmt) continue;
+    const isPolicy = /^CREATE\s+POLICY\b/i.test(stmt);
+    const isPrivilegeGrant = /^GRANT\b/i.test(stmt) && /\bON\b/i.test(stmt);
+    if (!isPolicy && !isPrivilegeGrant) continue;
+    const match = stmt.match(DUMP_ROLE_LIST);
     if (!match) continue;
     for (const part of match[1].split(",")) {
       const name = unquoteIdent(part);
@@ -645,10 +667,25 @@ export function collectRolesFromDumpSql(sql) {
   return [...roles].sort();
 }
 
-/** Defaults plus every TO/GRANT role in the dump. */
-export function rolesToStubFromDumpSql(sql) {
-  return [...new Set([...DEFAULT_SUPABASE_ROLES, ...collectRolesFromDumpSql(sql)])].sort();
+export function unexpectedDumpRoles(roles) {
+  return (roles ?? []).filter((role) => !ALLOWED_STUB_ROLE_SET.has(String(role).toLowerCase()));
 }
+
+/**
+ * Always stub the three Supabase roles. Any other TO/GRANT role is a
+ * hard error — we do not create it.
+ */
+export function rolesToStubFromDumpSql(sql) {
+  const extra = unexpectedDumpRoles(collectRolesFromDumpSql(sql));
+  if (extra.length) {
+    throw new Error(
+      `dump TO/GRANT names non-allowlisted role(s): ${extra.join(", ")}. Only ${DEFAULT_SUPABASE_ROLES.join(", ")} may be stubbed.`,
+    );
+  }
+  return [...DEFAULT_SUPABASE_ROLES].sort();
+}
+
+const STUB_ROLES_DOLLAR = "$leadwell_stub_roles$";
 
 /**
  * Idempotent NOLOGIN stubs. Safe to re-run on the dry-run scratch target
@@ -657,6 +694,12 @@ export function rolesToStubFromDumpSql(sql) {
 export function stubSupabaseRolesSql(roles = DEFAULT_SUPABASE_ROLES) {
   const unique = [...new Set((roles ?? []).map((role) => String(role).trim()).filter(Boolean))].sort();
   if (!unique.length) return "";
+  const extra = unexpectedDumpRoles(unique);
+  if (extra.length) {
+    throw new Error(
+      `refusing to stub non-allowlisted role(s): ${extra.join(", ")}. Only ${DEFAULT_SUPABASE_ROLES.join(", ")} may be stubbed.`,
+    );
+  }
   const body = unique
     .map((role) => {
       const lit = quoteStringLiteral(role);
@@ -666,7 +709,7 @@ export function stubSupabaseRolesSql(roles = DEFAULT_SUPABASE_ROLES) {
   END IF;`;
     })
     .join("\n");
-  return `DO $$\nBEGIN\n${body}\nEND $$;\n`;
+  return `DO ${STUB_ROLES_DOLLAR}\nBEGIN\n${body}\nEND\n${STUB_ROLES_DOLLAR};\n`;
 }
 
 /** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
@@ -677,14 +720,19 @@ export function proveMigrationReaderSetupSql(databaseName) {
   const db = quoteIdent(databaseName);
   const role = quoteIdent(MIGRATION_READER_ROLE);
   return `
-DO $$
+DO $leadwell_prove_reader$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATION_READER_ROLE}') THEN
     CREATE ROLE ${role} LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
   ELSE
     ALTER ROLE ${role} WITH LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
   END IF;
-END $$;
+END
+$leadwell_prove_reader$;
+-- pg_dump defaults to row_security=off. SELECT is not enough; the dump
+-- role must BYPASSRLS (or own the table / be superuser). Prod
+-- migration_reader already dumped RLS tables in cutover 40377053881.
+ALTER ROLE ${role} BYPASSRLS;
 GRANT CONNECT ON DATABASE ${db} TO ${role};
 GRANT USAGE ON SCHEMA public TO ${role};
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
