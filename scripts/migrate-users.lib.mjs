@@ -169,7 +169,10 @@ FROM public.${table} t`;
 /**
  * Prod LeadWell grants the read-only source role (migration_reader) EXECUTE
  * on these SECURITY DEFINER wrappers, not USAGE on auth. Every source read
- * of auth.users / auth.identities must go through them.
+ * of auth.users / auth.identities must go through them. The functions
+ * RETURNS TABLE only the Better Auth / COPY columns — never
+ * encrypted_password, recovery tokens, or other GoTrue secrets. Auth is
+ * magic-link only; those secrets are not required.
  */
 export const SOURCE_AUTH_USERS_FN = "migration_tmp.auth_users()";
 export const SOURCE_AUTH_IDENTITIES_FN = "migration_tmp.auth_identities()";
@@ -186,17 +189,14 @@ export const PG_DUMP_PUBLIC_ARGS = [
 
 export const EXPORT_AUTH_USERS_COPY_SQL = `
 COPY (
-  SELECT id::text, COALESCE(raw_user_meta_data->>'name', split_part(email, '@', 1), ''),
-         email, COALESCE(email_confirmed_at IS NOT NULL, false),
-         created_at, updated_at
+  SELECT id::text, name, email, email_verified, created_at, updated_at
   FROM ${SOURCE_AUTH_USERS_FN}
 ) TO STDOUT WITH CSV
 `;
 
 export const EXPORT_AUTH_IDENTITIES_COPY_SQL = `
 COPY (
-  SELECT user_id::text, provider,
-         COALESCE(identity_data->>'sub', identity_data->>'provider_id', provider_id::text, '')
+  SELECT user_id::text, provider, provider_id
   FROM ${SOURCE_AUTH_IDENTITIES_FN}
 ) TO STDOUT WITH CSV
 `;
@@ -233,40 +233,86 @@ FROM ${SOURCE_AUTH_IDENTITIES_FN}`;
 }
 
 /**
- * Local-Postgres stand-in for the prod wrappers. Creates SECURITY DEFINER
- * functions owned by the current (superuser) role and grants EXECUTE only
- * to migration_reader. Call after auth.users / auth.identities exist and
- * after the migration_reader role has been created.
+ * Prod + CI SQL for the SECURITY DEFINER wrappers. DROP first because
+ * CREATE OR REPLACE cannot change SETOF auth.users / auth.identities to
+ * RETURNS TABLE. Qualify every relation — search_path is empty.
+ *
+ * Columns are exactly what COPY / Better Auth need. encrypted_password,
+ * recovery_token, confirmation_token, and identity_data are omitted;
+ * magic-link sign-in does not use them.
  */
-export const PROVE_MIGRATION_TMP_FUNCTIONS_SQL = `
+export const MIGRATION_TMP_FUNCTIONS_SQL = `
 CREATE SCHEMA IF NOT EXISTS migration_tmp;
 
+DROP FUNCTION IF EXISTS migration_tmp.auth_users();
+DROP FUNCTION IF EXISTS migration_tmp.auth_identities();
+
 CREATE OR REPLACE FUNCTION migration_tmp.auth_users()
-RETURNS SETOF auth.users
+RETURNS TABLE (
+  id uuid,
+  name text,
+  email text,
+  email_verified boolean,
+  created_at timestamptz,
+  updated_at timestamptz
+)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog
+SET search_path = ''
 AS $$
-  SELECT * FROM auth.users;
+  SELECT
+    u.id,
+    COALESCE(u.raw_user_meta_data->>'name', split_part(u.email, '@', 1), ''),
+    u.email,
+    COALESCE(u.email_confirmed_at IS NOT NULL, false),
+    u.created_at,
+    u.updated_at
+  FROM auth.users AS u;
 $$;
 
 CREATE OR REPLACE FUNCTION migration_tmp.auth_identities()
-RETURNS SETOF auth.identities
+RETURNS TABLE (
+  user_id uuid,
+  provider text,
+  provider_id text
+)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = pg_catalog
+SET search_path = ''
 AS $$
-  SELECT * FROM auth.identities;
+  SELECT
+    i.user_id,
+    i.provider,
+    COALESCE(
+      i.identity_data->>'sub',
+      i.identity_data->>'provider_id',
+      i.provider_id::text,
+      ''
+    )
+  FROM auth.identities AS i;
 $$;
+`;
 
+/** REVOKE PUBLIC, then EXECUTE for migration_reader only. */
+export const MIGRATION_TMP_GRANTS_SQL = `
 REVOKE ALL ON SCHEMA migration_tmp FROM PUBLIC;
 REVOKE ALL ON FUNCTION migration_tmp.auth_users() FROM PUBLIC;
 REVOKE ALL ON FUNCTION migration_tmp.auth_identities() FROM PUBLIC;
 GRANT USAGE ON SCHEMA migration_tmp TO ${MIGRATION_READER_ROLE};
 GRANT EXECUTE ON FUNCTION migration_tmp.auth_users() TO ${MIGRATION_READER_ROLE};
 GRANT EXECUTE ON FUNCTION migration_tmp.auth_identities() TO ${MIGRATION_READER_ROLE};
+`;
+
+/**
+ * Local-Postgres stand-in for the prod wrappers. Same signatures as prod.
+ * Call after auth.users / auth.identities exist and after the
+ * migration_reader role has been created.
+ */
+export const PROVE_MIGRATION_TMP_FUNCTIONS_SQL = `
+${MIGRATION_TMP_FUNCTIONS_SQL}
+${MIGRATION_TMP_GRANTS_SQL}
 `;
 
 export function parseCountLine(line) {

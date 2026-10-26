@@ -25,6 +25,8 @@ import {
   EXPORT_AUTH_IDENTITIES_COPY_SQL,
   EXPORT_AUTH_USERS_COPY_SQL,
   MIGRATION_READER_ROLE,
+  MIGRATION_TMP_FUNCTIONS_SQL,
+  MIGRATION_TMP_GRANTS_SQL,
   PG_DUMP_PUBLIC_ARGS,
   PROVE_MIGRATION_TMP_FUNCTIONS_SQL,
   SOURCE_AUTH_IDENTITIES_FN,
@@ -165,11 +167,29 @@ ok(sourceAuthUsersHashQuery().includes(SOURCE_AUTH_USERS_FN), "auth users count/
 ok(sourceAuthIdentitiesHashQuery().includes(SOURCE_AUTH_IDENTITIES_FN), "auth identities count/md5 uses the function");
 ok(targetBetterAuthUsersHashQuery().includes('"user"'), "target auth hash reads Better Auth user");
 ok(PROVE_MIGRATION_TMP_FUNCTIONS_SQL.includes("SECURITY DEFINER"), "prove harness functions are SECURITY DEFINER");
-ok(PROVE_MIGRATION_TMP_FUNCTIONS_SQL.includes("RETURNS SETOF auth.users"), "prove users fn returns SETOF auth.users");
+ok(MIGRATION_TMP_FUNCTIONS_SQL.includes("RETURNS TABLE"), "prod users/identities fns return TABLE");
+ok(!/SETOF/.test(MIGRATION_TMP_FUNCTIONS_SQL), "prod fns do not return SETOF");
+ok(MIGRATION_TMP_FUNCTIONS_SQL.includes("SET search_path = ''"), "prod fns pin empty search_path");
 ok(
-  PROVE_MIGRATION_TMP_FUNCTIONS_SQL.includes("RETURNS SETOF auth.identities"),
-  "prove identities fn returns SETOF auth.identities",
+  !/SELECT\s+\*\s+FROM\s+auth\.(users|identities)/i.test(MIGRATION_TMP_FUNCTIONS_SQL),
+  "prod fns do not SELECT * from auth tables",
 );
+ok(
+  !/encrypted_password|recovery_token|confirmation_token/i.test(MIGRATION_TMP_FUNCTIONS_SQL),
+  "prod fns omit password hashes and recovery tokens",
+);
+ok(
+  PROVE_MIGRATION_TMP_FUNCTIONS_SQL.includes(MIGRATION_TMP_FUNCTIONS_SQL.trim()),
+  "CI harness uses the same CREATE OR REPLACE SQL as prod",
+);
+ok(
+  /REVOKE ALL ON FUNCTION migration_tmp\.auth_users\(\) FROM PUBLIC/.test(MIGRATION_TMP_GRANTS_SQL) &&
+    /GRANT EXECUTE ON FUNCTION migration_tmp\.auth_users\(\) TO migration_reader/.test(MIGRATION_TMP_GRANTS_SQL) &&
+    /GRANT EXECUTE ON FUNCTION migration_tmp\.auth_identities\(\) TO migration_reader/.test(MIGRATION_TMP_GRANTS_SQL),
+  "EXECUTE is granted to migration_reader only after REVOKE PUBLIC",
+);
+ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
+ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
 ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
 
 const migrateSrc = readFileSync(join(here, "migrate-supabase-to-neon.mjs"), "utf8");
@@ -238,6 +258,12 @@ ok(workflow.includes("scripts/cutover-verify.mjs"), "cutover writes checksums vi
 ok(workflow.includes("PG_DUMP_PUBLIC_ARGS") || workflow.includes("--exclude-schema=auth"), "cutover dump excludes auth");
 ok(workflow.includes("migration_tmp.auth_users"), "cutover comments the SECURITY DEFINER users function");
 
+const runbook = readFileSync(join(root, "RUNBOOK.md"), "utf8");
+ok(runbook.includes("has_schema_privilege"), "runbook verifies migration_reader has no USAGE on auth");
+ok(runbook.includes("has_function_privilege"), "runbook verifies EXECUTE on the wrappers");
+ok(runbook.includes("DROP SCHEMA migration_tmp CASCADE"), "runbook drops migration_tmp after cutover");
+ok(runbook.includes("encrypted_password"), "runbook documents that password hashes stay off the TABLE");
+
 // --- dry-run with no URLs --------------------------------------------------
 const dry = spawnSync(process.execPath, [join(here, "migrate-supabase-to-neon.mjs"), "--dry-run"], {
   encoding: "utf8",
@@ -290,7 +316,10 @@ CREATE TABLE auth.users (
   raw_user_meta_data JSONB,
   email_confirmed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ
+  updated_at TIMESTAMPTZ,
+  encrypted_password TEXT,
+  recovery_token TEXT,
+  confirmation_token TEXT
 );
 CREATE TABLE auth.identities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -302,12 +331,18 @@ CREATE TABLE auth.identities (
   updated_at TIMESTAMPTZ
 );
 ${schema}
-INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at)
+INSERT INTO auth.users (
+  id, email, raw_user_meta_data, email_confirmed_at, created_at, updated_at,
+  encrypted_password, recovery_token, confirmation_token
+)
 VALUES (
   'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
   'phil@example.com',
   '{"name":"Phil"}',
-  NOW(), NOW(), NOW()
+  NOW(), NOW(), NOW(),
+  'not-a-real-hash',
+  'not-a-real-recovery',
+  'not-a-real-confirm'
 );
 INSERT INTO auth.identities (user_id, provider, provider_id, identity_data)
 VALUES (
@@ -357,6 +392,63 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
       `SELECT count(*) FROM ${SOURCE_AUTH_USERS_FN}`,
     ]).trim();
     ok(viaFn === "1", "migration_reader can read via migration_tmp.auth_users()");
+
+    const usersResult = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      readerSource,
+      "-c",
+      "SELECT pg_get_function_result('migration_tmp.auth_users()'::regprocedure)",
+    ]).trim();
+    ok(/TABLE/i.test(usersResult) && !/SETOF/i.test(usersResult), "live auth_users() RETURNS TABLE, not SETOF");
+    ok(
+      !/encrypted_password|recovery_token|confirmation_token/i.test(usersResult),
+      "live auth_users() result type omits secrets",
+    );
+    const identResult = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      readerSource,
+      "-c",
+      "SELECT pg_get_function_result('migration_tmp.auth_identities()'::regprocedure)",
+    ]).trim();
+    ok(/TABLE/i.test(identResult) && !/SETOF/i.test(identResult), "live auth_identities() RETURNS TABLE, not SETOF");
+    ok(!/identity_data/i.test(identResult), "live auth_identities() omits identity_data");
+
+    const secretCols = spawnSync(
+      "psql",
+      [
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        readerSource,
+        "-c",
+        "SELECT encrypted_password, recovery_token FROM migration_tmp.auth_users()",
+      ],
+      { encoding: "utf8", cwd: root, env: libpqCleanEnv() },
+    );
+    ok(secretCols.status !== 0, "SELECT encrypted_password from auth_users() fails");
+    ok(
+      /column .* does not exist/i.test(`${secretCols.stderr || ""}\n${secretCols.stdout || ""}`),
+      "auth_users() has no encrypted_password / recovery_token columns",
+    );
+    const identBlob = spawnSync(
+      "psql",
+      [
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-d",
+        readerSource,
+        "-c",
+        "SELECT identity_data FROM migration_tmp.auth_identities()",
+      ],
+      { encoding: "utf8", cwd: root, env: libpqCleanEnv() },
+    );
+    ok(identBlob.status !== 0, "SELECT identity_data from auth_identities() fails");
 
     const migrated = spawnSync(
       process.execPath,

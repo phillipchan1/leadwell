@@ -134,8 +134,9 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
      (1-day retention). Auth rows are **not** in the dump
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
      Postgres 17 service container — **not** Neon. That script `COPY`s
-     `SELECT *` equivalent columns from `migration_tmp.auth_users()` /
-     `migration_tmp.auth_identities()`
+     the narrow TABLE columns from `migration_tmp.auth_users()` /
+     `migration_tmp.auth_identities()` (id/name/email/verified/timestamps
+     and user_id/provider/provider_id — no password hashes or tokens)
    - writes per-table `COUNT(*)` + md5 hashes (source vs scratch target,
      including auth users via the function vs Better Auth `"user"`) to
      the step summary and a 7-day artifact
@@ -153,7 +154,7 @@ guards in `scripts/loopback.mjs` stay as they are.
 The script:
 
 1. `pg_dump`s `public` (no-owner, no-acl, `--exclude-schema=auth`) from Supabase.
-2. `COPY`s `migration_tmp.auth_users()` (and `migration_tmp.auth_identities()`, unused). Never `SELECT`s `auth.users` / `auth.identities` — the source role cannot get `USAGE` on `auth`.
+2. `COPY`s `migration_tmp.auth_users()` (and `migration_tmp.auth_identities()`, unused). The functions `RETURNS TABLE` only the columns Better Auth needs. Never `SELECT`s `auth.users` / `auth.identities` — the source role cannot get `USAGE` on `auth`.
 3. Aborts on blank or case-insensitive-duplicate emails.
 4. Refuses a non-empty Neon target.
 5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, restores public.
@@ -166,6 +167,68 @@ The script:
 Email/password hashes from GoTrue are not portable. Phil's login path is a
 **magic-link** to the migrated `"user"` row (same UUID + email). The first
 sign-in with that email lands on that row; it does not create a second user.
+The wrappers therefore do **not** return `encrypted_password`, recovery
+tokens, or confirmation tokens. If a later change needs a secret column,
+justify it in the PR — do not widen `RETURNS TABLE` by default.
+
+### Apply / verify `migration_tmp` (prod, once)
+
+Apply the `CREATE OR REPLACE` SQL from the PR description (same text as
+`MIGRATION_TMP_FUNCTIONS_SQL` + `MIGRATION_TMP_GRANTS_SQL` in
+`scripts/migrate-users.lib.mjs`) on LeadWell prod as a privileged role.
+`CREATE OR REPLACE` cannot change `SETOF auth.users` to `RETURNS TABLE`,
+so the script `DROP`s the old functions first. Do not grant `USAGE` on
+`auth`.
+
+Then verify (still as a privileged role; never print row values):
+
+```sql
+-- expect f
+SELECT has_schema_privilege('migration_reader', 'auth', 'USAGE');
+
+-- expect t
+SELECT has_function_privilege('migration_reader', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('migration_reader', 'migration_tmp.auth_identities()', 'EXECUTE');
+
+-- expect TABLE (...), not SETOF auth.users / auth.identities
+-- expect no encrypted_password / recovery_token / confirmation_token / identity_data
+SELECT p.proname, pg_get_function_result(p.oid)
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities')
+ORDER BY 1;
+
+-- expect search_path = ''
+SELECT p.proname, pg_get_functiondef(p.oid)
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities');
+```
+
+As `migration_reader` (session-pooler URI), confirm:
+
+```sql
+-- expect permission denied
+SELECT 1 FROM auth.users LIMIT 1;
+
+-- expect column does not exist (function is TABLE, not SETOF auth.users)
+SELECT encrypted_password FROM migration_tmp.auth_users();
+
+-- expect one row; print the id only
+SELECT id FROM migration_tmp.auth_users();
+```
+
+### After cutover
+
+Once Neon is loaded and magic-link sign-in works, drop the temporary
+schema so the wrappers cannot be reused. Do **not** drop `auth` or
+`public`. Supabase stays intact.
+
+```sql
+DROP SCHEMA migration_tmp CASCADE;
+```
 
 ---
 
