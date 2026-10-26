@@ -9,7 +9,7 @@ import {
   routePath,
 } from "./lib/routes";
 import { meetingSubjectName, meetingTitle } from "./lib/readiness";
-import { entityModeFor, modeTabs } from "./lib/entityModes";
+import { defaultModeFor, entityModeFor, modeTabs } from "./lib/entityModes";
 import { SettingsModal } from "./components/SettingsModal";
 import { Login } from "./components/Login";
 import { ConfirmHost } from "./components/ConfirmDialog";
@@ -187,9 +187,9 @@ function useDropStaleSelection() {
 
 /**
  * Every page names itself, so a bookmark reads "Staff meeting" instead of a
- * bookmarks bar full of "LeadWell". The meeting agenda is the page people save,
- * which is why a meeting's title leads with the meeting and only names the mode
- * when it isn't the agenda.
+ * bookmarks bar full of "LeadWell". A meeting's own address is the page people
+ * save, which is why its title leads with the meeting and only names the mode
+ * when it isn't the one the meeting opens on.
  */
 function useDocumentTitle() {
   const selected = useSelectedEntity();
@@ -207,7 +207,7 @@ function useDocumentTitle() {
     const m = selected.meeting;
     title = meetingTitle(m, meetingSubjectName(m, { people, teams, managers }));
     const mode = entityModeFor("meeting", section);
-    if (mode !== "now") {
+    if (mode !== defaultModeFor("meeting")) {
       title += ` · ${modeTabs("meeting").find((t) => t.id === mode)?.label}`;
     }
   } else if (selected.kind === "person") {

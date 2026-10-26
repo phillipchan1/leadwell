@@ -24,8 +24,8 @@ import { cx } from "@/utils/cx";
 const AGENDA_AHEAD = aheadForHorizon("all");
 
 /**
- * One occurrence of a meeting, as a running order — the page a meeting opens
- * on, and the one `/m/<slug>` bookmarks.
+ * One occurrence of a meeting, as a running order — the Agenda tab, at
+ * `/m/<slug>/agenda`.
  *
  * The board answers "what's coming over the next eight weeks?". This answers
  * the question you actually arrive with: what's on the agenda for the next

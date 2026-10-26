@@ -2,7 +2,7 @@
  * Readable addresses for meetings — `/m/staff-meeting` instead of `/m/9f3c…`.
  *
  * ── Why derived, not stored ───────────────────────────────────────────────
- * A meeting's agenda is the page you bookmark, so the address has to be
+ * A meeting's page is the one you bookmark, so the address has to be
  * something you'd recognise in a bookmarks bar. Storing a slug would mean a
  * migration and a uniqueness rule in the database; deriving one from the name
  * needs neither, and the id still resolves, so nothing that already links by id

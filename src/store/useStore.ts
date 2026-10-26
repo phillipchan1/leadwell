@@ -1333,8 +1333,8 @@ export const useStore = create<Store>((set, get) => ({
   },
   // A meeting is reached from Home, the Meetings tab or its subject's profile,
   // and there's no canvas node for it — so it always opens in focus, where the
-  // agenda and the planner have the width they need. No section means the
-  // agenda for the next occurrence: the page worth bookmarking.
+  // agenda and the planner have the width they need. No section means Plan
+  // ahead — the board of today's meeting and the ones after it.
   selectMeeting: (id, section) => {
     const s = get();
     if (!id) {

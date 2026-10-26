@@ -14,8 +14,8 @@
  *   /person/p3/sessions/s42      full-screen editor for session s42
  *   /meetings                    every recurring meeting
  *   /prayer                      who I'm carrying
- *   /m/staff-meeting             one meeting's agenda for its next occurrence
- *   /m/staff-meeting/plan        the same meeting, planned weeks ahead
+ *   /m/staff-meeting             one meeting, planned weeks ahead
+ *   /m/staff-meeting/agenda      the same meeting, its next occurrence as a running order
  *   /me                          my own profile in focus
  *
  * A meeting is an entity kind rather than a page of its own, so it inherits

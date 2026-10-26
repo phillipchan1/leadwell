@@ -34,10 +34,11 @@
  *
  *   meeting  omits `prayer`: a meeting has no posture to hold toward it — the
  *            people in it do, on their own panels. Its Now is the Agenda — the
- *            next occurrence, ready or not — which is also why it's the page
- *            `/m/<slug>` opens on. It used to omit Now and open on the
- *            eight-week board, which answers "what's coming?" when the
- *            question you arrive with is "what's on Monday?".
+ *            next occurrence, ready or not, at `/m/<slug>/agenda`. A meeting
+ *            still *opens* on Plan ahead (see `defaultModeFor`): the board shows
+ *            today's meeting and the ones after it side by side, and it's the
+ *            page that gets reached for every time. The Agenda is one column
+ *            of that board, so it's a tab away rather than the front door.
  *   me       is `profile` alone. There are no meetings with yourself, no record
  *            about yourself distinct from your own profile, and no sibling
  *            pager. A single-tab strip is a worse answer than no strip.
@@ -78,10 +79,19 @@ const ALIASES: Record<string, EntityMode> = {
   people: "profile",
   mandate: "profile",
   readiness: "now",
-  // Pre-contract meeting tabs.
+  // Meeting sections, written as words.
+  agenda: "now",
   plan: "meetings",
   settings: "profile",
 };
+
+/**
+ * The mode an entity opens on when its address names none. Now for everything
+ * but a meeting, which opens on Plan ahead.
+ */
+export function defaultModeFor(subject?: ModeSubject): EntityMode {
+  return subject === "meeting" ? "meetings" : "now";
+}
 
 /** Which mode a URL section names. Unknown or absent lands on Now. */
 export function entityMode(section: string | null | undefined): EntityMode {
@@ -91,21 +101,22 @@ export function entityMode(section: string | null | undefined): EntityMode {
 }
 
 /**
- * A meeting's sections read as words in its address — `/m/staff-meeting/plan`
- * rather than `/m/staff-meeting/meetings`. The aliases above already parse
- * them back, so only the writing side needs to know.
+ * A meeting's sections read as words in its address — `/m/staff-meeting/agenda`
+ * rather than `/m/staff-meeting/now`. The aliases above already parse them
+ * back, so only the writing side needs to know. Plan ahead isn't here: it's the
+ * default, so it has no section at all.
  */
 const MEETING_SECTION: Partial<Record<EntityMode, string>> = {
-  meetings: "plan",
+  now: "agenda",
   profile: "settings",
 };
 
-/** The section value for a mode. Now is the default, so it clears the param. */
+/** The section value for a mode. The default clears the param. */
 export function modeSection(
   mode: EntityMode,
   subject?: ModeSubject
 ): string | null {
-  if (mode === "now") return null;
+  if (mode === defaultModeFor(subject)) return null;
   if (subject === "meeting") return MEETING_SECTION[mode] ?? mode;
   return mode;
 }
@@ -190,14 +201,16 @@ export function modeTabs(subject: ModeSubject): ModeTab[] {
 
 /**
  * The mode a URL section names, clamped to what this kind has. A link to
- * `?s=prayer` on a meeting lands on that meeting's first mode rather than a
- * blank panel.
+ * `?s=prayer` on a meeting lands on the page that meeting opens on rather than
+ * a blank panel — or, for a kind that doesn't have that either, its first mode.
  */
 export function entityModeFor(
   subject: ModeSubject,
   section: string | null | undefined
 ): EntityMode {
   const available = modesFor(subject);
-  const mode = entityMode(section);
-  return available.includes(mode) ? mode : available[0];
+  const fallback = defaultModeFor(subject);
+  const mode = section ? entityMode(section) : fallback;
+  if (available.includes(mode)) return mode;
+  return available.includes(fallback) ? fallback : available[0];
 }
