@@ -25,8 +25,10 @@ import {
   EXPORT_AUTH_IDENTITIES_COPY_SQL,
   EXPORT_AUTH_USERS_COPY_SQL,
   MIGRATION_READER_ROLE,
+  MIGRATION_TMP_DEPENDENTS_SQL,
   MIGRATION_TMP_FUNCTIONS_SQL,
   MIGRATION_TMP_GRANTS_SQL,
+  MIGRATION_TMP_PROD_APPLY_SQL,
   PG_DUMP_PUBLIC_ARGS,
   PROVE_MIGRATION_TMP_FUNCTIONS_SQL,
   SOURCE_AUTH_IDENTITIES_FN,
@@ -183,11 +185,19 @@ ok(
   "CI harness uses the same CREATE OR REPLACE SQL as prod",
 );
 ok(
-  /REVOKE ALL ON FUNCTION migration_tmp\.auth_users\(\) FROM PUBLIC/.test(MIGRATION_TMP_GRANTS_SQL) &&
-    /GRANT EXECUTE ON FUNCTION migration_tmp\.auth_users\(\) TO migration_reader/.test(MIGRATION_TMP_GRANTS_SQL) &&
-    /GRANT EXECUTE ON FUNCTION migration_tmp\.auth_identities\(\) TO migration_reader/.test(MIGRATION_TMP_GRANTS_SQL),
-  "EXECUTE is granted to migration_reader only after REVOKE PUBLIC",
+  /REVOKE ALL ON FUNCTION migration_tmp\.auth_users\(\), migration_tmp\.auth_identities\(\) FROM PUBLIC, anon, authenticated, service_role/.test(
+    MIGRATION_TMP_GRANTS_SQL,
+  ) &&
+    /GRANT EXECUTE ON FUNCTION migration_tmp\.auth_users\(\), migration_tmp\.auth_identities\(\) TO migration_reader/.test(
+      MIGRATION_TMP_GRANTS_SQL,
+    ),
+  "EXECUTE is granted to migration_reader only after REVOKE PUBLIC and Supabase roles",
 );
+ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("BEGIN;"), "prod apply is wrapped in BEGIN");
+ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("COMMIT;"), "prod apply commits as one transaction");
+ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("OWNER TO postgres"), "prod apply can pin function owner");
+ok(MIGRATION_TMP_DEPENDENTS_SQL.includes("pg_depend"), "dependents pre-check reads pg_depend");
+ok(proveMigrationReaderSetupSql("leadwell_src").includes("CREATE ROLE anon NOLOGIN"), "CI stubs anon for the prod REVOKE");
 ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
 ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
 ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
@@ -261,6 +271,12 @@ ok(workflow.includes("migration_tmp.auth_users"), "cutover comments the SECURITY
 const runbook = readFileSync(join(root, "RUNBOOK.md"), "utf8");
 ok(runbook.includes("has_schema_privilege"), "runbook verifies migration_reader has no USAGE on auth");
 ok(runbook.includes("has_function_privilege"), "runbook verifies EXECUTE on the wrappers");
+ok(runbook.includes("has_function_privilege('anon'"), "runbook expects anon EXECUTE = f");
+ok(runbook.includes("has_function_privilege('authenticated'"), "runbook expects authenticated EXECUTE = f");
+ok(runbook.includes("has_function_privilege('service_role'"), "runbook expects service_role EXECUTE = f");
+ok(runbook.includes("psql -1 -v ON_ERROR_STOP=1"), "runbook applies prod SQL in one transaction");
+ok(runbook.includes("OWNER TO postgres"), "runbook documents optional ALTER FUNCTION owner");
+ok(/LIMIT 1/.test(runbook) || /count\(\*\)/.test(runbook), "runbook id check is bounded");
 ok(runbook.includes("DROP SCHEMA migration_tmp CASCADE"), "runbook drops migration_tmp after cutover");
 ok(runbook.includes("encrypted_password"), "runbook documents that password hashes stay off the TABLE");
 
@@ -449,6 +465,43 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
       { encoding: "utf8", cwd: root, env: libpqCleanEnv() },
     );
     ok(identBlob.status !== 0, "SELECT identity_data from auth_identities() fails");
+
+    const privRows = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      source,
+      "-c",
+      `SELECT r.rolname || '=' || has_function_privilege(r.rolname, 'migration_tmp.auth_users()', 'EXECUTE')::text
+FROM (VALUES ('migration_reader'), ('anon'), ('authenticated'), ('service_role')) AS r(rolname)
+ORDER BY 1`,
+    ])
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    ok(privRows.includes("anon=f"), "anon has no EXECUTE on auth_users()");
+    ok(privRows.includes("authenticated=f"), "authenticated has no EXECUTE on auth_users()");
+    ok(privRows.includes("service_role=f"), "service_role has no EXECUTE on auth_users()");
+    ok(privRows.includes("migration_reader=t"), "migration_reader has EXECUTE on auth_users()");
+    const identPriv = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      source,
+      "-c",
+      `SELECT r.rolname || '=' || has_function_privilege(r.rolname, 'migration_tmp.auth_identities()', 'EXECUTE')::text
+FROM (VALUES ('migration_reader'), ('anon'), ('authenticated'), ('service_role')) AS r(rolname)
+ORDER BY 1`,
+    ])
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+    ok(identPriv.includes("anon=f"), "anon has no EXECUTE on auth_identities()");
+    ok(identPriv.includes("authenticated=f"), "authenticated has no EXECUTE on auth_identities()");
+    ok(identPriv.includes("service_role=f"), "service_role has no EXECUTE on auth_identities()");
+    ok(identPriv.includes("migration_reader=t"), "migration_reader has EXECUTE on auth_identities()");
 
     const migrated = spawnSync(
       process.execPath,

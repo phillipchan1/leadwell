@@ -173,12 +173,43 @@ justify it in the PR — do not widen `RETURNS TABLE` by default.
 
 ### Apply / verify `migration_tmp` (prod, once)
 
-Apply the `CREATE OR REPLACE` SQL from the PR description (same text as
-`MIGRATION_TMP_FUNCTIONS_SQL` + `MIGRATION_TMP_GRANTS_SQL` in
-`scripts/migrate-users.lib.mjs`) on LeadWell prod as a privileged role.
+Apply the SQL from the PR description (same text as
+`MIGRATION_TMP_PROD_APPLY_SQL` in `scripts/migrate-users.lib.mjs`) on
+LeadWell prod as a privileged role (`postgres`), **not**
+`migration_reader`. Run it as one transaction:
+
+```sh
+psql -1 -v ON_ERROR_STOP=1 "$SUPABASE_DB_URL" -f apply-migration-tmp.sql
+```
+
 `CREATE OR REPLACE` cannot change `SETOF auth.users` to `RETURNS TABLE`,
 so the script `DROP`s the old functions first. Do not grant `USAGE` on
 `auth`.
+
+Pre-check dependents (expect 0 rows; abort if anything depends on the
+current wrappers):
+
+```sql
+SELECT
+  pg_catalog.pg_describe_object(d.classid, d.objid, d.objsubid) AS dependent,
+  pg_catalog.pg_describe_object(d.refclassid, d.refobjid, d.refobjsubid) AS referenced
+FROM pg_catalog.pg_depend d
+JOIN pg_catalog.pg_proc p ON p.oid = d.refobjid
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities')
+  AND d.deptype = 'n'
+ORDER BY 1, 2;
+```
+
+The apply script wraps `CREATE` / `REVOKE` / `GRANT` in `BEGIN`/`COMMIT`
+and includes an optional `ALTER FUNCTION … OWNER TO postgres` (needed
+only when the creating role is not already `postgres`). After a failed
+apply or an aborted data migration, roll back with:
+
+```sql
+DROP SCHEMA migration_tmp CASCADE;
+```
 
 Then verify (still as a privileged role; never print row values):
 
@@ -189,6 +220,14 @@ SELECT has_schema_privilege('migration_reader', 'auth', 'USAGE');
 -- expect t
 SELECT has_function_privilege('migration_reader', 'migration_tmp.auth_users()', 'EXECUTE');
 SELECT has_function_privilege('migration_reader', 'migration_tmp.auth_identities()', 'EXECUTE');
+
+-- expect f
+SELECT has_function_privilege('anon', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('anon', 'migration_tmp.auth_identities()', 'EXECUTE');
+SELECT has_function_privilege('authenticated', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('authenticated', 'migration_tmp.auth_identities()', 'EXECUTE');
+SELECT has_function_privilege('service_role', 'migration_tmp.auth_users()', 'EXECUTE');
+SELECT has_function_privilege('service_role', 'migration_tmp.auth_identities()', 'EXECUTE');
 
 -- expect TABLE (...), not SETOF auth.users / auth.identities
 -- expect no encrypted_password / recovery_token / confirmation_token / identity_data
@@ -217,14 +256,14 @@ SELECT 1 FROM auth.users LIMIT 1;
 SELECT encrypted_password FROM migration_tmp.auth_users();
 
 -- expect one row; print the id only
-SELECT id FROM migration_tmp.auth_users();
+SELECT id FROM migration_tmp.auth_users() LIMIT 1;
 ```
 
 ### After cutover
 
 Once Neon is loaded and magic-link sign-in works, drop the temporary
 schema so the wrappers cannot be reused. Do **not** drop `auth` or
-`public`. Supabase stays intact.
+`public`. Supabase stays intact. Same statement as the abort rollback:
 
 ```sql
 DROP SCHEMA migration_tmp CASCADE;

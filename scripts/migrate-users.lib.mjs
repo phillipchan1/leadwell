@@ -295,14 +295,66 @@ AS $$
 $$;
 `;
 
-/** REVOKE PUBLIC, then EXECUTE for migration_reader only. */
+/**
+ * REVOKE default/Supabase roles, then EXECUTE for migration_reader only.
+ * Prod always has PUBLIC, anon, authenticated, service_role. The CI
+ * harness creates the last three as NOLOGIN stubs so this statement
+ * applies there too.
+ */
 export const MIGRATION_TMP_GRANTS_SQL = `
 REVOKE ALL ON SCHEMA migration_tmp FROM PUBLIC;
-REVOKE ALL ON FUNCTION migration_tmp.auth_users() FROM PUBLIC;
-REVOKE ALL ON FUNCTION migration_tmp.auth_identities() FROM PUBLIC;
+REVOKE ALL ON FUNCTION migration_tmp.auth_users(), migration_tmp.auth_identities() FROM PUBLIC, anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA migration_tmp TO ${MIGRATION_READER_ROLE};
-GRANT EXECUTE ON FUNCTION migration_tmp.auth_users() TO ${MIGRATION_READER_ROLE};
-GRANT EXECUTE ON FUNCTION migration_tmp.auth_identities() TO ${MIGRATION_READER_ROLE};
+GRANT EXECUTE ON FUNCTION migration_tmp.auth_users(), migration_tmp.auth_identities() TO ${MIGRATION_READER_ROLE};
+`;
+
+/** Expect 0 rows before DROP FUNCTION. Any row is a normal dependent. */
+export const MIGRATION_TMP_DEPENDENTS_SQL = `
+SELECT
+  pg_catalog.pg_describe_object(d.classid, d.objid, d.objsubid) AS dependent,
+  pg_catalog.pg_describe_object(d.refclassid, d.refobjid, d.refobjsubid) AS referenced
+FROM pg_catalog.pg_depend d
+JOIN pg_catalog.pg_proc p ON p.oid = d.refobjid
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'migration_tmp'
+  AND p.proname IN ('auth_users', 'auth_identities')
+  AND d.deptype = 'n'
+ORDER BY 1, 2
+`;
+
+/**
+ * Exact prod apply script (function bodies + grants). Run as a privileged
+ * role with: psql -1 -v ON_ERROR_STOP=1. Pre-check dependents first.
+ * ALTER FUNCTION OWNER is optional when the creating role is already postgres.
+ */
+export const MIGRATION_TMP_PROD_APPLY_SQL = `
+BEGIN;
+
+${MIGRATION_TMP_FUNCTIONS_SQL.trim()}
+
+-- Optional: pin SECURITY DEFINER owner if the creating role is not postgres.
+ALTER FUNCTION migration_tmp.auth_users() OWNER TO postgres;
+ALTER FUNCTION migration_tmp.auth_identities() OWNER TO postgres;
+
+${MIGRATION_TMP_GRANTS_SQL.trim()}
+
+COMMIT;
+`;
+
+/** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
+export const PROVE_SUPABASE_ROLE_STUBS_SQL = `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN;
+  END IF;
+END $$;
 `;
 
 /**
@@ -569,6 +621,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO ${role};
 REVOKE ALL ON SCHEMA auth FROM PUBLIC;
 REVOKE ALL ON SCHEMA auth FROM ${role};
+${PROVE_SUPABASE_ROLE_STUBS_SQL}
 ${PROVE_MIGRATION_TMP_FUNCTIONS_SQL}
 `;
 }
