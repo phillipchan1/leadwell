@@ -236,7 +236,7 @@ export function MeetingPlanner({
         <span className="ml-auto flex items-center gap-3">
           {view === "board" && !isMobile && !selectedSlotKey && (
             <span className="text-[12.5px] text-tertiary max-xl:hidden">
-              Drag an idea onto a week. Click a date to open it.
+              Drag an idea onto a week. Right-click for more. Drag a box to select several.
             </span>
           )}
           {oneOff && view !== "history" && (

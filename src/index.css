@@ -966,6 +966,13 @@ label:focus-within > .field-label,
   cursor: grabbing !important;
 }
 
+/* Sweeping a box across the board: the page is not text while it lasts. */
+.board-marquee,
+.board-marquee * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Occurrence notes side panel */
 
 .occurrence-notes-panel .notion-block-editor {

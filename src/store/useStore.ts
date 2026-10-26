@@ -35,6 +35,7 @@ import {
   findTag,
   parseCapture,
   reorderInto,
+  reorderManyInto,
   splitCaptureLines,
 } from "../lib/ideas";
 import type { PrayerFilterValue } from "../lib/prayer";
@@ -399,6 +400,20 @@ type Store = PersistedData &
       index?: number
     ) => void;
     /**
+     * `placeTopicAt` for a selection: they land together, in the order given,
+     * at `index` among the topics already there (not counting themselves).
+     */
+    placeTopicsAt: (
+      ids: string[],
+      target: ColumnTarget & { meetingId?: string },
+      index?: number
+    ) => void;
+    /**
+     * Put topics back exactly as they were — the way back for a bulk move.
+     * Unlike `restoreTopic` this overwrites by id rather than adding.
+     */
+    revertTopics: (snapshot: Topic[]) => void;
+    /**
      * Capture with the `#tag @meeting !` grammar. Unknown `#tags` are created
      * on the spot — being sent to a settings screen mid-thought is how a
      * capture box stops getting used. Returns the ids created.
@@ -613,6 +628,76 @@ function slotTagIds(
   if (from && from !== to) next = next.filter((x) => x !== from);
   if (to && !next.includes(to)) next = [...next, to];
   return next;
+}
+
+/**
+ * Where one topic lands when it is placed on a drop target — the topic as it
+ * will be, and the sessions after any booking the drop implies. Pure, so the
+ * single and the batch placement can't drift apart.
+ */
+function placement(
+  s: { topics: Topic[]; sessions: Session[]; meetings: TrackedMeeting[] },
+  id: string,
+  target: ColumnTarget & { meetingId?: string }
+): { sessions: Session[]; moved: Topic } | null {
+  const topic = s.topics.find((t) => t.id === id);
+  if (!topic) return null;
+
+  let sessions = s.sessions;
+  let sessionId: string | undefined;
+  let slotId = target.slotId;
+  let lane = topic.lane;
+  let meetingId = target.meetingId ?? topic.meetingId;
+
+  if (target.kind === "session") {
+    sessionId = target.sessionId;
+  } else if (target.kind === "projected") {
+    // Dropping on a projected week books it on the way in — the plan is the
+    // commitment, so it shouldn't need a separate "schedule this" step.
+    const existing = sessions.find(
+      (o) => o.meetingId === meetingId && o.date === target.date
+    );
+    if (existing) {
+      sessionId = existing.id;
+    } else if (meetingId) {
+      sessionId = uid();
+      sessions = [...sessions, { id: sessionId, meetingId, date: target.date }];
+    }
+  } else {
+    lane = target.lane;
+  }
+
+  if (sessionId) {
+    const owner = sessions.find((o) => o.id === sessionId);
+    if (owner) meetingId = owner.meetingId;
+    lane = "backlog";
+  }
+
+  // A slot with a tag stamps it on arrival. This is what makes coverage
+  // trustworthy without asking anyone to tag by hand.
+  const tagIds = slotTagIds(
+    s.meetings,
+    meetingId,
+    topic.tagIds,
+    slotId,
+    topic.meetingId === meetingId ? (topic.slotId ?? "") : undefined
+  );
+
+  const moved: Topic = {
+    ...topic,
+    status: "open",
+    closedOn: undefined,
+    meetingId,
+    sessionId,
+    slotId,
+    lane,
+    tagIds,
+    // Placing it by hand is a decision — it stops reading as "came back".
+    returnedOn: undefined,
+    returnedFromDate: undefined,
+  };
+
+  return { sessions, moved };
 }
 
 /**
@@ -2005,64 +2090,32 @@ export const useStore = create<Store>((set, get) => ({
     })),
   placeTopicAt: (id, target, index) =>
     set((s) => {
-      const topic = s.topics.find((t) => t.id === id);
-      if (!topic) return {};
-
-      let sessions = s.sessions;
-      let sessionId: string | undefined;
-      let slotId = target.slotId;
-      let lane = topic.lane;
-      let meetingId = target.meetingId ?? topic.meetingId;
-
-      if (target.kind === "session") {
-        sessionId = target.sessionId;
-      } else if (target.kind === "projected") {
-        // Dropping on a projected week books it on the way in — the plan is the
-        // commitment, so it shouldn't need a separate "schedule this" step.
-        const existing = sessions.find(
-          (o) => o.meetingId === meetingId && o.date === target.date
-        );
-        if (existing) {
-          sessionId = existing.id;
-        } else if (meetingId) {
-          sessionId = uid();
-          sessions = [...sessions, { id: sessionId, meetingId, date: target.date }];
-        }
-      } else {
-        lane = target.lane;
-      }
-
-      if (sessionId) {
-        const owner = sessions.find((o) => o.id === sessionId);
-        if (owner) meetingId = owner.meetingId;
-        lane = "backlog";
-      }
-
-      // A slot with a tag stamps it on arrival. This is what makes coverage
-      // trustworthy without asking anyone to tag by hand.
-      const tagIds = slotTagIds(
-        s.meetings,
-        meetingId,
-        topic.tagIds,
-        slotId,
-        topic.meetingId === meetingId ? (topic.slotId ?? "") : undefined
-      );
-
-      const moved: Topic = {
-        ...topic,
-        status: "open",
-        closedOn: undefined,
-        meetingId,
-        sessionId,
-        slotId,
-        lane,
-        tagIds,
-        // Placing it by hand is a decision — it stops reading as "came back".
-        returnedOn: undefined,
-        returnedFromDate: undefined,
+      const placed = placement(s, id, target);
+      if (!placed) return {};
+      return {
+        sessions: placed.sessions,
+        topics: reorderInto(s.topics, placed.moved, index),
       };
-
-      return { sessions, topics: reorderInto(s.topics, moved, index) };
+    }),
+  placeTopicsAt: (ids, target, index) =>
+    set((s) => {
+      // Threaded through `sessions`: the first topic onto a projected week books
+      // it, and the rest must find that booking instead of making their own.
+      let sessions = s.sessions;
+      const moved: Topic[] = [];
+      for (const id of ids) {
+        const placed = placement({ ...s, sessions }, id, target);
+        if (!placed) continue;
+        sessions = placed.sessions;
+        moved.push(placed.moved);
+      }
+      if (!moved.length) return {};
+      return { sessions, topics: reorderManyInto(s.topics, moved, index) };
+    }),
+  revertTopics: (snapshot) =>
+    set((s) => {
+      const byId = new Map(snapshot.map((t) => [t.id, t]));
+      return { topics: s.topics.map((t) => byId.get(t.id) ?? t) };
     }),
 
   captureTopics: (raw, target, index) => {

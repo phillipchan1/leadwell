@@ -3,6 +3,7 @@ import { Modal } from "./ui";
 import { Button } from "@/components/base/buttons/button";
 import { useOverlayGuard, useShortcutList } from "@/hooks/use-shortcut";
 import { keysOf, type ShortcutGroup } from "@/lib/shortcuts";
+import { MOD_LABEL } from "@/lib/keys";
 
 /**
  * The `?` sheet — every shortcut the app has, in one place.
@@ -53,7 +54,13 @@ const STATIC: Record<string, Row[]> = {
     { keys: "← / →", label: "Page to the previous or next sibling entity" },
     { keys: "↑ / ↓", label: "Move within a toolbar, menu or result list" },
     { keys: "⌥↑ / ⌥↓", label: "Move the focused topic up or down its column" },
-    { keys: "Del", label: "Delete the focused topic (from its handle)" },
+    { keys: "Del", label: "Delete the focused topic (from its handle), or the selected ones" },
+    { keys: `${MOD_LABEL} click`, label: "Add a card to the planner's selection, or take it out" },
+    { keys: "⇧ click", label: "Select every card from the last one you picked" },
+    { keys: "Drag a box", label: `Select the cards it crosses on the planner — hold ${MOD_LABEL} or ⇧ to add` },
+    { keys: "Right-click", label: "Actions for a card, or the whole selection" },
+    { keys: "⇧F10", label: "The same menu, from the keyboard (or the menu key)" },
+    { keys: "Esc", label: "Let go of the selection" },
   ],
   Writing: [
     { keys: "/", label: "Block menu in the note editor — ↑↓ to pick, ↵ to insert" },

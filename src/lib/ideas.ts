@@ -111,6 +111,37 @@ export function reorderInto(
   });
 }
 
+/**
+ * `reorderInto` for several topics at once, landing together and in the order
+ * given. Placing them one at a time can't get this right: while the first is
+ * being slotted in, the rest of the selection still sits among the peers, so an
+ * index counted against "everything else" is off by however many of them were
+ * above the drop.
+ */
+export function reorderManyInto(
+  topics: Topic[],
+  moved: Topic[],
+  index?: number
+): Topic[] {
+  const movedIds = new Set(moved.map((m) => m.id));
+  const groups = new Map<string, Topic[]>();
+  for (const m of moved) {
+    const key = bucketOf(m);
+    groups.set(key, [...(groups.get(key) ?? []), m]);
+  }
+  const next = new Map<string, Topic>();
+  for (const [bucket, group] of groups) {
+    const peers = topics
+      .filter((t) => !movedIds.has(t.id) && bucketOf(t) === bucket)
+      .sort((a, b) => a.order - b.order);
+    const at = Math.max(0, Math.min(index ?? peers.length, peers.length));
+    [...peers.slice(0, at), ...group, ...peers.slice(at)].forEach((t, i) =>
+      next.set(t.id, { ...t, order: i })
+    );
+  }
+  return topics.map((t) => next.get(t.id) ?? t);
+}
+
 // ── Coverage ──────────────────────────────────────────────────────────────
 
 export type CoverageStat = {
