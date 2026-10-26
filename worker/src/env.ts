@@ -20,10 +20,11 @@ export interface Env {
   AUTH_COOKIE_DOMAIN?: string;
   /** wrangler / `.dev.vars` only: `local` allows a localhost auth fallback. */
   ENVIRONMENT?: string;
-  GOOGLE_CLIENT_ID?: string;
-  GOOGLE_CLIENT_SECRET?: string;
-  ANTHROPIC_API_KEY?: string;
-  ANTHROPIC_MODEL?: string;
+  RESEND_API_KEY?: string;
+  /** Verified Resend from-address, e.g. `login@polarch.day`. */
+  AUTH_EMAIL_FROM?: string;
+  OPENAI_API_KEY?: string;
+  OPENAI_MODEL?: string;
   /** Comma-separated allowlist. Empty = no new users. Set to Phil's email. */
   ALLOWED_EMAILS?: string;
 }
@@ -33,7 +34,6 @@ const PLACEHOLDER_HYPERDRIVE = "00000000000000000000000000000000";
 export function databaseUrl(env: Env): string | null {
   const bound = env.HYPERDRIVE?.connectionString;
   const fromHyperdrive = bound?.trim() ?? "";
-  // Return the exact binding string so TLS can identity-match it.
   if (bound && fromHyperdrive && !fromHyperdrive.includes(PLACEHOLDER_HYPERDRIVE)) {
     return bound;
   }
@@ -41,6 +41,6 @@ export function databaseUrl(env: Env): string | null {
   return fallback || fromHyperdrive || null;
 }
 
-export function anthropicModel(env: Env): string {
-  return env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-20250514";
+export function openaiModel(env: Env): string {
+  return env.OPENAI_MODEL?.trim() || "gpt-5-mini";
 }

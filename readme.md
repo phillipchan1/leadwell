@@ -2,36 +2,33 @@
 
 A web app that shows the teams and people you lead as a visual org-chart tree,
 with an assessment-based profile (CliftonStrengths, Enneagram, MBTI) and an AI
-coach for each person. **Cloud-backed** by Supabase with **Google sign-in**, so
-your data syncs across every device.
+coach for each person. **Cloud-backed** on Cloudflare Workers + Neon, with
+**magic-link sign-in** (Resend). Cutover steps live in **[RUNBOOK.md](RUNBOOK.md)**.
 
 ## Setup
 
-This app needs a Supabase project (free tier is plenty) and Google OAuth. The
-full walkthrough — create project, run the SQL migration, enable Google
-sign-in, deploy the AI function — is in **[SETUP.md](SETUP.md)**. It's a
-one-time ~15-minute setup.
-
-Once configured:
+Local Worker + Vite: copy `.env.example` → `.env.local` and `.dev.vars.example`
+→ `.dev.vars`, then see **[RUNBOOK.md](RUNBOOK.md)**. Historical Supabase
+notes are in **[SETUP.md](SETUP.md)**.
 
 ```sh
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and **Continue with Google**. A brand-new account is
-seeded with starter data (teams + people, a mix of assessed and unassessed).
-If you used the old localStorage version in the same browser, that data is
-imported automatically on first sign-in.
+Open http://localhost:5173 and **Email me a sign-in link**. A brand-new
+allowlisted account is seeded with starter data (teams + people, a mix of
+assessed and unassessed). If you used the old localStorage version in the same
+browser, that data is imported automatically on first sign-in.
 
 ## Architecture
 
-- **Auth**: Supabase Auth + Google OAuth. Each user gets a private, row-level-
-  security-isolated workspace.
+- **Auth**: Better Auth magic link on the Worker. Sign-in and sign-up are
+  allowlist-only (`ALLOWED_EMAILS`). Each user gets a private workspace.
 - **Data**: normalized Postgres tables (one per entity), all scoped to the
   signed-in user. The Zustand store still works optimistically in memory; a thin
   repository layer ([`src/lib/repo.ts`](src/lib/repo.ts)) syncs changed
-  collections to Supabase (debounced) and hydrates on login.
+  collections to Neon (debounced) and hydrates on login.
 
 ## Design language: Leather & Gilt
 

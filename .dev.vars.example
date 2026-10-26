@@ -6,10 +6,10 @@ ENVIRONMENT=local
 # TRUSTED_ORIGINS=http://localhost:5173
 # AUTH_COOKIE_DOMAIN=
 BETTER_AUTH_SECRET=
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-ANTHROPIC_API_KEY=
-# ANTHROPIC_MODEL=claude-sonnet-4-20250514
-# Comma-separated. Sign-up and account-link only. Set to Phil's email.
+RESEND_API_KEY=
+# AUTH_EMAIL_FROM=login@polarch.day
+OPENAI_API_KEY=
+# OPENAI_MODEL=gpt-5-mini
+# Comma-separated. Sign-up and sign-in only. Set to Phil's email.
 ALLOWED_EMAILS=phillipchan1@gmail.com
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell

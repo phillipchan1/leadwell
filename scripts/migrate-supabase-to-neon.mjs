@@ -2,7 +2,8 @@
 /**
  * Dump LeadWell's Supabase project into Neon (schema + data) and map
  * auth.users → Better Auth `user` with the same UUIDs so every `user_id`
- * still matches. Google identities become Better Auth `account` rows.
+ * still matches. Magic-link sign-in uses that email. Google identities
+ * are not mapped (no Google provider).
  *
  * SOURCE IS READ-ONLY. The script only runs pg_dump and COPY … TO STDOUT
  * against SUPABASE_DB_URL. It never ALTER/DROP/DISABLE anything on the source.
@@ -48,7 +49,6 @@ import {
   formatNonEmptyTargetAbort,
   isNonEmptyTargetObject,
   loadBetterAuthUsersSql,
-  loadGoogleAccountsSql,
   loadStubAuthUsersSql,
   parseAuthUsersCsv,
   parseHashes,
@@ -146,7 +146,7 @@ const DRY_RUN_LINES = [
   "dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)",
   "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL",
   "dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out",
-  'dry-run: would insert auth.users into Better Auth "user" (same ids) and Google identities into account',
+  'dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email (Google identities are not mapped)',
   "dry-run: would compare per-table row counts and content hashes and abort on mismatch",
   "tools required: pg_dump, pg_restore, psql",
 ];
@@ -278,10 +278,7 @@ try {
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", loadPath]);
 
     if (readFileSync(identitiesPath, "utf8").trim()) {
-      console.log("mapping Google identities → account…");
-      const accountsPath = join(dir, "load_accounts.sql");
-      writeFileSync(accountsPath, loadGoogleAccountsSql(identitiesPath));
-      run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", accountsPath]);
+      console.log("skipping Google identity → account mapping (magic-link auth)");
     }
 
     const srcHashes = parseHashes(psql(source, ["-tA"], contentHashQuery()));

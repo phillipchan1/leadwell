@@ -55,36 +55,12 @@ supabase db push
 
 ---
 
-## 3. Turn on Google sign-in
+## 3. Sign-in is a magic link
 
-You need a Google OAuth client, then paste its credentials into Supabase.
-
-**a. Google Cloud Console** — <https://console.cloud.google.com>
-
-1. Create (or pick) a project → **APIs & Services → Credentials**.
-2. Configure the **OAuth consent screen** (External is fine; add yourself as a
-   test user, or publish it).
-3. **Create credentials → OAuth client ID → Web application**.
-4. Under **Authorized redirect URIs**, add exactly:
-
-   ```
-   https://<your-project-ref>.supabase.co/auth/v1/callback
-   ```
-
-   (Find `<your-project-ref>` in your Supabase Project URL.)
-5. Copy the **Client ID** and **Client secret**.
-
-**b. Supabase dashboard** — **Authentication → Providers → Google**
-
-1. Enable it and paste the **Client ID** and **Client secret**. Save.
-2. Go to **Authentication → URL Configuration** and set:
-   - **Site URL**: `http://localhost:5173` for local dev (change to your
-     deployed URL later).
-   - **Redirect URLs**: add `http://localhost:5173` (and your production URL
-     when you deploy).
-
-Anyone who signs in with Google gets their own private workspace, seeded with
-starter data on first login.
+Auth lives on the Worker. There is no Google OAuth client. Set
+`RESEND_API_KEY`, `AUTH_EMAIL_FROM`, and `ALLOWED_EMAILS` (see
+`RUNBOOK.md` and `.dev.vars.example`). Only allowlisted addresses can
+request a link or create an account.
 
 ---
 
@@ -95,7 +71,8 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>, click **Continue with Google**, and you're in.
+Open <http://localhost:5173>, enter an allowlisted email, and follow the
+sign-in link.
 
 ### Migrating your existing local data
 
