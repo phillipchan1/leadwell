@@ -79,7 +79,7 @@ export function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="h-12 w-full rounded-xl border border-leather-mute bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-leather-mute"
+              className="h-12 w-full rounded-xl border-2 border-leather-mute bg-leather-hi px-4 text-[15px] text-leather-fg outline-none placeholder:text-leather-ink/70 focus:border-leather-mute"
             />
             <Button
               type="submit"
