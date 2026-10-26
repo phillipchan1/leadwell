@@ -71,23 +71,84 @@ const LOCAL_DEV_ORIGINS = [
 /** Cookie Domain must be a multi-label hostname, not a URL or a TLD. */
 const COOKIE_DOMAIN_HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
+/**
+ * Multi-label public suffixes we refuse as cookie Domain.
+ * Single-label TLDs are already rejected by COOKIE_DOMAIN_HOST.
+ * `workers.dev` / `pages.dev` are public suffixes — a Domain there
+ * would share cookies across every Worker/Pages project.
+ */
+const PUBLIC_SUFFIXES = new Set([
+  "workers.dev",
+  "pages.dev",
+  "github.io",
+  "herokuapp.com",
+  "vercel.app",
+  "netlify.app",
+  "azurewebsites.net",
+  "cloudflare.net",
+  "co.uk",
+  "org.uk",
+  "ac.uk",
+  "gov.uk",
+  "me.uk",
+  "com.au",
+  "net.au",
+  "org.au",
+  "co.jp",
+  "ne.jp",
+  "or.jp",
+  "ac.jp",
+  "co.nz",
+  "co.za",
+  "com.br",
+  "com.mx",
+]);
+
+export function isPublicSuffix(domain: string): boolean {
+  const d = domain.replace(/^\./, "").toLowerCase();
+  if (!d.includes(".")) return true;
+  return PUBLIC_SUFFIXES.has(d);
+}
+
+export function isSharedPlatformHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return (
+    host === "workers.dev" ||
+    host.endsWith(".workers.dev") ||
+    host === "pages.dev" ||
+    host.endsWith(".pages.dev")
+  );
+}
+
+/** Parse an absolute http(s) origin. Fail closed on wildcards. */
+export function parseHttpOrigin(raw: string, label: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`${label} is not a valid URL`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`${label} must be http(s)`);
+  }
+  if (url.username || url.password) {
+    throw new Error(`${label} must not include credentials`);
+  }
+  if (!url.hostname) {
+    throw new Error(`${label} host is missing`);
+  }
+  if (url.hostname.includes("*")) {
+    throw new Error(`${label} host must not contain a wildcard`);
+  }
+  return url;
+}
+
 export function parseTrustedOrigins(raw: string | undefined): string[] {
   const out: string[] = [];
   for (const part of (raw ?? "").split(",")) {
     const s = part.trim();
     if (!s) continue;
-    let url: URL;
-    try {
-      url = new URL(s);
-    } catch {
-      throw new Error(`TRUSTED_ORIGINS entry "${s}" is not a valid origin`);
-    }
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      throw new Error(`TRUSTED_ORIGINS entry "${s}" must be http(s)`);
-    }
-    if (url.username || url.password) {
-      throw new Error(`TRUSTED_ORIGINS entry "${s}" must not include credentials`);
-    }
+    const url = parseHttpOrigin(s, `TRUSTED_ORIGINS entry "${s}"`);
     out.push(url.origin);
   }
   return out;
@@ -123,8 +184,14 @@ export function resolveAuthCookieDomain(
   }
   const host = canonicalizeHostname(new URL(resolveAuthBaseURL(env)).hostname);
   if (isLoopbackHostname(host)) return undefined;
+  if (isSharedPlatformHost(host) || isSharedPlatformHost(domain)) {
+    throw new Error("AUTH_COOKIE_DOMAIN cannot be used on workers.dev or pages.dev");
+  }
+  if (isPublicSuffix(domain)) {
+    throw new Error("AUTH_COOKIE_DOMAIN must not be a public suffix");
+  }
   if (host !== domain && !host.endsWith(`.${domain}`)) {
-    throw new Error("AUTH_COOKIE_DOMAIN must be a suffix of the BETTER_AUTH_URL host");
+    throw new Error("AUTH_COOKIE_DOMAIN must equal or be a parent of the BETTER_AUTH_URL host");
   }
   return domain;
 }
@@ -140,7 +207,13 @@ export function resolveAuthBaseURL(
   env: Pick<Env, "BETTER_AUTH_URL" | "DATABASE_URL" | "HYPERDRIVE" | "ENVIRONMENT">,
 ): string {
   const configured = env.BETTER_AUTH_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
+  if (configured) {
+    const url = parseHttpOrigin(configured, "BETTER_AUTH_URL");
+    if (!isLoopbackHostname(url.hostname) && url.protocol !== "https:") {
+      throw new Error("BETTER_AUTH_URL must be https except on loopback");
+    }
+    return url.origin;
+  }
   if (isLocalAuthRuntime(env)) return LOCAL_FALLBACK;
   throw new Error("BETTER_AUTH_URL must be set to the public Worker origin");
 }

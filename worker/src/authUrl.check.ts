@@ -16,6 +16,8 @@ import {
   isLocalAuthHost,
   isLocalAuthRuntime,
   isLoopbackHostname,
+  isPublicSuffix,
+  isSharedPlatformHost,
   parseTrustedOrigins,
   resolveAuthBaseURL,
   resolveAuthCookieDomain,
@@ -95,6 +97,31 @@ ok(
   resolveAuthBaseURL({ BETTER_AUTH_URL: "https://polarch.day/" }) === "https://polarch.day",
   "BETTER_AUTH_URL can be the public custom domain",
 );
+ok(
+  resolveAuthBaseURL({ BETTER_AUTH_URL: "http://127.0.0.1:8787" }) === "http://127.0.0.1:8787",
+  "loopback BETTER_AUTH_URL may be http",
+);
+let noScheme = false;
+try {
+  resolveAuthBaseURL({ BETTER_AUTH_URL: "polarch.day" });
+} catch {
+  noScheme = true;
+}
+ok(noScheme, "BETTER_AUTH_URL without a scheme is refused");
+let httpRemote = false;
+try {
+  resolveAuthBaseURL({ BETTER_AUTH_URL: "http://polarch.day" });
+} catch {
+  httpRemote = true;
+}
+ok(httpRemote, "non-loopback BETTER_AUTH_URL must be https");
+let starBase = false;
+try {
+  resolveAuthBaseURL({ BETTER_AUTH_URL: "https://*" });
+} catch {
+  starBase = true;
+}
+ok(starBase, "BETTER_AUTH_URL wildcard host is refused");
 
 ok(
   parseTrustedOrigins("https://polarch.day, https://www.polarch.day/").join(",") ===
@@ -108,6 +135,27 @@ try {
   badOrigin = true;
 }
 ok(badOrigin, "TRUSTED_ORIGINS rejects a bare host");
+let starOrigin = false;
+try {
+  parseTrustedOrigins("https://*");
+} catch {
+  starOrigin = true;
+}
+ok(starOrigin, "TRUSTED_ORIGINS rejects https://*");
+let starSub = false;
+try {
+  parseTrustedOrigins("https://*.polarch.day");
+} catch {
+  starSub = true;
+}
+ok(starSub, "TRUSTED_ORIGINS rejects https://*.polarch.day");
+let encodedStar = false;
+try {
+  parseTrustedOrigins("https://%2a.polarch.day");
+} catch {
+  encodedStar = true;
+}
+ok(encodedStar, "TRUSTED_ORIGINS rejects percent-encoded wildcard host");
 
 const custom = resolveTrustedOrigins({
   BETTER_AUTH_URL: "https://polarch.day",
@@ -168,6 +216,52 @@ try {
   tld = true;
 }
 ok(tld, "single-label cookie domain is refused");
+ok(isPublicSuffix("co.uk"), "co.uk is a public suffix");
+ok(isPublicSuffix("workers.dev"), "workers.dev is a public suffix");
+ok(!isPublicSuffix("polarch.day"), "polarch.day is not a public suffix");
+ok(isSharedPlatformHost("leadwell.example.workers.dev"), "workers.dev host is shared platform");
+ok(isSharedPlatformHost("app.pages.dev"), "pages.dev host is shared platform");
+ok(!isSharedPlatformHost("polarch.day"), "custom domain is not a shared platform");
+let workersCookie = false;
+try {
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://leadwell.example.workers.dev",
+    AUTH_COOKIE_DOMAIN: "workers.dev",
+  });
+} catch {
+  workersCookie = true;
+}
+ok(workersCookie, "cookie domain workers.dev is refused");
+let pagesCookie = false;
+try {
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://app.pages.dev",
+    AUTH_COOKIE_DOMAIN: "pages.dev",
+  });
+} catch {
+  pagesCookie = true;
+}
+ok(pagesCookie, "cookie domain pages.dev is refused");
+let workersEqual = false;
+try {
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://leadwell.example.workers.dev",
+    AUTH_COOKIE_DOMAIN: "leadwell.example.workers.dev",
+  });
+} catch {
+  workersEqual = true;
+}
+ok(workersEqual, "cookie domain on a workers.dev host is refused even when equal");
+let publicSuffixCookie = false;
+try {
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://app.example.co.uk",
+    AUTH_COOKIE_DOMAIN: "co.uk",
+  });
+} catch {
+  publicSuffixCookie = true;
+}
+ok(publicSuffixCookie, "cookie domain that is a public suffix is refused");
 
 ok(postgresSsl(neon) === "require", "remote Neon requires TLS");
 ok(postgresSsl(`${neon}?sslmode=disable`) === "require", "remote sslmode=disable still TLS");

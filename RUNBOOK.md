@@ -21,9 +21,9 @@ Never put values here.
 | Name | Where | Notes |
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | wrangler secret | Session signing. Generate a long random string. |
-| `BETTER_AUTH_URL` | wrangler var | Public Worker origin. Required in preview/prod. Unset is allowed only when `ENVIRONMENT=local`. After the custom domain is attached, set this to that origin. |
-| `TRUSTED_ORIGINS` | wrangler var | Optional comma-separated extra origins for CORS and Better Auth. `BETTER_AUTH_URL` is always included. Use for `www` or a leftover `*.workers.dev` host. |
-| `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Set to the registrable host when a custom domain is attached. Omit on `*.workers.dev` and local. |
+| `BETTER_AUTH_URL` | wrangler var | Public Worker origin (`https`, with a scheme). Required in preview/prod. Unset is allowed only when `ENVIRONMENT=local`. Loopback may use `http`. After the custom domain is attached, set this to that origin. |
+| `TRUSTED_ORIGINS` | wrangler var | Optional comma-separated extra origins for CORS and Better Auth. `BETTER_AUTH_URL` is always included. Use for `www` or a leftover `*.workers.dev` host. Hosts must not contain `*`. |
+| `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Must equal or be a parent of the `BETTER_AUTH_URL` host and must not be a public suffix (`workers.dev`, `pages.dev`, `co.uk`, …). Omit on `*.workers.dev` / `*.pages.dev` and local. |
 | `ENVIRONMENT` | `.dev.vars` only | Set to `local` on your laptop. Omit in preview/prod. |
 | `GOOGLE_CLIENT_ID` | wrangler secret | Same Google OAuth web client, new redirect URI. |
 | `GOOGLE_CLIENT_SECRET` | wrangler secret | Same Google client. |

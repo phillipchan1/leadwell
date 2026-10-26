@@ -1,4 +1,10 @@
-import { assertNoClientKey, sanitizeAnthropicBody } from "./anthropic.ts";
+import {
+  ALLOWED_ANTHROPIC_TOOLS,
+  assertNoClientKey,
+  filterClientTools,
+  filterToolChoice,
+  sanitizeAnthropicBody,
+} from "./anthropic.ts";
 import type { Env } from "./env.ts";
 
 const fails: string[] = [];
@@ -77,6 +83,38 @@ try {
   auth = true;
 }
 ok(auth, "client Authorization rejected");
+
+ok(ALLOWED_ANTHROPIC_TOOLS.length === 0, "tool allowlist is empty by default");
+const clientTools = [
+  { name: "bash", input_schema: { type: "object" } },
+  { name: "computer", input_schema: { type: "object" } },
+];
+const stripped = sanitizeAnthropicBody(
+  {
+    messages: [{ role: "user", content: "x" }],
+    tools: clientTools,
+    tool_choice: { type: "tool", name: "bash" },
+  },
+  env,
+);
+ok(stripped.tools === undefined, "client tools stripped when allowlist is empty");
+ok(stripped.tool_choice === undefined, "tool_choice stripped when tools are stripped");
+ok(filterClientTools(clientTools) === undefined, "filterClientTools default allowlist drops all");
+ok(
+  filterClientTools(clientTools, ["bash"])?.length === 1 &&
+    (filterClientTools(clientTools, ["bash"])?.[0] as { name: string }).name === "bash",
+  "explicit allowlist keeps only named tools",
+);
+ok(filterClientTools(clientTools, ["nope"]) === undefined, "unknown allowlist names keep nothing");
+ok(
+  filterToolChoice({ type: "tool", name: "bash" }, [{ name: "bash" }]) !== undefined,
+  "tool_choice kept when it names an allowed tool",
+);
+ok(
+  filterToolChoice({ type: "tool", name: "bash" }, [{ name: "other" }]) === undefined,
+  "tool_choice stripped when it names a tool that was filtered out",
+);
+ok(filterToolChoice({ type: "auto" }, undefined) === undefined, "tool_choice stripped without tools");
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);

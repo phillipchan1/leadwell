@@ -13,6 +13,8 @@ export const ALLOWED_ANTHROPIC_MODELS = ["claude-sonnet-4-20250514"] as const;
 export type AllowedAnthropicModel = (typeof ALLOWED_ANTHROPIC_MODELS)[number];
 export const MAX_ANTHROPIC_TOKENS = 8192;
 export const DEFAULT_ANTHROPIC_TOKENS = 4096;
+/** Client-supplied tools are dropped unless named here. Default: none. */
+export const ALLOWED_ANTHROPIC_TOOLS: readonly string[] = [];
 
 export type AnthropicBody = {
   model?: string;
@@ -46,6 +48,48 @@ export function resolveAnthropicModel(env: Env, requested?: string): AllowedAnth
   return ALLOWED_ANTHROPIC_MODELS[0];
 }
 
+export function filterClientTools(
+  tools: unknown,
+  allowlist: readonly string[] = ALLOWED_ANTHROPIC_TOOLS,
+): unknown[] | undefined {
+  if (!Array.isArray(tools) || allowlist.length === 0) return undefined;
+  const allowed = new Set(allowlist);
+  const kept: unknown[] = [];
+  for (const tool of tools) {
+    if (!tool || typeof tool !== "object" || Array.isArray(tool)) continue;
+    const name = (tool as { name?: unknown }).name;
+    if (typeof name === "string" && allowed.has(name)) kept.push(tool);
+  }
+  return kept.length ? kept : undefined;
+}
+
+export function filterToolChoice(
+  choice: unknown,
+  tools: unknown[] | undefined,
+): unknown {
+  if (!tools?.length || !choice || typeof choice !== "object" || Array.isArray(choice)) {
+    return undefined;
+  }
+  const type = (choice as { type?: unknown }).type;
+  if (type === "auto" || type === "any" || type === "none") return choice;
+  if (type === "tool") {
+    const name = (choice as { name?: unknown }).name;
+    if (
+      typeof name === "string" &&
+      tools.some(
+        (tool) =>
+          tool &&
+          typeof tool === "object" &&
+          !Array.isArray(tool) &&
+          (tool as { name?: unknown }).name === name,
+      )
+    ) {
+      return choice;
+    }
+  }
+  return undefined;
+}
+
 export function sanitizeAnthropicBody(input: unknown, env: Env): AnthropicBody {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("body must be a JSON object");
@@ -59,6 +103,8 @@ export function sanitizeAnthropicBody(input: unknown, env: Env): AnthropicBody {
     Number.isFinite(maxTokens) && maxTokens > 0
       ? Math.min(maxTokens, MAX_ANTHROPIC_TOKENS)
       : DEFAULT_ANTHROPIC_TOKENS;
+  const tools = filterClientTools(raw.tools);
+  const toolChoice = filterToolChoice(raw.tool_choice, tools);
   return {
     model: resolveAnthropicModel(env, typeof raw.model === "string" ? raw.model : undefined),
     messages: raw.messages,
@@ -66,8 +112,7 @@ export function sanitizeAnthropicBody(input: unknown, env: Env): AnthropicBody {
     max_tokens: capped,
     stream: raw.stream === true,
     temperature: typeof raw.temperature === "number" ? raw.temperature : undefined,
-    tools: raw.tools,
-    tool_choice: raw.tool_choice,
+    ...(tools ? { tools, ...(toolChoice ? { tool_choice: toolChoice } : {}) } : {}),
     metadata: raw.metadata,
     stop_sequences: raw.stop_sequences,
     top_k: typeof raw.top_k === "number" ? raw.top_k : undefined,
