@@ -715,7 +715,10 @@ export function stubSupabaseRolesSql(roles = DEFAULT_SUPABASE_ROLES) {
 /** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
 export const PROVE_SUPABASE_ROLE_STUBS_SQL = stubSupabaseRolesSql(DEFAULT_SUPABASE_ROLES);
 
-/** Create the read-only source role used by the live prove harness. */
+/** Create the read-only source role used by the live prove harness.
+ * Never ALTER … BYPASSRLS here — that must not happen on the source.
+ * Prove dumps as the table owner; this role is only for auth-function tests.
+ */
 export function proveMigrationReaderSetupSql(databaseName) {
   const db = quoteIdent(databaseName);
   const role = quoteIdent(MIGRATION_READER_ROLE);
@@ -729,10 +732,6 @@ BEGIN
   END IF;
 END
 $leadwell_prove_reader$;
--- pg_dump defaults to row_security=off. SELECT is not enough; the dump
--- role must BYPASSRLS (or own the table / be superuser). Prod
--- migration_reader already dumped RLS tables in cutover 40377053881.
-ALTER ROLE ${role} BYPASSRLS;
 GRANT CONNECT ON DATABASE ${db} TO ${role};
 GRANT USAGE ON SCHEMA public TO ${role};
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
@@ -741,6 +740,78 @@ REVOKE ALL ON SCHEMA auth FROM PUBLIC;
 REVOKE ALL ON SCHEMA auth FROM ${role};
 ${PROVE_SUPABASE_ROLE_STUBS_SQL}
 ${PROVE_MIGRATION_TMP_FUNCTIONS_SQL}
+`;
+}
+
+/**
+ * Target-only (Neon / scratch Postgres) role used for pg_restore when RLS
+ * would otherwise block COPY. Never created on the Supabase source.
+ * Password is supplied by the caller and must never be logged.
+ */
+export const TARGET_COPY_ROLE = "leadwell_copy";
+
+export function createTargetCopyRoleSql(password, databaseName) {
+  const role = quoteIdent(TARGET_COPY_ROLE);
+  const lit = quoteStringLiteral(TARGET_COPY_ROLE);
+  const pwd = quoteStringLiteral(password);
+  const db = databaseName
+    ? `GRANT CONNECT ON DATABASE ${quoteIdent(databaseName)} TO ${role};\n`
+    : "";
+  return `DO $leadwell_copy_role$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
+    CREATE ROLE ${role} LOGIN BYPASSRLS PASSWORD ${pwd};
+  ELSE
+    ALTER ROLE ${role} WITH LOGIN BYPASSRLS PASSWORD ${pwd};
+  END IF;
+END
+$leadwell_copy_role$;
+GRANT ${role} TO CURRENT_USER;
+${db}GRANT USAGE, CREATE ON SCHEMA public TO ${role};
+`;
+}
+
+export function grantTargetCopyRoleSchemasSql(schemas = ["public", "auth"]) {
+  const role = quoteIdent(TARGET_COPY_ROLE);
+  return (
+    schemas
+      .map((schema) => `GRANT USAGE, CREATE ON SCHEMA ${quoteIdent(schema)} TO ${role};`)
+      .join("\n") + "\n"
+  );
+}
+
+export function reassignTargetCopyOwnedSql(ownerName) {
+  return `REASSIGN OWNED BY ${quoteIdent(TARGET_COPY_ROLE)} TO ${quoteIdent(ownerName)};\n`;
+}
+
+/**
+ * Explicit drop of the target-only BYPASSRLS copy role. REASSIGN first so
+ * DROP OWNED cannot remove restored tables. Never run on Supabase.
+ */
+export function disableTargetCopyRoleSql(ownerName) {
+  const role = quoteIdent(TARGET_COPY_ROLE);
+  const lit = quoteStringLiteral(TARGET_COPY_ROLE);
+  const ownerLit = quoteStringLiteral(ownerName);
+  return `-- Explicit DROP ROLE of the target-only BYPASSRLS copy role.
+-- Alternative if DROP is blocked: ALTER ROLE ${role} NOLOGIN NOBYPASSRLS;
+-- Never run this on the Supabase source.
+DO $leadwell_drop_copy$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
+    BEGIN
+      EXECUTE format('REASSIGN OWNED BY %I TO %I', ${lit}, ${ownerLit});
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    BEGIN
+      EXECUTE format('DROP OWNED BY %I', ${lit});
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    EXECUTE format('DROP ROLE %I', ${lit});
+  END IF;
+END
+$leadwell_drop_copy$;
 `;
 }
 

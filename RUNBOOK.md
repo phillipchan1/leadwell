@@ -141,11 +141,14 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
      Postgres 17 service container — **not** Neon. Before restore it
      creates `NOLOGIN` stubs for `anon` / `authenticated` / `service_role`
-     (and any other dump `TO`/`GRANT` roles) so RLS policies can restore.
+     and a target-only `LOGIN BYPASSRLS` copy role (`leadwell_copy`). After
+     checksums verify, the script **explicitly `DROP ROLE`s** that copy
+     role (`ALTER ROLE … NOLOGIN` is the documented alternative if DROP
+     is blocked). Never create those roles on the Supabase source.
      That script `COPY`s the narrow TABLE columns from
      `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`
      (id/name/email/verified/timestamps and user_id/provider/provider_id
-     — no password hashes or tokens)
+     — no password hashes or tokens). Logs are counts and md5s only.
    - writes per-table `COUNT(*)` + content md5 hashes (source vs scratch
      target, including auth users via the function vs Better Auth `"user"`)
      to the step summary and a 7-day artifact. That artifact is counts and
@@ -172,16 +175,22 @@ The script:
    `DO $leadwell_stub_roles$`, `IF NOT EXISTS`). The dump is scanned for
    `CREATE POLICY … TO` and privilege `GRANT … ON … TO` only — not
    function bodies and not membership `GRANT role TO role`. Any other
-   role in those clauses is a hard error. Then restores public. The same
-   stubs run on the Actions scratch target (`dry_run=true`) and on Neon
-   (`dry_run=false`). Without them, `pg_restore` fails with
-   `role "authenticated" does not exist` on
+   role in those clauses is a hard error. Also creates a target-only
+   `LOGIN BYPASSRLS` copy role (`leadwell_copy`) and restores as that
+   role. The same stubs + copy role run on the Actions scratch target
+   (`dry_run=true`) and on Neon (`dry_run=false`). Without the stubs,
+   `pg_restore` fails with `role "authenticated" does not exist` on
    `CREATE POLICY actions_owner … TO authenticated`.
+   **Never create roles on the Supabase source.**
 6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
 7. Does **not** map Google identities.
-8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch.
-9. On failure, drops only objects this run created on Neon. Supabase is never
-   modified. Role stubs are cluster-level and are left in place (NOLOGIN).
+8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch. Logs are those counts and md5s — never emails or row data.
+9. After checksums verify, **explicitly `DROP ROLE leadwell_copy`**
+   (`REASSIGN OWNED` first so `DROP OWNED` cannot remove tables). If
+   `DROP` is blocked, `ALTER ROLE leadwell_copy NOLOGIN` (and drop
+   `BYPASSRLS`). On failure, the same drop runs, then only objects this
+   run created on Neon are dropped. Supabase is never modified. The
+   `NOLOGIN` stubs are cluster-level and are left in place.
 
 ### Restored RLS vs how the Worker enforces access
 
@@ -227,20 +236,15 @@ dumped `public` from real Supabase as `migration_reader` and then failed
 later on `CREATE POLICY … TO authenticated`. So the prod dump role
 **already can** `COPY` RLS-protected tables under `row_security=off`.
 This environment cannot `SELECT rolbypassrls` on that role (no source
-URI). If a later dump hits the error above, grant `BYPASSRLS` to
-`migration_reader` (or dump as the table owner / a superuser). Confirm
-as a privileged role, never print row values:
+URI). **Do not grant `BYPASSRLS` on Supabase.** If prove or restore
+needs a `BYPASSRLS` role, create it on the Neon / scratch **target**
+only (`leadwell_copy`), then `DROP ROLE` (or `ALTER ROLE … NOLOGIN`)
+after checksums. Never print credentials.
 
-```sql
--- expect t if this is how the role dumps (or rolsuper / table owner)
-SELECT rolname, rolsuper, rolbypassrls
-FROM pg_roles
-WHERE rolname = 'migration_reader';
-```
-
-The loopback prove dumps as `migration_reader` after `ALTER ROLE …
-BYPASSRLS` so CI matches that `row_security=off` COPY, not the owner
-session that created the tables.
+The loopback prove dumps as the **table owner** (not `migration_reader`).
+`migration_reader` stays a non-`BYPASSRLS` role for auth-function tests
+only. The restore target creates `leadwell_copy` `LOGIN BYPASSRLS`,
+restores as that role, then **explicitly `DROP ROLE`s it**.
 
 Loopback prove that a restore with role-scoped policies succeeds:
 
@@ -252,10 +256,17 @@ LEADWELL_PROVE_TARGET_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell
 
 `scripts/prove-migrate.mjs` seeds `CREATE POLICY actions_owner … TO authenticated`
 (the clause that failed in cutover dry-run 40377053881), then asserts the
-target has the NOLOGIN stubs, the policy is restored, and the table owner
-can still read rows (the Worker path). The `authenticated` stub has no
-`USAGE` on `public` — the Worker never `SET ROLE` those stubs. Dump-SQL
-scanning of `TO`/`GRANT` is also unit-tested without a database.
+target has the NOLOGIN stubs, the policy is restored, `leadwell_copy` is
+gone, and the table owner can still read rows (the Worker path). The
+`authenticated` stub has no `USAGE` on `public` — the Worker never
+`SET ROLE` those stubs. Dump-SQL scanning of `TO`/`GRANT` is also
+unit-tested without a database.
+
+The repo is public. `checks.yml` runs `scripts/guard-public-ci.mjs`, which
+fails if any workflow uses `actions/upload-artifact` for anything other
+than `artifacts/cutover-report.md` (counts + content md5). Every DB URL
+and secret is masked with `::add-mask::` before use. Scripts never echo
+query results or row data — only counts and md5s.
 
 Email/password hashes from GoTrue are not portable. Phil's login path is a
 **magic-link** to the migrated `"user"` row (same UUID + email). The first

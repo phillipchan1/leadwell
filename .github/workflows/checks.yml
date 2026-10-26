@@ -1,6 +1,8 @@
 # Typecheck, lint, and the unit / prove scripts.
 # Deliberately not a production deploy. Vercel and Supabase stay intact.
 # Never upload pg_dump, CSV, or row-data artifacts from this workflow.
+# scripts/guard-public-ci.mjs fails the job if any workflow uploads anything
+# other than artifacts/cutover-report.md (counts + md5 only).
 name: checks
 
 on:
@@ -34,6 +36,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Public-repo artifact allowlist
+        run: node scripts/guard-public-ci.mjs
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -50,13 +54,30 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
+          set +x
+          node --input-type=module <<'JS'
+          import { githubAddMaskLines } from "./scripts/loopback.mjs";
+          for (const key of ["PGPASSWORD"]) {
+            for (const line of githubAddMaskLines(process.env[key] || "")) process.stdout.write(`${line}\n`);
+          }
+          JS
           psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_src;"
           psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_dst;"
       - name: Live migrate prove (loopback only)
         env:
           LEADWELL_PROVE_SOURCE_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_src
           LEADWELL_PROVE_TARGET_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_dst
-        run: npm run test:migrate
+          PGPASSWORD: postgres
+        run: |
+          set +x
+          set -eu
+          node --input-type=module <<'JS'
+          import { githubAddMaskLines } from "./scripts/loopback.mjs";
+          for (const key of ["LEADWELL_PROVE_SOURCE_URL", "LEADWELL_PROVE_TARGET_URL", "PGPASSWORD"]) {
+            for (const line of githubAddMaskLines(process.env[key] || "")) process.stdout.write(`${line}\n`);
+          }
+          JS
+          npm run test:migrate
       - name: Preview wrangler dry-run
         run: |
           mkdir -p dist

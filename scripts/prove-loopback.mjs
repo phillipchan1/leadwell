@@ -12,6 +12,7 @@ import {
   refuseUnsafeTestUrl,
   SOURCE_READ_PGOPTIONS,
   sourceReadEnv,
+  withRoleUrl,
 } from "./loopback.mjs";
 
 const fails = [];
@@ -140,7 +141,14 @@ const masked = githubAddMaskLines("postgres://phil:p%40ss@db.example.com/leadwel
 ok(masked.some((l) => l === "::add-mask::postgres://phil:p%40ss@db.example.com/leadwell"), "mask raw URI");
 ok(masked.some((l) => l === "::add-mask::p%40ss"), "mask encoded password");
 ok(masked.some((l) => l === "::add-mask::p@ss"), "mask decoded password");
+ok(masked.some((l) => l === "::add-mask::phil"), "mask username");
+ok(masked.some((l) => l === "::add-mask::db.example.com"), "mask hostname");
 ok(masked.every((l) => l.startsWith("::add-mask::")), "mask lines are add-mask only");
+ok(
+  withRoleUrl("postgresql://postgres:postgres@127.0.0.1:5432/dst", "leadwell_copy", "x") ===
+    "postgresql://leadwell_copy:x@127.0.0.1:5432/dst",
+  "withRoleUrl rewrites userinfo",
+);
 
 if (fails.length) {
   console.error(`${fails.length}/${checks} failed`);

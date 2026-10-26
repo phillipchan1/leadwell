@@ -17,7 +17,7 @@
  * It never talks to Supabase.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,7 +60,17 @@ import {
   stubSupabaseRolesSql,
   collectRolesFromDumpSql,
   targetBetterAuthUsersHashQuery,
+  TARGET_COPY_ROLE,
+  createTargetCopyRoleSql,
+  disableTargetCopyRoleSql,
 } from "./migrate-users.lib.mjs";
+import {
+  ALLOWED_UPLOAD_ARTIFACT_PATHS,
+  assertSafeMigrateLog,
+  assertWorkflowUploadAllowlist,
+  assertWorkflowsUploadAllowlist,
+  logLooksLikeRowData,
+} from "./guard-public-ci.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -77,7 +87,8 @@ const DRY_RUN_NEEDLES = [
   "dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated",
   "dry-run: would refuse a non-empty target",
   "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto",
-  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and Supabase roles (anon, authenticated, service_role, plus dump TO/GRANT) on NEON_DB_URL",
+  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and NOLOGIN roles (anon, authenticated, service_role) on NEON_DB_URL",
+  "dry-run: would CREATE a target-only BYPASSRLS copy role on NEON_DB_URL (never on Supabase) and DROP ROLE it after checksums",
   "dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out",
   'dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email',
   "dry-run: would compare per-table row counts and content hashes and abort on mismatch",
@@ -259,7 +270,19 @@ ok(/CREATE ROLE "authenticated" NOLOGIN/.test(roleSql), "stub SQL creates authen
 ok(/IF NOT EXISTS \(SELECT 1 FROM pg_roles WHERE rolname = 'authenticated'\)/.test(roleSql), "stub SQL is idempotent");
 ok(roleSql.includes("$leadwell_stub_roles$"), "stub SQL uses a tagged dollar-quote");
 ok(!/DO \$\$/.test(roleSql), "stub SQL does not use untagged DO $$");
-ok(proveMigrationReaderSetupSql("leadwell_src").includes("BYPASSRLS"), "prove reader is BYPASSRLS for pg_dump");
+ok(
+  !proveMigrationReaderSetupSql("leadwell_src").includes("BYPASSRLS"),
+  "prove reader is not granted BYPASSRLS",
+);
+ok(TARGET_COPY_ROLE === "leadwell_copy", "target copy role name");
+const copySql = createTargetCopyRoleSql("x", "leadwell_dst");
+ok(copySql.includes("BYPASSRLS") && copySql.includes("LOGIN"), "copy role SQL is LOGIN BYPASSRLS");
+ok(copySql.includes("$leadwell_copy_role$"), "copy role SQL uses a tagged dollar-quote");
+ok(!/DO \$\$/.test(copySql), "copy role SQL does not use untagged DO $$");
+const dropCopySql = disableTargetCopyRoleSql("postgres");
+ok(/DROP ROLE/.test(dropCopySql), "copy role drop step is explicit DROP ROLE");
+ok(dropCopySql.includes("leadwell_copy") || dropCopySql.includes('"leadwell_copy"'), "drop SQL names leadwell_copy");
+ok(dropCopySql.includes("Never run this on the Supabase source"), "drop SQL forbids the source");
 ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
 ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
 ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
@@ -267,6 +290,11 @@ ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE),
 const migrateSrc = readFileSync(join(here, "migrate-supabase-to-neon.mjs"), "utf8");
 ok(migrateSrc.includes("rolesToStubFromDumpSql"), "migrate scans dump TO/GRANT for roles");
 ok(migrateSrc.includes("stubSupabaseRolesSql"), "migrate applies role stubs before restore");
+ok(migrateSrc.includes("createTargetCopyRoleSql"), "migrate creates the target copy role");
+ok(migrateSrc.includes("disableTargetCopyRoleSql"), "migrate drops the target copy role");
+ok(migrateSrc.includes("never on source"), "migrate copy role is target-only");
+ok(migrateSrc.includes("explicit DROP ROLE"), "migrate drop step is explicit");
+ok(!/ALTER ROLE \$\{role\} BYPASSRLS/.test(migrateSrc), "migrate does not grant source BYPASSRLS");
 ok(migrateSrc.includes("EXPORT_AUTH_USERS_COPY_SQL"), "migrate exports users via lib COPY SQL");
 ok(migrateSrc.includes("EXPORT_AUTH_IDENTITIES_COPY_SQL"), "migrate exports identities via lib COPY SQL");
 ok(migrateSrc.includes("PG_DUMP_PUBLIC_ARGS"), "migrate uses shared public-only dump args");
@@ -324,31 +352,54 @@ ok(
   "cutover actions are SHA-pinned",
 );
 ok(!/leadwell-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
-ok(!/path:.*\.dump/.test(workflow), "cutover upload-artifact paths are not dumps");
 ok(workflow.includes("NEVER upload"), "cutover comments the no-dump-artifact guard");
 ok(
   /name: Delete dumps[\s\S]*always\(\)/.test(workflow) ||
     /if:\s*\$\{\{\s*always\(\)\s*\}\}[\s\S]*\*\.dump/.test(workflow),
   "cutover always() deletes dumps",
 );
-ok(workflow.includes("cutover-report.md"), "cutover artifact is the checksum report only");
-const workflowUploads = [...workflow.matchAll(/uses:\s*actions\/upload-artifact[^\n]*\n(?:[ \t]+[^\n]*\n)*/g)].map(
-  (m) => m[0],
-);
-ok(workflowUploads.length === 1, "cutover has exactly one upload-artifact");
-ok(
-  workflowUploads.every((block) => /cutover-report\.md/.test(block) && !/\.dump|\.csv/i.test(block)),
-  "cutover upload-artifact is the markdown checksum report",
-);
-for (const name of readdirSync(join(root, ".github/workflows"))) {
-  if (!name.endsWith(".yml") && !name.endsWith(".yaml")) continue;
-  const text = readFileSync(join(root, ".github/workflows", name), "utf8");
-  const uploads = [...text.matchAll(/uses:\s*actions\/upload-artifact[^\n]*\n(?:[ \t]+[^\n]*\n)*/g)].map((m) => m[0]);
+ok(ALLOWED_UPLOAD_ARTIFACT_PATHS.includes("artifacts/cutover-report.md"), "allowlist is the checksum report");
+let allowlistOk = true;
+try {
+  const steps = assertWorkflowsUploadAllowlist(join(root, ".github/workflows"));
   ok(
-    uploads.every((block) => !/\.dump|\.csv|auth_users|auth_identities/i.test(block)),
-    `${name} does not upload dump/csv/row-data artifacts`,
+    steps.length === 1 && steps[0].path === "artifacts/cutover-report.md",
+    "workflows upload only artifacts/cutover-report.md",
   );
+} catch (err) {
+  allowlistOk = false;
+  ok(false, `workflow artifact allowlist: ${err.message}`);
 }
+ok(allowlistOk, "committed workflows pass the public-repo artifact allowlist");
+let dumpUploadThrew = false;
+try {
+  assertWorkflowUploadAllowlist(
+    "uses: actions/upload-artifact@sha\n        with:\n          path: secret.dump\n",
+    "bad.yml",
+  );
+} catch (err) {
+  dumpUploadThrew = String(err.message).includes("secret.dump");
+}
+ok(dumpUploadThrew, "artifact allowlist rejects a dump upload");
+ok(logLooksLikeRowData("phil@example.com,not-a-real-hash"), "email/CSV is treated as row data");
+ok(!logLooksLikeRowData("| profiles | 1 | 1 | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |"), "checksum table is not row data");
+assertSafeMigrateLog("  profiles: source=1 neon=1 hash aaa → aaa", "count/hash log");
+let rowLogThrew = false;
+try {
+  assertSafeMigrateLog("id,email\naaaa,phil@example.com\n", "csv");
+} catch {
+  rowLogThrew = true;
+}
+ok(rowLogThrew, "row-data log fails the safe-log guard");
+ok(!/console\.log\(\s*csv\b/.test(migrateSrc), "migrate does not log CSV contents");
+ok(!/console\.log\([^)]*\.email/.test(migrateSrc), "migrate does not log emails");
+ok(!/console\.log\([^)]*copyPassword/.test(migrateSrc), "migrate does not log the copy-role password");
+ok(!/console\.log\([^)]*copyTarget/.test(migrateSrc), "migrate does not log the copy-role URL");
+ok(/console\.log\(\s*` {2}\$\{table\}: source=/.test(migrateSrc), "migrate logs counts and hashes only");
+const checksYml = readFileSync(join(root, ".github/workflows/checks.yml"), "utf8");
+ok(checksYml.includes("scripts/guard-public-ci.mjs"), "checks.yml runs the artifact allowlist guard");
+ok(checksYml.includes("githubAddMaskLines"), "checks.yml masks DB URLs before use");
+ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
 ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
@@ -375,8 +426,12 @@ ok(runbook.includes("function bodies"), "runbook documents not scanning function
 ok(runbook.includes("FORCE ROW LEVEL SECURITY") || runbook.includes("FORCE RLS"), "runbook documents Worker vs RLS");
 ok(runbook.includes("user_id"), "runbook documents Worker user_id scoping");
 ok(!runbook.includes("uploads the dump"), "runbook no longer says the dump is uploaded");
-ok(runbook.includes("BYPASSRLS"), "runbook documents dump-role BYPASSRLS");
+ok(runbook.includes("BYPASSRLS"), "runbook documents the target-only BYPASSRLS copy role");
+ok(runbook.includes("DROP ROLE"), "runbook documents the explicit copy-role drop");
+ok(runbook.includes("Never create roles on the Supabase source") || runbook.includes("never create roles on the Supabase source") || runbook.includes("Never create roles on Supabase"), "runbook forbids source roles");
 ok(runbook.includes("--enable-row-security"), "runbook documents why --enable-row-security is not the dump fix");
+ok(runbook.includes("cutover-report.md"), "runbook names the allowlisted artifact");
+ok(runbook.includes("::add-mask::"), "runbook documents secret masking");
 const setupMd = readFileSync(join(root, "SETUP.md"), "utf8");
 ok(!/Continue as test user/.test(setupMd), "SETUP.md has no Continue as test user");
 const designPrompt = readFileSync(join(root, "docs/design-audit-implementation-prompt.md"), "utf8");
@@ -626,7 +681,7 @@ GRANT SELECT ON public.actions TO authenticated;
       "-c",
       "SELECT CASE WHEN rolbypassrls THEN 't' ELSE 'f' END FROM pg_roles WHERE rolname = 'migration_reader'",
     ]).trim();
-    ok(readerBypass === "t", "prove migration_reader has BYPASSRLS for pg_dump COPY");
+    ok(readerBypass === "f", "prove migration_reader is not BYPASSRLS (source never gets that grant)");
 
     const migrated = spawnSync(
       process.execPath,
@@ -636,7 +691,7 @@ GRANT SELECT ON public.actions TO authenticated;
         cwd: root,
         env: {
           ...process.env,
-          SUPABASE_DB_URL: readerSource,
+          SUPABASE_DB_URL: source,
           NEON_DB_URL: target,
           LEADWELL_MIGRATE_TEST: "1",
         },
@@ -651,9 +706,29 @@ GRANT SELECT ON public.actions TO authenticated;
       /creating stub roles \(.*authenticated.*\) as NOLOGIN/.test(migratedOut),
       "live migrate stubs dump roles before restore",
     );
+    ok(
+      migratedOut.includes("creating target-only BYPASSRLS copy role"),
+      "live migrate creates the target copy role",
+    );
+    ok(
+      migratedOut.includes("dropping target BYPASSRLS copy role (explicit DROP ROLE)"),
+      "live migrate drops the copy role after verify",
+    );
+    ok(!logLooksLikeRowData(migratedOut), "live migrate log has no emails or row data");
     if (migrated.status !== 0) {
       throw new Error(`live migrate failed:\n${migratedOut.trim()}`);
     }
+
+    const copyLeft = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      "SELECT COUNT(*) FROM pg_roles WHERE rolname = 'leadwell_copy'",
+    ]).trim();
+    ok(copyLeft === "0", "target BYPASSRLS copy role is gone after a successful restore");
 
     const roleBits = run("psql", [
       "-v",
@@ -726,7 +801,7 @@ GRANT SELECT ON public.actions TO authenticated;
       cwd: root,
       env: {
         ...process.env,
-        SOURCE_DATABASE_URL: readerSource,
+        SOURCE_DATABASE_URL: source,
         TARGET_DATABASE_URL: target,
         LEADWELL_MIGRATE_TEST: "1",
         DRY_RUN: "true",
@@ -737,6 +812,7 @@ GRANT SELECT ON public.actions TO authenticated;
     ok(verified.status === 0, "cutover-verify on loopback prove exits 0");
     ok(verifiedOut.includes("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), "cutover-verify prints Phil id");
     ok(!verifiedOut.includes("phil@example.com"), "cutover-verify omits Phil email");
+    ok(!logLooksLikeRowData(verifiedOut), "cutover-verify log has no emails or row data");
     ok(readFileSync(join(dir, "report.md"), "utf8").includes("source_md5"), "cutover-verify writes report");
     const google = run("psql", [
       "-v",
