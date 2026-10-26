@@ -466,17 +466,11 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
     );
     ok(identBlob.status !== 0, "SELECT identity_data from auth_identities() fails");
 
-    const privRows = run("psql", [
-      "-v",
-      "ON_ERROR_STOP=1",
-      "-tA",
-      "-d",
-      source,
-      "-c",
-      `SELECT r.rolname || '=' || has_function_privilege(r.rolname, 'migration_tmp.auth_users()', 'EXECUTE')::text
+    const privSql = (fn) =>
+      `SELECT r.rolname || '=' || CASE WHEN has_function_privilege(r.rolname, '${fn}', 'EXECUTE') THEN 't' ELSE 'f' END
 FROM (VALUES ('migration_reader'), ('anon'), ('authenticated'), ('service_role')) AS r(rolname)
-ORDER BY 1`,
-    ])
+ORDER BY 1`;
+    const privRows = run("psql", ["-v", "ON_ERROR_STOP=1", "-tA", "-d", source, "-c", privSql("migration_tmp.auth_users()")])
       .trim()
       .split("\n")
       .filter(Boolean);
@@ -491,9 +485,7 @@ ORDER BY 1`,
       "-d",
       source,
       "-c",
-      `SELECT r.rolname || '=' || has_function_privilege(r.rolname, 'migration_tmp.auth_identities()', 'EXECUTE')::text
-FROM (VALUES ('migration_reader'), ('anon'), ('authenticated'), ('service_role')) AS r(rolname)
-ORDER BY 1`,
+      privSql("migration_tmp.auth_identities()"),
     ])
       .trim()
       .split("\n")
