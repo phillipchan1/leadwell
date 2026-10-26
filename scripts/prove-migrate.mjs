@@ -624,7 +624,7 @@ GRANT SELECT ON public.actions TO authenticated;
       "-d",
       source,
       "-c",
-      "SELECT rolbypassrls::text FROM pg_roles WHERE rolname = 'migration_reader'",
+      "SELECT CASE WHEN rolbypassrls THEN 't' ELSE 'f' END FROM pg_roles WHERE rolname = 'migration_reader'",
     ]).trim();
     ok(readerBypass === "t", "prove migration_reader has BYPASSRLS for pg_dump COPY");
 
