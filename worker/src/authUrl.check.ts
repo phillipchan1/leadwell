@@ -16,7 +16,10 @@ import {
   isLocalAuthHost,
   isLocalAuthRuntime,
   isLoopbackHostname,
+  parseTrustedOrigins,
   resolveAuthBaseURL,
+  resolveAuthCookieDomain,
+  resolveTrustedOrigins,
 } from "./authUrl.ts";
 
 const fails: string[] = [];
@@ -88,6 +91,83 @@ try {
   threw = true;
 }
 ok(threw, "unset BETTER_AUTH_URL without ENVIRONMENT=local throws");
+ok(
+  resolveAuthBaseURL({ BETTER_AUTH_URL: "https://polarch.day/" }) === "https://polarch.day",
+  "BETTER_AUTH_URL can be the public custom domain",
+);
+
+ok(
+  parseTrustedOrigins("https://polarch.day, https://www.polarch.day/").join(",") ===
+    "https://polarch.day,https://www.polarch.day",
+  "TRUSTED_ORIGINS parses comma list to origins",
+);
+let badOrigin = false;
+try {
+  parseTrustedOrigins("polarch.day");
+} catch {
+  badOrigin = true;
+}
+ok(badOrigin, "TRUSTED_ORIGINS rejects a bare host");
+
+const custom = resolveTrustedOrigins({
+  BETTER_AUTH_URL: "https://polarch.day",
+  TRUSTED_ORIGINS: "https://www.polarch.day, https://leadwell.example.workers.dev",
+});
+ok(custom.includes("https://polarch.day"), "trusted origins always include BETTER_AUTH_URL");
+ok(custom.includes("https://www.polarch.day"), "trusted origins include TRUSTED_ORIGINS extras");
+ok(!custom.includes("http://localhost:5173"), "prod custom domain does not auto-trust localhost");
+
+const localOrigins = resolveTrustedOrigins({ ENVIRONMENT: "local" });
+ok(localOrigins.includes("http://localhost:8787"), "local runtime trusts wrangler");
+ok(localOrigins.includes("http://localhost:5173"), "local runtime trusts Vite");
+
+ok(
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://polarch.day",
+    AUTH_COOKIE_DOMAIN: "polarch.day",
+  }) === "polarch.day",
+  "cookie domain matches the custom-domain host",
+);
+ok(
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://www.polarch.day",
+    AUTH_COOKIE_DOMAIN: ".polarch.day",
+  }) === "polarch.day",
+  "cookie domain leading dot is stripped; suffix of www is allowed",
+);
+ok(
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://polarch.day",
+  }) === undefined,
+  "unset cookie domain is host-only",
+);
+ok(
+  resolveAuthCookieDomain({
+    ENVIRONMENT: "local",
+    AUTH_COOKIE_DOMAIN: "polarch.day",
+  }) === undefined,
+  "cookie domain is ignored on loopback so local sign-in still works",
+);
+let badDomain = false;
+try {
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://leadwell.example.workers.dev",
+    AUTH_COOKIE_DOMAIN: "polarch.day",
+  });
+} catch {
+  badDomain = true;
+}
+ok(badDomain, "cookie domain that is not a suffix of BETTER_AUTH_URL is refused");
+let tld = false;
+try {
+  resolveAuthCookieDomain({
+    BETTER_AUTH_URL: "https://polarch.day",
+    AUTH_COOKIE_DOMAIN: "day",
+  });
+} catch {
+  tld = true;
+}
+ok(tld, "single-label cookie domain is refused");
 
 ok(postgresSsl(neon) === "require", "remote Neon requires TLS");
 ok(postgresSsl(`${neon}?sslmode=disable`) === "require", "remote sslmode=disable still TLS");
@@ -141,6 +221,19 @@ if (cors.ok) {
   ok(cors.cors["Access-Control-Allow-Origin"] === "http://localhost:5173", "echoes allowlisted origin");
   ok(cors.cors["Access-Control-Allow-Credentials"] === "true", "credentialed CORS");
   ok(cors.cors["Access-Control-Allow-Origin"] !== "*", "never * + credentials");
+}
+
+const customCors = beginAuthCors("https://www.polarch.day", {
+  BETTER_AUTH_URL: "https://polarch.day",
+  TRUSTED_ORIGINS: "https://www.polarch.day",
+  BETTER_AUTH_SECRET: "x",
+});
+ok(customCors.ok === true, "custom-domain extra origin CORS starts");
+if (customCors.ok) {
+  ok(
+    customCors.cors["Access-Control-Allow-Origin"] === "https://www.polarch.day",
+    "echoes TRUSTED_ORIGINS custom domain",
+  );
 }
 
 const cfgErr = authConfigErrorResponse("https://evil.example", new Error("BETTER_AUTH_URL must be set"));

@@ -7,7 +7,8 @@ Realtime publication is on in Supabase. The app never calls
 `supabase.channel` / `.subscribe()`, so realtime is dropped. No Worker
 equivalent is shipped.
 
-There are no crons, storage buckets, payments, or a custom domain.
+There are no crons, storage buckets, or payments. The public host will
+be **polarch.day** (product rename comes later; Worker/repo stay LeadWell).
 
 ---
 
@@ -20,7 +21,9 @@ Never put values here.
 | Name | Where | Notes |
 | --- | --- | --- |
 | `BETTER_AUTH_SECRET` | wrangler secret | Session signing. Generate a long random string. |
-| `BETTER_AUTH_URL` | wrangler var | Public Worker origin. Required in preview/prod. Unset is allowed only when `ENVIRONMENT=local`. |
+| `BETTER_AUTH_URL` | wrangler var | Public Worker origin. Required in preview/prod. Unset is allowed only when `ENVIRONMENT=local`. After the custom domain is attached, set this to that origin. |
+| `TRUSTED_ORIGINS` | wrangler var | Optional comma-separated extra origins for CORS and Better Auth. `BETTER_AUTH_URL` is always included. Use for `www` or a leftover `*.workers.dev` host. |
+| `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Set to the registrable host when a custom domain is attached. Omit on `*.workers.dev` and local. |
 | `ENVIRONMENT` | `.dev.vars` only | Set to `local` on your laptop. Omit in preview/prod. |
 | `GOOGLE_CLIENT_ID` | wrangler secret | Same Google OAuth web client, new redirect URI. |
 | `GOOGLE_CLIENT_SECRET` | wrangler secret | Same Google client. |
@@ -127,17 +130,25 @@ remains available for a new test user or a password reset after cutover.
 1. Create a Neon project (free tier). Leave it empty.
 2. Create a Cloudflare Worker (`leadwell`) with Workers static assets.
    Hyperdrive is Workers Paid; preview can use `DATABASE_URL` instead.
-3. Set the Worker secrets, `BETTER_AUTH_URL` to the `*.workers.dev` origin, and
-   `ALLOWED_EMAILS` to Phil's Google email.
-4. In Google Cloud, add the Better Auth callback to the existing OAuth client:
-   `{BETTER_AUTH_URL}/api/auth/callback/google`
-   Do not remove the Supabase callback until rollback is no longer needed.
-5. Run the migrate script against the empty Neon database.
-6. `npm run build && wrangler deploy` (or `--env preview` first).
-7. Open the Worker URL. Sign in with Google. Data should be Phil's existing
-   org (same `user.id` as the Supabase auth UUID).
-8. Smoke-test, then point whatever URL you share at the Worker. There is no
-   custom domain today — flipping the shared URL is the cutover.
+3. Set the Worker secrets and `ALLOWED_EMAILS` to Phil's Google email.
+   Preview can use `BETTER_AUTH_URL` = the `*.workers.dev` origin. Production
+   uses the custom domain (next step).
+4. Attach **polarch.day** as the Worker custom domain (dashboard: Workers →
+   leadwell → Settings → Domains & Routes → Add, or
+   `npx wrangler domains add polarch.day`). Then set:
+   - `BETTER_AUTH_URL` = `https://polarch.day`
+   - `AUTH_COOKIE_DOMAIN` = `polarch.day` (no leading dot)
+   - `TRUSTED_ORIGINS` only if you still serve `www` or `*.workers.dev`
+   Do not rename the Worker, package, or repo.
+5. In Google Cloud, add these Better Auth callbacks to the existing OAuth
+   client (keep the Supabase callback until rollback is unused):
+   - `https://polarch.day/api/auth/callback/google`
+   - `{workers.dev origin}/api/auth/callback/google` while preview exists
+6. Run the migrate script against the empty Neon database.
+7. `npm run build && wrangler deploy` (or `--env preview` first).
+8. Open `https://polarch.day`. Sign in with Google. Data should be Phil's
+   existing org (same `user.id` as the Supabase auth UUID).
+9. Smoke-test. The shared URL is `https://polarch.day`.
 
 Vercel stays deployed. Supabase stays live. Nothing is deleted.
 
@@ -146,7 +157,7 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 ## Smoke tests
 
 - `GET /api/health` → `{ ok: true, service: "leadwell", realtime: false }`
-- Signed-out `/` still shows the marketing landing.
+- Signed-out `https://polarch.day/` still shows the marketing landing.
 - Google sign-in returns to the app; the org loads (people, meetings, prayer).
 - An edit syncs (chrome leaves "saving"); reload keeps it.
 - Dev-only: email/password test user if `VITE_DEV_*` is set.
@@ -179,6 +190,6 @@ the current deployment (`a147830`). That is the fallback.
 - No Cloudflare cron.
 - No R2 / storage.
 - No payments.
-- No custom domain.
 - No Supabase realtime replacement (unused).
+- No rename of the Worker, package, or repo (polarch.day is a host only).
 - No deletion of the Vercel project or the LeadWell Supabase project.

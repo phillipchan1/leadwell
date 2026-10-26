@@ -3,8 +3,9 @@ import { bearer } from "better-auth/plugins";
 import { Pool } from "pg";
 import {
   authCookieSecure,
-  isLocalAuthHost,
   resolveAuthBaseURL,
+  resolveAuthCookieDomain,
+  resolveTrustedOrigins,
 } from "./authUrl.ts";
 import { clientConnection, poolSsl } from "./db.ts";
 import { databaseUrl, type Env } from "./env.ts";
@@ -126,6 +127,7 @@ export function createAuth(env: Env, database?: AuthDatabase) {
   const secret = env.BETTER_AUTH_SECRET;
   if (!secret) throw new Error("BETTER_AUTH_SECRET is not set");
   const baseURL = resolveAuthBaseURL(env);
+  const cookieDomain = resolveAuthCookieDomain(env);
   let owned: Pool | undefined;
   const opts = url ? clientConnection(env, url) : null;
   const db =
@@ -173,24 +175,20 @@ export function createAuth(env: Env, database?: AuthDatabase) {
       accountLinking: ACCOUNT_LINKING,
     },
     verification: authModels.verification,
-    trustedOrigins: isLocalAuthHost(baseURL)
-      ? [
-          baseURL,
-          "http://localhost:5173",
-          "http://localhost:8787",
-          "http://[::1]:5173",
-          "http://[::1]:8787",
-        ]
-      : [baseURL],
+    trustedOrigins: resolveTrustedOrigins(env),
     advanced: {
       database: {
         generateId: () => crypto.randomUUID(),
       },
+      ...(cookieDomain
+        ? { crossSubDomainCookies: { enabled: true, domain: cookieDomain } }
+        : {}),
       defaultCookieAttributes: {
         sameSite: "lax",
         secure: authCookieSecure(baseURL),
         httpOnly: true,
         path: "/",
+        ...(cookieDomain ? { domain: cookieDomain } : {}),
       },
     },
     plugins: [bearer({ requireSignature: true })],

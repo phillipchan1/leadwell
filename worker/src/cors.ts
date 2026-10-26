@@ -1,4 +1,4 @@
-import { isLocalAuthHost, resolveAuthBaseURL } from "./authUrl.ts";
+import { isLocalAuthHost, resolveTrustedOrigins } from "./authUrl.ts";
 import type { Env } from "./env.ts";
 
 export const API_SECURITY = {
@@ -23,19 +23,7 @@ const AUTH_CORS_ALLOW = {
 } as const;
 
 export function trustedAuthOrigins(env: Env): string[] {
-  const base = resolveAuthBaseURL(env);
-  if (!isLocalAuthHost(base)) return [base];
-  return [
-    ...new Set([
-      base,
-      "http://localhost:5173",
-      "http://localhost:8787",
-      "http://127.0.0.1:5173",
-      "http://127.0.0.1:8787",
-      "http://[::1]:5173",
-      "http://[::1]:8787",
-    ]),
-  ];
+  return resolveTrustedOrigins(env);
 }
 
 function credentialedCors(origin: string): Record<string, string> {

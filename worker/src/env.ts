@@ -8,6 +8,16 @@ export interface Env {
   DATABASE_URL?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  /**
+   * Optional comma-separated extra origins for CORS + Better Auth.
+   * `BETTER_AUTH_URL` is always trusted. Example: `https://www.polarch.day`.
+   */
+  TRUSTED_ORIGINS?: string;
+  /**
+   * Optional cookie `Domain`. Set to the registrable host when a custom
+   * domain is attached (e.g. `polarch.day`). Omit on workers.dev and local.
+   */
+  AUTH_COOKIE_DOMAIN?: string;
   /** wrangler / `.dev.vars` only: `local` allows a localhost auth fallback. */
   ENVIRONMENT?: string;
   GOOGLE_CLIENT_ID?: string;
