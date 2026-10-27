@@ -57,8 +57,10 @@ supabase db push
 
 ## 3. Sign-in is a magic link
 
-Auth lives on the Worker. There is no Google OAuth client. Set
-`RESEND_API_KEY`, `AUTH_EMAIL_FROM`, and `ALLOWED_EMAILS` (see
+Auth lives on the Worker. There is no Google OAuth client. Mail goes
+through the Cloudflare `EMAIL` binding (login@polarch.day), with Resend as
+the fallback. Set `RESEND_API_KEY`, `AUTH_EMAIL_FROM` (dashboard only, the
+Resend sender), and `ALLOWED_EMAILS` (see
 `RUNBOOK.md` and `.dev.vars.example`). Only allowlisted addresses can
 request a link or create an account.
 
