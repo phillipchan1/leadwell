@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { TrackedMeeting } from "../types";
+import type { FollowUp, TrackedMeeting } from "../types";
 import { useStore } from "../store/useStore";
 import {
   RHYTHM_LABEL,
@@ -12,7 +12,8 @@ import { aheadForHorizon, ensureSessionId, plannedSlots } from "../lib/topics";
 import { TopicBoard } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
-import { Check as CheckIcon, ChevronLeft, ChevronRight, File06, Play, X } from "@untitledui/icons";
+import { Check as CheckIcon, ChevronLeft, ChevronRight, File06, Lock01, Play, X } from "@untitledui/icons";
+import { ArcBand } from "./arcs/ArcBand";
 import { cx } from "@/utils/cx";
 
 /**
@@ -173,6 +174,8 @@ export function MeetingAgenda({
         </ul>
       )}
 
+      <ArcBand meeting={meeting} date={slot.date} slots={upcoming} isNext={isNext} />
+
       <FollowUps meeting={meeting} />
 
       <TopicBoard meeting={meeting} occurrence={slot.date} ahead={AGENDA_AHEAD} narrow={narrow} />
@@ -247,7 +250,16 @@ function FollowUps({ meeting }: { meeting: TrackedMeeting }) {
   const addFollowUp = useStore((s) => s.addFollowUp);
   const toggleFollowUp = useStore((s) => s.toggleFollowUp);
   const deleteFollowUp = useStore((s) => s.deleteFollowUp);
+  const updateFollowUp = useStore((s) => s.updateFollowUp);
+  const shares = useStore((s) => s.shares).filter((x) => x.meetingId === meeting.id);
   const [draft, setDraft] = useState("");
+  // Who owes it, on a shared meeting: me → both of us → each of them → me.
+  const owners: (string | undefined)[] = [undefined, "both", ...shares.map((x) => x.id)];
+  const ownerLabel = (o?: string) =>
+    !o ? "You" : o === "both" ? "Both" : (() => {
+      const sh = shares.find((x) => x.id === o);
+      return sh ? (sh.name?.split(/\s+/)[0] ?? sh.email.split("@")[0]) : "Them";
+    })();
   const [showDone, setShowDone] = useState(false);
 
   const mine = followUps.filter(
@@ -312,8 +324,36 @@ function FollowUps({ meeting }: { meeting: TrackedMeeting }) {
                   >
                     {f.text}
                   </span>
-                  <span className="font-mono text-[10.5px] text-quaternary uppercase">
+                  <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-quaternary uppercase">
                     Since {fmt(f.openedOn, { month: "short", day: "numeric" })}
+                    {shares.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          title="Who owes it — the other chair can tick off theirs and ours"
+                          onClick={() => {
+                            const i = owners.indexOf(f.owner);
+                            updateFollowUp(f.id, { owner: owners[(i + 1) % owners.length] as FollowUp["owner"] });
+                          }}
+                          className="rounded-[4px] bg-secondary px-1.5 py-px font-sans text-[11px] font-semibold tracking-normal text-secondary normal-case hover:bg-tertiary"
+                        >
+                          {ownerLabel(f.owner)}
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={Boolean(f.private)}
+                          title={f.private ? "Only you — kept off the shared page" : "Shared — click to keep it to yourself"}
+                          onClick={() => updateFollowUp(f.id, { private: !f.private || undefined })}
+                          className={cx(
+                            "inline-flex items-center gap-1 font-sans text-[11px] tracking-normal normal-case",
+                            f.private ? "font-semibold text-secondary" : "text-quaternary hover:text-secondary"
+                          )}
+                        >
+                          <Lock01 aria-hidden className="size-3" />
+                          {f.private ? "Only you" : "Shared"}
+                        </button>
+                      </>
+                    )}
                   </span>
                 </span>
                 <button

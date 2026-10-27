@@ -21,7 +21,10 @@ export type TableName =
   | "team_goals"
   | "team_notes"
   | "chats"
-  | "node_positions";
+  | "node_positions"
+  | "arcs"
+  | "arc_takeaways"
+  | "shared_notes";
 
 export const TABLE_KEY: Record<TableName, string> = {
   profiles: "user_id",
@@ -45,6 +48,9 @@ export const TABLE_KEY: Record<TableName, string> = {
   team_notes: "id",
   chats: "chat_key",
   node_positions: "node_id",
+  arcs: "id",
+  arc_takeaways: "id",
+  shared_notes: "id",
 };
 
 export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
@@ -113,6 +119,7 @@ export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
     "how_to_lead",
     "custom_modalities",
     "lead_up",
+    "email",
   ],
   actions: ["user_id", "id", "person_id", "text", "done", "due_date", "board_column"],
   meetings: [
@@ -153,6 +160,8 @@ export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
     "closed_on",
     "sort_order",
     "slot_id",
+    "is_private",
+    "raised_by",
   ],
   follow_ups: [
     "user_id",
@@ -166,6 +175,8 @@ export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
     "closed_on",
     "source_session_id",
     "sort_order",
+    "owner",
+    "is_private",
   ],
   one_on_ones: [
     "user_id",
@@ -200,6 +211,25 @@ export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
   team_notes: ["user_id", "id", "team_id", "date", "body"],
   chats: ["user_id", "chat_key", "messages"],
   node_positions: ["user_id", "node_id", "x", "y"],
+  arcs: [
+    "user_id",
+    "id",
+    "meeting_id",
+    "title",
+    "author",
+    "cover",
+    "slot_id",
+    "pace_every",
+    "starts_on",
+    "status",
+    "steps",
+    "passed_in",
+    "created_on",
+    "closed_on",
+    "sort_order",
+  ],
+  arc_takeaways: ["user_id", "id", "arc_id", "step_id", "by_member", "text", "taken_on"],
+  shared_notes: ["user_id", "id", "meeting_id", "session_id", "by_member", "body", "updated_on"],
 };
 
 export const JSON_COLUMNS = new Set([
@@ -214,9 +244,10 @@ export const JSON_COLUMNS = new Set([
   "coverage_targets",
   "points",
   "messages",
+  "steps",
 ]);
 
-export const TEXT_ARRAY_COLUMNS = new Set(["tag_ids", "carried_from", "uncovered"]);
+export const TEXT_ARRAY_COLUMNS = new Set(["tag_ids", "carried_from", "uncovered", "passed_in"]);
 
 export const ALL_TABLES = Object.keys(TABLE_COLUMNS) as TableName[];
 

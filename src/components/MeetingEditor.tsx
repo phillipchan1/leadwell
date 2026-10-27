@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
 import { SessionEditor } from "./SessionEditor";
 import { SessionAgenda } from "./SessionAgenda";
+import { ArcRun } from "./arcs/ArcRun";
+import { SharedNotes } from "./sharing/SharedNotes";
 import { RunContext } from "./RunContext";
 import { Avatar } from "./Avatar";
 
@@ -312,7 +314,10 @@ export function MeetingEditor({
             aria-label="Agenda"
             className="w-full border-secondary px-4 pt-6 sm:px-6 lg:w-[340px] lg:shrink-0 lg:border-r lg:pt-8 lg:pb-8"
           >
-            <SessionAgenda session={session} meeting={meeting} ensureSession={() => session.id} />
+            <div className="flex flex-col gap-6">
+              <ArcRun meeting={meeting} session={session} />
+              <SessionAgenda session={session} meeting={meeting} ensureSession={() => session.id} />
+            </div>
           </aside>
 
           {/* The write-up */}
@@ -415,6 +420,8 @@ export function MeetingEditor({
                   )}
                 </div>
               )}
+
+              <SharedNotes meeting={meeting} session={session} />
 
               <SessionEditor
                 sessionId={session.id}

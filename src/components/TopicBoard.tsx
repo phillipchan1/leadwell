@@ -46,6 +46,7 @@ import {
   PauseCircle,
   Plus,
   Trash01,
+  Lock01,
 } from "@untitledui/icons";
 import { StripPager, fitColumns, pageStrip } from "./StripPager";
 import {
@@ -55,6 +56,8 @@ import {
 import { announce } from "@/lib/announce";
 import { MOD_LABEL, hasMod, isTypingTarget, ownsKeyboard } from "@/lib/keys";
 import { IdeasIcon } from "./shell/places";
+import { Avatar } from "./Avatar";
+import { shareFirstName } from "../lib/shares";
 import { cx } from "@/utils/cx";
 
 /**
@@ -154,6 +157,7 @@ export function TopicBoard({
   const moveTopic = useStore((s) => s.moveTopic);
   const addTopic = useStore((s) => s.addTopic);
   const updateTopic = useStore((s) => s.updateTopic);
+  const meetingShared = useStore((s) => s.shares.some((x) => x.meetingId === meeting.id));
   const deleteTopics = useStore((s) => s.deleteTopics);
   const placeTopicsAt = useStore((s) => s.placeTopicsAt);
   const revertTopics = useStore((s) => s.revertTopics);
@@ -560,6 +564,19 @@ export function TopicBoard({
         icon: <Flag01 className="size-4" />,
         onSelect: () => flagAll(targets, !allUrgent),
       },
+      ...(meetingShared
+        ? ([
+            {
+              type: "item",
+              label: targets.every((t) => t.private) ? `Share${count} again` : `Keep${count} to myself`,
+              icon: <Lock01 className="size-4" />,
+              onSelect: () => {
+                const lock = !targets.every((t) => t.private);
+                for (const t of targets) updateTopic(t.id, { private: lock });
+              },
+            },
+          ] satisfies MenuEntry[])
+        : []),
       { type: "separator" },
       {
         type: "item",
@@ -2000,7 +2017,25 @@ function BoardCard({
     },
   };
 
+  const shares = useStore((s) => s.shares);
   const meta = cardMeta(topic, covered);
+  // On a shared meeting the card says whose it is and whether it's mine alone.
+  const raiser = topic.raisedBy ? shares.find((s) => s.id === topic.raisedBy) : undefined;
+  if (topic.raisedBy) {
+    meta.unshift(
+      <span key="raised" className="inline-flex items-center gap-1 font-sans text-[11px] font-semibold tracking-normal text-teal-700 normal-case dark:text-teal-400">
+        <Avatar name={raiser?.name ?? raiser?.email ?? "?"} size={14} />
+        {raiser ? `${shareFirstName(raiser)} raised` : "Raised by a guest"}
+      </span>
+    );
+  }
+  if (topic.private) {
+    meta.push(
+      <span key="private" className="inline-flex items-center gap-1" title="Only you — kept off the shared page">
+        <Lock01 aria-hidden className="size-3" /> Only you
+      </span>
+    );
+  }
   const slipped = past && !covered;
 
   return (

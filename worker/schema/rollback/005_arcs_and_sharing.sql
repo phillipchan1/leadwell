@@ -1,0 +1,11 @@
+BEGIN;
+DROP TABLE IF EXISTS public.meeting_members;
+DROP TABLE IF EXISTS public.shared_notes;
+DROP TABLE IF EXISTS public.arc_takeaways;
+DROP TABLE IF EXISTS public.arcs;
+ALTER TABLE public.people DROP COLUMN IF EXISTS email;
+ALTER TABLE public.follow_ups DROP COLUMN IF EXISTS owner;
+ALTER TABLE public.follow_ups DROP COLUMN IF EXISTS is_private;
+ALTER TABLE public.topics DROP COLUMN IF EXISTS raised_by;
+ALTER TABLE public.topics DROP COLUMN IF EXISTS is_private;
+COMMIT;

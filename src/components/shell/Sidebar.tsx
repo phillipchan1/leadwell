@@ -9,7 +9,7 @@ import { useMenu } from "@/hooks/use-menu";
 import { healthColorOf } from "./health-dot";
 import { Mark, Wordmark } from "@/components/brand/glyphs";
 import { cx } from "@/utils/cx";
-import { MeetingsList } from "./MeetingsList";
+import { MeetingsList, SharedWithMeList } from "./MeetingsList";
 import { ScopeMenu } from "./ScopeMenu";
 import { PLACES, PlusIcon, SearchIcon, lastPeopleTab, placeOf } from "./places";
 
@@ -120,6 +120,8 @@ export function Sidebar({
       </ul>
 
       <MeetingsList onAll={() => goPlace("meetings")} />
+
+      <SharedWithMeList />
 
       <RecentList />
 

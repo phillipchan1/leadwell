@@ -107,3 +107,32 @@ export function MeetingsList({ onAll }: { onAll: () => void }) {
     </div>
   );
 }
+
+/**
+ * Meetings someone else runs and has shared with me — matched by my sign-in
+ * email. Each opens that meeting's shared page: their agenda, which I can add
+ * to, and nothing else of theirs.
+ */
+export function SharedWithMeList() {
+  const shared = useStore((s) => s.sharedWithMe);
+  if (!shared.length) return null;
+  return (
+    <div className="flex flex-col gap-0.5 border-t border-leather-line pt-2">
+      <div className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-leather-mute uppercase">
+        Shared with you
+      </div>
+      {shared.map((m) => (
+        <a
+          key={m.token}
+          href={`/with/${m.token}`}
+          title={`${m.meetingName} — shared by ${m.ownerName}`}
+          className="flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-leather-ink transition-colors hover:bg-leather-hi/60 hover:text-leather-fg"
+        >
+          <span aria-hidden className="size-2 shrink-0 rounded-full shadow-[inset_0_0_0_2px_var(--color-leather-mute)]" />
+          <span className="min-w-0 flex-1 truncate font-serif text-[15px]">{m.meetingName}</span>
+          <span className="shrink-0 truncate text-[11px] text-leather-mute">{m.ownerName.split(/\s+/)[0]}</span>
+        </a>
+      ))}
+    </div>
+  );
+}

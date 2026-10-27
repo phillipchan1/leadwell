@@ -1,4 +1,7 @@
 import type {
+  Arc,
+  ArcStep,
+  Takeaway,
   Capacity,
   Domain,
   Manager,
@@ -962,5 +965,98 @@ export const seedPrayers: PrayerEntry[] = [
     date: "2026-03-01",
     kind: "burden",
     text: "That the building season wouldn't cost us the staff's unity.",
+  },
+];
+
+const cc = (n: number, label: string, prompts: string[], practice?: string): ArcStep => ({
+  id: `arc-cc-${n}`,
+  label: `Ch. ${n} · ${label}`,
+  read: `Ch. ${n}`,
+  prompts,
+  practice,
+  status: "upcoming",
+  coveredIn: [],
+});
+
+const som = (n: number, label: string, read: string, prompts: string[], practice?: string): ArcStep => ({
+  id: `arc-som-${n}`,
+  label,
+  read,
+  prompts,
+  practice,
+  status: "upcoming",
+  coveredIn: [],
+});
+
+/**
+ * Two arcs, one of each kind: a book read together in a 1:1, and a study the
+ * whole staff works through in the Training section.
+ */
+export const seedArcs: Arc[] = [
+  {
+    id: "arc-cc",
+    meetingId: "m-p-sarah",
+    title: "Crucial Conversations",
+    author: "Patterson, Grenny, McMillan & Switzler",
+    cover: 0,
+    slotId: "cs-develop",
+    every: 1,
+    startsOn: "2026-06-17",
+    status: "active",
+    createdOn: "2026-06-16",
+    order: 0,
+    steps: [
+      {
+        ...cc(1, "What's a Crucial Conversation?", ["Which conversation have you been putting off longest?"], "Notice one moment this week where the stakes went up."),
+        status: "done",
+        coveredIn: ["o-1"],
+        doneOn: "2026-06-24",
+      },
+      cc(2, "Mastering Crucial Conversations", ["Who do you know who does this well? What do they do?"], "Name the pool of meaning in one meeting you're in."),
+      cc(3, "Choose Your Topic", ["Is this about content, pattern or relationship?"]),
+      cc(4, "Start with Heart", ["When the stakes rise, do you drift toward silence or violence first?"], "Before one hard conversation, ask: what do I really want?"),
+      cc(5, "Learn to Look", ["What's your earliest sign that a talk is turning crucial?"]),
+      cc(6, "Make It Safe", ["When did someone make it safe for you to say a hard thing?"], "Try one contrasting statement this week."),
+      cc(7, "Master My Stories", ["What story did you tell yourself about Sunday setup?"]),
+      cc(8, "STATE My Path", ["Which part of STATE is hardest for you?"]),
+      cc(9, "Learn to Listen", ["Who on your team needs you to listen more than talk?"]),
+      cc(10, "Move to Action", ["What decision are we leaving vague right now?"]),
+      cc(11, "Yeah, But", ["Which 'yeah, but' is yours?"]),
+      cc(12, "Putting It All Together", ["What will you keep doing after we finish?"]),
+    ],
+  },
+  {
+    id: "arc-som",
+    meetingId: "m-staff",
+    title: "Sermon on the Mount",
+    author: "Matthew 5–7",
+    cover: 2,
+    slotId: "cs-training",
+    every: 1,
+    startsOn: "2026-08-10",
+    status: "active",
+    createdOn: "2026-08-03",
+    order: 0,
+    steps: [
+      som(1, "The Beatitudes", "Matthew 5:1–12", ["Which beatitude describes our staff least right now?"], "Bless one volunteer by name this week."),
+      som(2, "Salt and light", "Matthew 5:13–16", ["Where are we hiding the lamp?"]),
+      som(3, "Anger and reconciliation", "Matthew 5:21–26", ["Is there a gift we should leave at the altar?"], "Make one call to put something right."),
+      som(4, "Love your enemies", "Matthew 5:43–48", ["Who is hard to love in our work right now?"]),
+      som(5, "Giving, prayer, fasting in secret", "Matthew 6:1–18", ["What do we do for an audience?"]),
+      som(6, "Treasure and worry", "Matthew 6:19–34", ["What is the staff anxious about this season?"]),
+      som(7, "Judging and asking", "Matthew 7:1–12", ["Where is a speck easier to see than a plank?"]),
+      som(8, "Two builders", "Matthew 7:24–29", ["What are we building on sand?"]),
+    ],
+  },
+];
+
+export const seedTakeaways: Takeaway[] = [
+  {
+    id: "arc-cc-1:owner",
+    arcId: "arc-cc",
+    stepId: "arc-cc-1",
+    by: "owner",
+    text: "I go to silence, and then I call it being patient.",
+    on: "2026-06-24",
   },
 ];

@@ -323,6 +323,13 @@ export type FollowUp = {
   closedOn?: string;
   sourceSessionId?: string;
   order: number;
+  /**
+   * Who said they'd do it. Unset = me. On a shared meeting the other chair can
+   * tick off what is theirs (a member id) or ours (`both`), never mine.
+   */
+  owner?: MemberRef | "both";
+  /** 🔒 — kept off the shared page even when the meeting is shared. */
+  private?: boolean;
 };
 
 export type Person = {
@@ -346,6 +353,8 @@ export type Person = {
   /** Set when I'm carrying them in prayer. Undefined = I'm not. */
   prayer?: Prayer;
   relationshipType?: string;
+  /** Where to send a shared meeting's link. Nothing else uses it. */
+  email?: string;
   /**
    * "I deliberately don't sit down with them." A decision, not a gap — it
    * clears them out of the undecided count without pretending to track them.
@@ -448,6 +457,13 @@ export type Topic = {
   createdOn: string;
   closedOn?: string;
   order: number;
+  /**
+   * 🔒 — mine even on a shared meeting. Placing a topic on a week of a shared
+   * meeting is what shares it; this is the one-click exception.
+   */
+  private?: boolean;
+  /** Who put it on the agenda. Unset = me; otherwise a `MeetingMember` id. */
+  raisedBy?: MemberRef;
 };
 
 /** One occurrence of a tracked meeting — what used to be a `OneOnOne`. */
@@ -548,3 +564,108 @@ export type Me = {
 };
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
+
+// ── Arcs ──────────────────────────────────────────────────────────────────
+
+/**
+ * "owner" for me, or the id of someone a meeting is shared with. Rows the
+ * other chair writes (a topic they raised, their takeaway) carry their id, so
+ * neither side ever has to edit the other's row.
+ */
+export type MemberRef = string;
+
+/**
+ * Something worked through in order across a meeting's occurrences, one step
+ * at a time: a book read together, an onboarding plan, a study.
+ *
+ * ── Why nothing is booked ahead ──────────────────────────────────────────
+ * An arc holds a *position* (the first step not yet done) and a *pace*, and
+ * the plan you see is drawn from those against the meeting's occurrences —
+ * the same way the rhythm projects dates. Skip a week and the arc slides;
+ * run out of time and the step stays where it is. There is never a schedule
+ * to repair. See `src/lib/arcs.ts`.
+ */
+export type Arc = {
+  id: string;
+  meetingId: string;
+  title: string;
+  /** A book's author, when it is one. */
+  author?: string;
+  /** Index into the cover palette — the arc's one bit of identity. */
+  cover?: number;
+  /** The standing-agenda band it sits in. Unset = a band of its own, first. */
+  slotId?: string;
+  /** One step every N meetings. 1 = every meeting. */
+  every: number;
+  /** Nothing lands on an occurrence before this date. */
+  startsOn: string;
+  status: "active" | "paused" | "done";
+  steps: ArcStep[];
+  /**
+   * Past occurrences where we chose not to touch the arc, so the "did you
+   * cover it?" question stops being asked about them.
+   */
+  passedIn?: string[];
+  createdOn: string;
+  closedOn?: string;
+  order: number;
+};
+
+/** One step of an arc: Read → Talk → Try. */
+export type ArcStep = {
+  id: string;
+  label: string;
+  /** What to do before we meet — "pp. 49–68". */
+  read?: string;
+  /** Questions for the meeting itself. */
+  prompts: string[];
+  /** One thing to practise before next time. Becomes a follow-up when done. */
+  practice?: string;
+  status: "upcoming" | "done";
+  /**
+   * The occurrences it was talked about in, oldest first. Two entries means it
+   * took two meetings — the ½ on the ribbon.
+   */
+  coveredIn: string[];
+  doneOn?: string;
+};
+
+/** One line each of us keeps from a step. What the closing page is made of. */
+export type Takeaway = {
+  id: string;
+  arcId: string;
+  stepId: string;
+  by: MemberRef;
+  text: string;
+  on: string;
+};
+
+/**
+ * One chair's contribution to an occurrence's shared write-up ("Our notes").
+ *
+ * Per author rather than one shared text: there is no realtime here, and two
+ * people typing into one field with last-write-wins would quietly eat one of
+ * them. `Session.notes` stays private — it was written before anything was
+ * shared, and sharing a meeting must never expose it.
+ */
+export type SharedNote = {
+  id: string;
+  meetingId: string;
+  sessionId: string;
+  by: MemberRef;
+  body: string;
+  updatedOn: string;
+};
+
+/** Someone a meeting is shared with, as the owner sees them. Server-held. */
+export type MeetingShare = {
+  id: string;
+  meetingId: string;
+  email: string;
+  name?: string;
+  personId?: string;
+  token: string;
+  invitedOn: string;
+  joinedOn?: string;
+  lastSeenOn?: string;
+};

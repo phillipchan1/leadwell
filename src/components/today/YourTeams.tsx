@@ -14,6 +14,8 @@ import {
   type Readiness,
 } from "@/lib/readiness";
 import { boardLayout, curriculumOf, slotDotClass } from "@/lib/topics";
+import { nextArcSteps } from "@/lib/arcs";
+import { ArcCover } from "../arcs/ArcCover";
 import { delegatedTeamIds } from "@/lib/teams";
 import { meetingSlugs } from "@/lib/slugs";
 import { HEALTH_LABEL } from "@/lib/health";
@@ -172,7 +174,12 @@ function TeamCard({
 }) {
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
+  const arcs = useStore((s) => s.arcs);
   const health = team.health;
+  const arcSteps = useMemo(
+    () => (meeting ? nextArcSteps(arcs, meeting, sessions, topics) : []),
+    [arcs, meeting, sessions, topics]
+  );
 
   // The next occurrence, section by section — the one-glance answer to "is
   // Monday planned?".
@@ -264,6 +271,14 @@ function TeamCard({
               ))}
             </span>
           )}
+          {arcSteps.map(({ arc, step }) => (
+            <span key={arc.id} className="flex min-w-0 items-center gap-2 text-[12.5px] text-secondary">
+              <ArcCover arc={arc} size="xs" className="!h-[18px] !w-[13px]" />
+              <span className="truncate">
+                <span className="font-semibold text-primary">{step.label}</span> · {arc.title}
+              </span>
+            </span>
+          ))}
           {readiness.headline && (
             <span className="truncate text-[12.5px] text-tertiary">{readiness.headline}</span>
           )}

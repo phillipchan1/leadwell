@@ -88,8 +88,11 @@ Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
 **`wrangler dev` / `cf:dev` sends real email.** The `EMAIL` send_email binding is `remote: true`, so a magic-link request in local dev goes out through Cloudflare Email Service from login@polarch.day to the real address (account `CLOUDFLARE_API_TOKEN` needs Email Sending: Edit). Only allowlisted addresses get mail. Use a bot inbox you own, never a stranger's address.
 
 Apply `worker/schema/001_polarch.sql`, `002_better_auth.sql`,
-`003_rate_limit.sql`, then `004_rate_limit_window_start.sql` to a local
-Postgres or Neon branch before signing in. `004` is a `BEGIN`/`COMMIT`
+`003_rate_limit.sql`, `004_rate_limit_window_start.sql`, then
+`005_arcs_and_sharing.sql` to a local Postgres or Neon branch before signing
+in. **Apply `005` to prod before deploying the Worker that ships arcs and
+shared meetings**: that Worker writes the new tables on every sync. Rollback:
+`worker/schema/rollback/005_arcs_and_sharing.sql`. `004` is a `BEGIN`/`COMMIT`
 transaction. To undo just that column (same statement as
 `worker/schema/rollback/004_rate_limit_window_start.sql`):
 

@@ -20,6 +20,10 @@
  */
 import { apiDelete, apiGet, apiPatch, apiPut, readApiError } from "./api";
 import type {
+  Arc,
+  ArcStep,
+  SharedNote,
+  Takeaway,
   Action,
   Capacity,
   ChatMessage,
@@ -79,6 +83,12 @@ export type PersistedData = {
   teamNotes: TeamNote[];
   chats: Record<string, ChatMessage[]>;
   nodePositions: Record<string, NodePosition>;
+  /** Things worked through across a meeting, one step per occurrence. */
+  arcs: Arc[];
+  /** One line per chair per arc step. */
+  takeaways: Takeaway[];
+  /** Each chair's part of an occurrence's shared write-up. */
+  sharedNotes: SharedNote[];
 };
 
 // --- small helpers ----------------------------------------------------------
@@ -110,16 +120,54 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
-function parseCurriculum(v: unknown): CurriculumSlot[] | undefined {
+function parseSteps(v: unknown): ArcStep[] {
+  const raw = typeof v === "string" ? safeJson(v) : v;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x): x is Record<string, unknown> => Boolean(x) && typeof x === "object")
+    .map((x) => ({
+      id: String(x.id ?? ""),
+      label: String(x.label ?? ""),
+      read: typeof x.read === "string" && x.read ? x.read : undefined,
+      prompts: Array.isArray(x.prompts)
+        ? x.prompts.filter((p): p is string => typeof p === "string")
+        : [],
+      practice: typeof x.practice === "string" && x.practice ? x.practice : undefined,
+      status: x.status === "done" ? ("done" as const) : ("upcoming" as const),
+      coveredIn: Array.isArray(x.coveredIn)
+        ? x.coveredIn.filter((p): p is string => typeof p === "string")
+        : [],
+      doneOn: typeof x.doneOn === "string" ? x.doneOn : undefined,
+    }))
+    .filter((x) => x.id);
+}
+
+function safeJson(v: string): unknown {
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
+export function parseCurriculum(v: unknown): CurriculumSlot[] | undefined {
   if (!Array.isArray(v) || v.length === 0) return undefined;
   const slots: CurriculumSlot[] = [];
   for (const item of v) {
     if (!item || typeof item !== "object") continue;
-    const row = item as { id?: unknown; label?: unknown };
+    const row = item as { id?: unknown; label?: unknown; tagId?: unknown; minutes?: unknown };
     if (typeof row.id !== "string" || typeof row.label !== "string") continue;
     const label = row.label.trim();
     if (!label) continue;
-    slots.push({ id: row.id, label });
+    // `tagId` is what makes a section stamp its tag on arrival and count toward
+    // coverage; `minutes` budgets its time. Dropping either on load would
+    // silently erase them from the database on the next save.
+    const slot: CurriculumSlot = { id: row.id, label };
+    if (typeof row.tagId === "string" && row.tagId) slot.tagId = row.tagId;
+    if (typeof row.minutes === "number" && Number.isFinite(row.minutes) && row.minutes > 0) {
+      slot.minutes = row.minutes;
+    }
+    slots.push(slot);
   }
   return slots.length ? slots : undefined;
 }
@@ -301,6 +349,7 @@ const map = {
       health: nn(p.health ?? null),
       prayer: nn(p.prayer ?? null),
       relationship_type: nn(p.relationshipType),
+      email: nn(p.email),
       no_meeting: nn(p.noMeeting),
       clifton_top5: p.assessments.cliftonTop5 ?? [],
       enneagram: nn(p.assessments.enneagram),
@@ -327,6 +376,7 @@ const map = {
         health: opt(r.health as Health | null),
         prayer: opt(r.prayer as Prayer | null),
         relationshipType: opt(r.relationship_type as string | null),
+        email: opt(r.email as string | null),
         noMeeting: opt(r.no_meeting as boolean | null),
         assessments: {
           ...(top5.length ? { cliftonTop5: top5 } : {}),
@@ -418,6 +468,8 @@ const map = {
       closed_on: nn(t.closedOn),
       sort_order: t.order,
       slot_id: nn(t.slotId),
+      is_private: Boolean(t.private),
+      raised_by: nn(t.raisedBy),
     }),
     fromRow: (r: Row): Topic => ({
       id: r.id as string,
@@ -440,6 +492,8 @@ const map = {
       createdOn: (r.created_on as string | null) ?? "",
       closedOn: opt(r.closed_on as string | null),
       order: (r.sort_order as number) ?? 0,
+      private: r.is_private ? true : undefined,
+      raisedBy: opt(r.raised_by as string | null),
     }),
   },
   tags: {
@@ -472,6 +526,8 @@ const map = {
       closed_on: nn(f.closedOn),
       source_session_id: nn(f.sourceSessionId),
       sort_order: f.order,
+      owner: nn(f.owner),
+      is_private: Boolean(f.private),
     }),
     fromRow: (r: Row): FollowUp => ({
       id: r.id as string,
@@ -484,6 +540,8 @@ const map = {
       closedOn: opt(r.closed_on as string | null),
       sourceSessionId: opt(r.source_session_id as string | null),
       order: (r.sort_order as number) ?? 0,
+      owner: opt(r.owner as string | null),
+      private: r.is_private ? true : undefined,
     }),
   },
   sessions: {
@@ -646,6 +704,82 @@ const map = {
       body: r.body as string,
     }),
   },
+  arcs: {
+    table: "arcs",
+    toRow: (u: string, a: Arc): Row => ({
+      user_id: u,
+      id: a.id,
+      meeting_id: a.meetingId,
+      title: a.title,
+      author: nn(a.author),
+      cover: nn(a.cover),
+      slot_id: nn(a.slotId),
+      pace_every: Math.max(1, Math.round(a.every || 1)),
+      starts_on: a.startsOn,
+      status: a.status,
+      steps: a.steps,
+      passed_in: a.passedIn ?? [],
+      created_on: a.createdOn,
+      closed_on: nn(a.closedOn),
+      sort_order: a.order,
+    }),
+    fromRow: (r: Row): Arc => ({
+      id: r.id as string,
+      meetingId: r.meeting_id as string,
+      title: (r.title as string) ?? "",
+      author: opt(r.author as string | null),
+      cover: opt(r.cover as number | null),
+      slotId: opt(r.slot_id as string | null),
+      every: Math.max(1, (r.pace_every as number) ?? 1),
+      startsOn: (r.starts_on as string) ?? "",
+      status: (r.status as Arc["status"]) ?? "active",
+      steps: parseSteps(r.steps),
+      passedIn: strArray(r.passed_in).length ? strArray(r.passed_in) : undefined,
+      createdOn: (r.created_on as string | null) ?? "",
+      closedOn: opt(r.closed_on as string | null),
+      order: (r.sort_order as number) ?? 0,
+    }),
+  },
+  takeaways: {
+    table: "arc_takeaways",
+    toRow: (u: string, t: Takeaway): Row => ({
+      user_id: u,
+      id: t.id,
+      arc_id: t.arcId,
+      step_id: t.stepId,
+      by_member: t.by,
+      text: t.text,
+      taken_on: t.on,
+    }),
+    fromRow: (r: Row): Takeaway => ({
+      id: r.id as string,
+      arcId: r.arc_id as string,
+      stepId: r.step_id as string,
+      by: (r.by_member as string) ?? "owner",
+      text: (r.text as string) ?? "",
+      on: (r.taken_on as string | null) ?? "",
+    }),
+  },
+  sharedNotes: {
+    table: "shared_notes",
+    toRow: (u: string, n: SharedNote): Row => ({
+      user_id: u,
+      id: n.id,
+      meeting_id: n.meetingId,
+      session_id: n.sessionId,
+      by_member: n.by,
+      body: n.body,
+      updated_on: n.updatedOn,
+    }),
+    fromRow: (r: Row): SharedNote => ({
+      id: r.id as string,
+      meetingId: r.meeting_id as string,
+      sessionId: r.session_id as string,
+      by: (r.by_member as string) ?? "owner",
+      body: (r.body as string) ?? "",
+      updatedOn: (r.updated_on as string | null) ?? "",
+    }),
+  },
 } as const;
 
 /** Collections that map 1:1 to an id-keyed table. */
@@ -770,6 +904,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
   const teamNotes = grab("team_notes");
   const chats = grab("chats");
   const positions = grab("node_positions");
+  const arcs = grab("arcs");
+  const takeaways = grab("arc_takeaways");
+  const sharedNotes = grab("shared_notes");
 
   const data: PersistedData = {
     me: meFromRow(prof as Parameters<typeof meFromRow>[0]),
@@ -800,6 +937,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
         { x: r.x as number, y: r.y as number },
       ])
     ),
+    arcs: arcs.map(map.arcs.fromRow).sort((a, b) => a.order - b.order),
+    takeaways: takeaways.map(map.takeaways.fromRow),
+    sharedNotes: sharedNotes.map(map.sharedNotes.fromRow),
   };
   return data;
 }

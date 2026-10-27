@@ -96,6 +96,20 @@ between columns files or retags; dropping on **Up next** puts an idea straight
 onto that meeting's next occurrence. Parked ideas are set aside and only show
 when asked for.
 
+### Arcs and shared meetings
+
+An **arc** is something worked through across a meeting, one step per
+occurrence — a book read together in a 1:1, a study the staff works through
+in Training. It stores a position and a pace, never a schedule, so a skipped
+week slides it and a chapter that ran long just stays put. Each step is
+Read → Talk → Try; *Try* becomes a follow-up that opens the next meeting.
+
+A meeting can be **shared** with the people in it: they get a link to its
+agenda (`/with/<token>`), can add to it, tick off what's theirs and write
+their part of *Our notes*. Health, prayer, assessments, the Ideas tray, *My
+notes* and anything locked never leave. See
+[docs/arcs-and-sharing.md](docs/arcs-and-sharing.md).
+
 ## Navigation model
 
 **The URL is the source of truth for what's selected.** Selection setters

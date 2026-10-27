@@ -18,6 +18,8 @@ import {
   type Subject,
 } from "@/lib/today";
 import { shortSincePrayed } from "@/lib/prayer";
+import { nextArcSteps, stepTag } from "@/lib/arcs";
+import type { Arc, ArcStep, TrackedMeeting } from "@/types";
 import { Avatar } from "../Avatar";
 import { YourTeams } from "./YourTeams";
 import { HealthMeter, PrayerFlame, RhythmRing, STATE_TEXT } from "../brand/glyphs";
@@ -113,6 +115,7 @@ export function TodayPage() {
             <IdeasWaiting ideas={model.ideas} />
           </div>
           <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-5">
+            <SharedWithYou />
             <Carrying rows={model.carrying} />
             <HowTheyreDoing health={model.health} />
             <Undecided subjects={model.undecided} />
@@ -184,7 +187,16 @@ function useFix() {
 
 // ── The next move ──────────────────────────────────────────────────────────
 
+/** What each live arc puts on a meeting's next occurrence. */
+function useArcSteps() {
+  const arcs = useStore((s) => s.arcs);
+  const sessions = useStore((s) => s.sessions);
+  const topics = useStore((s) => s.topics);
+  return (meeting: TrackedMeeting) => nextArcSteps(arcs, meeting, sessions, topics);
+}
+
 function NextMove({ row }: { row: MeetingRow }) {
+  const arcSteps = useArcSteps();
   const fix = useFix();
   const open = useOpen();
   const r = row.reading;
@@ -210,9 +222,11 @@ function NextMove({ row }: { row: MeetingRow }) {
         timeZone: "UTC",
       })
     : null;
+  const reading = arcSteps(row.meeting).find((x) => x.step.read);
   const detail = [
     `${RHYTHM_LABEL[row.meeting.rhythm]} rhythm, ${lastMet ? `last met ${lastMet}` : "never met yet"}`,
     check?.detail ? sentence(friendlyDates(check.detail)) : null,
+    reading ? readLine(reading.arc, reading.step) : null,
   ]
     .filter(Boolean)
     .join(". ");
@@ -316,6 +330,9 @@ function rowAction(row: MeetingRow): { label: string; check?: Check } | null {
 }
 
 function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow[] }) {
+  const arcSteps = useArcSteps();
+  const arcLines = (meeting: TrackedMeeting) =>
+    arcSteps(meeting).map(({ arc, step }) => `${arc.title} · ${stepTag(arc, step)}`);
   const selectMeeting = useStore((s) => s.selectMeeting);
   const setTab = useStore((s) => s.setTab);
   const fix = useFix();
@@ -365,6 +382,7 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                       row.meeting.subjectKind === "person" ? "1:1" : row.subject?.kind === "team" ? row.subject.name : row.subject?.name,
                       RHYTHM_LABEL[row.meeting.rhythm].toLowerCase(),
                       row.agenda ? `${row.agenda} on the agenda` : "nothing on the agenda",
+                      ...arcLines(row.meeting),
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -634,4 +652,39 @@ function Undecided({ subjects }: { subjects: Subject[] }) {
       </button>
     </section>
   );
+}
+
+/** Meetings other people run and have shared with me — their agenda, mine to add to. */
+function SharedWithYou() {
+  const shared = useStore((s) => s.sharedWithMe);
+  if (!shared.length) return null;
+  return (
+    <section aria-label="Shared with you" className="flex flex-col gap-2.5 rounded-2xl border border-secondary bg-primary px-5 py-4">
+      <span className="eyebrow">Shared with you</span>
+      <ul className="flex flex-col gap-1">
+        {shared.map((m) => (
+          <li key={m.token}>
+            <a
+              href={`/with/${m.token}`}
+              className="flex items-center gap-2.5 rounded-lg py-1.5 text-[14px] hover:underline hover:decoration-1 hover:underline-offset-4"
+            >
+              <Avatar name={m.ownerName} size={26} />
+              <span className="min-w-0 flex-1 truncate font-serif text-[15px] text-primary">{m.meetingName}</span>
+              <span className="shrink-0 text-[12px] text-tertiary">their agenda</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** "Read Ch. 4 of Crucial Conversations before you meet" / "Read Matthew 5:13–16 for …". */
+function readLine(arc: Arc, step: ArcStep): string {
+  const tag = stepTag(arc, step);
+  if (!tag.startsWith("Step ")) {
+    const where = step.read && step.read !== tag ? ` (${step.read})` : "";
+    return `Read ${tag} of ${arc.title}${where} before you meet`;
+  }
+  return `Read ${step.read} for ${arc.title} before you meet`;
 }

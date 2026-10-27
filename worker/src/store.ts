@@ -25,7 +25,16 @@ const EMPTY_JSON_ARRAY_COLUMNS = new Set([
   "watch_outs",
   "custom_modalities",
   "messages",
+  "steps",
 ]);
+
+/**
+ * Columns added after clients already existed in the wild. A tab still running
+ * the previous build upserts rows without them, and writing that absence as
+ * null/false would quietly unlock a private topic or drop who raised it. When
+ * the client didn't send one of these, the stored value is left alone.
+ */
+const PRESERVE_IF_ABSENT = new Set(["is_private", "raised_by", "owner", "email"]);
 
 function serialize(column: string, value: unknown): unknown {
   if (JSON_COLUMNS.has(column)) {
@@ -34,6 +43,7 @@ function serialize(column: string, value: unknown): unknown {
     }
     return typeof value === "string" ? value : JSON.stringify(value);
   }
+  if (column === "is_private") return value === true;
   if (TEXT_ARRAY_COLUMNS.has(column)) {
     return Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : [];
   }
@@ -86,22 +96,23 @@ export async function upsertRows(
   rows: Row[],
 ): Promise<void> {
   if (!rows.length) return;
-  const cols = TABLE_COLUMNS[table];
+  const allCols = TABLE_COLUMNS[table];
   const key = TABLE_KEY[table];
-  const colList = cols.map(quoteIdent).join(", ");
-  const placeholders = cols.map((_, i) => `$${i + 1}`).join(", ");
   const conflict =
     table === "profiles" ? quoteIdent("user_id") : `${quoteIdent("user_id")}, ${quoteIdent(key)}`;
-  const updates = cols
-    .filter((col) => col !== "user_id" && col !== key)
-    .map((col) => `${quoteIdent(col)} = EXCLUDED.${quoteIdent(col)}`);
-  const setClause = updates.length ? updates.join(", ") : `${quoteIdent("user_id")} = EXCLUDED.${quoteIdent("user_id")}`;
 
   for (const raw of rows) {
     const row = scopedRow(userId, table, raw);
     if (table !== "profiles" && (row[key] == null || row[key] === "")) {
       throw new Error(`${table}: missing ${key}`);
     }
+    const cols = allCols.filter((col) => !PRESERVE_IF_ABSENT.has(col) || col in row);
+    const colList = cols.map(quoteIdent).join(", ");
+    const placeholders = cols.map((_, i) => `$${i + 1}`).join(", ");
+    const updates = cols
+      .filter((col) => col !== "user_id" && col !== key)
+      .map((col) => `${quoteIdent(col)} = EXCLUDED.${quoteIdent(col)}`);
+    const setClause = updates.length ? updates.join(", ") : `${quoteIdent("user_id")} = EXCLUDED.${quoteIdent("user_id")}`;
     const values = cols.map((col) => serialize(col, row[col]));
     await sql.unsafe(
       `INSERT INTO ${quoteIdent(table)} (${colList}) VALUES (${placeholders})
@@ -129,9 +140,18 @@ export async function deleteKeys(
   );
 }
 
-export async function wipeUser(sql: Sql, userId: string): Promise<void> {
+export async function wipeUser(
+  sql: Sql,
+  userId: string,
+  opts: { shares?: boolean } = {},
+): Promise<void> {
   for (const table of ALL_TABLES) {
     await sql.unsafe(`DELETE FROM ${quoteIdent(table)} WHERE user_id = $1`, [userId]);
+  }
+  // Not a synced table, so a full-document replace (seed, import) leaves it
+  // alone. Deleting the workspace must not leave live links pointing into it.
+  if (opts.shares) {
+    await sql.unsafe(`DELETE FROM ${quoteIdent("meeting_members")} WHERE user_id = $1`, [userId]);
   }
 }
 

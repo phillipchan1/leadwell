@@ -12,6 +12,21 @@ import type { Env } from "./env.ts";
 import { authOf, finishRequest, sqlOf, type WorkerContext, type WorkerVars } from "./request.ts";
 import { stripGetSessionToken } from "./sessionBody.ts";
 import { applySync, loadTables, wipeUser } from "./store.ts";
+import {
+  ShareError,
+  createShare,
+  guestAddTopic,
+  guestRemoveTopic,
+  guestSetFollowUp,
+  guestSetNote,
+  guestSetTakeaway,
+  listShares,
+  loadShared,
+  memberByToken,
+  revokeShare,
+  sharedWithMe,
+  type Member,
+} from "./shares.ts";
 
 const app = new Hono<{ Bindings: Env; Variables: WorkerVars }>();
 
@@ -142,7 +157,7 @@ app.patch("/api/data", async (c) => {
 app.delete("/api/data", async (c) => {
   const user = await requireUser(c);
   if (!user) return json({ error: "not authenticated" }, 401);
-  await wipeUser(sqlOf(c), user.id);
+  await wipeUser(sqlOf(c), user.id, { shares: true });
   return json({ ok: true });
 });
 
@@ -202,6 +217,136 @@ async function fromAssets(
   }
   return res;
 }
+
+// ── Shared meetings: the owner's side ─────────────────────────────────────
+
+function shareFailure(err: unknown, fallback: string): Response {
+  if (err instanceof ShareError) return json({ error: err.message }, err.status);
+  console.error(fallback, err instanceof Error ? err.message : "unknown");
+  return json({ error: fallback }, 500);
+}
+
+async function readBody(c: WorkerContext): Promise<Record<string, unknown> | null> {
+  try {
+    const body = await c.req.json();
+    return body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+app.get("/api/shares", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  try {
+    return json({ shares: await listShares(sqlOf(c), user.id) });
+  } catch (err) {
+    return shareFailure(err, "could not list shares");
+  }
+});
+
+app.post("/api/shares", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  const body = await readBody(c);
+  if (!body) return json({ error: "invalid json" }, 400);
+  try {
+    return json({ share: await createShare(sqlOf(c), user.id, body) });
+  } catch (err) {
+    return shareFailure(err, "could not share");
+  }
+});
+
+app.delete("/api/shares/:id", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  try {
+    const ok = await revokeShare(sqlOf(c), user.id, c.req.param("id"));
+    return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
+  } catch (err) {
+    return shareFailure(err, "could not revoke");
+  }
+});
+
+app.get("/api/shared-with-me", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  try {
+    return json({ meetings: await sharedWithMe(sqlOf(c), user.email) });
+  } catch (err) {
+    return shareFailure(err, "could not list shared meetings");
+  }
+});
+
+// ── Shared meetings: the guest's side ─────────────────────────────────────
+// No session: the token in the path is the whole credential, and it opens
+// exactly one meeting. Every handler resolves it first.
+
+async function withMember(
+  c: WorkerContext,
+  run: (member: Member) => Promise<Response>,
+): Promise<Response> {
+  const res = await (async () => {
+    try {
+      const member = await memberByToken(sqlOf(c), c.req.param("token") ?? "");
+      if (!member) return json({ error: "this link isn't active" }, 404);
+      return await run(member);
+    } catch (err) {
+      return shareFailure(err, "shared meeting failed");
+    }
+  })();
+  res.headers.set("cache-control", "no-store");
+  res.headers.set("referrer-policy", "no-referrer");
+  return res;
+}
+
+app.get("/api/with/:token", (c) =>
+  withMember(c, async (m) => json(await loadShared(sqlOf(c), m))),
+);
+
+app.post("/api/with/:token/topics", (c) =>
+  withMember(c, async (m) => {
+    const body = await readBody(c);
+    if (!body) return json({ error: "invalid json" }, 400);
+    return json(await guestAddTopic(sqlOf(c), m, body));
+  }),
+);
+
+app.delete("/api/with/:token/topics/:id", (c) =>
+  withMember(c, async (m) => {
+    await guestRemoveTopic(sqlOf(c), m, c.req.param("id"));
+    return json({ ok: true });
+  }),
+);
+
+app.put("/api/with/:token/follow-ups/:id", (c) =>
+  withMember(c, async (m) => {
+    const body = await readBody(c);
+    if (!body) return json({ error: "invalid json" }, 400);
+    await guestSetFollowUp(sqlOf(c), m, c.req.param("id"), body.done);
+    return json({ ok: true });
+  }),
+);
+
+app.put("/api/with/:token/takeaways/:stepId", (c) =>
+  withMember(c, async (m) => {
+    const body = await readBody(c);
+    if (!body) return json({ error: "invalid json" }, 400);
+    await guestSetTakeaway(sqlOf(c), m, c.req.param("stepId"), body);
+    return json({ ok: true });
+  }),
+);
+
+app.put("/api/with/:token/notes/:sessionId", (c) =>
+  withMember(c, async (m) => {
+    const body = await readBody(c);
+    if (!body) return json({ error: "invalid json" }, 400);
+    await guestSetNote(sqlOf(c), m, c.req.param("sessionId"), body);
+    return json({ ok: true });
+  }),
+);
 
 /** Unknown API paths: JSON 404 (with API security headers), never the SPA or a 500. */
 function apiNotFound(): Response {

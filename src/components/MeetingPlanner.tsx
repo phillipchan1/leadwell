@@ -17,6 +17,7 @@ import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
 import { Calendar, ChevronDown } from "@untitledui/icons";
 import { todayISO } from "../lib/readiness";
+import { ArcRibbon } from "./arcs/ArcRibbon";
 import { cx } from "@/utils/cx";
 
 export type PlanView = "board" | "calendar" | "history";
@@ -106,7 +107,9 @@ export function MeetingPlanner({
 
   const body =
     view === "board" ? (
-      isMobile ? (
+      <div className="flex flex-col gap-4">
+      <ArcRibbon meeting={meeting} />
+      {isMobile ? (
         <PhonePlan
           meeting={meeting}
           direction={direction}
@@ -123,7 +126,8 @@ export function MeetingPlanner({
           ahead={aheadForHorizon(horizon)}
           narrow={narrow}
         />
-      )
+      )}
+      </div>
     ) : view === "history" ? (
       <SessionHistoryTable
         meetingId={meeting.id}

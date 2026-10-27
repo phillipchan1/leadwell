@@ -46,6 +46,7 @@ export function TopicDetail({
   const meetings = useStore((s) => s.meetings);
   const sessions = useStore((s) => s.sessions);
   const updateTopic = useStore((s) => s.updateTopic);
+  const shares = useStore((s) => s.shares);
   const tagTopics = useStore((s) => s.tagTopics);
   const assignTopics = useStore((s) => s.assignTopics);
   const placeTopicAt = useStore((s) => s.placeTopicAt);
@@ -87,6 +88,7 @@ export function TopicDetail({
   const meeting = topic.meetingId
     ? meetings.find((m) => m.id === topic.meetingId)
     : undefined;
+  const shared = Boolean(meeting && shares.some((x) => x.meetingId === meeting.id));
   const session = topic.sessionId
     ? sessions.find((s) => s.id === topic.sessionId)
     : undefined;
@@ -431,6 +433,20 @@ export function TopicDetail({
                 />
                 Urgent
               </label>
+              {meeting && shared && (
+                <label
+                  className="ml-1 inline-flex items-center gap-1.5 text-[13px] text-secondary"
+                  title="Kept off the shared page, even once it's on a week"
+                >
+                  <Checkbox
+                    size="sm"
+                    aria-label="Only me"
+                    isSelected={Boolean(topic.private)}
+                    onChange={(v) => updateTopic(topic.id, { private: v || undefined })}
+                  />
+                  Only me
+                </label>
+              )}
             </div>
             {session && (
               <p className="mt-2 text-[12.5px] text-tertiary">

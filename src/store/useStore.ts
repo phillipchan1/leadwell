@@ -2,6 +2,9 @@ import { create } from "zustand";
 import type {
   Action,
   ActionColumn,
+  Arc,
+  FollowUp,
+  MeetingShare,
   ChatMessage,
   Domain,
   Goal,
@@ -52,6 +55,15 @@ import { migratePigments } from "../lib/pigments";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
 import { DEMO, toThisWeek } from "../lib/demo";
+import {
+  markStep,
+  practiceText,
+  sharedNoteId,
+  takeawayId,
+  unmarkStep,
+  type StepMark,
+} from "../lib/arcs";
+import * as sharesApi from "../lib/shares";
 import { meetingSlugs, resolveMeetingKey } from "../lib/slugs";
 import {
   defaultCurriculum,
@@ -64,6 +76,8 @@ import {
   seedActions,
   seedCapacities,
   seedFollowUps,
+  seedArcs,
+  seedTakeaways,
   seedMeetings,
   seedDomains,
   seedGoals,
@@ -193,6 +207,13 @@ type UIState = {
   paletteOpen: boolean;
   /** The ? shortcuts sheet. */
   helpOpen: boolean;
+  /**
+   * Who my meetings are shared with. Held by the server, outside the synced
+   * document — a share is a capability, not a row the client may write.
+   */
+  shares: MeetingShare[];
+  /** Meetings other people have shared with me (by my email). */
+  sharedWithMe: sharesApi.SharedWithMe[];
 };
 
 type Store = PersistedData &
@@ -386,6 +407,7 @@ type Store = PersistedData &
           | "urgent"
           | "tagIds"
           | "meetingId"
+          | "private"
         >
       >
     ) => void;
@@ -448,7 +470,35 @@ type Store = PersistedData &
       opts?: { meetingId?: string; sourceSessionId?: string }
     ) => string;
     toggleFollowUp: (id: string) => void;
+    updateFollowUp: (
+      id: string,
+      patch: Partial<Pick<FollowUp, "text" | "owner" | "private">>
+    ) => void;
     deleteFollowUp: (id: string) => void;
+    // arcs — worked through one step per occurrence
+    addArc: (
+      arc: Omit<Arc, "id" | "order" | "createdOn" | "status"> & { status?: Arc["status"] }
+    ) => string;
+    updateArc: (id: string, patch: Partial<Omit<Arc, "id" | "meetingId">>) => void;
+    deleteArc: (id: string) => void;
+    /** Done, or again next time. A done step's practice becomes a follow-up. */
+    markArcStep: (arcId: string, stepId: string, sessionId: string, mark: StepMark) => void;
+    unmarkArcStep: (arcId: string, stepId: string, sessionId: string) => void;
+    /** "We didn't touch it that week" — stop asking about that occurrence. */
+    passArc: (arcId: string, sessionId: string) => void;
+    /** My one line from a step. Empty clears it. */
+    setTakeaway: (arcId: string, stepId: string, text: string) => void;
+    /** My part of an occurrence's shared write-up. */
+    setSharedNote: (meetingId: string, sessionId: string, body: string) => void;
+    // sharing
+    loadShares: () => Promise<void>;
+    createShare: (input: {
+      meetingId: string;
+      email: string;
+      name?: string;
+      personId?: string;
+    }) => Promise<MeetingShare>;
+    revokeShare: (id: string) => Promise<void>;
     /** A topic pushed three times is usually a commitment in disguise. */
     promoteToFollowUp: (topicId: string) => void;
     /** Move a topic into a lane or onto one occurrence. Reopens it if closed. */
@@ -825,6 +875,9 @@ function migrateDoc(doc: PersistedData): PersistedData {
     teamNotes: doc.teamNotes ?? [],
     chats: doc.chats ?? {},
     nodePositions: doc.nodePositions ?? {},
+    arcs: doc.arcs ?? [],
+    takeaways: doc.takeaways ?? [],
+    sharedNotes: doc.sharedNotes ?? [],
   };
 }
 
@@ -896,6 +949,9 @@ function seedData(): PersistedData {
     teamNotes: seedTeamNotes,
     chats: {},
     nodePositions: {},
+    arcs: seedArcs,
+    takeaways: seedTakeaways,
+    sharedNotes: [],
   };
 }
 
@@ -923,6 +979,9 @@ function blankData(): PersistedData {
     teamNotes: [],
     chats: {},
     nodePositions: {},
+    arcs: [],
+    takeaways: [],
+    sharedNotes: [],
   };
 }
 
@@ -953,6 +1012,9 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "teamNotes",
   "chats",
   "nodePositions",
+  "arcs",
+  "takeaways",
+  "sharedNotes",
 ];
 
 /** True when a cached doc was serialized without one of the persisted slices. */
@@ -1202,6 +1264,9 @@ function importLegacyLocalData(): PersistedData | null {
     }),
     chats: saved.chats ?? {},
     nodePositions: saved.nodePositions ?? {},
+    arcs: [],
+    takeaways: [],
+    sharedNotes: [],
     domains: saved.domains ?? seedDomains,
     managers: saved.managers ?? [],
     wins: saved.wins ?? [],
@@ -1345,6 +1410,8 @@ export const useStore = create<Store>((set, get) => ({
   panelPct: initialPanelPct(),
   paletteOpen: false,
   helpOpen: false,
+  shares: [],
+  sharedWithMe: [],
   modal: null,
   settingsOpen: false,
 
@@ -2400,8 +2467,148 @@ export const useStore = create<Store>((set, get) => ({
         };
       }),
     })),
+  updateFollowUp: (id, patch) =>
+    set((s) => ({
+      followUps: s.followUps.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    })),
   deleteFollowUp: (id) =>
     set((s) => ({ followUps: s.followUps.filter((f) => f.id !== id) })),
+
+  addArc: (input) => {
+    const id = uid();
+    set((s) => ({
+      arcs: [
+        ...s.arcs,
+        {
+          ...input,
+          id,
+          status: input.status ?? "active",
+          createdOn: todayISO(),
+          order: s.arcs.filter((a) => a.meetingId === input.meetingId).length,
+        },
+      ],
+    }));
+    return id;
+  },
+  updateArc: (id, patch) =>
+    set((s) => ({ arcs: s.arcs.map((a) => (a.id === id ? { ...a, ...patch } : a)) })),
+  deleteArc: (id) =>
+    set((s) => ({
+      arcs: s.arcs.filter((a) => a.id !== id),
+      takeaways: s.takeaways.filter((t) => t.arcId !== id),
+    })),
+  markArcStep: (arcId, stepId, sessionId, mark) =>
+    set((s) => {
+      const arc = s.arcs.find((a) => a.id === arcId);
+      const step = arc?.steps.find((x) => x.id === stepId);
+      if (!arc || !step) return {};
+      const meeting = s.meetings.find((m) => m.id === arc.meetingId);
+      const next = markStep(arc, stepId, sessionId, mark);
+      // Read → Talk → Try: the practice is what changes people, so it opens
+      // the next meeting as "Since last time" — owned by both chairs.
+      const text = practiceText(step);
+      const practice =
+        mark === "done" &&
+        step.practice &&
+        meeting &&
+        !s.followUps.some((f) => f.meetingId === meeting.id && f.text === text)
+          ? [
+              {
+                id: uid(),
+                subjectKind: meeting.subjectKind,
+                subjectId: meeting.subjectId,
+                meetingId: meeting.id,
+                text,
+                status: "open" as const,
+                openedOn: todayISO(),
+                sourceSessionId: sessionId,
+                order: s.followUps.length,
+                owner: "both" as const,
+              },
+            ]
+          : [];
+      return {
+        arcs: s.arcs.map((a) => (a.id === arcId ? next : a)),
+        ...(practice.length ? { followUps: [...s.followUps, ...practice] } : {}),
+      };
+    }),
+  unmarkArcStep: (arcId, stepId, sessionId) =>
+    set((s) => {
+      const arc = s.arcs.find((a) => a.id === arcId);
+      const step = arc?.steps.find((x) => x.id === stepId);
+      if (!arc || !step) return {};
+      // The practice it opened goes too, unless it was already ticked off —
+      // that would be undoing something that happened.
+      const text = practiceText(step);
+      return {
+        arcs: s.arcs.map((a) => (a.id === arcId ? unmarkStep(a, stepId, sessionId) : a)),
+        followUps: s.followUps.filter(
+          (f) =>
+            !(
+              f.meetingId === arc.meetingId &&
+              f.text === text &&
+              f.sourceSessionId === sessionId &&
+              f.status === "open"
+            )
+        ),
+      };
+    }),
+  passArc: (arcId, sessionId) =>
+    set((s) => ({
+      arcs: s.arcs.map((a) =>
+        a.id === arcId && !a.passedIn?.includes(sessionId)
+          ? { ...a, passedIn: [...(a.passedIn ?? []), sessionId] }
+          : a
+      ),
+    })),
+  setTakeaway: (arcId, stepId, text) =>
+    set((s) => {
+      const id = takeawayId(stepId, "owner");
+      const trimmed = text.trim();
+      const rest = s.takeaways.filter((t) => t.id !== id);
+      if (!trimmed) return { takeaways: rest };
+      const prev = s.takeaways.find((t) => t.id === id);
+      if (prev?.text === text) return {};
+      return {
+        takeaways: [...rest, { id, arcId, stepId, by: "owner", text, on: todayISO() }],
+      };
+    }),
+  setSharedNote: (meetingId, sessionId, body) =>
+    set((s) => {
+      const id = sharedNoteId(sessionId, "owner");
+      const rest = s.sharedNotes.filter((n) => n.id !== id);
+      if (!body.trim()) return { sharedNotes: rest };
+      return {
+        sharedNotes: [
+          ...rest,
+          { id, meetingId, sessionId, by: "owner", body, updatedOn: todayISO() },
+        ],
+      };
+    }),
+
+  loadShares: async () => {
+    if (DEMO || get().phase !== "ready") return;
+    try {
+      const [shares, sharedWithMe] = await Promise.all([
+        sharesApi.listShares(),
+        sharesApi.listSharedWithMe(),
+      ]);
+      set({ shares, sharedWithMe });
+    } catch (e) {
+      // Sharing is additive: the workspace works without knowing who else
+      // sits at a meeting, so a failed read never interrupts anything.
+      console.error("Polarch: could not load shares", e);
+    }
+  },
+  createShare: async (input) => {
+    const share = await sharesApi.createShare(input);
+    set((s) => ({ shares: [...s.shares.filter((x) => x.id !== share.id), share] }));
+    return share;
+  },
+  revokeShare: async (id) => {
+    await sharesApi.revokeShare(id);
+    set((s) => ({ shares: s.shares.filter((x) => x.id !== id) }));
+  },
   promoteToFollowUp: (topicId) =>
     set((s) => {
       const topic = s.topics.find((t) => t.id === topicId);
@@ -2949,7 +3156,7 @@ export const useStore = create<Store>((set, get) => ({
     const session = await getSession();
     if (!session) {
       repo.clearBaseline(); // clear any prior baseline
-      set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
+      set({ phase: "anon", userId: null, userEmail: null, shares: [], sharedWithMe: [], ...blankData() });
       return;
     }
     const userId = session.id;
@@ -3082,6 +3289,7 @@ export const useStore = create<Store>((set, get) => ({
      * from the cache-then-network path is a no-op.
      */
     get().sweepReturns();
+    void get().loadShares();
   },
 
   signOut: async () => {
@@ -3102,7 +3310,7 @@ export const useStore = create<Store>((set, get) => ({
     clearUndo();
     repo.clearBaseline();
     fullSyncPending = false;
-    set({ phase: "anon", userId: null, userEmail: null, ...blankData() });
+    set({ phase: "anon", userId: null, userEmail: null, shares: [], sharedWithMe: [], ...blankData() });
   },
 
   resetToSeed: async () => {
@@ -3189,6 +3397,14 @@ function refreshIfStale(minAgeMs: number) {
   if (state.phase !== "ready" || !state.userId) return;
   if (Date.now() - lastRefreshAt < minAgeMs) return;
   void revalidate(state.userId, state.userEmail);
+}
+
+/**
+ * A shared meeting is on screen, and the other chair may be adding to it right
+ * now. Same three-way merge as every refresh — only sooner.
+ */
+export function refreshShared(): void {
+  refreshIfStale(12_000);
 }
 
 /** Exponential backoff for a failed initial load, capped so it keeps trying. */
@@ -3419,6 +3635,8 @@ onAuthChange((event) => {
       phase: "anon",
       userId: null,
       userEmail: null,
+      shares: [],
+      sharedWithMe: [],
       ...blankData(),
     });
     return;

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { useStore } from "../store/useStore";
+import { refreshShared, useStore } from "../store/useStore";
+import { ShareSheet } from "./sharing/ShareSheet";
+import { sharedWithLabel, sharesFor } from "../lib/shares";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
@@ -40,7 +42,7 @@ import {
 import type { Density } from "./EntitySurface";
 import { EntityModeTabs } from "./EntityModeTabs";
 import { entityModeFor, modeSection } from "../lib/entityModes";
-import { Play } from "@untitledui/icons";
+import { Play, Users01 } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 
 const ROLE_OPTIONS: { label: string; value: MeetingRole }[] = [
@@ -83,6 +85,21 @@ export function MeetingProfile({
   const updateMeeting = useStore((s) => s.updateMeeting);
   const untrackMeeting = useStore((s) => s.untrackMeeting);
   const clearSelection = useStore((s) => s.clearSelection);
+  const allShares = useStore((s) => s.shares);
+  const shares = sharesFor(allShares, meeting.id);
+  const [sharing, setSharing] = useState(false);
+
+  // Someone else can be adding to this agenda right now. Fold their changes in
+  // sooner than the background refresh would.
+  const shared = shares.length > 0;
+  useEffect(() => {
+    if (!shared) return;
+    refreshShared();
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") refreshShared();
+    }, 15_000);
+    return () => clearInterval(t);
+  }, [shared, meeting.id]);
 
   /* On the five-mode contract (see lib/entityModes). A meeting carries four
      of the five: Agenda is its `now`, Plan ahead its `meetings`, Write-ups
@@ -141,6 +158,37 @@ export function MeetingProfile({
 
   const actions = (
     <>
+      <button
+        type="button"
+        onClick={() => setSharing(true)}
+        className={cx(
+          "inline-flex h-9 shrink-0 items-center gap-2 rounded-full text-[13px] font-semibold transition-colors touch:min-h-11",
+          shared
+            ? "bg-secondary pr-3 pl-1 text-secondary hover:bg-tertiary"
+            : "rounded-[9px] px-3 text-secondary hover:bg-secondary"
+        )}
+      >
+        {shared ? (
+          <>
+            <span className="flex">
+              {shares.slice(0, 3).map((sh, i) => (
+                <Avatar
+                  key={sh.id}
+                  name={sh.name ?? sh.email}
+                  size={26}
+                  className={cx("ring-2 ring-[var(--color-bg-secondary)]", i > 0 && "-ml-2")}
+                />
+              ))}
+            </span>
+            Visible to {sharedWithLabel(shares)}
+          </>
+        ) : (
+          <>
+            <Users01 aria-hidden className="size-4 text-tertiary" />
+            Share
+          </>
+        )}
+      </button>
       <AddOneOff
         onAdd={(date) => showWeek(`s:${addExtraOccurrence(meeting.id, date)}`)}
       />
@@ -277,6 +325,8 @@ export function MeetingProfile({
           />
         )}
       </div>
+
+      {sharing && <ShareSheet meeting={meeting} onClose={() => setSharing(false)} />}
 
       {mode === "notes" && selectedSlotKey && (
         <OccurrenceNotesSheet open onClose={closeNotes} label="Meeting notes">
