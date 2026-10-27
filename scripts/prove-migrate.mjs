@@ -87,13 +87,28 @@ import {
   extractSafeErrorPhrase,
   firstPhraseErrorLine,
   formatSafeCommandError,
+  PSQL_IGNORE_RC_ARGS,
+  PSQL_SQLSTATE_VERBOSITY_ARGS,
+  PSQL_VERBOSITY_REFUSED,
   SAFE_ERROR_IDENT_MAX,
   SAFE_ERROR_NAME_ALLOWLIST,
   sanitizePgFailureText,
   sqlstateClassMessage,
+  psqlSafeEnv,
   withPsqlSqlstateVerbosity,
 } from "./safe-cmd.mjs";
-import { SCRATCH_POSTGRES_CONTAINER, SCRATCH_POSTGRES_IMAGE } from "./scratch-postgres.mjs";
+import {
+  SCRATCH_POSTGRES_CONTAINER,
+  SCRATCH_POSTGRES_IMAGE,
+  SCRATCH_POSTGRES_LISTEN_SQL,
+  SCRATCH_POSTGRES_READY_ARGS,
+} from "./scratch-postgres.mjs";
+import {
+  QA2_GUARD_SETUP_SQL,
+  QA2_LOG_SETTINGS,
+  qa2GuardInsertSql,
+  qa2SettingsSql,
+} from "./prove-container-log.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -244,6 +259,27 @@ ok(
   !/phil@/i.test(formatSafeCommandError("psql", 1, "ERROR:  boom phil@example.com leaked\n", "")),
   "ERROR with no SQLSTATE and no quote-cut uses a fixed message",
 );
+const noStateRaise = sanitizePgFailureText('ERROR:  user phil@example.com rejected: "x"');
+ok(noStateRaise.sqlstate == null, "pg_dump/RAISE-shaped text has no SQLSTATE");
+ok(noStateRaise.firstError === "query failed", "no SQLSTATE never cuts; uses query failed");
+ok(!/phil@|rejected|: "/.test(noStateRaise.firstError), "no-SQLSTATE RAISE value does not leak");
+const noStateRestore = sanitizePgFailureText(
+  'pg_restore: error: could not execute query: ERROR:  user leaked@example.com rejected: "x"',
+);
+ok(noStateRestore.sqlstate == null, "pg_restore query error without SQLSTATE has none");
+ok(noStateRestore.firstError === "query failed", "pg_restore without SQLSTATE does not cut at : \"");
+ok(!/leaked@|rejected/.test(noStateRestore.firstError), "pg_restore no-SQLSTATE RAISE does not leak");
+const noStateDump = sanitizePgFailureText(
+  'pg_dump: error: query failed: ERROR:  user leaked@example.com rejected: "x"',
+);
+ok(noStateDump.firstError === "query failed", "pg_dump without SQLSTATE does not cut");
+ok(!/leaked@/.test(noStateDump.firstError), "pg_dump no-SQLSTATE RAISE does not leak");
+const noStatePhrase = sanitizePgFailureText("ERROR:  permission denied for table users");
+ok(noStatePhrase.sqlstate == null, "safe phrase without SQLSTATE has none");
+ok(
+  noStatePhrase.firstError === "permission denied for table users",
+  "no SQLSTATE still prints an allowlisted phrase",
+);
 ok(
   extractSafeErrorPhrase("ERROR:  permission denied for table users") === "permission denied for table users",
   "safe phrase: permission denied for table",
@@ -283,10 +319,61 @@ const forcedVerbosity = withPsqlSqlstateVerbosity("psql", ["-v", "VERBOSITY=ters
 ok(forcedVerbosity.includes("VERBOSITY=sqlstate"), "caller VERBOSITY is replaced with sqlstate");
 ok(!forcedVerbosity.includes("VERBOSITY=terse"), "caller VERBOSITY override is removed");
 ok(forcedVerbosity.filter((a) => /^VERBOSITY=/i.test(a)).length === 1, "VERBOSITY is set once");
+ok(forcedVerbosity.includes("-X"), "psql always gets -X");
+ok(forcedVerbosity[0] === "-X", "-X is the first psql arg");
+ok(PSQL_IGNORE_RC_ARGS.includes("-X"), "PSQL_IGNORE_RC_ARGS is -X");
+ok(PSQL_SQLSTATE_VERBOSITY_ARGS.includes("VERBOSITY=sqlstate"), "forced VERBOSITY is sqlstate");
 ok(
   !withPsqlSqlstateVerbosity("pg_dump", ["--file=x"]).includes("VERBOSITY=sqlstate"),
   "pg_dump is not given VERBOSITY=sqlstate",
 );
+const setTwo = withPsqlSqlstateVerbosity("psql", ["--set", "VERBOSITY=terse", "-c", "SELECT 1"]);
+ok(setTwo.includes("VERBOSITY=sqlstate") && !setTwo.includes("VERBOSITY=terse"), "--set VERBOSITY= two-arg is stripped");
+const varEq = withPsqlSqlstateVerbosity("psql", ["--variable=VERBOSITY=default", "-c", "SELECT 1"]);
+ok(!varEq.some((a) => /VERBOSITY=default/i.test(String(a))), "--variable=VERBOSITY= is stripped");
+const varTwo = withPsqlSqlstateVerbosity("psql", ["--variable", "VERBOSITY=verbose", "-c", "SELECT 1"]);
+ok(!varTwo.includes("VERBOSITY=verbose"), "--variable VERBOSITY= two-arg is stripped");
+let cSetThrew = false;
+try {
+  withPsqlSqlstateVerbosity("psql", ["-c", "\\set VERBOSITY default"]);
+} catch (err) {
+  cSetThrew = String(err.message) === PSQL_VERBOSITY_REFUSED;
+}
+ok(cSetThrew, "-c \\set VERBOSITY is refused");
+let commandEqThrew = false;
+try {
+  withPsqlSqlstateVerbosity("psql", ["--command=\\set VERBOSITY terse"]);
+} catch (err) {
+  commandEqThrew = String(err.message) === PSQL_VERBOSITY_REFUSED;
+}
+ok(commandEqThrew, "--command=\\set VERBOSITY is refused");
+const psqlrcDir = mkdtempSync(join(tmpdir(), "leadwell-psqlrc-"));
+const setFile = join(psqlrcDir, "set-verbosity.sql");
+writeFileSync(setFile, "\\set VERBOSITY default\nSELECT 1;\n");
+let fileSetThrew = false;
+try {
+  withPsqlSqlstateVerbosity("psql", ["-f", setFile]);
+} catch (err) {
+  fileSetThrew = String(err.message) === PSQL_VERBOSITY_REFUSED;
+}
+ok(fileSetThrew, "-f file containing \\set VERBOSITY is refused");
+let fileEqThrew = false;
+try {
+  withPsqlSqlstateVerbosity("psql", [`--file=${setFile}`]);
+} catch (err) {
+  fileEqThrew = String(err.message) === PSQL_VERBOSITY_REFUSED;
+}
+ok(fileEqThrew, "--file= containing \\set VERBOSITY is refused");
+const okFile = join(psqlrcDir, "ok.sql");
+writeFileSync(okFile, "SELECT 1;\n");
+ok(
+  withPsqlSqlstateVerbosity("psql", ["-c", "SELECT 1"]).includes("SELECT 1"),
+  "plain -c is kept",
+);
+ok(withPsqlSqlstateVerbosity("psql", ["-f", okFile]).includes(okFile), "plain -f is kept");
+rmSync(psqlrcDir, { recursive: true, force: true });
+ok(psqlSafeEnv({ PSQLRC: "/tmp/evil.psqlrc" }).PSQLRC === "/dev/null", "PSQLRC is forced to /dev/null");
+ok(!Object.hasOwn(psqlSafeEnv({ PGSERVICE: "x" }), "PGSERVICE"), "psqlSafeEnv still strips libpq service vars");
 
 ok(SAFE_ERROR_NAME_ALLOWLIST.has("users"), "allowlist includes users");
 ok(SAFE_ERROR_NAME_ALLOWLIST.has("leadwell_copy"), "allowlist includes leadwell_copy");
@@ -770,6 +857,63 @@ ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_error_statement = panic"), "panic 
 ok(TARGET_PANIC_LOGGING_SQL.includes("log_error_verbosity = terse"), "panic SQL sets log_error_verbosity");
 ok(TARGET_PANIC_LOGGING_SQL.includes("pg_reload_conf()"), "panic SQL reloads config");
 ok(migrateSrc.includes("TARGET_PANIC_LOGGING_SQL"), "migrate applies panic logging before restore");
+ok(SCRATCH_POSTGRES_READY_ARGS.includes("pg_isready"), "readiness uses pg_isready");
+ok(SCRATCH_POSTGRES_READY_ARGS.includes("127.0.0.1"), "readiness uses TCP 127.0.0.1");
+ok(
+  SCRATCH_POSTGRES_READY_ARGS.indexOf("-h") >= 0 &&
+    SCRATCH_POSTGRES_READY_ARGS[SCRATCH_POSTGRES_READY_ARGS.indexOf("-h") + 1] === "127.0.0.1",
+  "pg_isready is pointed at 127.0.0.1, not the unix socket",
+);
+ok(SCRATCH_POSTGRES_LISTEN_SQL.includes("listen_addresses"), "readiness checks listen_addresses");
+ok(
+  /IN \(''|,\s*'localhost'\)/.test(SCRATCH_POSTGRES_LISTEN_SQL) ||
+    SCRATCH_POSTGRES_LISTEN_SQL.includes("''") && SCRATCH_POSTGRES_LISTEN_SQL.includes("localhost"),
+  "temp-server listen_addresses '' / localhost is not ready",
+);
+const scratchSrc = readFileSync(join(here, "scratch-postgres.mjs"), "utf8");
+ok(scratchSrc.includes("isRealServerReady"), "scratch postgres waits for the real server");
+ok(!/pg_isready(?![\s\S]*127\.0\.0\.1)/.test(scratchSrc), "no unix-socket-only pg_isready");
+ok(QA2_GUARD_SETUP_SQL.includes("CHECK"), "container-log guard uses CHECK");
+ok(/note !~ '\^QA2_'/.test(QA2_GUARD_SETUP_SQL), "CHECK rejects the QA2_ sentinel prefix");
+ok(QA2_LOG_SETTINGS.length === 3, "guard enforces three log settings");
+ok(
+  QA2_LOG_SETTINGS.map((s) => s.name).join(",") ===
+    "log_min_messages,log_min_error_statement,log_error_verbosity",
+  "guard names the three panic log settings",
+);
+ok(qa2SettingsSql(null).includes("log_min_messages = warning"), "all-leaky SQL drops messages");
+ok(qa2SettingsSql("log_min_error_statement").includes("log_min_error_statement = panic"), "keep-one SQL keeps that setting");
+ok(qa2SettingsSql("log_min_error_statement").includes("log_min_messages = warning"), "keep-one SQL drops the others");
+ok(
+  qa2GuardInsertSql("QA2_ab") === "INSERT INTO qa2_guard (id, note) VALUES (1, 'QA2_ab')",
+  "guard insert puts the sentinel in the checked column",
+);
+let badSentinel = false;
+try {
+  qa2GuardInsertSql("not-a-sentinel");
+} catch {
+  badSentinel = true;
+}
+ok(badSentinel, "guard insert rejects a non-sentinel");
+const guardSrc = readFileSync(join(here, "prove-container-log.mjs"), "utf8");
+ok(guardSrc.includes("not enforced"), "guard fails when a log setting is not required");
+ok(guardSrc.includes("sentinel not observable"), "guard requires the CHECK sentinel to be visible when leaky");
+ok(guardSrc.includes("qa2SettingsSql"), "guard drops each setting in turn");
+ok(guardSrc.includes("log_min_messages"), "guard names log_min_messages");
+ok(guardSrc.includes("import.meta.url"), "container-log CLI does not run on import");
+ok(/-tA/.test(guardSrc), "container-log psql reads settings as tuples-only");
+
+const migrationDir = join(root, "supabase/migrations");
+const raiseWithRow = [];
+for (const name of readdirSync(migrationDir).filter((f) => f.endsWith(".sql")).sort()) {
+  const raw = readFileSync(join(migrationDir, name), "utf8");
+  const body = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "");
+  const hasFn = /CREATE\s+(OR\s+REPLACE\s+)?FUNCTION\b/i.test(body);
+  const hasTrigger = /CREATE\s+(CONSTRAINT\s+)?TRIGGER\b/i.test(body);
+  const hasRaise = /RAISE\s+(EXCEPTION|SQLSTATE|WARNING|NOTICE|INFO|LOG|DEBUG)\b/i.test(body);
+  if ((hasFn || hasTrigger) && hasRaise) raiseWithRow.push(name);
+}
+ok(raiseWithRow.length === 0, "no trigger function in supabase/migrations RAISES with row values");
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");

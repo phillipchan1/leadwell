@@ -5,7 +5,7 @@
  * first quoted value or a fixed message for the SQLSTATE class.
  */
 import { spawnSync } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
+import { closeSync, openSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { libpqCleanEnv, redactSecrets } from "./loopback.mjs";
 import { assertSafeMigrateLog, logLooksLikeRowData } from "./guard-public-ci.mjs";
@@ -68,11 +68,33 @@ export const PG_ERROR_LINE_RE = /^(?:psql:[^:\n]*:\d+: )?ERROR:|^pg_(?:dump|rest
 export const PG_RESTORE_QUERY_ERROR_RE = /^pg_restore: error: could not execute query: ERROR:/i;
 
 export const PSQL_SQLSTATE_VERBOSITY_ARGS = Object.freeze(["-v", "VERBOSITY=sqlstate"]);
+export const PSQL_IGNORE_RC_ARGS = Object.freeze(["-X"]);
+export const PSQL_VERBOSITY_REFUSED = "psql VERBOSITY override refused";
+
+function isVerbosityAssignment(value) {
+  return /^VERBOSITY=/i.test(String(value ?? ""));
+}
+
+function commandSetsVerbosity(value) {
+  return /\\set\s+VERBOSITY\b/i.test(String(value ?? ""));
+}
+
+function fileSetsVerbosity(path) {
+  try {
+    return commandSetsVerbosity(readFileSync(path, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+function refuseVerbosityOverride() {
+  throw new Error(PSQL_VERBOSITY_REFUSED);
+}
 
 /**
- * Always force `-v VERBOSITY=sqlstate` for psql. Caller overrides are
- * stripped so a terse/default setting cannot hide SQLSTATE or keep
- * DETAIL/CONTEXT on the wire.
+ * Always force `-X -v VERBOSITY=sqlstate` for psql. Caller overrides
+ * (`-v` / `--set` / `--variable`, `\set VERBOSITY` via `-c` or `-f`)
+ * are stripped or refused. PSQLRC is ignored via `-X` and `/dev/null`.
  */
 export function withPsqlSqlstateVerbosity(cmd, args = []) {
   const name = basename(String(cmd || "").split(/\s+/)[0] || "");
@@ -81,14 +103,38 @@ export function withPsqlSqlstateVerbosity(cmd, args = []) {
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const t = String(list[i]);
-    if (t === "-v" && /^VERBOSITY=/i.test(String(list[i + 1] || ""))) {
+    const next = list[i + 1];
+    if ((t === "-v" || t === "--set" || t === "--variable") && isVerbosityAssignment(next)) {
       i += 1;
       continue;
     }
-    if (/^--set=VERBOSITY=/i.test(t) || /^-vVERBOSITY=/i.test(t)) continue;
+    if (
+      /^--set=VERBOSITY=/i.test(t) ||
+      /^-vVERBOSITY=/i.test(t) ||
+      /^--variable=VERBOSITY=/i.test(t)
+    ) {
+      continue;
+    }
+    if ((t === "-c" || t === "--command") && commandSetsVerbosity(next)) {
+      refuseVerbosityOverride();
+    }
+    if (/^--command=/i.test(t) && commandSetsVerbosity(t.replace(/^--command=/i, ""))) {
+      refuseVerbosityOverride();
+    }
+    if ((t === "-f" || t === "--file") && fileSetsVerbosity(next)) {
+      refuseVerbosityOverride();
+    }
+    if (/^--file=/i.test(t) && fileSetsVerbosity(t.replace(/^--file=/i, ""))) {
+      refuseVerbosityOverride();
+    }
     out.push(list[i]);
   }
-  return [...PSQL_SQLSTATE_VERBOSITY_ARGS, ...out];
+  return [...PSQL_IGNORE_RC_ARGS, ...PSQL_SQLSTATE_VERBOSITY_ARGS, ...out];
+}
+
+/** libpq-clean env with PSQLRC disabled so ~/.psqlrc cannot set VERBOSITY. */
+export function psqlSafeEnv(env = process.env) {
+  return { ...libpqCleanEnv(env), PSQLRC: "/dev/null" };
 }
 
 /**
@@ -218,9 +264,10 @@ export function sanitizePgFailureText(text) {
     return { sqlstate, firstError: sqlstateClassMessage(sqlstate) };
   }
   const phrase = extractSafeErrorPhrase(raw);
+  if (phrase) return { sqlstate, firstError: phrase };
+  if (!sqlstate) return { sqlstate, firstError: sqlstateClassMessage(null) };
   const cut = cutErrorLineAtQuotedValue(raw);
-  const firstError = phrase ?? cut ?? (sqlstate ? sqlstateClassMessage(sqlstate) : "query failed");
-  return { sqlstate, firstError };
+  return { sqlstate, firstError: cut ?? sqlstateClassMessage(sqlstate) };
 }
 
 /** If the text looks like row data, replace it with a generic message. */
@@ -262,7 +309,7 @@ export function run(cmd, args = [], opts = {}) {
     stdio: ["pipe", "pipe", "pipe"],
     maxBuffer: 64 * 1024 * 1024,
     ...rest,
-    env: libpqCleanEnv(env ?? process.env),
+    env: psqlSafeEnv(env ?? process.env),
   });
   if (res.status !== 0) {
     throw new Error(formatSafeCommandError(cmd, res.status, res.stderr, res.stdout, redact));
@@ -277,7 +324,7 @@ export function runToFile(cmd, args, file, opts = {}) {
     const res = spawnSync(cmd, withPsqlSqlstateVerbosity(cmd, args), {
       encoding: "utf8",
       stdio: ["ignore", fd, "pipe"],
-      env: libpqCleanEnv(env ?? process.env),
+      env: psqlSafeEnv(env ?? process.env),
     });
     if (res.status !== 0) {
       throw new Error(formatSafeCommandError(cmd, res.status, res.stderr, "", redact));
