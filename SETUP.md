@@ -1,11 +1,11 @@
-# LeadWell cloud setup
+# Polarch cloud setup
 
 > **Cutover:** the live app is moving to Cloudflare Workers + Neon + Better
 > Auth. Follow [RUNBOOK.md](RUNBOOK.md) for env names, migrate, smoke tests,
 > and rollback. Vercel and this Supabase project stay intact. The rest of this
 > file is the original Supabase setup, kept as history.
 
-LeadWell now runs on **Supabase** (Postgres + Auth) with **Google sign-in**, so
+Polarch now runs on **Supabase** (Postgres + Auth) with **Google sign-in**, so
 your data lives in the cloud and syncs across every device.
 
 You do this once. It takes ~15 minutes.
