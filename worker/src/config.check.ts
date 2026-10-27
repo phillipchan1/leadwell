@@ -45,8 +45,9 @@ ok(cfg.keep_vars === true, "top-level keep_vars is true");
 const blocks: [string, Vars | undefined][] = [["top-level", cfg.vars]];
 for (const [name, e] of Object.entries(cfg.env ?? {})) blocks.push([`env.${name}`, e.vars]);
 for (const [name, vars] of blocks) {
-  const v = vars?.AUTH_EMAIL_FROM;
-  ok(v === undefined || !/polarch\.day/i.test(v), `${name} vars must not set AUTH_EMAIL_FROM on polarch.day (got ${v})`);
+  // Absent, full stop: any config value would override the dashboard
+  // Resend sender on every deploy (keep_vars does not protect config vars).
+  ok(!Object.prototype.hasOwnProperty.call(vars ?? {}, "AUTH_EMAIL_FROM"), `${name} vars must not contain AUTH_EMAIL_FROM (dashboard-only)`);
   ok(!/RESEND_API_KEY|BETTER_AUTH_SECRET|OPENAI_API_KEY|DATABASE_URL/.test(Object.keys(vars ?? {}).join(",")), `${name} vars hold no secrets`);
 }
 const senders = [cfg.send_email, ...Object.values(cfg.env ?? {}).map((e) => e.send_email)];
