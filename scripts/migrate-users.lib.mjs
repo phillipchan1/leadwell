@@ -773,11 +773,17 @@ ${db}GRANT USAGE, CREATE ON SCHEMA public TO ${role};
 
 export function grantTargetCopyRoleSchemasSql(schemas = ["public", "auth"]) {
   const role = quoteIdent(TARGET_COPY_ROLE);
-  return (
-    schemas
-      .map((schema) => `GRANT USAGE, CREATE ON SCHEMA ${quoteIdent(schema)} TO ${role};`)
-      .join("\n") + "\n"
-  );
+  const schemaGrants = schemas
+    .map((schema) => `GRANT USAGE, CREATE ON SCHEMA ${quoteIdent(schema)} TO ${role};`)
+    .join("\n");
+  // REFERENCES only — every public table FK points at auth.users(id).
+  // The stub is postgres-owned; USAGE/CREATE on schema auth is not enough.
+  // DROP OWNED BY the copy role (then DROP ROLE) revokes this grant.
+  // Audit of supabase/migrations 0001–0017: FKs only to auth.users; policies
+  // call auth.uid() (default PUBLIC EXECUTE); no auth sequences/types and
+  // no extensions-schema objects.
+  const tableGrants = `GRANT REFERENCES ON TABLE ${quoteIdent("auth")}.${quoteIdent("users")} TO ${role};`;
+  return `${schemaGrants}\n${tableGrants}\n`;
 }
 
 export function reassignTargetCopyOwnedSql(ownerName) {
