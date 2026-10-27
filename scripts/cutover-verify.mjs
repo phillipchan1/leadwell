@@ -108,9 +108,8 @@ assertHashesMatch(reportSrc, reportDst, reportTables);
 const srcUsers = parseIdEmailRows(psql(source, SOURCE_AUTH_USERS_ID_EMAIL_SQL));
 const dstUsers = parseIdEmailRows(psql(target, TARGET_BETTER_AUTH_USERS_ID_EMAIL_SQL));
 const ids = assertAuthUsersCarriedOver(srcUsers, dstUsers);
-for (const id of ids) {
-  console.log(`Phil auth user carried over: ${id}`);
-}
+// Public run log: print a boolean, never the auth user UUID.
+console.log(`Phil auth user carried over: ${ids.length > 0 ? "yes" : "no"}`);
 
 const mode = dryRun ? "dry_run (scratch target, not Neon)" : "live (NEON_DATABASE_URL)";
 const report = [
@@ -122,7 +121,7 @@ const report = [
   ``,
   `auth_identities source via ${SOURCE_AUTH_IDENTITIES_FN}: n=${srcIdent.auth_identities?.n ?? "?"} md5=${srcIdent.auth_identities?.hash ?? "?"}`,
   ``,
-  `Phil auth user id(s) (email omitted): ${ids.join(", ") || "(none)"}`,
+  `Phil auth user carried over: ${ids.length > 0 ? "yes" : "no"} (n=${ids.length})`,
   ``,
 ].join("\n");
 

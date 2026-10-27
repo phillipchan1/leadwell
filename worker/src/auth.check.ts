@@ -64,7 +64,8 @@ ok(
 );
 
 const mail = magicLinkEmail({ url: "https://polarch.day/api/auth/magic-link/verify?token=abc" });
-ok(mail.subject.includes("LeadWell"), "magic-link subject is set");
+ok(mail.subject === "Your Polarch sign-in link", "magic-link subject says Polarch");
+ok(!/LeadWell/.test(mail.subject + mail.text + mail.html), "magic-link email no longer says LeadWell");
 ok(mail.text.includes("https://polarch.day/api/auth/magic-link/verify"), "magic-link body has url");
 
 const token = "visible-token-should-not-appear";
