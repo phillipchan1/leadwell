@@ -2,9 +2,11 @@
 /**
  * Force a CHECK violation whose failing row contains a runtime sentinel
  * in the value, then assert that sentinel is absent from docker logs
- * and from the sanitized error this job would print. Also prove that
- * keeping only one of the three panic log settings still leaks. Never
- * prints the sentinel, container logs, or raw psql output.
+ * and from the sanitized error this job would print. current_setting
+ * must be panic,panic,terse (any one missing fails). A leaky server
+ * must show the sentinel; keeping only error_statement or only
+ * verbosity must still leak. Never prints the sentinel, container
+ * logs, or raw psql output.
  */
 import { randomBytes, createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -131,7 +133,20 @@ function main() {
     finish(1, "container-log-guard: leak");
   }
 
-  for (const setting of QA2_LOG_SETTINGS) {
+  const observable = newSentinel();
+  const opened = psql(qa2SettingsSql(null));
+  if (opened.status !== 0) finish(1, "container-log-guard: could not drop log settings");
+  const openedProbe = fireCheck(observable, logFile);
+  const restored = psql(TARGET_PANIC_LOGGING_SQL);
+  if (restored.status !== 0) finish(1, "container-log-guard: could not restore panic settings");
+  if (!openedProbe.log.includes(observable)) {
+    finish(1, "container-log-guard: sentinel not observable");
+  }
+
+  // log_min_messages=panic hides ERROR/DETAIL/STATEMENT, so it is
+  // sufficient alone. The other two are not: keeping only one of them
+  // must still leak the CHECK value (the QA2 unique-on-id miss).
+  for (const setting of QA2_LOG_SETTINGS.filter((s) => s.name !== "log_min_messages")) {
     const leak = newSentinel();
     const drop = psql(qa2SettingsSql(setting.name));
     if (drop.status !== 0) finish(1, "container-log-guard: could not drop a log setting");

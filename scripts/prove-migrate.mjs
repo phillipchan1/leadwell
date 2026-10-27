@@ -897,7 +897,9 @@ try {
 ok(badSentinel, "guard insert rejects a non-sentinel");
 const guardSrc = readFileSync(join(here, "prove-container-log.mjs"), "utf8");
 ok(guardSrc.includes("not enforced"), "guard fails when a log setting is not required");
+ok(guardSrc.includes("sentinel not observable"), "guard requires the CHECK sentinel to be visible when leaky");
 ok(guardSrc.includes("qa2SettingsSql"), "guard drops each setting in turn");
+ok(guardSrc.includes("log_min_messages"), "guard names log_min_messages");
 ok(guardSrc.includes("import.meta.url"), "container-log CLI does not run on import");
 ok(/-tA/.test(guardSrc), "container-log psql reads settings as tuples-only");
 
