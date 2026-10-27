@@ -8,7 +8,6 @@ name: checks
 
 on:
   push:
-    branches-ignore: []
   pull_request:
 
 concurrency:
@@ -33,6 +32,21 @@ jobs:
     steps:
       - id: checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - id: actionlint
+        name: Lint GitHub Actions workflows
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+        run: |
+          set +x
+          set -eu
+          mkdir -p "${RUNNER_TEMP}/actionlint-bin"
+          curl -fsSL -o "${RUNNER_TEMP}/actionlint.tar.gz" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${RUNNER_TEMP}/actionlint.tar.gz" | sha256sum --check --strict
+          tar -xzf "${RUNNER_TEMP}/actionlint.tar.gz" -C "${RUNNER_TEMP}/actionlint-bin" actionlint
+          export PATH="${RUNNER_TEMP}/actionlint-bin:${PATH}"
+          actionlint -color
       - id: setup-node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
