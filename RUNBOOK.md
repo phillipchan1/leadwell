@@ -107,7 +107,8 @@ Expected output:
 dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)
 dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated
 dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)
-dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and Supabase roles (anon, authenticated, service_role, plus dump TO/GRANT) on NEON_DB_URL
+dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and NOLOGIN roles (anon, authenticated, service_role) on NEON_DB_URL
+dry-run: would CREATE a target-only BYPASSRLS copy role on NEON_DB_URL (never on Supabase) and DROP ROLE it after checksums
 dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out
 dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email (Google identities are not mapped)
 dry-run: would compare per-table row counts and content hashes and abort on mismatch
@@ -134,10 +135,13 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
 2. Leave **dry_run** checked for a rehearsal. The job:
    - masks `SOURCE_DATABASE_URL` / `NEON_DATABASE_URL` (`::add-mask::`) and
      never `set -x`
-   - `pg_dump`s `public` from Supabase (custom format, matching client major,
-     `sslmode=require`, `--exclude-schema=auth`) into `$RUNNER_TEMP`. The
-     dump is **never** uploaded as an artifact. Auth rows are **not** in
-     the dump. An `always()` step deletes `*.dump` and auth COPY CSVs
+   - takes a **verified dump backup** of `public` from Supabase (custom
+     format, matching client major, `sslmode=require`, `--exclude-schema=auth`)
+     into `$RUNNER_TEMP`. It checks `pg_restore --list` succeeds and the
+     file is non-zero, then logs **only the file name and byte size**. The
+     dump is never uploaded, never printed, and never written to the step
+     summary or `GITHUB_OUTPUT`. Auth rows are **not** in the dump. An
+     `always()` step deletes `*.dump` and auth COPY CSVs
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
      Postgres 17 service container — **not** Neon. Before restore it
      creates `NOLOGIN` stubs for `anon` / `authenticated` / `service_role`
@@ -149,16 +153,18 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
      `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`
      (id/name/email/verified/timestamps and user_id/provider/provider_id
      — no password hashes or tokens). Logs are counts and md5s only.
-   - writes per-table `COUNT(*)` + content md5 hashes (source vs scratch
+   - prints per-table `COUNT(*)` + content md5 hashes (source vs scratch
      target, including auth users via the function vs Better Auth `"user"`)
-     to the step summary and a 7-day artifact. That artifact is counts and
-     hashes only — no row data, emails, or password hashes
+     to the **job log only**. No artifact, no step summary, no output file
    - confirms Phil's auth user (via `migration_tmp.auth_users()`) landed
      in Better Auth `"user"` with the same id and email, and prints
      **the id only**
    - fails if any checksum table mismatches or the user did not carry over
 3. Uncheck **dry_run** only when Neon is empty and you intend to load it.
    Same dump + migrate script + checksums; the target is `NEON_DATABASE_URL`.
+   Optional: snapshot a Neon branch of the empty (or current) target first
+   so a failed live copy can be discarded without touching the LeadWell
+   Supabase project.
 
 The job does **not** set `LEADWELL_MIGRATE_TEST`. That flag is prove/CI
 loopback only and would refuse the real session-pooler URL. The loopback
@@ -262,11 +268,15 @@ gone, and the table owner can still read rows (the Worker path). The
 `SET ROLE` those stubs. Dump-SQL scanning of `TO`/`GRANT` is also
 unit-tested without a database.
 
-The repo is public. `checks.yml` runs `scripts/guard-public-ci.mjs`, which
-fails if any workflow uses `actions/upload-artifact` for anything other
-than `artifacts/cutover-report.md` (counts + content md5). Every DB URL
-and secret is masked with `::add-mask::` before use. Scripts never echo
-query results or row data — only counts and md5s.
+The repo is public. `checks.yml` runs `scripts/guard-public-ci.mjs` (port
+of nuvo PR #100): a default-deny YAML hasher. Every step, job, and
+workflow — plus their order — is hashed; parse errors fail closed.
+`.github/CODEOWNERS` requires `@phillipchan1` on the hasher, the
+allowlist, and every workflow. There is no repo-settings change. Cutover
+uploads **nothing** and writes no step summary or `GITHUB_OUTPUT`. Every
+DB URL and secret is masked with `::add-mask::` before use. Scripts never
+echo query results or row data — only counts and md5s. Every `uses:` is
+pinned to a full commit SHA.
 
 Email/password hashes from GoTrue are not portable. Phil's login path is a
 **magic-link** to the migrated `"user"` row (same UUID + email). The first
@@ -466,19 +476,27 @@ clear those only if the same flood also 429s a prefix.
 
 ## Rollback
 
+The intact **LeadWell** Supabase project is the backup and the rollback
+target. Cutover never uploads a dump artifact; the source rows stay on
+Supabase. Optional: take a Neon branch snapshot of the empty target
+before `dry_run=false` so a failed copy can be dropped without touching
+Supabase.
+
 `vercel.json` has `"ignoreCommand": "exit 0"`. Merging this branch to
 `master` does **not** ship a new Vercel build. Production on Vercel stays
 the current deployment (`a147830`). That is the fallback.
 
 1. Point the shared URL / bookmark back at that Vercel deployment. Do not
    delete the Worker.
-2. Google still works against Supabase — its redirect URI was never removed.
+2. Sign-in stays magic-link against the intact LeadWell Supabase project
+   (Vercel). No Google OAuth client was ever required for rollback.
 3. Neon and the Worker can stay; they are unused until you cut over again.
 4. **Writes made on Neon after cutover do not exist on Supabase.** Rolling
    back returns Phil to the last Supabase snapshot. Do not write back from
    Neon to Supabase.
 5. Re-migrate later only into a **new empty** Neon database (the script
-   refuses a dirty target).
+   refuses a dirty target). Discard an optional Neon branch snapshot if
+   you took one before the live copy.
 6. If you applied `004_rate_limit_window_start.sql` and need to drop the
    fixed-window column without a full cutover rollback:
 

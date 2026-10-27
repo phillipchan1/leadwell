@@ -69,7 +69,12 @@ import {
   assertSafeMigrateLog,
   assertWorkflowUploadAllowlist,
   assertWorkflowsUploadAllowlist,
+  collectWorkflowUnits,
+  listHash,
   logLooksLikeRowData,
+  parseWorkflowDocument,
+  unitHash,
+  usesIsShaPinned,
 } from "./guard-public-ci.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -345,42 +350,50 @@ ok(!/^\s+(push|pull_request):/m.test(workflow), "cutover workflow is not on push
 ok(/dry_run:[\s\S]*default:\s*true/.test(workflow), "dry_run defaults true");
 ok(!/^\s*set -x\b/m.test(workflow), "cutover workflow never set -x");
 ok(workflow.includes("::add-mask::") || workflow.includes("githubAddMaskLines"), "cutover workflow masks secrets");
-ok(
-  /actions\/checkout@[0-9a-f]{40}/.test(workflow) &&
-    /actions\/setup-node@[0-9a-f]{40}/.test(workflow) &&
-    /actions\/upload-artifact@[0-9a-f]{40}/.test(workflow),
-  "cutover actions are SHA-pinned",
-);
+ok(!/upload-artifact/.test(workflow), "cutover has no upload-artifact");
+ok(!/GITHUB_STEP_SUMMARY/.test(workflow.replace(/#[^\n]*/g, "")), "cutover writes no step summary");
+ok(!/GITHUB_OUTPUT/.test(workflow.replace(/#[^\n]*/g, "")), "cutover writes no GITHUB_OUTPUT");
+ok(!/cutover-report\.md/.test(workflow), "cutover does not write a report file");
+ok(workflow.includes("pg_restore --list") || workflow.includes("--list"), "cutover verifies the dump with pg_restore --list");
+ok(/id:\s*backup/.test(workflow), "cutover has a named backup step");
+ok(workflow.includes("CUTOVER_DUMP_DIR") && workflow.includes("runner.temp"), "backup dump stays in runner.temp");
 ok(!/leadwell-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
-ok(workflow.includes("NEVER upload"), "cutover comments the no-dump-artifact guard");
 ok(
-  /name: Delete dumps[\s\S]*always\(\)/.test(workflow) ||
+  /id:\s*delete-dumps[\s\S]*always\(\)/.test(workflow) ||
     /if:\s*\$\{\{\s*always\(\)\s*\}\}[\s\S]*\*\.dump/.test(workflow),
   "cutover always() deletes dumps",
 );
-ok(ALLOWED_UPLOAD_ARTIFACT_PATHS.includes("artifacts/cutover-report.md"), "allowlist is the checksum report");
+ok(ALLOWED_UPLOAD_ARTIFACT_PATHS.length === 0, "upload-artifact path allowlist is empty");
 let allowlistOk = true;
 try {
   const steps = assertWorkflowsUploadAllowlist(join(root, ".github/workflows"));
-  ok(
-    steps.length === 1 && steps[0].path === "artifacts/cutover-report.md",
-    "workflows upload only artifacts/cutover-report.md",
-  );
+  ok(steps.length === 0, "committed workflows upload no artifacts");
 } catch (err) {
   allowlistOk = false;
-  ok(false, `workflow artifact allowlist: ${err.message}`);
+  ok(false, `workflow hasher allowlist: ${err.message}`);
 }
-ok(allowlistOk, "committed workflows pass the public-repo artifact allowlist");
+ok(allowlistOk, "committed workflows pass the public-repo hasher");
 let dumpUploadThrew = false;
 try {
   assertWorkflowUploadAllowlist(
-    "uses: actions/upload-artifact@sha\n        with:\n          path: secret.dump\n",
+    [
+      "name: bad",
+      "on: push",
+      "jobs:",
+      "  j:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - id: up",
+      "        uses: actions/upload-artifact@0123456789abcdef0123456789abcdef01234567",
+      "        with:",
+      "          path: secret.dump",
+    ].join("\n"),
     "bad.yml",
   );
 } catch (err) {
-  dumpUploadThrew = String(err.message).includes("secret.dump");
+  dumpUploadThrew = /secret\.dump|upload-artifact|forbidden upload/.test(String(err.message));
 }
-ok(dumpUploadThrew, "artifact allowlist rejects a dump upload");
+ok(dumpUploadThrew, "hasher rejects a dump upload");
 ok(logLooksLikeRowData("phil@example.com,not-a-real-hash"), "email/CSV is treated as row data");
 ok(!logLooksLikeRowData("| profiles | 1 | 1 | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |"), "checksum table is not row data");
 assertSafeMigrateLog("  profiles: source=1 neon=1 hash aaa → aaa", "count/hash log");
@@ -397,7 +410,7 @@ ok(!/console\.log\([^)]*copyPassword/.test(migrateSrc), "migrate does not log th
 ok(!/console\.log\([^)]*copyTarget/.test(migrateSrc), "migrate does not log the copy-role URL");
 ok(/console\.log\(\s*` {2}\$\{table\}: source=/.test(migrateSrc), "migrate logs counts and hashes only");
 const checksYml = readFileSync(join(root, ".github/workflows/checks.yml"), "utf8");
-ok(checksYml.includes("scripts/guard-public-ci.mjs"), "checks.yml runs the artifact allowlist guard");
+ok(checksYml.includes("scripts/guard-public-ci.mjs"), "checks.yml runs the hasher");
 ok(checksYml.includes("githubAddMaskLines"), "checks.yml masks DB URLs before use");
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
@@ -405,8 +418,150 @@ ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_
 ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
 ok(workflow.includes("scripts/migrate-supabase-to-neon.mjs"), "cutover runs the existing migrate script");
 ok(workflow.includes("scripts/cutover-verify.mjs"), "cutover writes checksums via cutover-verify");
+ok(!/cutover-verify\.mjs --report/.test(workflow), "cutover verify does not write a report file");
 ok(workflow.includes("PG_DUMP_PUBLIC_ARGS") || workflow.includes("--exclude-schema=auth"), "cutover dump excludes auth");
 ok(workflow.includes("migration_tmp.auth_users"), "cutover comments the SECURITY DEFINER users function");
+ok(!/appendFileSync/.test(verifySrc), "cutover-verify never appends a step summary");
+ok(!/GITHUB_STEP_SUMMARY|GITHUB_OUTPUT/.test(verifySrc.replace(/\/\*[\s\S]*?\*\//g, "")), "cutover-verify body never writes summary or output");
+
+for (const [name, text] of [
+  ["checks.yml", checksYml],
+  ["cutover-migrate.yml", workflow],
+]) {
+  const collected = collectWorkflowUnits(text);
+  ok(collected.full, `${name} parses as a full workflow`);
+  ok(collected.units.every((u) => u.id), `${name} every step has an id`);
+  ok(collected.jobs.every((j) => j.duplicateIds.length === 0), `${name} has no duplicate step ids`);
+  for (const unit of collected.units) {
+    if (unit.uses) {
+      ok(usesIsShaPinned(unit.uses), `${name} ${unit.id} uses is SHA-pinned`);
+    }
+  }
+}
+
+let parseThrew = false;
+try {
+  parseWorkflowDocument("jobs: [\n");
+} catch {
+  parseThrew = true;
+}
+ok(parseThrew, "hasher fails closed on a YAML parse error");
+let mergeThrew = false;
+try {
+  parseWorkflowDocument("on: push\njobs:\n  a:\n    <<: {runs-on: ubuntu-latest}\n");
+} catch (err) {
+  mergeThrew = String(err.message).includes("merge");
+}
+ok(mergeThrew, "hasher fails closed on YAML merge keys");
+let multiThrew = false;
+try {
+  parseWorkflowDocument("name: a\n---\nname: b\n");
+} catch (err) {
+  multiThrew = /exactly one document/.test(String(err.message));
+}
+ok(multiThrew, "hasher fails closed on multi-document YAML");
+const baseWf = [
+  "name: t",
+  "on: push",
+  "jobs:",
+  "  one:",
+  "    runs-on: ubuntu-latest",
+  "    steps:",
+  "      - id: a",
+  "        run: echo 1",
+  "  two:",
+  "    runs-on: ubuntu-latest",
+  "    steps:",
+  "      - id: b",
+  "        run: echo 2",
+].join("\n");
+const baseUnits = collectWorkflowUnits(baseWf);
+const stepA = baseUnits.units.find((u) => u.id === "a");
+const h1 = unitHash(stepA);
+const extraKey = collectWorkflowUnits(
+  [
+    "name: t",
+    "on: push",
+    "jobs:",
+    "  one:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - id: a",
+    "        run: echo 1",
+    "        timeout-minutes: 5",
+    "  two:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - id: b",
+    "        run: echo 2",
+  ].join("\n"),
+);
+const extraA = extraKey.units.find((u) => u.id === "a");
+ok(unitHash(extraA) !== h1, "hasher includes every step key");
+const swapped = collectWorkflowUnits(
+  [
+    "name: t",
+    "on: push",
+    "jobs:",
+    "  two:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - id: b",
+    "        run: echo 2",
+    "  one:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - id: a",
+    "        run: echo 1",
+  ].join("\n"),
+);
+ok(swapped.jobOrder.join(",") === "two,one", "hasher records job order");
+ok(listHash(swapped.jobOrder) !== listHash(baseUnits.jobOrder), "hasher hashes workflow job order");
+const timeoutJob = collectWorkflowUnits(
+  [
+    "name: t",
+    "on: push",
+    "jobs:",
+    "  one:",
+    "    runs-on: ubuntu-latest",
+    "    timeout-minutes: 9",
+    "    steps:",
+    "      - id: a",
+    "        run: echo 1",
+    "  two:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - id: b",
+    "        run: echo 2",
+  ].join("\n"),
+);
+ok(unitHash(timeoutJob.units.find((u) => u.id === "a")) !== h1, "hasher includes the whole job minus steps");
+const triggerChange = collectWorkflowUnits(baseWf.replace("on: push", "on: pull_request"));
+ok(unitHash(triggerChange.units.find((u) => u.id === "a")) !== h1, "hasher includes the whole workflow minus jobs");
+let dupThrew = false;
+try {
+  assertWorkflowUploadAllowlist(
+    [
+      "name: t",
+      "on: push",
+      "jobs:",
+      "  one:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - id: a",
+      "        run: echo 1",
+      "      - id: a",
+      "        run: echo 2",
+    ].join("\n"),
+    "dup.yml",
+  );
+} catch (err) {
+  dupThrew = /duplicate step id/.test(String(err.message));
+}
+ok(dupThrew, "hasher rejects duplicate step ids");
+ok(usesIsShaPinned("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0"), "full SHA uses is pinned");
+ok(!usesIsShaPinned("actions/checkout@v5"), "tag uses is not pinned");
+ok(!usesIsShaPinned("actions/checkout@v5.1.0"), "semver uses is not pinned");
 
 const runbook = readFileSync(join(root, "RUNBOOK.md"), "utf8");
 ok(runbook.includes("has_schema_privilege"), "runbook verifies migration_reader has no USAGE on auth");
@@ -430,8 +585,18 @@ ok(runbook.includes("BYPASSRLS"), "runbook documents the target-only BYPASSRLS c
 ok(runbook.includes("DROP ROLE"), "runbook documents the explicit copy-role drop");
 ok(runbook.includes("Never create roles on the Supabase source") || runbook.includes("never create roles on the Supabase source") || runbook.includes("Never create roles on Supabase"), "runbook forbids source roles");
 ok(runbook.includes("--enable-row-security"), "runbook documents why --enable-row-security is not the dump fix");
-ok(runbook.includes("cutover-report.md"), "runbook names the allowlisted artifact");
+ok(!runbook.includes("cutover-report.md"), "runbook does not name a cutover artifact");
+ok(runbook.includes("CODEOWNERS"), "runbook names CODEOWNERS as the hasher protection");
+ok(runbook.includes("LeadWell") && /intact/.test(runbook) && /[Rr]ollback/.test(runbook), "runbook names intact LeadWell Supabase as rollback");
+ok(runbook.includes("Neon branch"), "runbook offers an optional Neon branch snapshot");
+ok(!/plus dump TO\/GRANT/.test(runbook), "runbook dry-run lines match the allowlist stubs");
+ok(runbook.includes("NOLOGIN roles (anon, authenticated, service_role)"), "runbook expected dry-run names the three NOLOGIN stubs");
 ok(runbook.includes("::add-mask::"), "runbook documents secret masking");
+const codeowners = readFileSync(join(root, ".github/CODEOWNERS"), "utf8");
+ok(codeowners.includes("scripts/guard-public-ci.allowlist.json"), "CODEOWNERS covers the hasher allowlist");
+ok(codeowners.includes("scripts/guard-public-ci.mjs"), "CODEOWNERS covers the hasher");
+ok(codeowners.includes(".github/workflows/"), "CODEOWNERS covers workflows");
+ok(codeowners.includes("@phillipchan1"), "CODEOWNERS requires phillipchan1");
 const setupMd = readFileSync(join(root, "SETUP.md"), "utf8");
 ok(!/Continue as test user/.test(setupMd), "SETUP.md has no Continue as test user");
 const designPrompt = readFileSync(join(root, "docs/design-audit-implementation-prompt.md"), "utf8");

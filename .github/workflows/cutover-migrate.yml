@@ -6,10 +6,10 @@
 # LEADWELL_MIGRATE_TEST (that flag is prove/CI loopback only and would
 # refuse the real source).
 #
-# Artifacts: NEVER upload pg_dump, CSV, or any row-data file. Dumps stay
-# in $RUNNER_TEMP / the runner workspace and are deleted in the always()
-# step below. The only allowed artifact is the checksum report (per-table
-# counts + content md5). No emails, no password hashes, no dump files.
+# This workflow produces NO artifact and NO step-summary or GITHUB_OUTPUT.
+# Only counts and md5 hashes go to the job log. The verified dump backup
+# lives in $RUNNER_TEMP, is checked with pg_restore --list + non-zero
+# size (file name and byte size only), and is deleted in always().
 name: cutover-migrate
 
 on:
@@ -28,7 +28,6 @@ concurrency:
 
 permissions:
   contents: read
-  actions: write
 
 jobs:
   cutover:
@@ -50,20 +49,25 @@ jobs:
       SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       DRY_RUN: ${{ inputs.dry_run }}
+      CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
     steps:
-      - name: Checkout
+      - id: checkout
+        name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - name: Setup Node
+      - id: setup-node
+        name: Setup Node
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
 
-      - name: Install dependencies
+      - id: npm-ci
+        name: Install dependencies
         run: npm ci
 
-      - name: Mask secrets and prepare URLs
+      - id: mask
+        name: Mask secrets and prepare URLs
         env:
           # Empty on purpose: prove/CI sets this so both URLs must be
           # loopback. This job reads the real Supabase session pooler.
@@ -121,7 +125,8 @@ jobs:
           console.log(`dry_run=${dryRun} target=${dryRun ? "scratch-postgres" : "neon"}`);
           JS
 
-      - name: Install PostgreSQL clients
+      - id: install-pg
+        name: Install PostgreSQL clients
         run: |
           set +x
           set -eu
@@ -130,10 +135,10 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-15 postgresql-client-16 postgresql-client-17
 
-      - name: pg_dump source (custom format)
+      - id: backup
+        name: Verified dump backup
         env:
           PGOPTIONS: "-c default_transaction_read_only=on"
-          CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
         run: |
           set +x
           set -eu
@@ -142,7 +147,7 @@ jobs:
           node --input-type=module <<'JS'
           import { spawnSync } from "node:child_process";
           import { existsSync, mkdirSync, statSync } from "node:fs";
-          import { join } from "node:path";
+          import { basename, join } from "node:path";
           import { redactSecrets, sourceReadEnv } from "./scripts/loopback.mjs";
           import { PG_DUMP_PUBLIC_ARGS } from "./scripts/migrate-users.lib.mjs";
 
@@ -167,6 +172,19 @@ jobs:
             const m = `${res.stdout || ""}\n${res.stderr || ""}`.match(/(\d+)\./);
             return m ? Number(m[1]) : null;
           }
+          function matchingBin(name, major) {
+            const candidates = [
+              process.env.PG_BIN ? join(process.env.PG_BIN, name) : null,
+              `/usr/lib/postgresql/${major}/bin/${name}`,
+              `/usr/pgsql-${major}/bin/${name}`,
+              name,
+            ].filter(Boolean);
+            for (const bin of candidates) {
+              if (bin !== name && !existsSync(bin)) continue;
+              if (toolMajor(bin) === major) return bin;
+            }
+            return null;
+          }
           const verOut = run("psql", [
             "-v",
             "ON_ERROR_STOP=1",
@@ -179,31 +197,21 @@ jobs:
           const n = Number(String(verOut).trim());
           if (!Number.isFinite(n) || n < 10000) throw new Error("unparsable server_version_num");
           const major = Math.floor(n / 10000);
-          const candidates = [
-            process.env.PG_BIN ? join(process.env.PG_BIN, "pg_dump") : null,
-            `/usr/lib/postgresql/${major}/bin/pg_dump`,
-            `/usr/pgsql-${major}/bin/pg_dump`,
-            "pg_dump",
-          ].filter(Boolean);
-          let dump = null;
-          for (const bin of candidates) {
-            if (bin !== "pg_dump" && !existsSync(bin)) continue;
-            if (toolMajor(bin) === major) {
-              dump = bin;
-              break;
-            }
-          }
+          const dump = matchingBin("pg_dump", major);
           if (!dump) throw new Error(`pg_dump matching Postgres ${major} not found`);
-          console.log(`source postgres major ${major}; using matching pg_dump`);
+          const restore = matchingBin("pg_restore", major);
+          if (!restore) throw new Error(`pg_restore matching Postgres ${major} not found`);
           mkdirSync(dumpDir, { recursive: true });
           const file = join(dumpDir, "source.dump");
           run(dump, [...PG_DUMP_PUBLIC_ARGS, `--file=${file}`, source]);
           const bytes = statSync(file).size;
           if (!bytes) throw new Error("custom-format dump is empty");
-          console.log(`custom-format dump written (${bytes} bytes; runner workspace only, not uploaded)`);
+          run(restore, ["--list", file], { env: process.env });
+          console.log(`${basename(file)} ${bytes} bytes`);
           JS
 
-      - name: Create scratch target (dry_run)
+      - id: scratch
+        name: Create scratch target (dry_run)
         if: ${{ inputs.dry_run }}
         env:
           PGPASSWORD: postgres
@@ -213,7 +221,8 @@ jobs:
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
           psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_cutover;"
 
-      - name: Run Supabase → Neon migrate script
+      - id: migrate
+        name: Run Supabase → Neon migrate script
         env:
           LEADWELL_MIGRATE_TEST: ""
         run: |
@@ -227,7 +236,8 @@ jobs:
           # target to checksum or to confirm Phil's user.
           node scripts/migrate-supabase-to-neon.mjs
 
-      - name: Checksums and Phil auth user
+      - id: verify
+        name: Checksums and Phil auth user
         env:
           LEADWELL_MIGRATE_TEST: ""
         run: |
@@ -235,26 +245,16 @@ jobs:
           set -eu
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
           unset LEADWELL_MIGRATE_TEST
-          node scripts/cutover-verify.mjs --report artifacts/cutover-report.md
+          node scripts/cutover-verify.mjs
 
-      # Guard: this is the only upload-artifact. Path must stay a markdown
-      # checksum table (counts + md5). Never point it at a dump or CSV.
-      - name: Upload checksum report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
-        with:
-          name: cutover-report
-          path: artifacts/cutover-report.md
-          retention-days: 7
-          if-no-files-found: ignore
-
-      - name: Delete dumps
+      - id: delete-dumps
+        name: Delete dumps
         if: ${{ always() }}
         run: |
           set +x
           set -eu
           # Dumps and COPY CSVs stay on the runner only. Never upload them.
-          rm -rf "${RUNNER_TEMP}/leadwell-cutover"
+          rm -rf "${CUTOVER_DUMP_DIR:-${RUNNER_TEMP}/leadwell-cutover}"
           find "${GITHUB_WORKSPACE}" "${RUNNER_TEMP}" -type f \( \
             -name '*.dump' -o \
             -name 'auth_users.csv' -o \

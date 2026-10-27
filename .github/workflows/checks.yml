@@ -1,8 +1,9 @@
 # Typecheck, lint, and the unit / prove scripts.
 # Deliberately not a production deploy. Vercel and Supabase stay intact.
 # Never upload pg_dump, CSV, or row-data artifacts from this workflow.
-# scripts/guard-public-ci.mjs fails the job if any workflow uploads anything
-# other than artifacts/cutover-report.md (counts + md5 only).
+# scripts/guard-public-ci.mjs is a default-deny YAML hasher (nuvo PR #100):
+# every step/job/workflow plus order must match the CODEOWNERS-protected
+# allowlist. Cutover produces no artifact and no step-summary or output.
 name: checks
 
 on:
@@ -30,27 +31,36 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - id: checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - id: setup-node
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Public-repo artifact allowlist
+      - id: npm-ci
+        run: npm ci
+      - id: guard
+        name: Public-repo CI allowlist
         run: node scripts/guard-public-ci.mjs
-      - name: Typecheck
+      - id: typecheck
+        name: Typecheck
         run: npm run typecheck
-      - name: Lint
+      - id: lint
+        name: Lint
         run: npm run lint
-      - name: Worker + loopback + migrate (no live DB)
+      - id: test
+        name: Worker + loopback + migrate (no live DB)
         run: npm test
-      - name: Install PostgreSQL 17 client
+      - id: install-pg
+        name: Install PostgreSQL 17 client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-common
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
-      - name: Create prove databases
+      - id: create-prove-dbs
+        name: Create prove databases
         env:
           PGPASSWORD: postgres
         run: |
@@ -63,7 +73,8 @@ jobs:
           JS
           psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_src;"
           psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_dst;"
-      - name: Live migrate prove (loopback only)
+      - id: live-prove
+        name: Live migrate prove (loopback only)
         env:
           LEADWELL_PROVE_SOURCE_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_src
           LEADWELL_PROVE_TARGET_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_dst
@@ -78,7 +89,8 @@ jobs:
           }
           JS
           npm run test:migrate
-      - name: Preview wrangler dry-run
+      - id: wrangler-preview
+        name: Preview wrangler dry-run
         run: |
           mkdir -p dist
           test -f dist/index.html || printf '<!doctype html><title>leadwell</title>\n' > dist/index.html
