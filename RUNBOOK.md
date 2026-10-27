@@ -1,6 +1,6 @@
-# LeadWell cutover: Vercel/Supabase → Cloudflare/Neon
+# Polarch cutover: Vercel/Supabase → Cloudflare/Neon
 
-Phil is the only user. Vercel and the Supabase project **LeadWell** stay
+Phil is the only user. Vercel and the Supabase project **Polarch** stay
 intact. This runbook is the cutover, not a delete.
 
 Realtime publication is on in Supabase. The app never calls
@@ -8,7 +8,7 @@ Realtime publication is on in Supabase. The app never calls
 equivalent is shipped.
 
 There are no crons, storage buckets, or payments. The public host will
-be **polarch.day** (product rename comes later; Worker/repo stay LeadWell).
+be **polarch.day**.
 
 Auth is a magic-link email. Primary sender: Cloudflare Email Service (`EMAIL` send_email binding, from `Polarch <login@polarch.day>`). Fallback on any binding error: Resend (`AUTH_EMAIL_FROM`). "Continue with Google" sits next to the magic link when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (see [Google sign-in](#google-sign-in)); without them the button is hidden and only the magic link runs.
 Sign-in and sign-up are allowlist-only (`ALLOWED_EMAILS`).
@@ -45,15 +45,15 @@ Never put values here.
 | Name | Where | Notes |
 | --- | --- | --- |
 | `VITE_DEMO` | build env | `1` for the offline sample-org build. |
-| `LEADWELL_WORKER_ORIGIN` | `.env.local` | Optional Vite proxy target. Defaults to `http://127.0.0.1:8787`. |
+| `POLARCH_WORKER_ORIGIN` | `.env.local` | Optional Vite proxy target. Defaults to `http://127.0.0.1:8787`. |
 
 ### Migration script (laptop, once)
 
 | Name | Notes |
 | --- | --- |
-| `SUPABASE_DB_URL` | Read-only Postgres URI for the LeadWell project (`migration_reader`). The script `pg_dump`s `public` (never `auth`) and `COPY`s auth rows from `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`. |
+| `SUPABASE_DB_URL` | Read-only Postgres URI for the Polarch project (`migration_reader`). The script `pg_dump`s `public` (never `auth`) and `COPY`s auth rows from `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`. |
 | `NEON_DB_URL` | Empty Neon database. The script writes here. |
-| `LEADWELL_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover or the Actions cutover workflow. |
+| `POLARCH_MIGRATE_TEST` | Set to `1` in prove/CI so both URLs must be loopback. Do **not** set this for the live Phil cutover or the Actions cutover workflow. |
 | `PG_BIN` | Optional directory containing `pg_dump` / `pg_restore` matching the source major. |
 
 ### GitHub Actions cutover (`cutover-migrate.yml`)
@@ -87,7 +87,7 @@ Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
 
 **`wrangler dev` / `cf:dev` sends real email.** The `EMAIL` send_email binding is `remote: true`, so a magic-link request in local dev goes out through Cloudflare Email Service from login@polarch.day to the real address (account `CLOUDFLARE_API_TOKEN` needs Email Sending: Edit). Only allowlisted addresses get mail. Use a bot inbox you own, never a stranger's address.
 
-Apply `worker/schema/001_leadwell.sql`, `002_better_auth.sql`,
+Apply `worker/schema/001_polarch.sql`, `002_better_auth.sql`,
 `003_rate_limit.sql`, then `004_rate_limit_window_start.sql` to a local
 Postgres or Neon branch before signing in. `004` is a `BEGIN`/`COMMIT`
 transaction. To undo just that column (same statement as
@@ -151,7 +151,7 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
    - runs `scripts/migrate-supabase-to-neon.mjs` against an ephemeral
      Postgres 17 service container — **not** Neon. Before restore it
      creates `NOLOGIN` stubs for `anon` / `authenticated` / `service_role`
-     and a target-only `LOGIN BYPASSRLS` copy role (`leadwell_copy`). After
+     and a target-only `LOGIN BYPASSRLS` copy role (`polarch_copy`). After
      checksums verify, the script **explicitly `DROP ROLE`s** that copy
      role (`ALTER ROLE … NOLOGIN` is the documented alternative if DROP
      is blocked). Never create those roles on the Supabase source.
@@ -172,10 +172,10 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
 3. Uncheck **dry_run** only when Neon is empty and you intend to load it.
    Same dump + migrate script + checksums; the target is `NEON_DATABASE_URL`.
    Optional: snapshot a Neon branch of the empty (or current) target first
-   so a failed live copy can be discarded without touching the LeadWell
+   so a failed live copy can be discarded without touching the Polarch
    Supabase project.
 
-The job does **not** set `LEADWELL_MIGRATE_TEST`. That flag is prove/CI
+The job does **not** set `POLARCH_MIGRATE_TEST`. That flag is prove/CI
 loopback only and would refuse the real session-pooler URL. The loopback
 guards in `scripts/loopback.mjs` stay as they are.
 
@@ -187,11 +187,11 @@ The script:
 4. Refuses a non-empty Neon target.
 5. Creates `pgcrypto`, stub `auth.users` / `auth.uid()`, and stub **only**
    `anon`, `authenticated`, and `service_role` as `NOLOGIN` (tagged
-   `DO $leadwell_stub_roles$`, `IF NOT EXISTS`). The dump is scanned for
+   `DO $polarch_stub_roles$`, `IF NOT EXISTS`). The dump is scanned for
    `CREATE POLICY … TO` and privilege `GRANT … ON … TO` only — not
    function bodies and not membership `GRANT role TO role`. Any other
    role in those clauses is a hard error. Also creates a target-only
-   `LOGIN BYPASSRLS` copy role (`leadwell_copy`) and restores as that
+   `LOGIN BYPASSRLS` copy role (`polarch_copy`) and restores as that
    role. The same stubs + copy role run on the Actions scratch target
    (`dry_run=true`) and on Neon (`dry_run=false`). Without the stubs,
    `pg_restore` fails with `role "authenticated" does not exist` on
@@ -201,9 +201,9 @@ The script:
 7. Does **not** map Google identities. The first "Continue with Google" links
    by verified email to the migrated user (same id), so none are needed.
 8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch. Logs are those counts and md5s — never emails or row data.
-9. After checksums verify, **explicitly `DROP ROLE leadwell_copy`**
+9. After checksums verify, **explicitly `DROP ROLE polarch_copy`**
    (`REASSIGN OWNED` first so `DROP OWNED` cannot remove tables). If
-   `DROP` is blocked, `ALTER ROLE leadwell_copy NOLOGIN` (and drop
+   `DROP` is blocked, `ALTER ROLE polarch_copy NOLOGIN` (and drop
    `BYPASSRLS`). On failure, the same drop runs, then only objects this
    run created on Neon are dropped. Supabase is never modified. The
    `NOLOGIN` stubs are cluster-level and are left in place.
@@ -241,7 +241,7 @@ A non-owner without `BYPASSRLS` gets:
 ERROR: query would be affected by row-level security policy for table "actions"
 ```
 
-`--enable-row-security` would only dump rows a policy allows. The LeadWell
+`--enable-row-security` would only dump rows a policy allows. The Polarch
 policies are `TO authenticated` + `auth.uid()`. `migration_reader` is
 neither `authenticated` nor the table owner, so it would dump **empty**
 tables. Do not use that flag.
@@ -254,25 +254,25 @@ later on `CREATE POLICY … TO authenticated`. So the prod dump role
 This environment cannot `SELECT rolbypassrls` on that role (no source
 URI). **Do not grant `BYPASSRLS` on Supabase.** If prove or restore
 needs a `BYPASSRLS` role, create it on the Neon / scratch **target**
-only (`leadwell_copy`), then `DROP ROLE` (or `ALTER ROLE … NOLOGIN`)
+only (`polarch_copy`), then `DROP ROLE` (or `ALTER ROLE … NOLOGIN`)
 after checksums. Never print credentials.
 
 The loopback prove dumps as the **table owner** (not `migration_reader`).
 `migration_reader` stays a non-`BYPASSRLS` role for auth-function tests
-only. The restore target creates `leadwell_copy` `LOGIN BYPASSRLS`,
+only. The restore target creates `polarch_copy` `LOGIN BYPASSRLS`,
 restores as that role, then **explicitly `DROP ROLE`s it**.
 
 Loopback prove that a restore with role-scoped policies succeeds:
 
 ```sh
-LEADWELL_PROVE_SOURCE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell_src \
-LEADWELL_PROVE_TARGET_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell_dst \
+POLARCH_PROVE_SOURCE_URL=postgresql://postgres:postgres@127.0.0.1:5432/polarch_src \
+POLARCH_PROVE_TARGET_URL=postgresql://postgres:postgres@127.0.0.1:5432/polarch_dst \
   npm run test:migrate
 ```
 
 `scripts/prove-migrate.mjs` seeds `CREATE POLICY actions_owner … TO authenticated`
 (the clause that failed in cutover dry-run 40377053881), then asserts the
-target has the NOLOGIN stubs, the policy is restored, `leadwell_copy` is
+target has the NOLOGIN stubs, the policy is restored, `polarch_copy` is
 gone, and the table owner can still read rows (the Worker path). The
 `authenticated` stub has no `USAGE` on `public` — the Worker never
 `SET ROLE` those stubs. Dump-SQL scanning of `TO`/`GRANT` is also
@@ -299,7 +299,7 @@ justify it in the PR — do not widen `RETURNS TABLE` by default.
 
 Apply the SQL from the PR description (same text as
 `MIGRATION_TMP_PROD_APPLY_SQL` in `scripts/migrate-users.lib.mjs`) on
-LeadWell prod as a privileged role (`postgres`), **not**
+Polarch prod as a privileged role (`postgres`), **not**
 `migration_reader`. Run it as one transaction:
 
 ```sh
@@ -385,7 +385,7 @@ SELECT id FROM migration_tmp.auth_users() LIMIT 1;
 
 ### After cutover
 
-Do **not** pause or delete the LeadWell Supabase project until Neon is verified
+Do **not** pause or delete the Polarch Supabase project until Neon is verified
 (checksums match and magic-link sign-in works). Supabase is the intact rollback.
 
 Once Neon is loaded and magic-link sign-in works, drop the temporary
@@ -401,14 +401,14 @@ DROP SCHEMA migration_tmp CASCADE;
 ## Cutover
 
 1. Create a Neon project (free tier). Leave it empty.
-2. Create a Cloudflare Worker (`leadwell`) with Workers static assets.
+2. Create a Cloudflare Worker (`polarch`) with Workers static assets.
    Hyperdrive is Workers Paid; preview can use `DATABASE_URL` instead.
 3. Set the Worker secrets (`BETTER_AUTH_SECRET`, `RESEND_API_KEY`,
    `OPENAI_API_KEY`, `DATABASE_URL`) and `ALLOWED_EMAILS` to Phil's email.
    Preview can use `BETTER_AUTH_URL` = the `*.workers.dev` origin. Production
    uses the custom domain (next step).
 4. Attach **polarch.day** as the Worker custom domain (dashboard: Workers →
-   leadwell → Settings → Domains & Routes → Add, or
+   polarch → Settings → Domains & Routes → Add, or
    `npx wrangler domains add polarch.day`). Then set:
    - `BETTER_AUTH_URL` = `https://polarch.day`
    - `AUTH_COOKIE_DOMAIN` = `polarch.day` (no leading dot)
@@ -436,7 +436,7 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
 
 ## Smoke tests
 
-- `GET /api/health` → `{ ok: true, service: "leadwell", realtime: false }`
+- `GET /api/health` → `{ ok: true, service: "polarch", realtime: false }`
 - Signed-out `https://polarch.day/` still shows the marketing landing.
 - Magic-link sign-in returns to the app; the org loads (people, meetings, prayer).
 - An edit syncs (chrome leaves "saving"); reload keeps it.
@@ -500,7 +500,7 @@ clear those only if the same flood also 429s a prefix.
 
 ## Rollback
 
-The intact **LeadWell** Supabase project is the backup and the rollback
+The intact **Polarch** Supabase project is the backup and the rollback
 target. Cutover never uploads a dump artifact; the source rows stay on
 Supabase. Optional: take a Neon branch snapshot of the empty target
 before `dry_run=false` so a failed copy can be dropped without touching
@@ -519,7 +519,7 @@ Supabase.
 
 Vercel never served `polarch.day`. Before cutover the `polarch.day`
 Cloudflare zone had **0 DNS records**. Cutover added one thing: a Worker
-custom domain `polarch.day` → Worker `leadwell`, which auto-created a
+custom domain `polarch.day` → Worker `polarch`, which auto-created a
 proxied `AAAA polarch.day 100::` record.
 
 ### Rollback steps (in order)
@@ -544,7 +544,7 @@ proxied `AAAA polarch.day 100::` record.
    read-only snapshot of the same data.
 1. **Detach `polarch.day` from the Worker.** Do not delete the Worker or
    the Hyperdrive config.
-   - Dashboard: Workers & Pages → `leadwell` → Settings → Domains & Routes
+   - Dashboard: Workers & Pages → `polarch` → Settings → Domains & Routes
      → `polarch.day` → Remove.
    - Or API (account `c1f7fb7e8c746389e2c56c499805d3e1`):
 
@@ -567,9 +567,9 @@ proxied `AAAA polarch.day 100::` record.
      record, plus a Rules → Redirect Rule: hostname equals `polarch.day`
      → 302 to `https://leadwell-ochre.vercel.app` (preserve path).
 3. **Verify the fallback.** `curl -sI https://leadwell-ochre.vercel.app/`
-   returns 200 with title `LeadWell`. Sign in with the Supabase magic link
+   returns 200 with title `Polarch`. Sign in with the Supabase magic link
    on that URL. Old polarch.day Better Auth sessions do not carry over.
-4. Sign-in stays magic-link against the intact LeadWell Supabase project
+4. Sign-in stays magic-link against the intact Polarch Supabase project
    (Vercel). No Google OAuth client was ever required for rollback.
 5. Neon and the Worker stay up but unused (workers.dev URL
    `https://leadwell.nq-morning-briefing.workers.dev`) until you cut over
@@ -596,8 +596,7 @@ proxied `AAAA polarch.day 100::` record.
 - No payments.
 - No Anthropic / Claude proxy.
 - No Supabase realtime replacement (unused).
-- No rename of the Worker, package, or repo (polarch.day is a host only).
-- No deletion of the Vercel project or the LeadWell Supabase project.
+- No deletion of the Vercel project or the Polarch Supabase project.
 
 ## Sign-in email: Cloudflare Email Service
 
@@ -649,11 +648,11 @@ magic link. Code: `googleSocialProviders`, `ACCOUNT_LINKING` and
 - **Google Cloud (Phil's console login; no gcloud on the box).** Project
   number `75851534029`, OAuth client
   `75851534029-n43ho7oqt9mm598bh4jtm03mpjcfjt8p.apps.googleusercontent.com`
-  (the client the LeadWell Supabase project used).
+  (the client the Polarch Supabase project used).
   1. APIs & Services → Credentials → that client → **Authorized redirect URIs**:
      add `https://polarch.day/api/auth/callback/google` (keep the Supabase
      `/auth/v1/callback` one until Supabase is retired). For a preview Worker
-     also add `https://leadwell-preview.<subdomain>.workers.dev/api/auth/callback/google`.
+     also add `https://polarch-preview.<subdomain>.workers.dev/api/auth/callback/google`.
   2. Same client → **Add secret** (the old one is only stored hashed in
      Supabase, so it cannot be recovered). Copy it once.
   3. OAuth consent screen → Branding → **App name** = `Polarch`

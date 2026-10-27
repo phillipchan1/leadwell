@@ -22,7 +22,7 @@ type Props = {
 };
 
 function modeStorageKey(sessionId?: string) {
-  return sessionId ? `leadwell:editor-mode:${sessionId}` : "leadwell:editor-mode";
+  return sessionId ? `polarch:editor-mode:${sessionId}` : "polarch:editor-mode";
 }
 
 function loadMode(sessionId?: string): EditorMode {

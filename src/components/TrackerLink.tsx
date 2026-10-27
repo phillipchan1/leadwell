@@ -14,7 +14,7 @@ import { autoFocusUnlessTouch } from "../lib/pointer";
 import { Link03, LinkExternal01 } from "@untitledui/icons";
 
 /**
- * The tracker someone already had before LeadWell — a Notion page, a Word doc,
+ * The tracker someone already had before Polarch — a Notion page, a Word doc,
  * a shared Google Doc — pinned to the meeting it belongs to.
  *
  * Deliberately an *and*: linking a tracker doesn't switch anything off. The

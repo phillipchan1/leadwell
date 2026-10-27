@@ -511,7 +511,7 @@ export function meetingReadiness(
   // you in red.
   const rhythmOnTrack = Boolean(explicit) || (!missed && !overdue);
 
-  // The write-up is the one check an external tracker takes over. LeadWell
+  // The write-up is the one check an external tracker takes over. Polarch
   // can't read a Notion page or a Word doc, and a check that can never pass
   // would park everyone who uses one in Loose end forever — which is exactly
   // how a dashboard stops being read. So it stops asserting instead of

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "leadwell",
+  "name": "polarch",
   "main": "worker/src/index.ts",
   "compatibility_date": "2026-01-15",
   "compatibility_flags": ["nodejs_compat"],
@@ -32,7 +32,7 @@
     {
       "binding": "HYPERDRIVE",
       "id": "c18a2c83cf664a8d9fc9f40bcba47718",
-      "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:5432/leadwell"
+      "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:5432/polarch"
     }
   ],
   // Cloudflare Email Service (Workers Paid). Primary magic-link sender from
@@ -47,7 +47,7 @@
   // in the Cloudflare dashboard, not in this file. Do not deploy from CI.
   "env": {
     "preview": {
-      "name": "leadwell-preview",
+      "name": "polarch-preview",
       "workers_dev": true,
       "preview_urls": true,
       "vars": {

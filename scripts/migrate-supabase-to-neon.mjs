@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dump LeadWell's Supabase project into Neon (schema + data) and map
+ * Dump Polarch's Supabase project into Neon (schema + data) and map
  * auth.users → Better Auth `user` with the same UUIDs so every `user_id`
  * still matches. Magic-link sign-in uses that email. Google identities
  * are not mapped (no Google provider).
@@ -90,7 +90,7 @@ import {
 const dryRun = process.argv.includes("--dry-run");
 const source = process.env.SUPABASE_DB_URL || process.env.SOURCE_DATABASE_URL || "";
 const target = process.env.NEON_DB_URL || process.env.TARGET_DATABASE_URL || "";
-const isTest = process.env.LEADWELL_MIGRATE_TEST === "1";
+const isTest = process.env.POLARCH_MIGRATE_TEST === "1";
 const extraRedact = [];
 
 function redact(text) {
@@ -213,7 +213,7 @@ const pgDump = resolvePgBin("pg_dump", srcMajor);
 const pgRestore = resolvePgBin("pg_restore", srcMajor);
 console.log(`using ${pgDump} / ${pgRestore} for Postgres ${srcMajor}`);
 
-const dir = mkdtempSync(join(tmpdir(), "leadwell-migrate-"));
+const dir = mkdtempSync(join(tmpdir(), "polarch-migrate-"));
 const dumpPath = join(dir, "public.dump");
 const usersPath = join(dir, "auth_users.csv");
 const identitiesPath = join(dir, "auth_identities.csv");

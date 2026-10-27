@@ -7,8 +7,8 @@
  *   - runs `migrate-supabase-to-neon.mjs --dry-run` with no URLs
  *
  * Optional live dump/import (loopback only):
- *   LEADWELL_PROVE_SOURCE_URL=postgres://…@127.0.0.1/… \
- *   LEADWELL_PROVE_TARGET_URL=postgres://…@127.0.0.1/… \
+ *   POLARCH_PROVE_SOURCE_URL=postgres://…@127.0.0.1/… \
+ *   POLARCH_PROVE_TARGET_URL=postgres://…@127.0.0.1/… \
  *     node scripts/prove-migrate.mjs
  *
  * Live mode seeds a throwaway source (including CREATE POLICY …
@@ -290,7 +290,7 @@ ok(
   "safe phrase ignores the Command was: line",
 );
 ok(
-  extractSafeErrorPhrase('ERROR:  role "leadwell_copy" does not exist') === 'role "leadwell_copy" does not exist',
+  extractSafeErrorPhrase('ERROR:  role "polarch_copy" does not exist') === 'role "polarch_copy" does not exist',
   "safe phrase: role does not exist",
 );
 ok(
@@ -347,7 +347,7 @@ try {
   commandEqThrew = String(err.message) === PSQL_VERBOSITY_REFUSED;
 }
 ok(commandEqThrew, "--command=\\set VERBOSITY is refused");
-const psqlrcDir = mkdtempSync(join(tmpdir(), "leadwell-psqlrc-"));
+const psqlrcDir = mkdtempSync(join(tmpdir(), "polarch-psqlrc-"));
 const setFile = join(psqlrcDir, "set-verbosity.sql");
 writeFileSync(setFile, "\\set VERBOSITY default\nSELECT 1;\n");
 let fileSetThrew = false;
@@ -376,7 +376,7 @@ ok(psqlSafeEnv({ PSQLRC: "/tmp/evil.psqlrc" }).PSQLRC === "/dev/null", "PSQLRC i
 ok(!Object.hasOwn(psqlSafeEnv({ PGSERVICE: "x" }), "PGSERVICE"), "psqlSafeEnv still strips libpq service vars");
 
 ok(SAFE_ERROR_NAME_ALLOWLIST.has("users"), "allowlist includes users");
-ok(SAFE_ERROR_NAME_ALLOWLIST.has("leadwell_copy"), "allowlist includes leadwell_copy");
+ok(SAFE_ERROR_NAME_ALLOWLIST.has("polarch_copy"), "allowlist includes polarch_copy");
 ok(SAFE_ERROR_IDENT_MAX === 63, "identifier cap is 63");
 ok(
   firstPhraseErrorLine("NOTICE:  x\nERROR:  permission denied for table users\n") ===
@@ -545,7 +545,7 @@ ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("COMMIT;"), "prod apply commits as one 
 ok(MIGRATION_TMP_PROD_APPLY_SQL.includes("OWNER TO postgres"), "prod apply can pin function owner");
 ok(MIGRATION_TMP_DEPENDENTS_SQL.includes("pg_depend"), "dependents pre-check reads pg_depend");
 ok(
-  /CREATE ROLE "?anon"? NOLOGIN/.test(proveMigrationReaderSetupSql("leadwell_src")),
+  /CREATE ROLE "?anon"? NOLOGIN/.test(proveMigrationReaderSetupSql("polarch_src")),
   "CI stubs anon for the prod REVOKE",
 );
 
@@ -597,25 +597,25 @@ const roleSql = stubSupabaseRolesSql(["authenticated", "anon"]);
 ok(/CREATE ROLE "anon" NOLOGIN/.test(roleSql), "stub SQL creates anon NOLOGIN");
 ok(/CREATE ROLE "authenticated" NOLOGIN/.test(roleSql), "stub SQL creates authenticated NOLOGIN");
 ok(/IF NOT EXISTS \(SELECT 1 FROM pg_roles WHERE rolname = 'authenticated'\)/.test(roleSql), "stub SQL is idempotent");
-ok(roleSql.includes("$leadwell_stub_roles$"), "stub SQL uses a tagged dollar-quote");
+ok(roleSql.includes("$polarch_stub_roles$"), "stub SQL uses a tagged dollar-quote");
 ok(!/DO \$\$/.test(roleSql), "stub SQL does not use untagged DO $$");
 ok(
-  !proveMigrationReaderSetupSql("leadwell_src").includes("BYPASSRLS"),
+  !proveMigrationReaderSetupSql("polarch_src").includes("BYPASSRLS"),
   "prove reader is not granted BYPASSRLS",
 );
-ok(TARGET_COPY_ROLE === "leadwell_copy", "target copy role name");
-const copySql = createTargetCopyRoleSql("x", "leadwell_dst");
+ok(TARGET_COPY_ROLE === "polarch_copy", "target copy role name");
+const copySql = createTargetCopyRoleSql("x", "polarch_dst");
 ok(copySql.includes("BYPASSRLS") && copySql.includes("LOGIN"), "copy role SQL is LOGIN BYPASSRLS");
-ok(copySql.includes("$leadwell_copy_role$"), "copy role SQL uses a tagged dollar-quote");
+ok(copySql.includes("$polarch_copy_role$"), "copy role SQL uses a tagged dollar-quote");
 ok(!/DO \$\$/.test(copySql), "copy role SQL does not use untagged DO $$");
 const dropCopySql = disableTargetCopyRoleSql("postgres");
 ok(/DROP ROLE/.test(dropCopySql), "copy role drop step is explicit DROP ROLE");
-ok(dropCopySql.includes("leadwell_copy") || dropCopySql.includes('"leadwell_copy"'), "drop SQL names leadwell_copy");
+ok(dropCopySql.includes("polarch_copy") || dropCopySql.includes('"polarch_copy"'), "drop SQL names polarch_copy");
 ok(dropCopySql.includes("Never run this on the Supabase source"), "drop SQL forbids the source");
 const grantCopySql = grantTargetCopyRoleSchemasSql(["public", "auth"]);
 ok(/GRANT USAGE, CREATE ON SCHEMA "auth"/.test(grantCopySql), "copy role gets USAGE/CREATE on auth");
 ok(
-  /GRANT REFERENCES ON TABLE "auth"\."users" TO "leadwell_copy"/.test(grantCopySql),
+  /GRANT REFERENCES ON TABLE "auth"\."users" TO "polarch_copy"/.test(grantCopySql),
   "copy role gets REFERENCES on auth.users",
 );
 ok(
@@ -624,7 +624,7 @@ ok(
 );
 ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
 ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
-ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
+ok(proveMigrationReaderSetupSql("polarch_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
 const supabaseMigFiles = readdirSync(join(root, "supabase/migrations"))
   .filter((f) => f.endsWith(".sql"))
   .sort();
@@ -705,7 +705,7 @@ ok(!/GITHUB_OUTPUT/.test(workflow.replace(/#[^\n]*/g, "")), "cutover writes no G
 ok(!/cutover-report\.md/.test(workflow), "cutover does not write a report file");
 ok(workflow.includes("pg_restore --list") || workflow.includes("--list"), "cutover verifies the dump with pg_restore --list");
 ok(/id:\s*backup/.test(workflow), "cutover has a named backup step");
-ok(/id:\s*leftover-copy-role/.test(workflow), "cutover has a leftover leadwell_copy always() step");
+ok(/id:\s*leftover-copy-role/.test(workflow), "cutover has a leftover polarch_copy always() step");
 ok(/id:\s*leftover-copy-role[\s\S]*always\(\)/.test(workflow), "leftover copy-role step is always()");
 ok(/catch\s*\{[\s\S]*console\.log\("unknown"\)/.test(workflow), "leftover-role check errors log unknown");
 ok(!/catch\s*\{[\s\S]*console\.log\("no"\)/.test(workflow), "leftover-role check errors do not log no");
@@ -733,8 +733,8 @@ ok(
   "delete-dumps step env sets CUTOVER_DUMP_DIR from runner.temp",
 );
 ok(
-  String(backupStep.env.CUTOVER_DUMP_DIR).includes("leadwell-cutover"),
-  "backup dump stays in runner.temp/leadwell-cutover",
+  String(backupStep.env.CUTOVER_DUMP_DIR).includes("polarch-cutover"),
+  "backup dump stays in runner.temp/polarch-cutover",
 );
 ok(
   String(backupStep.env?.CUTOVER_DUMP_DIR ?? "") === String(deleteDumpsStep.env?.CUTOVER_DUMP_DIR ?? "") &&
@@ -749,14 +749,14 @@ const badJobEnvDoc = parseWorkflowDocument(
     "  j:",
     "    runs-on: ubuntu-latest",
     "    env:",
-    '      CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover',
+    '      CUTOVER_DUMP_DIR: ${{ runner.temp }}/polarch-cutover',
     "    steps:",
     "      - id: s",
     "        run: echo hi",
   ].join("\n"),
 );
 ok(envUsesRunnerContext(badJobEnvDoc.jobs.j.env), "helper flags runner context in job env");
-ok(!/leadwell-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
+ok(!/polarch-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
 ok(
   /id:\s*delete-dumps[\s\S]*always\(\)/.test(workflow) ||
     /if:\s*\$\{\{\s*always\(\)\s*\}\}[\s\S]*\*\.dump/.test(workflow),
@@ -851,7 +851,7 @@ ok(/id:\s*container-log-guard/.test(workflow), "cutover has a container-log-guar
 ok(!/\bdocker logs\b/.test(checksYml), "checks.yml never prints docker logs");
 ok(!/\bdocker logs\b/.test(workflow), "cutover never prints docker logs");
 ok(/^postgres@sha256:[0-9a-f]{64}$/.test(SCRATCH_POSTGRES_IMAGE), "scratch postgres image is SHA-pinned");
-ok(SCRATCH_POSTGRES_CONTAINER === "leadwell-pg", "scratch postgres container name");
+ok(SCRATCH_POSTGRES_CONTAINER === "polarch-pg", "scratch postgres container name");
 ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_messages = panic"), "panic SQL sets log_min_messages");
 ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_error_statement = panic"), "panic SQL sets log_min_error_statement");
 ok(TARGET_PANIC_LOGGING_SQL.includes("log_error_verbosity = terse"), "panic SQL sets log_error_verbosity");
@@ -917,7 +917,7 @@ ok(raiseWithRow.length === 0, "no trigger function in supabase/migrations RAISES
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
-ok(!/LEADWELL_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set LEADWELL_MIGRATE_TEST=1");
+ok(!/POLARCH_MIGRATE_TEST:\s*["']?1/.test(workflow), "cutover does not set POLARCH_MIGRATE_TEST=1");
 ok(workflow.includes("scripts/migrate-supabase-to-neon.mjs"), "cutover runs the existing migrate script");
 ok(workflow.includes("scripts/cutover-verify.mjs"), "cutover writes checksums via cutover-verify");
 ok(!/cutover-verify\.mjs --report/.test(workflow), "cutover verify does not write a report file");
@@ -1092,7 +1092,7 @@ ok(runbook.includes("Never create roles on the Supabase source") || runbook.incl
 ok(runbook.includes("--enable-row-security"), "runbook documents why --enable-row-security is not the dump fix");
 ok(!runbook.includes("cutover-report.md"), "runbook does not name a cutover artifact");
 ok(runbook.includes("CODEOWNERS"), "runbook names CODEOWNERS as the hasher protection");
-ok(runbook.includes("LeadWell") && /intact/.test(runbook) && /[Rr]ollback/.test(runbook), "runbook names intact LeadWell Supabase as rollback");
+ok(runbook.includes("Polarch") && /intact/.test(runbook) && /[Rr]ollback/.test(runbook), "runbook names intact Polarch Supabase as rollback");
 ok(runbook.includes("Neon branch"), "runbook offers an optional Neon branch snapshot");
 ok(!/plus dump TO\/GRANT/.test(runbook), "runbook dry-run lines match the allowlist stubs");
 ok(runbook.includes("NOLOGIN roles (anon, authenticated, service_role)"), "runbook expected dry-run names the three NOLOGIN stubs");
@@ -1144,8 +1144,8 @@ for (const needle of DRY_RUN_NEEDLES) {
 }
 
 // --- optional live loopback dump/import ------------------------------------
-const source = process.env.LEADWELL_PROVE_SOURCE_URL || "";
-const target = process.env.LEADWELL_PROVE_TARGET_URL || "";
+const source = process.env.POLARCH_PROVE_SOURCE_URL || "";
+const target = process.env.POLARCH_PROVE_TARGET_URL || "";
 
 function run(cmd, args, opts = {}) {
   const { env, ...rest } = opts;
@@ -1163,14 +1163,14 @@ function run(cmd, args, opts = {}) {
 
 if (source || target) {
   if (!source || !target) {
-    throw new Error("Set both LEADWELL_PROVE_SOURCE_URL and LEADWELL_PROVE_TARGET_URL, or neither.");
+    throw new Error("Set both POLARCH_PROVE_SOURCE_URL and POLARCH_PROVE_TARGET_URL, or neither.");
   }
-  refuseUnsafeTestUrl(source, "LEADWELL_PROVE_SOURCE_URL");
-  refuseUnsafeTestUrl(target, "LEADWELL_PROVE_TARGET_URL");
+  refuseUnsafeTestUrl(source, "POLARCH_PROVE_SOURCE_URL");
+  refuseUnsafeTestUrl(target, "POLARCH_PROVE_TARGET_URL");
   if (source === target) throw new Error("prove source and target must differ");
 
-  const schema = readFileSync(join(root, "worker/schema/001_leadwell.sql"), "utf8");
-  const dir = mkdtempSync(join(tmpdir(), "leadwell-prove-"));
+  const schema = readFileSync(join(root, "worker/schema/001_polarch.sql"), "utf8");
+  const dir = mkdtempSync(join(tmpdir(), "polarch-prove-"));
   try {
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP SCHEMA IF EXISTS migration_tmp CASCADE; DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;"]);
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-c", "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;"]);
@@ -1399,11 +1399,11 @@ GRANT SELECT ON public.actions TO authenticated;
 
     const errUrl = (() => {
       const u = new URL(source);
-      u.pathname = "/leadwell_err";
+      u.pathname = "/polarch_err";
       return u.href;
     })();
-    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP DATABASE IF EXISTS leadwell_err"]);
-    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "CREATE DATABASE leadwell_err"]);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP DATABASE IF EXISTS polarch_err"]);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "CREATE DATABASE polarch_err"]);
     run("psql", [
       "-v",
       "ON_ERROR_STOP=1",
@@ -1497,7 +1497,7 @@ GRANT SELECT ON public.actions TO authenticated;
         ...process.env,
         SUPABASE_DB_URL: source,
         NEON_DB_URL: target,
-        LEADWELL_MIGRATE_TEST: "1",
+        POLARCH_MIGRATE_TEST: "1",
       },
     });
     const dupeCap = assertNoRowLeak("dupe-email abort", dupeMigrate);
@@ -1510,7 +1510,7 @@ GRANT SELECT ON public.actions TO authenticated;
       "-c",
       "DELETE FROM auth.users WHERE id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'",
     ]);
-    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP DATABASE IF EXISTS leadwell_err"]);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP DATABASE IF EXISTS polarch_err"]);
 
     const migrated = spawnSync(
       process.execPath,
@@ -1522,7 +1522,7 @@ GRANT SELECT ON public.actions TO authenticated;
           ...process.env,
           SUPABASE_DB_URL: source,
           NEON_DB_URL: target,
-          LEADWELL_MIGRATE_TEST: "1",
+          POLARCH_MIGRATE_TEST: "1",
         },
       },
     );
@@ -1555,7 +1555,7 @@ GRANT SELECT ON public.actions TO authenticated;
       "-d",
       target,
       "-c",
-      "SELECT COUNT(*) FROM pg_roles WHERE rolname = 'leadwell_copy'",
+      "SELECT COUNT(*) FROM pg_roles WHERE rolname = 'polarch_copy'",
     ]).trim();
     ok(copyLeft === "0", "target BYPASSRLS copy role is gone after a successful restore");
 
@@ -1632,7 +1632,7 @@ GRANT SELECT ON public.actions TO authenticated;
         ...process.env,
         SOURCE_DATABASE_URL: source,
         TARGET_DATABASE_URL: target,
-        LEADWELL_MIGRATE_TEST: "1",
+        POLARCH_MIGRATE_TEST: "1",
         DRY_RUN: "true",
       },
     });
@@ -1718,7 +1718,7 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'a1', 'p1', 'Follow up');`,
         ...process.env,
         SUPABASE_DB_URL: source,
         NEON_DB_URL: target,
-        LEADWELL_MIGRATE_TEST: "1",
+        POLARCH_MIGRATE_TEST: "1",
       },
     });
     const migRealOut = `${migReal.stdout || ""}\n${migReal.stderr || ""}`;
@@ -1749,14 +1749,14 @@ VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'a1', 'p1', 'Follow up');`,
       "-d",
       target,
       "-c",
-      "SELECT COUNT(*) FROM pg_roles WHERE rolname = 'leadwell_copy'",
+      "SELECT COUNT(*) FROM pg_roles WHERE rolname = 'polarch_copy'",
     ]).trim();
     ok(copyLeftAfterMig === "0", "copy role is gone after supabase-migrations restore");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 } else {
-  console.log("prove-migrate: live dump/import skipped (no LEADWELL_PROVE_* URLs)");
+  console.log("prove-migrate: live dump/import skipped (no POLARCH_PROVE_* URLs)");
 }
 
 if (fails.length) {

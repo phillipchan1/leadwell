@@ -1,4 +1,4 @@
-# LeadWell — Design Audit
+# Polarch — Design Audit
 
 **Date:** 2026-08-12 · **Scope:** full product (IA, visual system, speed, reliability, keyboard, mobile) · **Method:** codebase walk — routes, store, components, stylesheets. No code changed.
 
@@ -6,7 +6,7 @@
 
 ## 0. Headline
 
-LeadWell is unusually thoughtful for a hand-built app. The navigation model (URL as source of truth, one entity rendering at two densities, a shared breadcrumb/pager for every entity kind) is genuinely better than most funded B2B SaaS. The comment density in the source shows someone reasoning about *why*, not just shipping.
+Polarch is unusually thoughtful for a hand-built app. The navigation model (URL as source of truth, one entity rendering at two densities, a shared breadcrumb/pager for every entity kind) is genuinely better than most funded B2B SaaS. The comment density in the source shows someone reasoning about *why*, not just shipping.
 
 The problems are almost all **systemic, not local**. They fall into three shapes:
 
@@ -296,7 +296,7 @@ React Flow, the org table and the session editor are correctly code-split (`App.
 Compounding it, the most recent commit is *"Drop the sync error toast and retry cloud saves silently."* Sync failures now do exactly this (`useStore.ts:1747-1751`):
 
 ```
-console.error("LeadWell: cloud sync failed", e);
+console.error("Polarch: cloud sync failed", e);
 scheduleSyncRetry(userId);
 useStore.setState({ syncStatus: "idle" });   // ← reports idle on failure
 ```

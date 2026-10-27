@@ -84,8 +84,8 @@ jobs:
             for (const line of githubAddMaskLines(process.env[key] || "")) process.stdout.write(`${line}\n`);
           }
           JS
-          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_src;"
-          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_dst;"
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE polarch_src;"
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE polarch_dst;"
       - id: container-log-guard
         name: Container log sentinel
         env:
@@ -97,15 +97,15 @@ jobs:
       - id: live-prove
         name: Live migrate prove (loopback only)
         env:
-          LEADWELL_PROVE_SOURCE_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_src
-          LEADWELL_PROVE_TARGET_URL: postgresql://postgres:postgres@127.0.0.1:5432/leadwell_dst
+          POLARCH_PROVE_SOURCE_URL: postgresql://postgres:postgres@127.0.0.1:5432/polarch_src
+          POLARCH_PROVE_TARGET_URL: postgresql://postgres:postgres@127.0.0.1:5432/polarch_dst
           PGPASSWORD: postgres
         run: |
           set +x
           set -eu
           node --input-type=module <<'JS'
           import { githubAddMaskLines } from "./scripts/loopback.mjs";
-          for (const key of ["LEADWELL_PROVE_SOURCE_URL", "LEADWELL_PROVE_TARGET_URL", "PGPASSWORD"]) {
+          for (const key of ["POLARCH_PROVE_SOURCE_URL", "POLARCH_PROVE_TARGET_URL", "PGPASSWORD"]) {
             for (const line of githubAddMaskLines(process.env[key] || "")) process.stdout.write(`${line}\n`);
           }
           JS
@@ -114,7 +114,7 @@ jobs:
         name: Preview wrangler dry-run
         run: |
           mkdir -p dist
-          test -f dist/index.html || printf '<!doctype html><title>leadwell</title>\n' > dist/index.html
+          test -f dist/index.html || printf '<!doctype html><title>polarch</title>\n' > dist/index.html
           npx wrangler deploy --env preview --dry-run
       - id: stop-postgres
         name: Remove scratch Postgres

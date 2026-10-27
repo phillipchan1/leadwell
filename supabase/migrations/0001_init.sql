@@ -1,4 +1,4 @@
--- LeadWell cloud schema.
+-- Polarch cloud schema.
 --
 -- One row-per-entity, normalized model. Every table is scoped to the owning
 -- user via a `user_id` column and protected by row-level security so a signed-in

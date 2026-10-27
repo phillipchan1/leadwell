@@ -3,7 +3,7 @@ import { magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/client";
 
 /** Boot scripts read this — Better Auth cookies are httpOnly. */
-export const SESSION_STORAGE_KEY = "lw-session";
+export const SESSION_STORAGE_KEY = "polarch-session";
 
 export type AuthUser = { id: string; email?: string | null };
 export type AuthEvent = "SIGNED_IN" | "SIGNED_OUT" | "INITIAL_SESSION";

@@ -14,7 +14,7 @@
  * laptop run. The Actions cutover workflow never passes --report and
  * never writes GITHUB_STEP_SUMMARY or GITHUB_OUTPUT.
  *
- * Set LEADWELL_MIGRATE_TEST=1 only in prove/CI (both URLs must be
+ * Set POLARCH_MIGRATE_TEST=1 only in prove/CI (both URLs must be
  * loopback). The live/Actions cutover leaves that flag unset.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -45,7 +45,7 @@ const target =
   process.env.NEON_DB_URL ||
   process.env.NEON_DATABASE_URL ||
   "";
-const isTest = process.env.LEADWELL_MIGRATE_TEST === "1";
+const isTest = process.env.POLARCH_MIGRATE_TEST === "1";
 const dryRun = process.env.DRY_RUN === "true" || process.argv.includes("--dry-run");
 
 function argValue(flag) {

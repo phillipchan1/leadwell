@@ -852,7 +852,7 @@ function rescueOrphanTopics(doc: PersistedData): PersistedData {
   if (!stranded.length) return doc;
 
   console.warn(
-    `LeadWell: ${stranded.length} topic(s) pointed at a missing occurrence — returned to the backlog`,
+    `Polarch: ${stranded.length} topic(s) pointed at a missing occurrence — returned to the backlog`,
     stranded.map((t) => t.text)
   );
   const lost = new Set(stranded.map((t) => t.id));
@@ -1173,7 +1173,7 @@ async function recoverIncompletePendingWrite(
     fullSyncPending = true;
     void runSync(userId);
   } catch (e) {
-    console.error("LeadWell: could not repair incomplete pending cache", e);
+    console.error("Polarch: could not repair incomplete pending cache", e);
     // Do not full-push the incomplete doc — that is how the wipe happens.
     // Keep the local paint and retry when connectivity returns via revalidate.
     void revalidate(userId, email);
@@ -3024,7 +3024,7 @@ export const useStore = create<Store>((set, get) => ({
       }
       get().hydrate(doc, userId, email);
     } catch (e) {
-      console.error("LeadWell: failed to load cloud data", e);
+      console.error("Polarch: failed to load cloud data", e);
       // A dropped connection is not a failed sign-in. Keep the session and
       // offer a retry — dropping to the login screen mid-commute was
       // indistinguishable from being signed out.
@@ -3174,7 +3174,7 @@ function revalidate(userId: string, email: string | null): Promise<void> {
     } catch (e) {
       // There is a document on screen and the app works. A failed refresh is
       // not an error screen — the write path surfaces connectivity on its own.
-      console.error("LeadWell: background refresh failed", e);
+      console.error("Polarch: background refresh failed", e);
     }
   })().finally(() => {
     if (refreshing === job) refreshing = null;
@@ -3295,7 +3295,7 @@ function runSync(userId: string): Promise<void> {
         saveDoc(userId, written, { pendingWrite: false });
         useStore.setState({ syncStatus: "idle" });
       } catch (e) {
-        console.error("LeadWell: cloud sync failed", e);
+        console.error("Polarch: cloud sync failed", e);
         scheduleSyncRetry(userId);
         // The edits are real and the server doesn't have them. Keep them where
         // a hard quit can't take them, and mark them as still owed.

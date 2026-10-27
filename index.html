@@ -5,11 +5,11 @@
     <script>
       /* Signed-out visitors to `/` go to the static landing without downloading
          the app bundle. Signed-in users, every other route, and OAuth callbacks
-         load the app. Demo builds flip LEADWELL_DEMO via the Vite HTML plugin. */
+         load the app. Demo builds flip POLARCH_DEMO via the Vite HTML plugin. */
       (function () {
-        var LEADWELL_DEMO = false;
+        var POLARCH_DEMO = false;
         function loadApp() {
-          // LEADWELL_LOAD_APP
+          // POLARCH_LOAD_APP
         }
         function isCallback(q, h) {
           return (
@@ -19,7 +19,16 @@
         }
         function hasSession() {
           try {
-            var raw = localStorage.getItem("lw-session");
+            var raw = localStorage.getItem("polarch-session");
+            if (!raw) {
+              /* Hint written before the rename: carry it over so a signed-in
+                 browser isn't bounced to the landing. */
+              raw = localStorage.getItem("lw-session");
+              if (raw) {
+                localStorage.setItem("polarch-session", raw);
+                localStorage.removeItem("lw-session");
+              }
+            }
             if (!raw) return false;
             var v = JSON.parse(raw);
             return Boolean(v && v.id);
@@ -27,10 +36,10 @@
           return false;
         }
         function setHop(v) {
-          try { sessionStorage.setItem("lw-boot", v); } catch (e) {}
+          try { sessionStorage.setItem("polarch-boot", v); } catch (e) {}
         }
         function clearHop() {
-          try { sessionStorage.removeItem("lw-boot"); } catch (e) {}
+          try { sessionStorage.removeItem("polarch-boot"); } catch (e) {}
         }
         function fromParam(q) {
           try {
@@ -52,7 +61,7 @@
             return "?" + p.toString();
           } catch (e) { return (q ? q + (q.indexOf("?") >= 0 ? "&" : "?") : "?") + "from=" + value; }
         }
-        if (LEADWELL_DEMO) {
+        if (POLARCH_DEMO) {
           loadApp();
           return;
         }

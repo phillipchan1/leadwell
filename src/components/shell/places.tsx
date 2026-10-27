@@ -148,7 +148,7 @@ export function placeOf(tab: Tab): Place {
 
 // ── People remembers which view you were last in ──────────────────────────
 
-const PEOPLE_VIEW_KEY = "leadwell:people-view";
+const PEOPLE_VIEW_KEY = "polarch:people-view";
 
 export function lastPeopleTab(): Tab {
   try {

@@ -108,7 +108,7 @@ function fireCheck(sentinel, logFile) {
 }
 
 function main() {
-  const dir = mkdtempSync(join(tmpdir(), "leadwell-pglog-"));
+  const dir = mkdtempSync(join(tmpdir(), "polarch-pglog-"));
   const logFile = join(dir, "container.log");
   const finish = (code, message) => {
     rmSync(dir, { recursive: true, force: true });

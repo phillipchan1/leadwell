@@ -3,7 +3,7 @@
 # Auth rows are read only through migration_tmp.auth_users() /
 # migration_tmp.auth_identities() — never by granting USAGE on auth.
 # Secrets are masked and never printed. Do not set -x. Do not set
-# LEADWELL_MIGRATE_TEST (that flag is prove/CI loopback only and would
+# POLARCH_MIGRATE_TEST (that flag is prove/CI loopback only and would
 # refuse the real source).
 #
 # This workflow produces NO artifact and NO step-summary or GITHUB_OUTPUT.
@@ -76,7 +76,7 @@ jobs:
         env:
           # Empty on purpose: prove/CI sets this so both URLs must be
           # loopback. This job reads the real Supabase session pooler.
-          LEADWELL_MIGRATE_TEST: ""
+          POLARCH_MIGRATE_TEST: ""
         run: |
           set +x
           set -eu
@@ -101,7 +101,7 @@ jobs:
           mask(source);
           let target;
           if (dryRun) {
-            target = "postgresql://postgres:postgres@127.0.0.1:5432/leadwell_cutover";
+            target = "postgresql://postgres:postgres@127.0.0.1:5432/polarch_cutover";
           } else {
             if (!neon) {
               console.error("Missing repo secret NEON_DATABASE_URL (required when dry_run=false)");
@@ -145,7 +145,7 @@ jobs:
         env:
           PGOPTIONS: "-c default_transaction_read_only=on"
           # runner context is valid in step env, not job env.
-          CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
+          CUTOVER_DUMP_DIR: ${{ runner.temp }}/polarch-cutover
         run: |
           set +x
           set -eu
@@ -216,17 +216,17 @@ jobs:
           set +x
           set -eu
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
-          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE leadwell_cutover;"
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE polarch_cutover;"
 
       - id: migrate
         name: Run Supabase → Neon migrate script
         env:
-          LEADWELL_MIGRATE_TEST: ""
+          POLARCH_MIGRATE_TEST: ""
         run: |
           set +x
           set -eu
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
-          unset LEADWELL_MIGRATE_TEST
+          unset POLARCH_MIGRATE_TEST
           # dry_run=true: NEON_DB_URL is the scratch service DB (prepared above).
           # dry_run=false: NEON_DB_URL is NEON_DATABASE_URL. No --dry-run flag —
           # the script's --dry-run exits before restore, so we would have no
@@ -236,16 +236,16 @@ jobs:
       - id: verify
         name: Checksums and Phil auth user
         env:
-          LEADWELL_MIGRATE_TEST: ""
+          POLARCH_MIGRATE_TEST: ""
         run: |
           set +x
           set -eu
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
-          unset LEADWELL_MIGRATE_TEST
+          unset POLARCH_MIGRATE_TEST
           node scripts/cutover-verify.mjs
 
       - id: leftover-copy-role
-        name: Drop leftover leadwell_copy
+        name: Drop leftover polarch_copy
         if: ${{ always() }}
         run: |
           set +x
@@ -293,12 +293,12 @@ jobs:
         name: Delete dumps
         if: ${{ always() }}
         env:
-          CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
+          CUTOVER_DUMP_DIR: ${{ runner.temp }}/polarch-cutover
         run: |
           set +x
           set -eu
           # Dumps and COPY CSVs stay on the runner only. Never upload them.
-          rm -rf "${CUTOVER_DUMP_DIR:-${RUNNER_TEMP}/leadwell-cutover}"
+          rm -rf "${CUTOVER_DUMP_DIR:-${RUNNER_TEMP}/polarch-cutover}"
           find "${GITHUB_WORKSPACE}" "${RUNNER_TEMP}" -type f \( \
             -name '*.dump' -o \
             -name 'auth_users.csv' -o \

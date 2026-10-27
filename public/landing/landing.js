@@ -2145,7 +2145,7 @@ void main(){
     setTimeout(begin, 300);
   }, { once: true });
   clock0 = performance.now();
-  window.__leadwellDay = () => ({
+  window.__polarchDay = () => ({
     minute: day.minute,
     clock: fmt(day.minute),
     night: !!day.night,

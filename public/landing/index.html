@@ -11,7 +11,16 @@
       var h = location.hash;
       function hasSession() {
         try {
-          var raw = localStorage.getItem("lw-session");
+          var raw = localStorage.getItem("polarch-session");
+          if (!raw) {
+            /* Hint written before the rename: carry it over so a signed-in
+               browser isn't bounced back to the landing. */
+            raw = localStorage.getItem("lw-session");
+            if (raw) {
+              localStorage.setItem("polarch-session", raw);
+              localStorage.removeItem("lw-session");
+            }
+          }
           if (!raw) return false;
           var v = JSON.parse(raw);
           return Boolean(v && v.id);
@@ -19,13 +28,13 @@
         return false;
       }
       function hop() {
-        try { return sessionStorage.getItem("lw-boot") || ""; } catch (e) { return ""; }
+        try { return sessionStorage.getItem("polarch-boot") || ""; } catch (e) { return ""; }
       }
       function setHop(v) {
-        try { sessionStorage.setItem("lw-boot", v); } catch (e) {}
+        try { sessionStorage.setItem("polarch-boot", v); } catch (e) {}
       }
       function clearHop() {
-        try { sessionStorage.removeItem("lw-boot"); } catch (e) {}
+        try { sessionStorage.removeItem("polarch-boot"); } catch (e) {}
       }
       function fromParam(search) {
         try {

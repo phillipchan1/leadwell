@@ -175,7 +175,7 @@ FROM public.${table} t`;
 }
 
 /**
- * Prod LeadWell grants the read-only source role (migration_reader) EXECUTE
+ * Prod Polarch grants the read-only source role (migration_reader) EXECUTE
  * on these SECURITY DEFINER wrappers, not USAGE on auth. Every source read
  * of auth.users / auth.identities must go through them. The functions
  * RETURNS TABLE only the Better Auth / COPY columns — never
@@ -692,7 +692,7 @@ export function rolesToStubFromDumpSql(sql) {
   return [...DEFAULT_SUPABASE_ROLES].sort();
 }
 
-const STUB_ROLES_DOLLAR = "$leadwell_stub_roles$";
+const STUB_ROLES_DOLLAR = "$polarch_stub_roles$";
 
 /**
  * Idempotent NOLOGIN stubs. Safe to re-run on the dry-run scratch target
@@ -730,7 +730,7 @@ export function proveMigrationReaderSetupSql(databaseName) {
   const db = quoteIdent(databaseName);
   const role = quoteIdent(MIGRATION_READER_ROLE);
   return `
-DO $leadwell_prove_reader$
+DO $polarch_prove_reader$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATION_READER_ROLE}') THEN
     CREATE ROLE ${role} LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
@@ -738,7 +738,7 @@ BEGIN
     ALTER ROLE ${role} WITH LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
   END IF;
 END
-$leadwell_prove_reader$;
+$polarch_prove_reader$;
 GRANT CONNECT ON DATABASE ${db} TO ${role};
 GRANT USAGE ON SCHEMA public TO ${role};
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
@@ -755,7 +755,7 @@ ${PROVE_MIGRATION_TMP_FUNCTIONS_SQL}
  * would otherwise block COPY. Never created on the Supabase source.
  * Password is supplied by the caller and must never be logged.
  */
-export const TARGET_COPY_ROLE = "leadwell_copy";
+export const TARGET_COPY_ROLE = "polarch_copy";
 
 export function createTargetCopyRoleSql(password, databaseName) {
   const role = quoteIdent(TARGET_COPY_ROLE);
@@ -764,7 +764,7 @@ export function createTargetCopyRoleSql(password, databaseName) {
   const db = databaseName
     ? `GRANT CONNECT ON DATABASE ${quoteIdent(databaseName)} TO ${role};\n`
     : "";
-  return `DO $leadwell_copy_role$
+  return `DO $polarch_copy_role$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
     CREATE ROLE ${role} LOGIN BYPASSRLS PASSWORD ${pwd};
@@ -772,7 +772,7 @@ BEGIN
     ALTER ROLE ${role} WITH LOGIN BYPASSRLS PASSWORD ${pwd};
   END IF;
 END
-$leadwell_copy_role$;
+$polarch_copy_role$;
 GRANT ${role} TO CURRENT_USER;
 ${db}GRANT USAGE, CREATE ON SCHEMA public TO ${role};
 `;
@@ -808,7 +808,7 @@ export function disableTargetCopyRoleSql(ownerName) {
   return `-- Explicit DROP ROLE of the target-only BYPASSRLS copy role.
 -- Alternative if DROP is blocked: ALTER ROLE ${role} NOLOGIN NOBYPASSRLS;
 -- Never run this on the Supabase source.
-DO $leadwell_drop_copy$
+DO $polarch_drop_copy$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
     BEGIN
@@ -824,7 +824,7 @@ BEGIN
     EXECUTE format('DROP ROLE %I', ${lit});
   END IF;
 END
-$leadwell_drop_copy$;
+$polarch_drop_copy$;
 `;
 }
 

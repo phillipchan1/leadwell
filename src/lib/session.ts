@@ -12,7 +12,7 @@ export type SessionStatus =
  *
  * `notesElsewhere` — the meeting points at an external tracker — turns the
  * empty row from a nag into a fact. Nothing is owed here when the write-up
- * lives in Notion or a Word doc; it just didn't happen in LeadWell.
+ * lives in Notion or a Word doc; it just didn't happen in Polarch.
  */
 export function sessionStatus(
   o: Session,

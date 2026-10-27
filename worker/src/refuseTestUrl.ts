@@ -89,7 +89,7 @@ function refuseRedirectEnv(name: "PGSERVICE" | "PGSERVICEFILE" | "PGSYSCONFDIR")
 /** Throw before any connect/query when a wipe/test URL is not loopback. */
 export function refuseUnsafeTestUrl(
   url: string,
-  label = "LEADWELL_TEST_DATABASE_URL",
+  label = "POLARCH_TEST_DATABASE_URL",
 ): void {
   refuseEnvHost("PGHOST");
   refuseEnvHost("PGHOSTADDR");

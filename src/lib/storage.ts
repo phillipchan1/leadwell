@@ -15,7 +15,32 @@ export interface Storage {
   remove(key: string): void;
 }
 
-const PREFIX = "leadwell:v1:";
+const PREFIX = "polarch:v1:";
+
+/**
+ * Keys written before the app was renamed. Carried over once, at load, so the
+ * unsynced cache and UI preferences survive. Covers both `PREFIX` keys and the
+ * few components that read localStorage directly (all of which render later).
+ */
+const LEGACY_KEY_PREFIX = "leadwell:";
+
+function migrateLegacyKeys(): void {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(LEGACY_KEY_PREFIX)) continue;
+      const value = localStorage.getItem(key);
+      const next = "polarch:" + key.slice(LEGACY_KEY_PREFIX.length);
+      if (value !== null && localStorage.getItem(next) === null) {
+        localStorage.setItem(next, value);
+      }
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage unavailable or full: the old keys stay put and the app starts clean.
+  }
+}
+
+migrateLegacyKeys();
 
 export const localStorageBackend: Storage = {
   load<T>(key: string): T | null {
@@ -32,7 +57,7 @@ export const localStorageBackend: Storage = {
       return true;
     } catch (e) {
       // Most likely quota (large photos). Surface loudly in dev.
-      console.error("LeadWell: failed to persist", key, e);
+      console.error("Polarch: failed to persist", key, e);
       return false;
     }
   },

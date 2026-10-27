@@ -1,4 +1,4 @@
-# LeadWell — Design Remediation Brief
+# Polarch — Design Remediation Brief
 
 **Companion to:** [`docs/design-audit.md`](./design-audit.md) — read it first; every finding ID below (`IA-1`, `REL-4`, `MOB-3`…) refers to a section there.
 
@@ -10,7 +10,7 @@ Paste the whole thing to start, or paste a single phase to resume. Each phase is
 
 ## Mission
 
-LeadWell is a personal leadership app for people who lead people — pastors, execs, founders, managers. Its users are mobile, time-poor, interruption-prone, and not power users. The app's routing model and product thinking are strong; its **design system adoption, trust signals, and mobile write paths** are not.
+Polarch is a personal leadership app for people who lead people — pastors, execs, founders, managers. Its users are mobile, time-poor, interruption-prone, and not power users. The app's routing model and product thinking are strong; its **design system adoption, trust signals, and mobile write paths** are not.
 
 Fix that without breaking what works.
 

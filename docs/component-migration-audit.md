@@ -1,4 +1,4 @@
-# Leadwell → Untitled UI React — Phase 1 Component Audit
+# Polarch → Untitled UI React — Phase 1 Component Audit
 
 _Audit date: 2026-08-02. No code has been changed; this document is the Phase 1 deliverable for review before setup begins._
 

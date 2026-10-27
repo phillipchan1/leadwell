@@ -47,7 +47,7 @@ async function requireUser(c: WorkerContext) {
 app.get("/api/health", (c) =>
   c.json({
     ok: true,
-    service: "leadwell",
+    service: "polarch",
     runtime: "cloudflare-workers",
     realtime: false,
   }),

@@ -1,4 +1,4 @@
-/** Allowlisted LeadWell tables. Names and columns never come from the client. */
+/** Allowlisted Polarch tables. Names and columns never come from the client. */
 
 export type TableName =
   | "profiles"

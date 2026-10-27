@@ -5,11 +5,11 @@
  * Plenty of relationships arrive with a system already: a Notion page for one
  * report, a Word doc in OneDrive for another, a shared Google Doc for a third.
  * Asking someone to abandon a tracker they and their report both trust is how
- * you lose the report, not how you win the tracker — so LeadWell doesn't ask.
+ * you lose the report, not how you win the tracker — so Polarch doesn't ask.
  *
  * What it keeps is the part the doc can't do: the rhythm, the readiness clock,
  * the topic board, the health read. What it gives up is exactly one thing —
- * the write-up. When `trackerUrl` is set, LeadWell stops claiming to know
+ * the write-up. When `trackerUrl` is set, Polarch stops claiming to know
  * whether the last one was written up, because it genuinely can't see it (see
  * `meetingReadiness`). Logging sessions here as well still works; the link
  * declares where the source of truth is, it doesn't lock anything.

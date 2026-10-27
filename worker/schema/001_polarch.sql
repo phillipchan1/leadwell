@@ -1,4 +1,4 @@
--- LeadWell application schema for Neon.
+-- Polarch application schema for Neon.
 -- Matches the live Supabase public tables after migrations 0001–0017,
 -- without FKs to auth.users (Better Auth owns identity).
 

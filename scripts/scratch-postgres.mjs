@@ -11,7 +11,7 @@ import { pathToFileURL } from "node:url";
 /** postgres:17 linux/amd64 (library/postgres tag 17, 2026-10). */
 export const SCRATCH_POSTGRES_IMAGE =
   "postgres@sha256:3518071376d0b6156b02e1db2747a78511b5b9dc3763cc79c506ebe2dc2ee71c";
-export const SCRATCH_POSTGRES_CONTAINER = "leadwell-pg";
+export const SCRATCH_POSTGRES_CONTAINER = "polarch-pg";
 
 /** TCP only — the initdb temp server sets listen_addresses=''. */
 export const SCRATCH_POSTGRES_READY_ARGS = Object.freeze([

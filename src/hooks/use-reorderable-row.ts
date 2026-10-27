@@ -7,7 +7,7 @@ export type MoveResult = { index: number; total: number } | null;
 /**
  * Keyboard reordering and removal for a row in an ordered list.
  *
- * Dragging a card is the only way to reorder anything in Leadwell today, which
+ * Dragging a card is the only way to reorder anything in Polarch today, which
  * means reordering does not exist for a keyboard at all. This is the equivalent:
  * ⌥↑ / ⌥↓ move the focused row, and the new position is spoken through the live
  * region — a silent move is indistinguishable from a move that didn't happen.

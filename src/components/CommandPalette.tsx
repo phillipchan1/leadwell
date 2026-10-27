@@ -35,7 +35,7 @@ import { SearchLg } from "@untitledui/icons";
 /**
  * ⌘K — one place to reach anything, answered from memory.
  *
- * Leadwell earns a palette: five tabs, five tree modes, four entity kinds that
+ * Polarch earns a palette: five tabs, five tree modes, four entity kinds that
  * each number in the dozens, and a set of create actions scattered across three
  * surfaces. Without it, "open Dana's 1:1" is a tab switch, a scan and a click;
  * with it, it's four keystrokes from anywhere.

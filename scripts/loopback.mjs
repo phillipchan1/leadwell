@@ -146,7 +146,7 @@ function refuseRedirectEnv(name) {
   throw new Error(`${name} can redirect the connection — refusing to connect`);
 }
 
-export function refuseUnsafeTestUrl(url, label = "LEADWELL_TEST_DATABASE_URL") {
+export function refuseUnsafeTestUrl(url, label = "POLARCH_TEST_DATABASE_URL") {
   refuseEnvHost("PGHOST");
   refuseEnvHost("PGHOSTADDR");
   refuseRedirectEnv("PGSERVICE");

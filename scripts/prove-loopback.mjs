@@ -31,24 +31,24 @@ function refused(url, label) {
   }
 }
 
-ok(!refused("postgresql://postgres:postgres@127.0.0.1:5432/leadwell"), "127.0.0.1 allowed");
-ok(!refused("postgresql://postgres@localhost:5432/leadwell"), "localhost allowed");
-ok(!refused("postgresql://postgres@[::1]:5432/leadwell"), "::1 allowed");
-ok(refused("postgresql://neondb@ep-prod.neon.tech/leadwell"), "Neon host refused");
-ok(refused("postgresql://u@0127.0.0.1:5432/leadwell"), "leading-zero IPv4 refused");
-ok(refused("postgresql://u@127:5432/leadwell"), "bare 127 refused");
-ok(refused("postgresql://u@10.0.0.1:5432/leadwell"), "RFC1918 refused");
+ok(!refused("postgresql://postgres:postgres@127.0.0.1:5432/polarch"), "127.0.0.1 allowed");
+ok(!refused("postgresql://postgres@localhost:5432/polarch"), "localhost allowed");
+ok(!refused("postgresql://postgres@[::1]:5432/polarch"), "::1 allowed");
+ok(refused("postgresql://neondb@ep-prod.neon.tech/polarch"), "Neon host refused");
+ok(refused("postgresql://u@0127.0.0.1:5432/polarch"), "leading-zero IPv4 refused");
+ok(refused("postgresql://u@127:5432/polarch"), "bare 127 refused");
+ok(refused("postgresql://u@10.0.0.1:5432/polarch"), "RFC1918 refused");
 ok(
-  refused("postgresql://u@127.0.0.1:5432/leadwell?host=ep-prod.neon.tech"),
+  refused("postgresql://u@127.0.0.1:5432/polarch?host=ep-prod.neon.tech"),
   "host= redirect query refused",
 );
-ok(refused("postgresql://u@a,b:5432/leadwell"), "multi-host list refused");
+ok(refused("postgresql://u@a,b:5432/polarch"), "multi-host list refused");
 ok(refused("not-a-url"), "invalid URL refused");
 
 const saved = process.env.PGHOST;
 process.env.PGHOST = "ep-prod.neon.tech";
 ok(
-  refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   "PGHOST non-loopback refused even if URL is loopback",
 );
 if (saved === undefined) delete process.env.PGHOST;
@@ -67,19 +67,19 @@ function withEnv(name, value, fn) {
 
 ok(
   withEnv("PGSERVICE", "neon-prod", () =>
-    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+    refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   ),
   "PGSERVICE refused even if URL is loopback",
 );
 ok(
   withEnv("PGSERVICEFILE", "/tmp/pg_service.conf", () =>
-    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+    refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   ),
   "PGSERVICEFILE refused even if URL is loopback",
 );
 ok(
   withEnv("PGSYSCONFDIR", "/tmp/pgconf", () =>
-    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+    refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   ),
   "PGSYSCONFDIR refused even if URL is loopback",
 );
@@ -107,20 +107,20 @@ ok(sourceEnv.KEEP === "yes", "sourceReadEnv keeps unrelated vars");
 
 let missing = false;
 try {
-  assertLoopbackDatabaseUrl("", "LEADWELL_TEST_DATABASE_URL");
+  assertLoopbackDatabaseUrl("", "POLARCH_TEST_DATABASE_URL");
 } catch {
   missing = true;
 }
 ok(missing, "empty URL required-and-loopback");
 
 ok(
-  redactSecrets("pg_dump failed: postgres://u:s3cret@db.example.com/leadwell") ===
+  redactSecrets("pg_dump failed: postgres://u:s3cret@db.example.com/polarch") ===
     "pg_dump failed: postgres://***",
   "redactSecrets strips postgres URIs",
 );
 ok(
-  redactSecrets("postgresql://u:s3cret@db.example.com/leadwell?sslmode=require").includes("***") &&
-    !redactSecrets("postgresql://u:s3cret@db.example.com/leadwell?sslmode=require").includes("s3cret"),
+  redactSecrets("postgresql://u:s3cret@db.example.com/polarch?sslmode=require").includes("***") &&
+    !redactSecrets("postgresql://u:s3cret@db.example.com/polarch?sslmode=require").includes("s3cret"),
   "redactSecrets strips postgresql URIs and passwords",
 );
 ok(ensureSslMode("") === "", "ensureSslMode empty");
@@ -137,16 +137,16 @@ ok(
   "ensureSslMode appends with &",
 );
 
-const masked = githubAddMaskLines("postgres://phil:p%40ss@db.example.com/leadwell");
-ok(masked.some((l) => l === "::add-mask::postgres://phil:p%40ss@db.example.com/leadwell"), "mask raw URI");
+const masked = githubAddMaskLines("postgres://phil:p%40ss@db.example.com/polarch");
+ok(masked.some((l) => l === "::add-mask::postgres://phil:p%40ss@db.example.com/polarch"), "mask raw URI");
 ok(masked.some((l) => l === "::add-mask::p%40ss"), "mask encoded password");
 ok(masked.some((l) => l === "::add-mask::p@ss"), "mask decoded password");
 ok(masked.some((l) => l === "::add-mask::phil"), "mask username");
 ok(masked.some((l) => l === "::add-mask::db.example.com"), "mask hostname");
 ok(masked.every((l) => l.startsWith("::add-mask::")), "mask lines are add-mask only");
 ok(
-  withRoleUrl("postgresql://postgres:postgres@127.0.0.1:5432/dst", "leadwell_copy", "x") ===
-    "postgresql://leadwell_copy:x@127.0.0.1:5432/dst",
+  withRoleUrl("postgresql://postgres:postgres@127.0.0.1:5432/dst", "polarch_copy", "x") ===
+    "postgresql://polarch_copy:x@127.0.0.1:5432/dst",
   "withRoleUrl rewrites userinfo",
 );
 

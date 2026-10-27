@@ -1,5 +1,5 @@
 /**
- * Normalized Worker persistence for LeadWell.
+ * Normalized Worker persistence for Polarch.
  *
  * The zustand store keeps working entirely in memory with optimistic updates —
  * exactly as it did against localStorage. This module is the seam that turns
@@ -906,7 +906,7 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
     // and blocked every save). With row diffs it could no longer wipe a table,
     // but it would still read as "every row was deleted".
     if (!Array.isArray(items)) {
-      console.error(`LeadWell: sync skipped missing collection "${k}"`);
+      console.error(`Polarch: sync skipped missing collection "${k}"`);
       continue;
     }
     const { changed, removed } = diffRows(
@@ -925,7 +925,7 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
       addUpserts(payload, "chats", chatRows(userId, changed));
       addDeletes(payload, "chats", removed);
     } else {
-      console.error('LeadWell: sync skipped missing collection "chats"');
+      console.error('Polarch: sync skipped missing collection "chats"');
     }
   }
   if (!base || base.nodePositions !== d.nodePositions) {
@@ -934,7 +934,7 @@ export async function syncData(userId: string, d: PersistedData): Promise<void> 
       addUpserts(payload, "node_positions", posRows(userId, changed));
       addDeletes(payload, "node_positions", removed);
     } else {
-      console.error('LeadWell: sync skipped missing collection "nodePositions"');
+      console.error('Polarch: sync skipped missing collection "nodePositions"');
     }
   }
 

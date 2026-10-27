@@ -16,15 +16,15 @@ function refused(url: string, label?: string): boolean {
   }
 }
 
-ok(!refused("postgresql://postgres:postgres@127.0.0.1:5432/leadwell"), "127.0.0.1 allowed");
-ok(!refused("postgresql://postgres@localhost:5432/leadwell"), "localhost allowed");
-ok(!refused("postgresql://postgres@[::1]:5432/leadwell"), "::1 allowed");
-ok(refused("postgresql://neondb@ep-prod.neon.tech/leadwell"), "Neon host refused");
-ok(refused("postgresql://u@0127.0.0.1:5432/leadwell"), "leading-zero IPv4 refused");
-ok(refused("postgresql://u@127:5432/leadwell"), "bare 127 refused");
-ok(refused("postgresql://u@10.0.0.1:5432/leadwell"), "RFC1918 refused");
+ok(!refused("postgresql://postgres:postgres@127.0.0.1:5432/polarch"), "127.0.0.1 allowed");
+ok(!refused("postgresql://postgres@localhost:5432/polarch"), "localhost allowed");
+ok(!refused("postgresql://postgres@[::1]:5432/polarch"), "::1 allowed");
+ok(refused("postgresql://neondb@ep-prod.neon.tech/polarch"), "Neon host refused");
+ok(refused("postgresql://u@0127.0.0.1:5432/polarch"), "leading-zero IPv4 refused");
+ok(refused("postgresql://u@127:5432/polarch"), "bare 127 refused");
+ok(refused("postgresql://u@10.0.0.1:5432/polarch"), "RFC1918 refused");
 ok(
-  refused("postgresql://u@127.0.0.1:5432/leadwell?host=ep-prod.neon.tech"),
+  refused("postgresql://u@127.0.0.1:5432/polarch?host=ep-prod.neon.tech"),
   "host= redirect query refused",
 );
 ok(refused("not-a-url"), "invalid URL refused");
@@ -32,7 +32,7 @@ ok(refused("not-a-url"), "invalid URL refused");
 const saved = process.env.PGHOST;
 process.env.PGHOST = "ep-prod.neon.tech";
 ok(
-  refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+  refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   "PGHOST non-loopback refused even if URL is loopback",
 );
 if (saved === undefined) delete process.env.PGHOST;
@@ -51,19 +51,19 @@ function withEnv(name: string, value: string, fn: () => boolean): boolean {
 
 ok(
   withEnv("PGSERVICE", "neon-prod", () =>
-    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+    refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   ),
   "PGSERVICE refused even if URL is loopback",
 );
 ok(
   withEnv("PGSERVICEFILE", "/tmp/pg_service.conf", () =>
-    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+    refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   ),
   "PGSERVICEFILE refused even if URL is loopback",
 );
 ok(
   withEnv("PGSYSCONFDIR", "/tmp/pgconf", () =>
-    refused("postgresql://postgres@127.0.0.1:5432/leadwell"),
+    refused("postgresql://postgres@127.0.0.1:5432/polarch"),
   ),
   "PGSYSCONFDIR refused even if URL is loopback",
 );

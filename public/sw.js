@@ -9,8 +9,8 @@
  * Bump CACHE_VERSION to evict every cache on the next deploy.
  */
 const CACHE_VERSION = "v7";
-const SHELL_CACHE = `leadwell-shell-${CACHE_VERSION}`;
-const ASSET_CACHE = `leadwell-assets-${CACHE_VERSION}`;
+const SHELL_CACHE = `polarch-shell-${CACHE_VERSION}`;
+const ASSET_CACHE = `polarch-assets-${CACHE_VERSION}`;
 const KNOWN_CACHES = [SHELL_CACHE, ASSET_CACHE];
 
 const SHELL_URLS = [
@@ -50,7 +50,12 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k.startsWith("leadwell-") && !KNOWN_CACHES.includes(k))
+            // "leadwell-" caches predate the rename and would otherwise linger.
+            .filter(
+              (k) =>
+                (k.startsWith("polarch-") || k.startsWith("leadwell-")) &&
+                !KNOWN_CACHES.includes(k)
+            )
             .map((k) => caches.delete(k))
         )
       )

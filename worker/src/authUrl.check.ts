@@ -31,16 +31,16 @@ function ok(cond: boolean, msg: string) {
   if (!cond) fails.push(msg);
 }
 
-const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/leadwell";
-const prodWithLocalUser = "postgresql://localhost_admin@ep-prod.neon.tech/leadwell";
+const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/polarch";
+const prodWithLocalUser = "postgresql://localhost_admin@ep-prod.neon.tech/polarch";
 const prodWithLocalDb = "postgresql://app@ep-prod.neon.tech/localhost";
 const prodWithLocalQuery =
-  "postgresql://app@ep-prod.neon.tech/leadwell?application_name=localhost&sslmode=require";
-const loopbackPg = "postgresql://postgres@localhost:5432/leadwell";
-const loopbackV4 = "postgresql://postgres@127.0.0.1:5432/leadwell";
-const loopbackV6 = "postgresql://postgres:postgres@[::1]:5432/leadwell";
-const leadingZeroHost = "postgresql://u@0127.0.0.1:5432/leadwell";
-const hyperdrive = "postgresql://u:p@abc.hyperdrive.local:5432/leadwell?sslmode=require";
+  "postgresql://app@ep-prod.neon.tech/polarch?application_name=localhost&sslmode=require";
+const loopbackPg = "postgresql://postgres@localhost:5432/polarch";
+const loopbackV4 = "postgresql://postgres@127.0.0.1:5432/polarch";
+const loopbackV6 = "postgresql://postgres:postgres@[::1]:5432/polarch";
+const leadingZeroHost = "postgresql://u@0127.0.0.1:5432/polarch";
+const hyperdrive = "postgresql://u:p@abc.hyperdrive.local:5432/polarch?sslmode=require";
 
 ok(isLoopbackHostname("::1"), "::1 hostname is loopback");
 ok(isLoopbackHostname("[::1]"), "[::1] hostname is loopback");
@@ -65,9 +65,9 @@ ok(
   !isLoopbackHostname(connectionHostname(leadingZeroHost) ?? ""),
   "unnormalized 0127 postgres host is not loopback",
 );
-ok(!isLocalAuthHost("https://leadwell.example.workers.dev"), "workers.dev is not local");
+ok(!isLocalAuthHost("https://polarch.example.workers.dev"), "workers.dev is not local");
 ok(!authCookieSecure("http://localhost:8787"), "localhost cookies are not Secure");
-ok(authCookieSecure("https://leadwell.example.workers.dev"), "prod cookies are Secure");
+ok(authCookieSecure("https://polarch.example.workers.dev"), "prod cookies are Secure");
 
 ok(!isLocalAuthRuntime({}), "empty env is not local");
 ok(!isLocalAuthRuntime({ ENVIRONMENT: "dev" }), "ENVIRONMENT=dev is not local");
@@ -78,8 +78,8 @@ ok(connectionHostname(prodWithLocalDb) === "ep-prod.neon.tech", "parses host not
 ok(connectionHostname(prodWithLocalQuery) === "ep-prod.neon.tech", "parses host not query");
 
 ok(
-  resolveAuthBaseURL({ BETTER_AUTH_URL: "https://leadwell.example.workers.dev/" }) ===
-    "https://leadwell.example.workers.dev",
+  resolveAuthBaseURL({ BETTER_AUTH_URL: "https://polarch.example.workers.dev/" }) ===
+    "https://polarch.example.workers.dev",
   "configured URL wins and strips trailing slash",
 );
 ok(
@@ -159,7 +159,7 @@ ok(encodedStar, "TRUSTED_ORIGINS rejects percent-encoded wildcard host");
 
 const custom = resolveTrustedOrigins({
   BETTER_AUTH_URL: "https://polarch.day",
-  TRUSTED_ORIGINS: "https://www.polarch.day, https://leadwell.example.workers.dev",
+  TRUSTED_ORIGINS: "https://www.polarch.day, https://polarch.example.workers.dev",
 });
 ok(custom.includes("https://polarch.day"), "trusted origins always include BETTER_AUTH_URL");
 ok(custom.includes("https://www.polarch.day"), "trusted origins include TRUSTED_ORIGINS extras");
@@ -199,7 +199,7 @@ ok(
 let badDomain = false;
 try {
   resolveAuthCookieDomain({
-    BETTER_AUTH_URL: "https://leadwell.example.workers.dev",
+    BETTER_AUTH_URL: "https://polarch.example.workers.dev",
     AUTH_COOKIE_DOMAIN: "polarch.day",
   });
 } catch {
@@ -219,13 +219,13 @@ ok(tld, "single-label cookie domain is refused");
 ok(isPublicSuffix("co.uk"), "co.uk is a public suffix");
 ok(isPublicSuffix("workers.dev"), "workers.dev is a public suffix");
 ok(!isPublicSuffix("polarch.day"), "polarch.day is not a public suffix");
-ok(isSharedPlatformHost("leadwell.example.workers.dev"), "workers.dev host is shared platform");
+ok(isSharedPlatformHost("polarch.example.workers.dev"), "workers.dev host is shared platform");
 ok(isSharedPlatformHost("app.pages.dev"), "pages.dev host is shared platform");
 ok(!isSharedPlatformHost("polarch.day"), "custom domain is not a shared platform");
 let workersCookie = false;
 try {
   resolveAuthCookieDomain({
-    BETTER_AUTH_URL: "https://leadwell.example.workers.dev",
+    BETTER_AUTH_URL: "https://polarch.example.workers.dev",
     AUTH_COOKIE_DOMAIN: "workers.dev",
   });
 } catch {
@@ -245,8 +245,8 @@ ok(pagesCookie, "cookie domain pages.dev is refused");
 let workersEqual = false;
 try {
   resolveAuthCookieDomain({
-    BETTER_AUTH_URL: "https://leadwell.example.workers.dev",
-    AUTH_COOKIE_DOMAIN: "leadwell.example.workers.dev",
+    BETTER_AUTH_URL: "https://polarch.example.workers.dev",
+    AUTH_COOKIE_DOMAIN: "polarch.example.workers.dev",
   });
 } catch {
   workersEqual = true;

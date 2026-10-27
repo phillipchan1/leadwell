@@ -9,14 +9,14 @@ export const API_SECURITY = {
 export const API_CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, content-type, cookie, x-leadwell-token",
+    "authorization, content-type, cookie, x-polarch-token",
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   ...API_SECURITY,
 };
 
 const AUTH_CORS_ALLOW = {
   "Access-Control-Allow-Headers":
-    "authorization, content-type, cookie, x-leadwell-token",
+    "authorization, content-type, cookie, x-polarch-token",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Credentials": "true",
   Vary: "Origin",

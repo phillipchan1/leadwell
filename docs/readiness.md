@@ -26,7 +26,7 @@ The dread isn't "I don't have enough data about my people." It's:
 
 > I'm sitting down in four minutes and I don't know what this meeting is for.
 
-LeadWell today answers **"who do I know?"** — assessment coverage, `X/Y with a
+Polarch today answers **"who do I know?"** — assessment coverage, `X/Y with a
 read`, blind spots, domain mix. That's a *library* metric. It's backward-looking
 and it never changes between Tuesday and Wednesday.
 
@@ -392,7 +392,7 @@ isn't a fourth triage state — it's a **tracked** meeting whose write-up happen
 elsewhere — so it rides on the meeting as `trackerUrl` rather than adding a
 branch to the ladder.
 
-The decision it forces is whether the tracker replaces LeadWell's 1:1s or sits
+The decision it forces is whether the tracker replaces Polarch's 1:1s or sits
 beside them. **Beside**: the rhythm, the topic board, the health read and three
 of the four checks are things a shared doc can't do, and asking someone to
 abandon a page their report also writes in is how you lose the report, not how
@@ -400,8 +400,8 @@ you win the page. Sessions can still be logged here as well; the link declares
 where the source of truth is, it doesn't lock anything.
 
 Exactly one thing changes, and it has to: **the write-up check stops
-asserting.** LeadWell can't read a Notion page, so "Last one written up" becomes
-"Written up in Notion — kept outside LeadWell, not checked here". The
+asserting.** Polarch can't read a Notion page, so "Last one written up" becomes
+"Written up in Notion — kept outside Polarch, not checked here". The
 alternative is a check that can never pass, which parks everyone who uses a
 tracker in permanent **Loose end** — and a dashboard that can't go clean is a
 dashboard nobody reads, which takes the one real alarm down with it. Same

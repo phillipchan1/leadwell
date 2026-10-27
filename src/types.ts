@@ -229,12 +229,12 @@ export type TrackedMeeting = {
   /** Defaults to "convene". Participants aren't scored on the agenda. */
   role?: MeetingRole;
   /**
-   * Where the notes live, when they live outside LeadWell — a Notion page, a
+   * Where the notes live, when they live outside Polarch — a Notion page, a
    * Word doc in OneDrive, a shared Google Doc. Some relationships arrive with
    * a system already, and the tracker both people trust isn't worth breaking.
    *
    * This is an *and*, not an *or*: the rhythm, the topic board and the
-   * readiness clock stay here. Only the write-up moves — LeadWell stops
+   * readiness clock stay here. Only the write-up moves — Polarch stops
    * claiming to know whether the last one was written up, because it can't
    * see the page. Logging sessions here as well keeps working.
    *

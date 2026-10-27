@@ -695,7 +695,7 @@ export function search(
       }
     }
 
-    // Mid-word title hits ("well" → "Leadwell"), which a prefix index can't
+    // Mid-word title hits ("arch" → "Polarch"), which a prefix index can't
     // see. Only titles: they're one short line per doc, so the scan is cheap,
     // and a mid-word match buried in a note body is noise anyway.
     for (let d = 0; d < docs.length; d++) {

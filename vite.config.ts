@@ -25,7 +25,7 @@ function serveLandingPlugin(): Plugin {
   };
 
   return {
-    name: "leadwell-serve-landing",
+    name: "polarch-serve-landing",
     configureServer(server) {
       server.middlewares.use(serveLanding);
     },
@@ -40,7 +40,7 @@ function serveLandingPlugin(): Plugin {
  *  downloading the app bundle. */
 function deferAppBundle(): Plugin {
   return {
-    name: "leadwell-defer-app-bundle",
+    name: "polarch-defer-app-bundle",
     transformIndexHtml: {
       order: "post",
       handler(html) {
@@ -70,25 +70,25 @@ function deferAppBundle(): Plugin {
         );
 
         if (!assets.some((a) => a.k === "js")) {
-          throw new Error("leadwell-defer-app-bundle: no app module found in index.html");
+          throw new Error("polarch-defer-app-bundle: no app module found in index.html");
         }
-        if (!html.includes("// LEADWELL_LOAD_APP")) {
-          throw new Error("leadwell-defer-app-bundle: missing LEADWELL_LOAD_APP marker");
+        if (!html.includes("// POLARCH_LOAD_APP")) {
+          throw new Error("polarch-defer-app-bundle: missing POLARCH_LOAD_APP marker");
         }
 
         const body =
-          "if(window.__LW_APP)return;window.__LW_APP=1;var A=" +
+          "if(window.__POLARCH_APP)return;window.__POLARCH_APP=1;var A=" +
           JSON.stringify(assets) +
           ";for(var i=0;i<A.length;i++){var x=A[i],n;if(x.k===\"css\"){n=document.createElement(\"link\");n.rel=\"stylesheet\";n.href=x.h;if(x.c)n.crossOrigin=\"\";document.head.appendChild(n);}else if(x.k===\"preload\"){n=document.createElement(\"link\");n.rel=\"modulepreload\";n.href=x.h;document.head.appendChild(n);}else{n=document.createElement(\"script\");n.type=\"module\";n.src=x.h;if(x.c)n.crossOrigin=\"\";document.head.appendChild(n);}}";
 
-        return html.replace("// LEADWELL_LOAD_APP", body);
+        return html.replace("// POLARCH_LOAD_APP", body);
       },
     },
   };
 }
 
 export default defineConfig(() => {
-  const workerOrigin = process.env.LEADWELL_WORKER_ORIGIN || "http://127.0.0.1:8787";
+  const workerOrigin = process.env.POLARCH_WORKER_ORIGIN || "http://127.0.0.1:8787";
 
   return {
     // The demo build is served from wherever it's hosted, not a site root.
@@ -98,10 +98,10 @@ export default defineConfig(() => {
       tailwindcss(),
       serveLandingPlugin(),
       {
-        name: "leadwell-demo-html",
+        name: "polarch-demo-html",
         transformIndexHtml(html) {
           if (process.env.VITE_DEMO === "1") {
-            return html.replace("var LEADWELL_DEMO = false;", "var LEADWELL_DEMO = true;");
+            return html.replace("var POLARCH_DEMO = false;", "var POLARCH_DEMO = true;");
           }
           return html;
         },

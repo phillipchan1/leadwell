@@ -1,5 +1,5 @@
 /**
- * Public-repo CI guards. LeadWell is public: dumps, CSVs, and row data
+ * Public-repo CI guards. Polarch is public: dumps, CSVs, and row data
  * must never become Actions artifacts, and cutover logs must stay counts
  * + hashes. Port of phillipchan1/nuvo PR #100 @ 8143e24 (Engineer 3):
  * default-deny allowlist, YAML-parsed, fail-closed, hashes each whole
@@ -78,6 +78,7 @@ const ALLOWED = new Set(ALLOWED_UPLOAD_ARTIFACT_PATHS);
 
 /** Filenames that are dumps / COPY output / dump sidecars — never in the workspace upload tree. */
 export const FORBIDDEN_WORKSPACE_BASENAMES = Object.freeze([
+  "polarch-source.dump",
   "leadwell-source.dump",
   "source.dump",
   "nuvo-source.dump",
@@ -91,7 +92,7 @@ export const FORBIDDEN_WORKSPACE_BASENAMES = Object.freeze([
 
 const DATA_PATH_RE = /\.(dump|csv|sql|toc)$/i;
 
-/** uses: matching /upload|release/. Empty: LeadWell uploads nothing. */
+/** uses: matching /upload|release/. Empty: Polarch uploads nothing. */
 export const ALLOWED_UPLOAD_OR_RELEASE_USES = Object.freeze([]);
 
 /** Local ./ and docker:// uses: none of the four workflows ship one. */

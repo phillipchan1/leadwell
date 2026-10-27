@@ -123,9 +123,9 @@ ok(
   "local client IP can read XFF",
 );
 
-const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/leadwell?sslmode=disable";
-const loopback = "postgresql://postgres@127.0.0.1:5432/leadwell";
-const hyperdrive = "postgresql://u:p@abc.hyperdrive.local:5432/leadwell?sslmode=require";
+const neon = "postgresql://neondb@ep-prod.us-east-1.aws.neon.tech/polarch?sslmode=disable";
+const loopback = "postgresql://postgres@127.0.0.1:5432/polarch";
+const hyperdrive = "postgresql://u:p@abc.hyperdrive.local:5432/polarch?sslmode=require";
 
 ok(
   poolSsl(clientConnection({}, neon).ssl) === true,

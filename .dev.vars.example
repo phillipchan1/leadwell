@@ -19,4 +19,4 @@ ALLOWED_EMAILS=phillipchan1@gmail.com
 # Local redirect URI: http://localhost:8787/api/auth/callback/google
 # GOOGLE_CLIENT_ID=
 # GOOGLE_CLIENT_SECRET=
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/polarch

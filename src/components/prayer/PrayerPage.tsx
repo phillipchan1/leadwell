@@ -168,7 +168,7 @@ export function PrayerPage() {
   );
 }
 
-const NIGHT_KEY = "leadwell:prayer-night";
+const NIGHT_KEY = "polarch:prayer-night";
 
 /** Night by default; remembered per device, like the app's own theme. */
 function useNight() {

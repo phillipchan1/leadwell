@@ -3,7 +3,7 @@
 -- Some relationships arrive with a system already: a Notion page for one
 -- report, a Word doc in OneDrive for another. Breaking a tracker both people
 -- trust is a bad trade, so the meeting can point at where the notes actually
--- live and LeadWell keeps the parts a doc can't do — the rhythm, the topic
+-- live and Polarch keeps the parts a doc can't do — the rhythm, the topic
 -- board, the readiness clock.
 --
 -- It rides on the meeting rather than the person because the meeting is the
