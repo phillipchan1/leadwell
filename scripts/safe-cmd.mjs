@@ -41,17 +41,46 @@ export function extractSqlstate(text) {
   );
 }
 
+/** Line-anchored ERROR / pg_dump|pg_restore error. Ignores mid-line "error:". */
+export const PG_ERROR_LINE_RE = /^(?:psql:[^:\n]*:\d+: )?ERROR:|^pg_(?:dump|restore): error:/im;
+
+export const PSQL_SQLSTATE_VERBOSITY_ARGS = Object.freeze(["-v", "VERBOSITY=sqlstate"]);
+
+/** Prepend `-v VERBOSITY=sqlstate` for psql unless the caller already set it. */
+export function withPsqlSqlstateVerbosity(cmd, args = []) {
+  const name = basename(String(cmd || "").split(/\s+/)[0] || "");
+  const list = Array.isArray(args) ? [...args] : [];
+  if (name !== "psql") return list;
+  for (let i = 0; i < list.length; i++) {
+    const t = String(list[i]);
+    if (t === "-v" && /^VERBOSITY=/i.test(String(list[i + 1] || ""))) return list;
+    if (/^--set=VERBOSITY=/i.test(t) || /^-vVERBOSITY=/i.test(t)) return list;
+  }
+  return [...PSQL_SQLSTATE_VERBOSITY_ARGS, ...list];
+}
+
 /**
  * ERROR: prefix plus text up to the first `: "` or `: '` after ERROR:.
  * Returns null when there is no such cut (caller uses the SQLSTATE class).
  */
 export function cutErrorLineAtQuotedValue(text) {
   const s = String(text ?? "");
-  const errorAt = s.search(/ERROR:/i);
-  if (errorAt < 0) return null;
-  const fromError = s.slice(errorAt).split(/\r?\n/, 1)[0];
-  const head = fromError.match(/^ERROR:/i)?.[0] ?? "ERROR:";
-  const rest = fromError.slice(head.length);
+  const m = s.match(PG_ERROR_LINE_RE);
+  if (!m || m.index == null) return null;
+  const fromError = s.slice(m.index).split(/\r?\n/, 1)[0];
+  const standalone = fromError.match(/(?:^psql:[^:\n]*:\d+: )?(ERROR:)/);
+  let head;
+  let headAt;
+  if (standalone && standalone.index != null) {
+    head = standalone[1];
+    headAt = standalone.index + standalone[0].length - standalone[1].length;
+  } else {
+    const pg = fromError.match(/^pg_(?:dump|restore): error:/i);
+    if (!pg) return null;
+    head = pg[0];
+    headAt = 0;
+  }
+  const rest = fromError.slice(headAt + head.length);
   const cutDq = rest.indexOf(': "');
   const cutSq = rest.indexOf(": '");
   const cuts = [cutDq, cutSq].filter((i) => i >= 0);
@@ -63,10 +92,15 @@ export function cutErrorLineAtQuotedValue(text) {
 /**
  * SQLSTATE plus a safe ERROR prefix (cut at the first quoted value) or a
  * fixed message for the SQLSTATE class. Never regex-strips values.
+ * P0001 (plpgsql RAISE) always uses the class message — the RAISE text
+ * can put a value before `: "` and still leak if we cut.
  */
 export function sanitizePgFailureText(text) {
   const raw = String(text ?? "");
   const sqlstate = extractSqlstate(raw);
+  if (sqlstate && String(sqlstate).toUpperCase() === "P0001") {
+    return { sqlstate, firstError: sqlstateClassMessage(sqlstate) };
+  }
   const cut = cutErrorLineAtQuotedValue(raw);
   const firstError = cut ?? (sqlstate ? sqlstateClassMessage(sqlstate) : "query failed");
   return { sqlstate, firstError };
@@ -106,7 +140,7 @@ export function formatSafeCommandError(cmd, status, stderr, stdout, redact = (s)
 
 export function run(cmd, args = [], opts = {}) {
   const { env, redact = (s) => s, ...rest } = opts;
-  const res = spawnSync(cmd, args, {
+  const res = spawnSync(cmd, withPsqlSqlstateVerbosity(cmd, args), {
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
     maxBuffer: 64 * 1024 * 1024,
@@ -123,7 +157,7 @@ export function runToFile(cmd, args, file, opts = {}) {
   const { env, redact = (s) => s } = opts;
   const fd = openSync(file, "w");
   try {
-    const res = spawnSync(cmd, args, {
+    const res = spawnSync(cmd, withPsqlSqlstateVerbosity(cmd, args), {
       encoding: "utf8",
       stdio: ["ignore", fd, "pipe"],
       env: libpqCleanEnv(env ?? process.env),

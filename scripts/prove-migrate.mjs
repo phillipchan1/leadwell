@@ -83,6 +83,7 @@ import {
   formatSafeCommandError,
   sanitizePgFailureText,
   sqlstateClassMessage,
+  withPsqlSqlstateVerbosity,
 } from "./safe-cmd.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -205,6 +206,22 @@ ok(raiseSan.sqlstate === "P0001", "plpgsql RAISE keeps SQLSTATE");
 ok(raiseSan.firstError === "plpgsql error", "plpgsql RAISE without : \" uses the class message");
 ok(!/phil@|leaked/.test(raiseSan.firstError), "plpgsql RAISE text does not leak");
 
+const raiseBeforeQuote = 'ERROR:  leaked phil@example.com : "x"\nSQLSTATE P0001';
+const raiseBeforeSan = sanitizePgFailureText(raiseBeforeQuote);
+ok(raiseBeforeSan.sqlstate === "P0001", "P0001 with : \" keeps SQLSTATE");
+ok(raiseBeforeSan.firstError === "plpgsql error", "P0001 always uses the class message");
+ok(!/phil@|leaked/.test(raiseBeforeSan.firstError), "RAISE value before : \" does not leak");
+
+const noticeError = [
+  'NOTICE:  trigger error: "phil@example.com"',
+  'ERROR:  invalid input syntax for type text: "ok@example.com"',
+  "SQLSTATE 22P02",
+].join("\n");
+const noticeSan = sanitizePgFailureText(noticeError);
+ok(noticeSan.sqlstate === "22P02", "NOTICE + ERROR keeps SQLSTATE");
+ok(noticeSan.firstError === "ERROR:  invalid input syntax for type text", "NOTICE error: is not treated as ERROR");
+ok(!/phil@|NOTICE|ok@|trigger/.test(noticeSan.firstError), "NOTICE containing error: does not leak");
+
 const singleQuoted = "ERROR:  invalid input syntax for type text: 'it\\'s phil@example.com'\nSQLSTATE 22P02";
 const sqSan = sanitizePgFailureText(singleQuoted);
 ok(sqSan.firstError === "ERROR:  invalid input syntax for type text", "cuts ERROR at first : '");
@@ -213,6 +230,18 @@ ok(!/phil@|it/.test(sqSan.firstError), "single-quoted value does not leak");
 ok(
   !/phil@/i.test(formatSafeCommandError("psql", 1, "ERROR:  boom phil@example.com leaked\n", "")),
   "ERROR with no SQLSTATE and no quote-cut uses a fixed message",
+);
+ok(
+  withPsqlSqlstateVerbosity("psql", ["-v", "ON_ERROR_STOP=1", "-c", "SELECT 1"]).includes("VERBOSITY=sqlstate"),
+  "psql args include VERBOSITY=sqlstate",
+);
+ok(
+  withPsqlSqlstateVerbosity("psql", ["-v", "VERBOSITY=terse"]).filter((a) => /^VERBOSITY=/i.test(a)).length === 1,
+  "caller VERBOSITY is not duplicated",
+);
+ok(
+  !withPsqlSqlstateVerbosity("pg_dump", ["--file=x"]).includes("VERBOSITY=sqlstate"),
+  "pg_dump is not given VERBOSITY=sqlstate",
 );
 
 const hashes = parseHashes("profiles|1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nteams|0|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
@@ -483,6 +512,11 @@ ok(
   String(backupStep.env.CUTOVER_DUMP_DIR).includes("leadwell-cutover"),
   "backup dump stays in runner.temp/leadwell-cutover",
 );
+ok(
+  String(backupStep.env?.CUTOVER_DUMP_DIR ?? "") === String(deleteDumpsStep.env?.CUTOVER_DUMP_DIR ?? "") &&
+    Boolean(backupStep.env?.CUTOVER_DUMP_DIR),
+  "backup and delete-dumps use the same CUTOVER_DUMP_DIR",
+);
 const badJobEnvDoc = parseWorkflowDocument(
   [
     "name: t",
@@ -569,6 +603,12 @@ ok(/\bactionlint\b/.test(String(actionlintStep.run)), "actionlint step runs acti
 for (const [jobName, job] of Object.entries(checksDoc.jobs || {})) {
   ok(!envUsesRunnerContext(job?.env), `checks.yml ${jobName} job env does not use runner context`);
 }
+ok(checksDoc.permissions?.contents === "read", "checks.yml permissions are contents: read");
+const checksCheckout = Array.isArray(checksDoc.jobs?.checks?.steps)
+  ? checksDoc.jobs.checks.steps.find((s) => s?.id === "checkout")
+  : null;
+ok(checksCheckout, "checks.yml has a checkout step");
+ok(checksCheckout.with?.["persist-credentials"] === false, "checks checkout persist-credentials is false");
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
@@ -799,7 +839,7 @@ const target = process.env.LEADWELL_PROVE_TARGET_URL || "";
 
 function run(cmd, args, opts = {}) {
   const { env, ...rest } = opts;
-  const res = spawnSync(cmd, args, {
+  const res = spawnSync(cmd, withPsqlSqlstateVerbosity(cmd, args), {
     encoding: "utf8",
     cwd: root,
     ...rest,
