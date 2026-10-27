@@ -18,6 +18,7 @@ import { confirmAction } from "../ConfirmDialog";
 import { ArcCover, ArcRail } from "./ArcCover";
 import { ArcSheet } from "./ArcSheet";
 import { ArcClosing } from "./ArcClosing";
+import { ArcStart } from "./ArcStart";
 import { BookOpen01, DotsHorizontal, Plus } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 
@@ -47,6 +48,14 @@ export function ArcBand({
   const [closing, setClosing] = useState<Arc | null>(null);
   const live = liveArcs(arcs, meeting.id);
   const finished = arcsFor(arcs, meeting.id).filter((a) => a.status === "done");
+
+  if (!live.length && !finished.length) {
+    return (
+      <section className="flex flex-col" aria-label="Arcs">
+        <ArcStart meeting={meeting} variant="agenda" />
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-2.5" aria-label="Arcs">
@@ -78,12 +87,7 @@ export function ArcBand({
         <button
           type="button"
           onClick={() => setSheet("new")}
-          className={cx(
-            "inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-tertiary hover:text-teal-700 dark:hover:text-teal-400",
-            live.length === 0 &&
-              finished.length === 0 &&
-              "h-10 w-full justify-center rounded-[12px] border border-dashed border-primary hover:border-teal-300"
-          )}
+          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-tertiary hover:text-teal-700 dark:hover:text-teal-400"
         >
           {live.length === 0 ? <BookOpen01 aria-hidden className="size-4" /> : <Plus aria-hidden className="size-3.5" />}
           {live.length === 0 ? "Working through a book or a plan together? Start an arc" : "Another arc"}

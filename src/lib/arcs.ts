@@ -285,3 +285,88 @@ export function nextArcSteps(
       .map((p) => ({ arc, step: p.step, date: next.date }))
   );
 }
+
+// ── Spotting an arc you're already running by hand ─────────────────────────
+
+/** Words that say "this is part of a series" rather than what the series is. */
+const SERIES_NOISE = new Set(
+  (
+    "go goes going over through discuss discussing review reviewing read reading finish start continue continued " +
+    "check in pt part parts ch chap chapter chapters section session week wk day the a an and or of on with for " +
+    "to our my your about re more next from at by into up out cont"
+  ).split(" ")
+);
+
+/** "Pt 1", "Part 2", "Ch. 3", "week 4", "2 of 7", "#5". */
+const SERIES_MARKER = /\b(pt|part|ch|chap|chapter|session|week|wk)\.?\s*\d+\b|\b\d+\s*(of|\/)\s*\d+\b|#\d+/i;
+
+export type ArcSuggestion = {
+  /** The repeated phrase, as first written. */
+  title: string;
+  /** How many weeks (or unplaced items) it turns up in. */
+  weeks: number;
+  /** The earliest week ahead that already has one, if any. */
+  startsOn?: string;
+};
+
+const words = (text: string) => text.split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+const isNoise = (w: string) => SERIES_NOISE.has(w.toLowerCase()) || /^\d+$/.test(w);
+const titleCase = (s: string) =>
+  s === s.toLowerCase() ? s.replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : s;
+
+/**
+ * A book (or anything) you're already working through by hand: the same
+ * phrase in two or more weeks' items, at least one of them numbered like a
+ * series ("Pt 1", "Ch. 2"), or in three weeks or more. Phrases of two words
+ * up, so a weekly "Budget" never qualifies on its own, and nothing an arc on
+ * this meeting already covers, or that was waved off.
+ */
+export function arcSuggestion(
+  meetingId: string,
+  topics: Topic[],
+  sessions: Session[],
+  arcs: Arc[],
+  today: string,
+  dismissed: string[] = []
+): ArcSuggestion | null {
+  const mine = topics.filter((t) => t.meetingId === meetingId && t.status !== "dropped");
+  const taken = arcs
+    .filter((a) => a.meetingId === meetingId)
+    .map((a) => a.title.toLowerCase())
+    .concat(dismissed.map((d) => d.toLowerCase()));
+  const dateOf = new Map(sessions.map((s) => [s.id, s.date]));
+
+  type Hit = { title: string; places: Set<string>; marked: boolean; dates: string[]; n: number; first: number };
+  const hits = new Map<string, Hit>();
+  mine.forEach((t, order) => {
+    const ws = words(t.text);
+    const place = t.sessionId ?? `topic:${t.id}`;
+    const marked = SERIES_MARKER.test(t.text);
+    const seen = new Set<string>();
+    for (let i = 0; i < ws.length; i++) {
+      for (let j = i + 1; j < Math.min(ws.length, i + 6); j++) {
+        const gram = ws.slice(i, j + 1);
+        if (isNoise(gram[0]) || isNoise(gram[gram.length - 1])) continue;
+        if (!gram.some((w) => !isNoise(w) && w.length >= 4)) continue;
+        const key = gram.join(" ").toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const hit = hits.get(key) ?? { title: gram.join(" "), places: new Set(), marked: false, dates: [], n: gram.length, first: order };
+        hit.places.add(place);
+        hit.marked ||= marked;
+        const d = t.sessionId ? dateOf.get(t.sessionId) : undefined;
+        if (d) hit.dates.push(d);
+        hits.set(key, hit);
+      }
+    }
+  });
+
+  const best = [...hits.entries()]
+    .filter(([, h]) => h.places.size >= 2 && (h.marked || h.places.size >= 3))
+    .filter(([key]) => !taken.some((t) => t.includes(key) || key.includes(t)))
+    .sort(([, a], [, b]) => b.places.size - a.places.size || b.n - a.n || a.first - b.first)[0];
+  if (!best) return null;
+  const [, h] = best;
+  const ahead = h.dates.filter((d) => d >= today).sort();
+  return { title: titleCase(h.title), weeks: h.places.size, startsOn: ahead[0] };
+}

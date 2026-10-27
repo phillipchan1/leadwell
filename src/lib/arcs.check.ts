@@ -1,5 +1,6 @@
-import type { Arc, Session, TrackedMeeting } from "../types";
+import type { Arc, Session, Topic, TrackedMeeting } from "../types";
 import {
+  arcSuggestion,
   arcPlan,
   currentStep,
   markStep,
@@ -120,6 +121,36 @@ let all = base;
 base.steps.forEach((s, i) => (all = markStep(all, s.id, `x${i}`, "done", "2026-12-01")));
 ok(all.status === "done" && all.closedOn === "2026-12-01", "last step done closes the arc");
 ok(unmarkStep(all, "c7", "x6").status === "active", "undoing the last step reopens it");
+
+// Spotting an arc already being run by hand.
+const tp = (id: string, text: string, sessionId?: string, meetingId = "m1"): Topic =>
+  ({ id, meetingId, text, sessionId, tagIds: [], status: "open", lane: "backlog", carried: 0, carriedFrom: [] }) as unknown as Topic;
+const sugSessions = [
+  { id: "q1", meetingId: "m1", date: "2026-10-23" },
+  { id: "q2", meetingId: "m1", date: "2026-10-30" },
+  { id: "q3", meetingId: "m1", date: "2026-11-06" },
+] as Session[];
+const handRun = [
+  tp("h1", "Check in + Crucial Conversations", "q1"),
+  tp("h2", "Go Over Crucial Conversations Pt 1", "q2"),
+  tp("h3", "Crucial Conversations Part 2", "q3"),
+  tp("h4", "Budget sign-off", "q2"),
+];
+const sug = arcSuggestion("m1", handRun, sugSessions, [], "2026-10-27");
+ok(sug?.title === "Crucial Conversations", `finds the book being run by hand (got ${sug?.title})`);
+ok(sug?.weeks === 3, "counts the weeks it shows up in");
+ok(sug?.startsOn === "2026-10-30", "starts at the first week ahead that has one");
+ok(arcSuggestion("m1", handRun, sugSessions, [{ ...base, meetingId: "m1", title: "Crucial Conversations" }], "2026-10-27") === null, "not once an arc covers it");
+ok(arcSuggestion("m1", handRun, sugSessions, [], "2026-10-27", ["Crucial Conversations"]) === null, "not once waved off");
+ok(arcSuggestion("m2", handRun, sugSessions, [], "2026-10-27") === null, "only this meeting's items count");
+const weekly = [tp("w1", "Budget sign-off", "q1"), tp("w2", "Budget sign-off", "q2")];
+ok(arcSuggestion("m1", weekly, sugSessions, [], "2026-10-27") === null, "a repeat in two weeks without numbering is not a series");
+const once = [tp("o1", "Crucial Conversations Pt 1", "q2"), tp("o2", "Crucial Conversations notes", "q2")];
+ok(arcSuggestion("m1", once, sugSessions, [], "2026-10-27") === null, "twice in the same week is not a series");
+const lower = [tp("l1", "atomic habits ch 1", "q1"), tp("l2", "atomic habits ch 2", "q2")];
+ok(arcSuggestion("m1", lower, sugSessions, [], "2026-10-27")?.title === "Atomic Habits", "title-cases a lowercase title");
+const noise = [tp("n1", "Check in pt 1", "q1"), tp("n2", "Check in pt 2", "q2")];
+ok(arcSuggestion("m1", noise, sugSessions, [], "2026-10-27") === null, "series words alone are not a title");
 
 if (fails.length) {
   console.error(`arcs.check: ${fails.length}/${checks} failed`);

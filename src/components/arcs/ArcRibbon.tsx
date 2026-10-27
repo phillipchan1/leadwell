@@ -5,6 +5,7 @@ import { arcPlan, liveArcs, shortLabel, tookLonger } from "../../lib/arcs";
 import { heldSessions, sessionsFor, todayISO } from "../../lib/readiness";
 import { plannedSlots, type Slot } from "../../lib/topics";
 import { ArcCover } from "./ArcCover";
+import { ArcStart } from "./ArcStart";
 import { cx } from "@/utils/cx";
 
 const fmt = (iso: string) =>
@@ -44,7 +45,7 @@ export function ArcRibbon({ meeting }: { meeting: TrackedMeeting }) {
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, c]) => c);
   }, [meeting, sessions, topics, today]);
 
-  if (!live.length) return null;
+  if (!live.length) return <ArcStart meeting={meeting} variant="board" />;
   const slots = columns.flatMap((c) => (c.kind === "slot" ? [c.slot] : []));
   const nextDate = slots.find((s) => !s.past)?.date;
   const template = columns.map((c) => (c.kind === "skipped" ? "34px" : "minmax(112px,1fr)")).join(" ");

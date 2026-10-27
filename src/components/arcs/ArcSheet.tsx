@@ -55,11 +55,14 @@ const TEMPLATES: { title: string; steps: string[] }[] = [
 export function ArcSheet({
   meeting,
   arc,
+  initial,
   onClose,
 }: {
   meeting: TrackedMeeting;
   /** Present = editing. */
   arc?: Arc;
+  /** A new arc's starting point, e.g. a title spotted on the board. */
+  initial?: { title?: string; startsOn?: string };
   onClose: () => void;
 }) {
   const addArc = useStore((s) => s.addArc);
@@ -76,7 +79,7 @@ export function ArcSheet({
     [meeting, sessions, topics]
   );
 
-  const [title, setTitle] = useState(arc?.title ?? "");
+  const [title, setTitle] = useState(arc?.title ?? initial?.title ?? "");
   const [author, setAuthor] = useState(arc?.author ?? "");
   const [cover, setCover] = useState<number>(arc?.cover ?? Math.floor(Math.random() * ARC_COVERS.length));
   const [coverUrl, setCoverUrl] = useState<string | undefined>(arc?.coverUrl);
@@ -88,7 +91,7 @@ export function ArcSheet({
   const [slotId, setSlotId] = useState<string>(
     arc ? (arc.slotId ?? "") : (curriculum.find((s) => /growth|training|learn|develop/i.test(s.label))?.id ?? "")
   );
-  const [startsOn, setStartsOn] = useState(arc?.startsOn ?? nextDate);
+  const [startsOn, setStartsOn] = useState(arc?.startsOn ?? initial?.startsOn ?? nextDate);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
