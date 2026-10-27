@@ -1184,8 +1184,17 @@ export function isUnitAllowlisted(filename, unit, allowlist) {
   );
 }
 
+/** Workflow files: .yml / .yaml, any case (.YML, .Yaml, …). */
+export function isWorkflowFilename(name) {
+  return /\.(ya?ml)$/i.test(String(name || ""));
+}
+
+export function listWorkflowFilenames(workflowsDir) {
+  return readdirSync(workflowsDir).filter(isWorkflowFilename);
+}
+
 export function neededAllowlist(workflowsDir) {
-  const names = readdirSync(workflowsDir).filter((n) => n.endsWith(".yml") || n.endsWith(".yaml"));
+  const names = listWorkflowFilenames(workflowsDir);
   const steps = [];
   const job_steps = [];
   const workflow_jobs = [];
@@ -1614,7 +1623,7 @@ export function assertWorkflowUploadAllowlist(workflowText, filename = "workflow
 }
 
 export function assertWorkflowsUploadAllowlist(workflowsDir) {
-  const names = readdirSync(workflowsDir).filter((n) => n.endsWith(".yml") || n.endsWith(".yaml"));
+  const names = listWorkflowFilenames(workflowsDir);
   if (!names.length) throw new Error(`no workflows in ${workflowsDir}`);
   const all = [];
   for (const name of names) {

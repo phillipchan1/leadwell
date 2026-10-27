@@ -27,10 +27,8 @@
 import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
-  closeSync,
   existsSync,
   mkdtempSync,
-  openSync,
   writeFileSync,
   readFileSync,
   rmSync,
@@ -38,12 +36,19 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  libpqCleanEnv,
   redactSecrets,
   refuseUnsafeTestUrl,
   sourceReadEnv,
   withRoleUrl,
 } from "./loopback.mjs";
+import {
+  installSafeErrorHandlers,
+  run as runSafe,
+  runToFile as runToFileSafe,
+  safeErrorMessage,
+  safeLoggedMessage,
+  throwSafe,
+} from "./safe-cmd.mjs";
 import {
   BETTER_AUTH_TABLES_SQL,
   CHECKSUM_TABLES,
@@ -104,37 +109,14 @@ function databaseNameFromUrl(url) {
   }
 }
 
+installSafeErrorHandlers();
+
 function run(cmd, args, opts = {}) {
-  const { env, ...rest } = opts;
-  const res = spawnSync(cmd, args, {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-    maxBuffer: 64 * 1024 * 1024,
-    ...rest,
-    env: libpqCleanEnv(env ?? process.env),
-  });
-  if (res.status !== 0) {
-    const err = (res.stderr || res.stdout || "").trim();
-    throw new Error(redact(`${cmd} failed (${res.status}): ${err}`));
-  }
-  return res.stdout;
+  return runSafe(cmd, args, { ...opts, redact });
 }
 
 function runToFile(cmd, args, file) {
-  const fd = openSync(file, "w");
-  try {
-    const res = spawnSync(cmd, args, {
-      encoding: "utf8",
-      stdio: ["ignore", fd, "pipe"],
-      env: sourceReadEnv(),
-    });
-    if (res.status !== 0) {
-      const err = (res.stderr || "").trim();
-      throw new Error(redact(`${cmd} failed (${res.status}): ${err}`));
-    }
-  } finally {
-    closeSync(fd);
-  }
+  return runToFileSafe(cmd, args, file, { env: sourceReadEnv(), redact });
 }
 
 function toolMajor(bin) {
@@ -159,7 +141,7 @@ function serverMajor(url) {
     { env: sourceReadEnv() },
   );
   const n = Number(String(out).trim());
-  if (!Number.isFinite(n) || n < 10000) throw new Error(`unparsable server_version_num: ${out}`);
+  if (!Number.isFinite(n) || n < 10000) throwSafe("unparsable server_version_num");
   return Math.floor(n / 10000);
 }
 
@@ -174,14 +156,14 @@ function resolvePgBin(name, major) {
     if (bin !== name && !existsSync(bin)) continue;
     if (toolMajor(bin) === major) return bin;
   }
-  throw new Error(
+  throwSafe(
     `${name} matching Postgres ${major} not found. Install postgresql-client-${major} (or set PG_BIN).`,
   );
 }
 
 function needBin(name) {
   const res = spawnSync(name, ["--version"], { encoding: "utf8" });
-  if (res.status !== 0) throw new Error(`Missing ${name}. Install PostgreSQL client tools.`);
+  if (res.status !== 0) throwSafe(`Missing ${name}. Install PostgreSQL client tools.`);
 }
 
 function psql(url, extraArgs, sql) {
@@ -210,12 +192,12 @@ if (dryRun && !source && !target) {
 }
 
 if (!source || !target) {
-  console.error("Set SUPABASE_DB_URL and NEON_DB_URL (or pass --dry-run).");
+  console.error(safeLoggedMessage("Set SUPABASE_DB_URL and NEON_DB_URL (or pass --dry-run)."));
   process.exit(2);
 }
 
 if (source === target) {
-  console.error("SUPABASE_DB_URL and NEON_DB_URL must be different. Source is read-only.");
+  console.error(safeLoggedMessage("SUPABASE_DB_URL and NEON_DB_URL must be different. Source is read-only."));
   process.exit(2);
 }
 
@@ -255,7 +237,11 @@ try {
   );
 
   console.log("pre-checking source emails (read-only)…");
-  assertSourceUsersReady(parseAuthUsersCsv(csv));
+  try {
+    assertSourceUsersReady(parseAuthUsersCsv(csv));
+  } catch (err) {
+    throwSafe(err instanceof Error ? err.message : err);
+  }
 
   if (dryRun) {
     console.log(`dry-run: dump at ${dumpPath} (${readFileSync(dumpPath).length} bytes)`);
@@ -270,14 +256,14 @@ try {
   console.log("checking target is empty…");
   const before = parseObjectList(psql(target, ["-tA"], LIST_USER_OBJECTS_TEXT_SQL));
   const dirty = before.filter(isNonEmptyTargetObject);
-  if (dirty.length) throw new Error(formatNonEmptyTargetAbort(dirty));
+    if (dirty.length) throwSafe(formatNonEmptyTargetAbort(dirty));
 
   let wroteTarget = false;
   let copyRoleCreated = false;
   let ownerName = "";
   try {
     ownerName = String(psql(target, ["-tA"], "SELECT current_user")).trim();
-    if (!ownerName) throw new Error("could not read target current_user");
+    if (!ownerName) throwSafe("could not read target current_user");
 
     const copyPassword = randomBytes(24).toString("base64url");
     extraRedact.push(copyPassword);
@@ -383,11 +369,11 @@ try {
         writeFileSync(join(dir, "drop_copy_role.sql"), disableTargetCopyRoleSql(ownerName));
         run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", join(dir, "drop_copy_role.sql")]);
       } catch (dropErr) {
-        console.error(redact(`copy-role drop after failure: ${dropErr.message || dropErr}`));
+        console.error(safeErrorMessage(dropErr));
       }
     }
     if (wroteTarget) {
-      console.error("load failed — dropping objects this run created…");
+      console.error(safeLoggedMessage("load failed — dropping objects this run created…"));
       const after = parseObjectList(psql(target, ["-tA"], LIST_USER_OBJECTS_TEXT_SQL));
       const created = createdSince(before, after);
       const cleanupPath = join(dir, "cleanup_this_run.sql");

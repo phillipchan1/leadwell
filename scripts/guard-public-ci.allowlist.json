@@ -101,7 +101,7 @@
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "backup",
-      "sha256": "692e13f7946812d84fdd2c796cae9f5107ce4dcc90c34e9adb23f43a6a8adfa4"
+      "sha256": "92e5d753ea617e125ec401d93aceb36c9c3dd94bfc0a1d27e8aa95b374f24fa7"
     },
     {
       "file": "cutover-migrate.yml",
@@ -120,6 +120,12 @@
       "job": "cutover",
       "id": "verify",
       "sha256": "140972f13d1a91e45fc8f03af83573e4af25b5d5ef3907a80be9f9e43103c1c3"
+    },
+    {
+      "file": "cutover-migrate.yml",
+      "job": "cutover",
+      "id": "leftover-copy-role",
+      "sha256": "9f42869c5b67d427e9167f62ea3f4fd09beb905b513d8f0df40bc5c6cba71697"
     },
     {
       "file": "cutover-migrate.yml",
@@ -160,9 +166,10 @@
         "scratch",
         "migrate",
         "verify",
+        "leftover-copy-role",
         "delete-dumps"
       ],
-      "sha256": "b1ec3584e0f8b03b2c4a97899941f613c4a8f464b4512656f8865f1a7e7a2818"
+      "sha256": "fbf23ff31b614343cb06314bee0e0389e6cf3cc7555200068e166cd5bbed70d0"
     }
   ],
   "workflow_jobs": [

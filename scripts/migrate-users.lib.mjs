@@ -964,8 +964,8 @@ export function findBlankEmails(users) {
 }
 
 export function formatBlankEmailAbort(rows) {
-  const lines = rows.map((row) => `  ${row.id} ${describeSourceEmail(row.email)}`);
-  return `blank source emails:\n${lines.join("\n")}`;
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  return `blank source emails: ${ids.length} user id(s): ${ids.join(", ")}`;
 }
 
 export function findCaseInsensitiveEmailDupes(users) {
@@ -983,8 +983,8 @@ export function findCaseInsensitiveEmailDupes(users) {
 }
 
 export function formatEmailDupeAbort(dupes) {
-  const lines = dupes.flatMap((group) => group.rows.map((row) => `  ${row.id} ${row.email}`));
-  return `case-insensitive email duplicates:\n${lines.join("\n")}`;
+  const ids = dupes.flatMap((group) => group.rows.map((row) => row.id)).filter(Boolean);
+  return `case-insensitive email duplicates: ${ids.length} user id(s) in ${dupes.length} group(s): ${ids.join(", ")}`;
 }
 
 export function formatSourceUsersAbort({ blanks, dupes }) {

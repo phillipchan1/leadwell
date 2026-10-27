@@ -153,6 +153,9 @@ once in the GitHub UI (Settings → Secrets and variables → Actions).
      `migration_tmp.auth_users()` / `migration_tmp.auth_identities()`
      (id/name/email/verified/timestamps and user_id/provider/provider_id
      — no password hashes or tokens). Logs are counts and md5s only.
+     Blank-email and case-insensitive-dupe aborts print **user ids and counts only**, never emails. Command failures log the command name,
+     exit code, SQLSTATE if present, and the first ERROR line with
+     values stripped — never raw stdout/stderr, DETAIL, or row contents.
    - prints per-table `COUNT(*)` + content md5 hashes (source vs scratch
      target, including auth users via the function vs Better Auth `"user"`)
      to the **job log only**. No artifact, no step summary, no output file
@@ -374,6 +377,9 @@ SELECT id FROM migration_tmp.auth_users() LIMIT 1;
 ```
 
 ### After cutover
+
+Do **not** pause or delete the LeadWell Supabase project until Neon is verified
+(checksums match and magic-link sign-in works). Supabase is the intact rollback.
 
 Once Neon is loaded and magic-link sign-in works, drop the temporary
 schema so the wrappers cannot be reused. Do **not** drop `auth` or

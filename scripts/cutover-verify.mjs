@@ -17,10 +17,10 @@
  * Set LEADWELL_MIGRATE_TEST=1 only in prove/CI (both URLs must be
  * loopback). The live/Actions cutover leaves that flag unset.
  */
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl, sourceReadEnv } from "./loopback.mjs";
+import { refuseUnsafeTestUrl, sourceReadEnv } from "./loopback.mjs";
+import { installSafeErrorHandlers, run as runSafe, safeLoggedMessage } from "./safe-cmd.mjs";
 import {
   CHECKSUM_TABLES,
   SOURCE_AUTH_IDENTITIES_FN,
@@ -62,26 +62,18 @@ if (isTest) {
 }
 
 if (!source || !target) {
-  console.error("Set SOURCE_DATABASE_URL and TARGET_DATABASE_URL.");
+  console.error(safeLoggedMessage("Set SOURCE_DATABASE_URL and TARGET_DATABASE_URL."));
   process.exit(2);
 }
 if (source === target) {
-  console.error("SOURCE_DATABASE_URL and TARGET_DATABASE_URL must be different.");
+  console.error(safeLoggedMessage("SOURCE_DATABASE_URL and TARGET_DATABASE_URL must be different."));
   process.exit(2);
 }
 
+installSafeErrorHandlers();
+
 function run(cmd, args, env) {
-  const res = spawnSync(cmd, args, {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-    maxBuffer: 64 * 1024 * 1024,
-    env: libpqCleanEnv(env ?? process.env),
-  });
-  if (res.status !== 0) {
-    const err = (res.stderr || res.stdout || "").trim();
-    throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
-  }
-  return res.stdout;
+  return runSafe(cmd, args, { env });
 }
 
 function psql(url, sql) {

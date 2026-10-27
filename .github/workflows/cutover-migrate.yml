@@ -148,24 +148,14 @@ jobs:
           import { spawnSync } from "node:child_process";
           import { existsSync, mkdirSync, statSync } from "node:fs";
           import { basename, join } from "node:path";
-          import { redactSecrets, sourceReadEnv } from "./scripts/loopback.mjs";
+          import { sourceReadEnv } from "./scripts/loopback.mjs";
           import { PG_DUMP_PUBLIC_ARGS } from "./scripts/migrate-users.lib.mjs";
+          import { installSafeErrorHandlers, run } from "./scripts/safe-cmd.mjs";
 
+          installSafeErrorHandlers();
           const source = process.env.SOURCE_DATABASE_URL || "";
           const dumpDir = process.env.CUTOVER_DUMP_DIR || "";
           if (!dumpDir) throw new Error("CUTOVER_DUMP_DIR is required (runner temp, never artifacts)");
-          function run(cmd, args, opts = {}) {
-            const res = spawnSync(cmd, args, {
-              encoding: "utf8",
-              maxBuffer: 64 * 1024 * 1024,
-              env: sourceReadEnv(),
-              ...opts,
-            });
-            if (res.status !== 0) {
-              throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${(res.stderr || res.stdout || "").trim()}`));
-            }
-            return res.stdout;
-          }
           function toolMajor(bin) {
             const res = spawnSync(bin, ["--version"], { encoding: "utf8" });
             if (res.status !== 0) return null;
@@ -193,7 +183,7 @@ jobs:
             source,
             "-c",
             "SHOW server_version_num",
-          ]);
+          ], { env: sourceReadEnv() });
           const n = Number(String(verOut).trim());
           if (!Number.isFinite(n) || n < 10000) throw new Error("unparsable server_version_num");
           const major = Math.floor(n / 10000);
@@ -203,7 +193,7 @@ jobs:
           if (!restore) throw new Error(`pg_restore matching Postgres ${major} not found`);
           mkdirSync(dumpDir, { recursive: true });
           const file = join(dumpDir, "source.dump");
-          run(dump, [...PG_DUMP_PUBLIC_ARGS, `--file=${file}`, source]);
+          run(dump, [...PG_DUMP_PUBLIC_ARGS, `--file=${file}`, source], { env: sourceReadEnv() });
           const bytes = statSync(file).size;
           if (!bytes) throw new Error("custom-format dump is empty");
           run(restore, ["--list", file], { env: process.env });
@@ -246,6 +236,51 @@ jobs:
           unset PGHOST PGHOSTADDR PGSERVICE PGSERVICEFILE PGSYSCONFDIR
           unset LEADWELL_MIGRATE_TEST
           node scripts/cutover-verify.mjs
+
+      - id: leftover-copy-role
+        name: Drop leftover leadwell_copy
+        if: ${{ always() }}
+        run: |
+          set +x
+          set -eu
+          node --input-type=module <<'JS'
+          import { githubAddMaskLines } from "./scripts/loopback.mjs";
+          import { disableTargetCopyRoleSql, TARGET_COPY_ROLE } from "./scripts/migrate-users.lib.mjs";
+          import { installSafeErrorHandlers, run } from "./scripts/safe-cmd.mjs";
+
+          installSafeErrorHandlers();
+          const target = (process.env.TARGET_DATABASE_URL || process.env.NEON_DB_URL || "").trim();
+          for (const line of githubAddMaskLines(target)) process.stdout.write(`${line}\n`);
+          try {
+            if (!target) {
+              console.log("no");
+              process.exit(0);
+            }
+            const n = String(
+              run("psql", [
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-tA",
+                "-d",
+                target,
+                "-c",
+                `SELECT COUNT(*) FROM pg_roles WHERE rolname = '${TARGET_COPY_ROLE}'`,
+              ]),
+            ).trim();
+            if (n === "0") {
+              console.log("no");
+              process.exit(0);
+            }
+            const owner = String(
+              run("psql", ["-v", "ON_ERROR_STOP=1", "-tA", "-d", target, "-c", "SELECT current_user"]),
+            ).trim();
+            run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-c", disableTargetCopyRoleSql(owner)]);
+            console.log("yes");
+          } catch {
+            console.log("no");
+            process.exit(0);
+          }
+          JS
 
       - id: delete-dumps
         name: Delete dumps

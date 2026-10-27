@@ -40,6 +40,8 @@ import {
   assertCountsMatch,
   assertHashesMatch,
   assertSourceUsersReady,
+  formatBlankEmailAbort,
+  formatEmailDupeAbort,
   contentHashQuery,
   createdSince,
   dropCreatedSql,
@@ -70,12 +72,19 @@ import {
   assertWorkflowUploadAllowlist,
   assertWorkflowsUploadAllowlist,
   collectWorkflowUnits,
+  isWorkflowFilename,
   listHash,
   logLooksLikeRowData,
   parseWorkflowDocument,
   unitHash,
   usesIsShaPinned,
 } from "./guard-public-ci.mjs";
+import {
+  GENERIC_SAFE_ERROR,
+  formatSafeCommandError,
+  sanitizePgFailureText,
+  stripPgErrorValues,
+} from "./safe-cmd.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -108,10 +117,17 @@ ok(true, "valid source user accepted");
 let blankThrew = false;
 try {
   assertSourceUsersReady([{ id: "1", name: "x", email: "   ", email_verified: false }]);
-} catch {
+} catch (err) {
   blankThrew = true;
+  ok(!/@/.test(String(err.message)), "blank-email abort has no email");
+  ok(/\b1\b/.test(String(err.message)), "blank-email abort names the user id");
+  ok(!logLooksLikeRowData(String(err.message)), "blank-email abort is not row data");
 }
 ok(blankThrew, "blank email aborted");
+ok(
+  !/@/.test(formatBlankEmailAbort([{ id: "1", email: "   " }])),
+  "formatBlankEmailAbort prints ids and counts only",
+);
 
 let dupeThrew = false;
 try {
@@ -119,10 +135,57 @@ try {
     { id: "1", name: "a", email: "Phil@Example.com", email_verified: true },
     { id: "2", name: "b", email: "phil@example.com", email_verified: true },
   ]);
-} catch {
+} catch (err) {
   dupeThrew = true;
+  ok(!/phil@/i.test(String(err.message)), "dupe-email abort has no email");
+  ok(/\b1\b/.test(String(err.message)) && /\b2\b/.test(String(err.message)), "dupe-email abort names both ids");
+  ok(!logLooksLikeRowData(String(err.message)), "dupe-email abort is not row data");
 }
 ok(dupeThrew, "case-insensitive email dupe aborted");
+ok(
+  !/@/.test(
+    formatEmailDupeAbort([
+      {
+        emailKey: "phil@example.com",
+        rows: [
+          { id: "1", email: "Phil@Example.com" },
+          { id: "2", email: "phil@example.com" },
+        ],
+      },
+    ]),
+  ),
+  "formatEmailDupeAbort prints ids and counts only",
+);
+
+const leakyPg = [
+  'ERROR:  duplicate key value violates unique constraint "user_email_key"',
+  "DETAIL:  Key (email)=(phil@example.com) already exists.",
+  'CONTEXT:  COPY auth_users_import, line 1: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Phil,phil@example.com,t"',
+  "HINT:  You might need to use ON CONFLICT.",
+  "WHERE:  SQL statement",
+  "LINE 1: INSERT INTO",
+  "Failing row contains (aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa, Phil, phil@example.com).",
+  "SQLSTATE 23505",
+].join("\n");
+const sanitized = sanitizePgFailureText(leakyPg);
+ok(sanitized.sqlstate === "23505", "sanitizer keeps SQLSTATE");
+ok(/ERROR:/i.test(sanitized.firstError), "sanitizer keeps the first ERROR line");
+ok(!/phil@/i.test(sanitized.firstError), "sanitizer strips emails from ERROR");
+ok(!/Key \(email\)=\(phil@/i.test(sanitized.firstError), "sanitizer strips Key (...)=(...)");
+ok(!/DETAIL|CONTEXT|HINT|WHERE|LINE |Failing row/i.test(sanitized.firstError), "sanitizer drops DETAIL and friends");
+const safeFail = formatSafeCommandError("psql", 1, leakyPg, "");
+ok(!/phil@/i.test(safeFail), "safe command error has no email");
+ok(/psql failed \(1\)/.test(safeFail), "safe command error names cmd and exit");
+ok(/SQLSTATE 23505/.test(safeFail), "safe command error includes SQLSTATE");
+ok(!logLooksLikeRowData(safeFail), "safe command error is not row data");
+ok(
+  !/\(phil@/i.test(stripPgErrorValues("DETAIL:  Key (email)=(phil@example.com) already exists.")),
+  "stripPgErrorValues removes Key values",
+);
+ok(
+  formatSafeCommandError("psql", 1, "ERROR:  boom phil@example.com leaked\n", "") === GENERIC_SAFE_ERROR,
+  "safe command error becomes generic if it still looks like row data",
+);
 
 const hashes = parseHashes("profiles|1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nteams|0|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
 ok(hashes.profiles?.n === 1 && hashes.profiles.hash.length === 32, "parseHashes pipe");
@@ -300,6 +363,9 @@ ok(migrateSrc.includes("disableTargetCopyRoleSql"), "migrate drops the target co
 ok(migrateSrc.includes("never on source"), "migrate copy role is target-only");
 ok(migrateSrc.includes("explicit DROP ROLE"), "migrate drop step is explicit");
 ok(!/ALTER ROLE \$\{role\} BYPASSRLS/.test(migrateSrc), "migrate does not grant source BYPASSRLS");
+ok(migrateSrc.includes("safe-cmd.mjs"), "migrate uses the shared safe runner");
+ok(migrateSrc.includes("installSafeErrorHandlers"), "migrate installs uncaught error handlers");
+ok(!/res\.stderr \|\| res\.stdout/.test(migrateSrc), "migrate run does not echo raw streams");
 ok(migrateSrc.includes("EXPORT_AUTH_USERS_COPY_SQL"), "migrate exports users via lib COPY SQL");
 ok(migrateSrc.includes("EXPORT_AUTH_IDENTITIES_COPY_SQL"), "migrate exports identities via lib COPY SQL");
 ok(migrateSrc.includes("PG_DUMP_PUBLIC_ARGS"), "migrate uses shared public-only dump args");
@@ -311,6 +377,8 @@ ok(verifySrc.includes("sourceAuthUsersHashQuery"), "verify auth users count/md5 
 ok(verifySrc.includes("sourceAuthIdentitiesHashQuery"), "verify auth identities count/md5 uses the function");
 ok(!/FROM\s+auth\.users\b/.test(verifySrc), "verify source has no FROM auth.users");
 ok(!/FROM\s+auth\.identities\b/.test(verifySrc), "verify source has no FROM auth.identities");
+ok(verifySrc.includes("safe-cmd.mjs"), "verify uses the shared safe runner");
+ok(verifySrc.includes("installSafeErrorHandlers"), "verify installs uncaught error handlers");
 
 const idEmail = parseIdEmailRows("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa|phil@example.com\n");
 ok(idEmail[0]?.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "parseIdEmailRows id");
@@ -356,6 +424,9 @@ ok(!/GITHUB_OUTPUT/.test(workflow.replace(/#[^\n]*/g, "")), "cutover writes no G
 ok(!/cutover-report\.md/.test(workflow), "cutover does not write a report file");
 ok(workflow.includes("pg_restore --list") || workflow.includes("--list"), "cutover verifies the dump with pg_restore --list");
 ok(/id:\s*backup/.test(workflow), "cutover has a named backup step");
+ok(/id:\s*leftover-copy-role/.test(workflow), "cutover has a leftover leadwell_copy always() step");
+ok(/id:\s*leftover-copy-role[\s\S]*always\(\)/.test(workflow), "leftover copy-role step is always()");
+ok(workflow.includes("scripts/safe-cmd.mjs"), "cutover backup uses the shared safe runner");
 ok(workflow.includes("CUTOVER_DUMP_DIR") && workflow.includes("runner.temp"), "backup dump stays in runner.temp");
 ok(!/leadwell-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
 ok(
@@ -591,12 +662,29 @@ ok(runbook.includes("LeadWell") && /intact/.test(runbook) && /[Rr]ollback/.test(
 ok(runbook.includes("Neon branch"), "runbook offers an optional Neon branch snapshot");
 ok(!/plus dump TO\/GRANT/.test(runbook), "runbook dry-run lines match the allowlist stubs");
 ok(runbook.includes("NOLOGIN roles (anon, authenticated, service_role)"), "runbook expected dry-run names the three NOLOGIN stubs");
+ok(
+  /user ids and counts only/i.test(runbook) && /never emails/i.test(runbook),
+  "runbook says blank/dupe aborts print ids and counts only",
+);
+ok(
+  /pause or delete/i.test(runbook) && /until Neon is verified/i.test(runbook),
+  "runbook says not to pause or delete Supabase until Neon is verified",
+);
 ok(runbook.includes("::add-mask::"), "runbook documents secret masking");
 const codeowners = readFileSync(join(root, ".github/CODEOWNERS"), "utf8");
 ok(codeowners.includes("scripts/guard-public-ci.allowlist.json"), "CODEOWNERS covers the hasher allowlist");
 ok(codeowners.includes("scripts/guard-public-ci.mjs"), "CODEOWNERS covers the hasher");
+ok(codeowners.includes("scripts/regen-public-ci-allowlist.mjs"), "CODEOWNERS covers the regen script");
+ok(codeowners.includes("scripts/prove-migrate.mjs"), "CODEOWNERS covers prove-migrate");
+ok(codeowners.includes("package.json"), "CODEOWNERS covers package.json");
+ok(codeowners.includes("package-lock.json"), "CODEOWNERS covers the lockfile");
+ok(codeowners.includes(".github/CODEOWNERS"), "CODEOWNERS covers itself");
 ok(codeowners.includes(".github/workflows/"), "CODEOWNERS covers workflows");
 ok(codeowners.includes("@phillipchan1"), "CODEOWNERS requires phillipchan1");
+ok(isWorkflowFilename("cutover-migrate.yml"), "yml is a workflow");
+ok(isWorkflowFilename("SNEAK.YML"), "mixed-case YML is a workflow");
+ok(isWorkflowFilename("other.YAML"), "YAML is a workflow");
+ok(!isWorkflowFilename("notes.md"), "md is not a workflow");
 const setupMd = readFileSync(join(root, "SETUP.md"), "utf8");
 ok(!/Continue as test user/.test(setupMd), "SETUP.md has no Continue as test user");
 const designPrompt = readFileSync(join(root, "docs/design-audit-implementation-prompt.md"), "utf8");
@@ -847,6 +935,135 @@ GRANT SELECT ON public.actions TO authenticated;
       "SELECT CASE WHEN rolbypassrls THEN 't' ELSE 'f' END FROM pg_roles WHERE rolname = 'migration_reader'",
     ]).trim();
     ok(readerBypass === "f", "prove migration_reader is not BYPASSRLS (source never gets that grant)");
+
+    function spawnSafeModule(code) {
+      return spawnSync(process.execPath, ["--input-type=module", "-e", code], {
+        encoding: "utf8",
+        cwd: root,
+        env: libpqCleanEnv({ ...process.env }),
+      });
+    }
+    function assertNoRowLeak(label, res) {
+      const captured = `${res.stdout || ""}\n${res.stderr || ""}`;
+      ok(res.status !== 0, `${label} exits non-zero`);
+      ok(/failed|ERROR|omitted|duplicate/i.test(captured), `${label} logs a safe failure`);
+      ok(!logLooksLikeRowData(captured), `${label} captured log is not row data`);
+      ok(!captured.includes("phil@example.com"), `${label} omits phil@example.com`);
+      ok(!captured.includes("Phil@Example.com"), `${label} omits Phil@Example.com`);
+      ok(!/Failing row contains/i.test(captured), `${label} drops Failing row contains`);
+      ok(!/^\s*DETAIL:/mi.test(captured), `${label} drops DETAIL`);
+      ok(!/^\s*CONTEXT:/mi.test(captured), `${label} drops CONTEXT`);
+      return captured;
+    }
+
+    const errUrl = (() => {
+      const u = new URL(source);
+      u.pathname = "/leadwell_err";
+      return u.href;
+    })();
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP DATABASE IF EXISTS leadwell_err"]);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "CREATE DATABASE leadwell_err"]);
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      errUrl,
+      "-c",
+      `CREATE TABLE auth_users_import (
+        id TEXT, name TEXT, email TEXT CHECK (char_length(email) < 5),
+        email_verified BOOLEAN, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
+      )`,
+    ]);
+    const copyCsv = join(dir, "bad_copy.csv");
+    writeFileSync(
+      copyCsv,
+      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa,Phil,phil@example.com,t,2020-01-01,2020-01-01\n",
+    );
+    const copySql = `\\copy auth_users_import FROM '${copyCsv}' WITH CSV`;
+    const copyFail = spawnSafeModule(`
+      import { installSafeErrorHandlers, run } from ${JSON.stringify(join(here, "safe-cmd.mjs"))};
+      installSafeErrorHandlers();
+      run("psql", ["-v", "ON_ERROR_STOP=1", "-d", ${JSON.stringify(errUrl)}, "-c", ${JSON.stringify(copySql)}]);
+    `);
+    assertNoRowLeak("COPY constraint failure", copyFail);
+
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      errUrl,
+      "-c",
+      "CREATE TABLE uniq_t (email TEXT PRIMARY KEY); INSERT INTO uniq_t VALUES ('phil@example.com')",
+    ]);
+    const uniqFail = spawnSafeModule(`
+      import { installSafeErrorHandlers, run } from ${JSON.stringify(join(here, "safe-cmd.mjs"))};
+      installSafeErrorHandlers();
+      run("psql", ["-v", "ON_ERROR_STOP=1", "-d", ${JSON.stringify(errUrl)}, "-c", "INSERT INTO uniq_t VALUES ('phil@example.com')"]);
+    `);
+    assertNoRowLeak("unique violation", uniqFail);
+
+    const invalidFail = spawnSafeModule(`
+      import { installSafeErrorHandlers, run } from ${JSON.stringify(join(here, "safe-cmd.mjs"))};
+      installSafeErrorHandlers();
+      run("psql", ["-v", "ON_ERROR_STOP=1", "-d", ${JSON.stringify(errUrl)}, "-c", "SELECT 'phil@example.com'::uuid"]);
+    `);
+    assertNoRowLeak("invalid-input error", invalidFail);
+
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      errUrl,
+      "-c",
+      "DROP TABLE IF EXISTS restore_t; CREATE TABLE restore_t (id int PRIMARY KEY, email text); INSERT INTO restore_t VALUES (1, 'phil@example.com')",
+    ]);
+    const restoreDump = join(dir, "restore_fail.dump");
+    run("pg_dump", ["-Fc", "-t", "restore_t", "-f", restoreDump, errUrl]);
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      errUrl,
+      "-c",
+      "TRUNCATE restore_t; ALTER TABLE restore_t ADD CONSTRAINT restore_t_short CHECK (char_length(email) < 3)",
+    ]);
+    const restoreFail = spawnSafeModule(`
+      import { installSafeErrorHandlers, run } from ${JSON.stringify(join(here, "safe-cmd.mjs"))};
+      installSafeErrorHandlers();
+      run("pg_restore", ["--data-only", "--exit-on-error", "--dbname", ${JSON.stringify(errUrl)}, ${JSON.stringify(restoreDump)}]);
+    `);
+    assertNoRowLeak("pg_restore data-load failure", restoreFail);
+
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      source,
+      "-c",
+      `INSERT INTO auth.users (id, email, raw_user_meta_data, created_at, updated_at)
+       VALUES ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Phil@Example.com', '{"name":"Other"}', NOW(), NOW())`,
+    ]);
+    const dupeMigrate = spawnSync(process.execPath, [join(here, "migrate-supabase-to-neon.mjs")], {
+      encoding: "utf8",
+      cwd: root,
+      env: {
+        ...process.env,
+        SUPABASE_DB_URL: source,
+        NEON_DB_URL: target,
+        LEADWELL_MIGRATE_TEST: "1",
+      },
+    });
+    const dupeCap = assertNoRowLeak("dupe-email abort", dupeMigrate);
+    ok(/user id\(s\)/.test(dupeCap) || /duplicate/i.test(dupeCap), "dupe-email abort names ids or counts");
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      source,
+      "-c",
+      "DELETE FROM auth.users WHERE id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'",
+    ]);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-c", "DROP DATABASE IF EXISTS leadwell_err"]);
 
     const migrated = spawnSync(
       process.execPath,
