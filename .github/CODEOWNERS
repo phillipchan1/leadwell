@@ -8,6 +8,8 @@ scripts/migrate-supabase-to-neon.mjs @phillipchan1
 scripts/cutover-verify.mjs @phillipchan1
 scripts/migrate-users.lib.mjs @phillipchan1
 scripts/loopback.mjs @phillipchan1
+scripts/scratch-postgres.mjs @phillipchan1
+scripts/prove-container-log.mjs @phillipchan1
 package.json @phillipchan1
 package-lock.json @phillipchan1
 .github/CODEOWNERS @phillipchan1

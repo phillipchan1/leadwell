@@ -61,6 +61,7 @@ import {
   SOURCE_AUTH_USERS_FN,
   STUB_AUTH_SQL,
   TARGET_COPY_ROLE,
+  TARGET_PANIC_LOGGING_SQL,
   assertCountsMatch,
   assertHashesMatch,
   assertSourceUsersReady,
@@ -298,6 +299,15 @@ try {
 
     const copyTarget = withRoleUrl(target, TARGET_COPY_ROLE, copyPassword);
     extraRedact.push(copyTarget);
+
+    try {
+      const host = new URL(target).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+      if (host === "127.0.0.1" || host === "localhost" || host === "::1") {
+        run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-c", TARGET_PANIC_LOGGING_SQL]);
+      }
+    } catch {
+      /* URL parse / ALTER SYSTEM — scratch start step already set panic logging */
+    }
 
     console.log("restoring into Neon…");
     const tocPath = join(dir, "restore.toc");

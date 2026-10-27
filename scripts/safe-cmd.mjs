@@ -9,6 +9,7 @@ import { closeSync, openSync } from "node:fs";
 import { basename } from "node:path";
 import { libpqCleanEnv, redactSecrets } from "./loopback.mjs";
 import { assertSafeMigrateLog, logLooksLikeRowData } from "./guard-public-ci.mjs";
+import { CHECKSUM_TABLES, DEFAULT_SUPABASE_ROLES, TARGET_COPY_ROLE } from "./migrate-users.lib.mjs";
 
 export const GENERIC_SAFE_ERROR = "command failed (details omitted; log looked like row data)";
 
@@ -25,6 +26,25 @@ export const SQLSTATE_CLASS_MESSAGES = Object.freeze({
   P0: "plpgsql error",
   XX: "internal error",
 });
+
+/** Postgres NAMEDATALEN-1. Longer tokens are never printed as names. */
+export const SAFE_ERROR_IDENT_MAX = 63;
+
+/**
+ * Names that may appear after a known-safe error phrase. Dump/public
+ * tables, stub auth objects, the copy role, and the three Supabase stubs.
+ */
+export const SAFE_ERROR_NAME_ALLOWLIST = Object.freeze(
+  new Set([
+    ...CHECKSUM_TABLES,
+    ...DEFAULT_SUPABASE_ROLES,
+    TARGET_COPY_ROLE,
+    "auth",
+    "users",
+    "identities",
+    "public",
+  ]),
+);
 
 export function sqlstateClassMessage(sqlstate) {
   if (!sqlstate) return "query failed";
@@ -44,19 +64,31 @@ export function extractSqlstate(text) {
 /** Line-anchored ERROR / pg_dump|pg_restore error. Ignores mid-line "error:". */
 export const PG_ERROR_LINE_RE = /^(?:psql:[^:\n]*:\d+: )?ERROR:|^pg_(?:dump|restore): error:/im;
 
+/** Only this pg_restore shape is eligible for phrase matching. */
+export const PG_RESTORE_QUERY_ERROR_RE = /^pg_restore: error: could not execute query: ERROR:/i;
+
 export const PSQL_SQLSTATE_VERBOSITY_ARGS = Object.freeze(["-v", "VERBOSITY=sqlstate"]);
 
-/** Prepend `-v VERBOSITY=sqlstate` for psql unless the caller already set it. */
+/**
+ * Always force `-v VERBOSITY=sqlstate` for psql. Caller overrides are
+ * stripped so a terse/default setting cannot hide SQLSTATE or keep
+ * DETAIL/CONTEXT on the wire.
+ */
 export function withPsqlSqlstateVerbosity(cmd, args = []) {
   const name = basename(String(cmd || "").split(/\s+/)[0] || "");
   const list = Array.isArray(args) ? [...args] : [];
   if (name !== "psql") return list;
+  const out = [];
   for (let i = 0; i < list.length; i++) {
     const t = String(list[i]);
-    if (t === "-v" && /^VERBOSITY=/i.test(String(list[i + 1] || ""))) return list;
-    if (/^--set=VERBOSITY=/i.test(t) || /^-vVERBOSITY=/i.test(t)) return list;
+    if (t === "-v" && /^VERBOSITY=/i.test(String(list[i + 1] || ""))) {
+      i += 1;
+      continue;
+    }
+    if (/^--set=VERBOSITY=/i.test(t) || /^-vVERBOSITY=/i.test(t)) continue;
+    out.push(list[i]);
   }
-  return [...PSQL_SQLSTATE_VERBOSITY_ARGS, ...list];
+  return [...PSQL_SQLSTATE_VERBOSITY_ARGS, ...out];
 }
 
 /**
@@ -94,47 +126,78 @@ const SAFE_IDENT = String.raw`(?:"[^"]+"|[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)?)`;
 
 const SAFE_ERROR_PHRASE_RES = Object.freeze([
   {
-    re: new RegExp(`permission denied for (table|schema|sequence|function) (${SAFE_IDENT})`, "i"),
-    format: (m, ident) => `permission denied for ${m[1].toLowerCase()} ${ident}`,
+    re: new RegExp(`permission denied for (table|schema|sequence|function) (${SAFE_IDENT})\\s*$`, "i"),
+    format: (m, ident) =>
+      ident ? `permission denied for ${m[1].toLowerCase()} ${ident}` : `permission denied for ${m[1].toLowerCase()}`,
   },
   {
-    re: new RegExp(`role (${SAFE_IDENT}) does not exist`, "i"),
-    format: (_m, ident) => `role "${ident}" does not exist`,
+    re: new RegExp(`role (${SAFE_IDENT}) does not exist\\s*$`, "i"),
+    format: (_m, ident) => (ident ? `role "${ident}" does not exist` : "role does not exist"),
   },
   {
-    re: new RegExp(`schema (${SAFE_IDENT}) does not exist`, "i"),
-    format: (_m, ident) => `schema ${ident} does not exist`,
+    re: new RegExp(`schema (${SAFE_IDENT}) does not exist\\s*$`, "i"),
+    format: (_m, ident) => (ident ? `schema ${ident} does not exist` : "schema does not exist"),
   },
   {
     re: new RegExp(
-      `must be owner of(?: (?:table|schema|sequence|function|relation))? (${SAFE_IDENT})`,
+      `must be owner of(?: (?:table|schema|sequence|function|relation))? (${SAFE_IDENT})\\s*$`,
       "i",
     ),
-    format: (_m, ident) => `must be owner of ${ident}`,
+    format: (_m, ident) => (ident ? `must be owner of ${ident}` : "must be owner of"),
   },
   {
-    re: new RegExp(`relation (${SAFE_IDENT}) does not exist`, "i"),
-    format: (_m, ident) => `relation "${ident}" does not exist`,
+    re: new RegExp(`relation (${SAFE_IDENT}) does not exist\\s*$`, "i"),
+    format: (_m, ident) => (ident ? `relation "${ident}" does not exist` : "relation does not exist"),
   },
 ]);
 
-function safeIdent(raw) {
-  const name = String(raw ?? "").replaceAll('"', "");
-  if (!/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(name)) return null;
-  return name;
+function phraseLineBody(line) {
+  const s = String(line ?? "");
+  if (PG_RESTORE_QUERY_ERROR_RE.test(s)) {
+    return s.replace(PG_RESTORE_QUERY_ERROR_RE, "").replace(/^\s+/, "");
+  }
+  const psql = s.match(/^(?:psql:[^:\n]*:\d+: )?ERROR:\s*(.*)$/);
+  return psql ? psql[1] : null;
 }
 
 /**
- * Phrase + identifier only, from an allowlist of known-safe Postgres errors.
- * Returns null when the text is not one of those shapes.
+ * First ERROR line that may carry a known-safe phrase.
+ * pg_restore: only `could not execute query: ERROR:`. Other pg_restore
+ * / pg_dump error lines are not scanned for phrases.
+ */
+export function firstPhraseErrorLine(text) {
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    if (PG_RESTORE_QUERY_ERROR_RE.test(line)) return line;
+    if (/^pg_restore: error:/i.test(line)) return null;
+    if (/^(?:psql:[^:\n]*:\d+: )?ERROR:/.test(line)) return line;
+  }
+  return null;
+}
+
+function allowlistedIdent(raw) {
+  const name = String(raw ?? "").replaceAll('"', "");
+  if (!/^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(name)) return null;
+  const parts = name.split(".");
+  if (parts.some((p) => p.length === 0 || p.length > SAFE_ERROR_IDENT_MAX)) return null;
+  if (parts.every((p) => SAFE_ERROR_NAME_ALLOWLIST.has(p))) return name;
+  return "";
+}
+
+/**
+ * Phrase + optional allowlisted identifier, from the first ERROR line
+ * only, anchored at the end of that line. Returns null when the line is
+ * not one of those shapes.
  */
 export function extractSafeErrorPhrase(text) {
-  const s = String(text ?? "");
+  const line = firstPhraseErrorLine(text);
+  if (!line) return null;
+  const body = phraseLineBody(line);
+  if (body == null) return null;
   for (const { re, format } of SAFE_ERROR_PHRASE_RES) {
-    const m = s.match(re);
+    const m = body.match(re);
     if (!m) continue;
-    const ident = safeIdent(m[2] ?? m[1]);
-    if (!ident) continue;
+    const ident = allowlistedIdent(m[2] ?? m[1]);
+    if (ident == null) continue;
     return format(m, ident);
   }
   return null;
@@ -146,7 +209,7 @@ export function extractSafeErrorPhrase(text) {
  * P0001 (plpgsql RAISE) always uses the class message — the RAISE text
  * can put a value before `: "` and still leak if we cut.
  * Known-safe phrases (permission denied, missing role/schema/relation)
- * log the phrase and identifier only.
+ * log the phrase and an allowlisted identifier only.
  */
 export function sanitizePgFailureText(text) {
   const raw = String(text ?? "");
@@ -183,9 +246,9 @@ export function throwSafe(message) {
   throw new Error(safeLoggedMessage(message));
 }
 
-export function formatSafeCommandError(cmd, status, stderr, stdout, redact = (s) => s) {
+export function formatSafeCommandError(cmd, status, stderr, _stdout, redact = (s) => s) {
   const name = basename(String(cmd || "command").split(/\s+/)[0] || "command");
-  const { sqlstate, firstError } = sanitizePgFailureText(`${stderr || ""}\n${stdout || ""}`);
+  const { sqlstate, firstError } = sanitizePgFailureText(stderr || "");
   const parts = [`${name} failed (${status})`];
   if (sqlstate) parts.push(`SQLSTATE ${sqlstate}`);
   if (firstError) parts.push(firstError);

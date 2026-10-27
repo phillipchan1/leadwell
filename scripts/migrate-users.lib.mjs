@@ -31,6 +31,13 @@ RETURNS UUID LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
 export const REQUIRED_EXTENSIONS_SQL = `CREATE EXTENSION IF NOT EXISTS pgcrypto;
 `;
 
+/** Scratch-target only. Stops the server log from recording COPY/DETAIL rows. */
+export const TARGET_PANIC_LOGGING_SQL = `ALTER SYSTEM SET log_min_messages = panic;
+ALTER SYSTEM SET log_min_error_statement = panic;
+ALTER SYSTEM SET log_error_verbosity = terse;
+SELECT pg_reload_conf();
+`;
+
 export const BETTER_AUTH_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS "user" (
   id TEXT PRIMARY KEY,

@@ -68,6 +68,7 @@ import {
   createTargetCopyRoleSql,
   disableTargetCopyRoleSql,
   grantTargetCopyRoleSchemasSql,
+  TARGET_PANIC_LOGGING_SQL,
 } from "./migrate-users.lib.mjs";
 import {
   ALLOWED_UPLOAD_ARTIFACT_PATHS,
@@ -84,11 +85,15 @@ import {
 } from "./guard-public-ci.mjs";
 import {
   extractSafeErrorPhrase,
+  firstPhraseErrorLine,
   formatSafeCommandError,
+  SAFE_ERROR_IDENT_MAX,
+  SAFE_ERROR_NAME_ALLOWLIST,
   sanitizePgFailureText,
   sqlstateClassMessage,
   withPsqlSqlstateVerbosity,
 } from "./safe-cmd.mjs";
+import { SCRATCH_POSTGRES_CONTAINER, SCRATCH_POSTGRES_IMAGE } from "./scratch-postgres.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -274,14 +279,87 @@ ok(
   withPsqlSqlstateVerbosity("psql", ["-v", "ON_ERROR_STOP=1", "-c", "SELECT 1"]).includes("VERBOSITY=sqlstate"),
   "psql args include VERBOSITY=sqlstate",
 );
-ok(
-  withPsqlSqlstateVerbosity("psql", ["-v", "VERBOSITY=terse"]).filter((a) => /^VERBOSITY=/i.test(a)).length === 1,
-  "caller VERBOSITY is not duplicated",
-);
+const forcedVerbosity = withPsqlSqlstateVerbosity("psql", ["-v", "VERBOSITY=terse", "-c", "SELECT 1"]);
+ok(forcedVerbosity.includes("VERBOSITY=sqlstate"), "caller VERBOSITY is replaced with sqlstate");
+ok(!forcedVerbosity.includes("VERBOSITY=terse"), "caller VERBOSITY override is removed");
+ok(forcedVerbosity.filter((a) => /^VERBOSITY=/i.test(a)).length === 1, "VERBOSITY is set once");
 ok(
   !withPsqlSqlstateVerbosity("pg_dump", ["--file=x"]).includes("VERBOSITY=sqlstate"),
   "pg_dump is not given VERBOSITY=sqlstate",
 );
+
+ok(SAFE_ERROR_NAME_ALLOWLIST.has("users"), "allowlist includes users");
+ok(SAFE_ERROR_NAME_ALLOWLIST.has("leadwell_copy"), "allowlist includes leadwell_copy");
+ok(SAFE_ERROR_IDENT_MAX === 63, "identifier cap is 63");
+ok(
+  firstPhraseErrorLine("NOTICE:  x\nERROR:  permission denied for table users\n") ===
+    "ERROR:  permission denied for table users",
+  "phrase line is the first ERROR line",
+);
+ok(
+  firstPhraseErrorLine("pg_restore: error: could not find TOC\nERROR:  permission denied for table users\n") ==
+    null,
+  "non-query pg_restore error is not a phrase line",
+);
+ok(
+  firstPhraseErrorLine(
+    "pg_restore: connecting to database\npg_restore: error: could not execute query: ERROR:  permission denied for table users\n",
+  ) === "pg_restore: error: could not execute query: ERROR:  permission denied for table users",
+  "informational pg_restore lines are skipped",
+);
+
+const COPY_SENTINEL = "SENTINEL_CTX_9931";
+const copyRestore = [
+  "pg_restore: error: could not execute query: ERROR:  invalid input syntax for type text",
+  `Command was: COPY public.profiles FROM stdin;`,
+  `CONTEXT:  COPY profiles, line 1: "permission denied for table ${COPY_SENTINEL}"`,
+].join("\n");
+ok(extractSafeErrorPhrase(copyRestore) == null, "COPY value is not treated as a phrase");
+ok(
+  !formatSafeCommandError("pg_restore", 1, copyRestore, "").includes(COPY_SENTINEL),
+  "COPY value sentinel is not logged from stderr",
+);
+
+ok(
+  extractSafeErrorPhrase('ERROR:  relation "missing_table_xyz" does not exist') === "relation does not exist",
+  "does-not-exist without allowlisted name omits the name",
+);
+ok(
+  extractSafeErrorPhrase("ERROR:  must be owner of table not_a_real_table") === "must be owner of",
+  "must-be-owner without allowlisted name omits the name",
+);
+
+const longValue = `${"A".repeat(5000)}${COPY_SENTINEL}`;
+const longSan = sanitizePgFailureText(`ERROR:  invalid input syntax for type text: "${longValue}"\nSQLSTATE 22P02`);
+ok(longSan.firstError === "ERROR:  invalid input syntax for type text", "5000-character value is cut at the quote");
+ok(!longSan.firstError.includes(COPY_SENTINEL), "5000-character value does not leak");
+ok(longSan.firstError.length < 80, "cut ERROR line stays short");
+
+ok(
+  extractSafeErrorPhrase('ERROR:  permission denied for table "users"') === "permission denied for table users",
+  "quoted allowlisted identifier is printed",
+);
+ok(
+  extractSafeErrorPhrase(`ERROR:  permission denied for table "${COPY_SENTINEL}"`) ===
+    "permission denied for table",
+  "quoted non-allowlisted identifier is omitted",
+);
+
+const raiseRestore = `pg_restore: error: could not execute query: ERROR:  permission denied for table ${COPY_SENTINEL}`;
+ok(
+  extractSafeErrorPhrase(raiseRestore) === "permission denied for table",
+  "pg_restore RAISE-shaped phrase omits a non-allowlisted name",
+);
+ok(!formatSafeCommandError("pg_restore", 1, raiseRestore, "").includes(COPY_SENTINEL), "trigger RAISE sentinel is not logged");
+
+const stdoutPhrase = formatSafeCommandError(
+  "psql",
+  1,
+  "ERROR:  syntax error\n",
+  `permission denied for table ${COPY_SENTINEL}\n`,
+);
+ok(!stdoutPhrase.includes(COPY_SENTINEL), "phrase on stdout is not scanned");
+ok(!/permission denied/.test(stdoutPhrase), "stdout phrase is not used as the error");
 
 const hashes = parseHashes("profiles|1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nteams|0|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
 ok(hashes.profiles?.n === 1 && hashes.profiles.hash.length === 32, "parseHashes pipe");
@@ -668,6 +746,30 @@ const checksCheckout = Array.isArray(checksDoc.jobs?.checks?.steps)
   : null;
 ok(checksCheckout, "checks.yml has a checkout step");
 ok(checksCheckout.with?.["persist-credentials"] === false, "checks checkout persist-credentials is false");
+const cutoverCheckout = Array.isArray(cutoverJob.steps)
+  ? cutoverJob.steps.find((s) => s?.id === "checkout")
+  : null;
+ok(cutoverCheckout, "cutover has a checkout step");
+ok(cutoverCheckout.with?.["persist-credentials"] === false, "cutover checkout persist-credentials is false");
+ok(!Object.hasOwn(checksDoc.jobs?.checks ?? {}, "services"), "checks.yml has no services: postgres");
+ok(!Object.hasOwn(cutoverJob ?? {}, "services"), "cutover-migrate.yml has no services: postgres");
+ok(/id:\s*start-postgres/.test(checksYml) && /id:\s*stop-postgres/.test(checksYml), "checks.yml starts and stops scratch postgres");
+ok(/id:\s*start-postgres/.test(workflow) && /id:\s*stop-postgres/.test(workflow), "cutover starts and stops scratch postgres");
+ok(/id:\s*stop-postgres[\s\S]*always\(\)/.test(checksYml), "checks stop-postgres is always()");
+ok(/id:\s*stop-postgres[\s\S]*always\(\)/.test(workflow), "cutover stop-postgres is always()");
+ok(checksYml.includes("scratch-postgres.mjs stop >/dev/null 2>&1"), "checks stop discards output");
+ok(workflow.includes("scratch-postgres.mjs stop >/dev/null 2>&1"), "cutover stop discards output");
+ok(/id:\s*container-log-guard/.test(checksYml), "checks.yml has a container-log-guard step");
+ok(/id:\s*container-log-guard/.test(workflow), "cutover has a container-log-guard step");
+ok(!/\bdocker logs\b/.test(checksYml), "checks.yml never prints docker logs");
+ok(!/\bdocker logs\b/.test(workflow), "cutover never prints docker logs");
+ok(/^postgres@sha256:[0-9a-f]{64}$/.test(SCRATCH_POSTGRES_IMAGE), "scratch postgres image is SHA-pinned");
+ok(SCRATCH_POSTGRES_CONTAINER === "leadwell-pg", "scratch postgres container name");
+ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_messages = panic"), "panic SQL sets log_min_messages");
+ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_error_statement = panic"), "panic SQL sets log_min_error_statement");
+ok(TARGET_PANIC_LOGGING_SQL.includes("log_error_verbosity = terse"), "panic SQL sets log_error_verbosity");
+ok(TARGET_PANIC_LOGGING_SQL.includes("pg_reload_conf()"), "panic SQL reloads config");
+ok(migrateSrc.includes("TARGET_PANIC_LOGGING_SQL"), "migrate applies panic logging before restore");
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
@@ -866,6 +968,8 @@ ok(codeowners.includes("scripts/migrate-supabase-to-neon.mjs"), "CODEOWNERS cove
 ok(codeowners.includes("scripts/cutover-verify.mjs"), "CODEOWNERS covers cutover-verify");
 ok(codeowners.includes("scripts/migrate-users.lib.mjs"), "CODEOWNERS covers migrate-users.lib");
 ok(codeowners.includes("scripts/loopback.mjs"), "CODEOWNERS covers loopback");
+ok(codeowners.includes("scripts/scratch-postgres.mjs"), "CODEOWNERS covers scratch-postgres");
+ok(codeowners.includes("scripts/prove-container-log.mjs"), "CODEOWNERS covers prove-container-log");
 ok(codeowners.includes("package.json"), "CODEOWNERS covers package.json");
 ok(codeowners.includes("package-lock.json"), "CODEOWNERS covers the lockfile");
 ok(codeowners.includes(".github/CODEOWNERS"), "CODEOWNERS covers itself");
