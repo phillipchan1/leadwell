@@ -8,6 +8,7 @@ import {
   meetingTitle,
   todayISO,
 } from "../lib/readiness";
+import { startMeeting } from "../lib/liveMeeting";
 import { cx } from "@/utils/cx";
 import { useStore } from "../store/useStore";
 import { parseColumnKey, plannedSlots } from "../lib/topics";
@@ -117,7 +118,14 @@ export function OccurrenceNotesPanel({
         onGone={onClose}
         onClose={onClose}
         onStart={
-          onOpenFullEditor && !skipped ? () => onOpenFullEditor(ensure()) : undefined
+          onOpenFullEditor && !skipped
+            ? () => {
+                const id = ensure();
+                // Today's or ahead is starting it; a past week is its notes.
+                if (date >= todayISO()) startMeeting(id);
+                onOpenFullEditor(id);
+              }
+            : undefined
         }
       />
 

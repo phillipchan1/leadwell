@@ -19,6 +19,9 @@ import {
 } from "@/lib/today";
 import { shortSincePrayed } from "@/lib/prayer";
 import { nextArcSteps, stepTag } from "@/lib/arcs";
+import { ensureSessionId, plannedSlots } from "@/lib/topics";
+import { startMeeting } from "@/lib/liveMeeting";
+import { Play } from "@untitledui/icons";
 import type { Arc, ArcStep, TrackedMeeting } from "@/types";
 import { Avatar } from "../Avatar";
 import { YourTeams } from "./YourTeams";
@@ -323,6 +326,25 @@ function AllClear() {
 
 // ── The week ───────────────────────────────────────────────────────────────
 
+/** Into Run for today's occurrence, booking it if the rhythm only expected it. */
+function useStartToday() {
+  const openSession = useStore((s) => s.openSession);
+  const addSession = useStore((s) => s.addSession);
+  return (meeting: TrackedMeeting) => {
+    const { sessions, topics } = useStore.getState();
+    const today = todayISO();
+    const slot = plannedSlots(meeting, sessions, topics, today, 2).find((s) => s.date === today) ?? {
+      sessionId: null,
+      date: today,
+      projected: true,
+      past: false,
+    };
+    const id = ensureSessionId(meeting.id, slot, sessions, addSession);
+    startMeeting(id);
+    openSession(id);
+  };
+}
+
 function rowAction(row: MeetingRow): { label: string; check?: Check } | null {
   const check = row.reading.checks.find((c) => !c.done);
   if (!check || row.reading.state === "ready" || row.reading.state === "resting") return null;
@@ -336,6 +358,7 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
   const selectMeeting = useStore((s) => s.selectMeeting);
   const setTab = useStore((s) => s.setTab);
   const fix = useFix();
+  const startToday = useStartToday();
 
   return (
     <section className="flex flex-col gap-3.5">
@@ -393,7 +416,17 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                   {STATE_LABEL[r.state]}
                 </span>
                 <span className="justify-self-end">
-                  {action ? (
+                  {/* On the day, the only thing left to do is have it. */}
+                  {r.daysUntil === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => startToday(row.meeting)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-[8px] bg-teal-600 px-3 text-[13px] font-semibold whitespace-nowrap text-white transition-colors hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950"
+                    >
+                      <Play aria-hidden className="size-3" />
+                      Start
+                    </button>
+                  ) : action ? (
                     <button
                       type="button"
                       onClick={() => fix(row, action.check)}

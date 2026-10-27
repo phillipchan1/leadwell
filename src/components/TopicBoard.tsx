@@ -16,6 +16,7 @@ import { TopicDetail } from "./TopicDetail";
 import {
   boardLayout,
   curriculumOf,
+  ensureSessionId,
   looseTopics,
   nextSlotAfter,
   parseColumnKey,
@@ -29,6 +30,7 @@ import {
   type WeekColumn,
 } from "../lib/topics";
 import { MEETING_LABEL, daysBetween, todayISO } from "../lib/readiness";
+import { startMeeting } from "../lib/liveMeeting";
 import { chainVerticalWheel } from "../lib/scroll-chain";
 import { sessionSummary } from "../lib/session";
 import { deleteWithUndo, doWithUndo } from "../lib/undo";
@@ -41,11 +43,13 @@ import {
   Copy01,
   CornerUpLeft,
   DotsGrid,
+  Edit03,
   Flag01,
   FlipBackward,
   LayersTwo01,
   Maximize01,
   PauseCircle,
+  Play,
   Plus,
   Trash01,
   Lock01,
@@ -1239,6 +1243,7 @@ function ScheduleGrid({
           {!agenda && weeks.map((week) => (
             <WeekHeader
               key={`head-${week.key}`}
+              meetingId={meetingId}
               column={colOf.get(week.key)!}
               week={week}
               today={today}
@@ -1495,6 +1500,7 @@ function weekStatus(week: WeekColumn, today: string): { text: string; tone: stri
 }
 
 function WeekHeader({
+  meetingId,
   column,
   week,
   today,
@@ -1503,6 +1509,7 @@ function WeekHeader({
   notesPreview,
   onSelect,
 }: {
+  meetingId: string;
   column: number;
   week: WeekColumn;
   today: string;
@@ -1511,67 +1518,108 @@ function WeekHeader({
   notesPreview: string;
   onSelect: () => void;
 }) {
+  const sessions = useStore((s) => s.sessions);
+  const addSession = useStore((s) => s.addSession);
+  const openSession = useStore((s) => s.openSession);
   const past = week.slot.past;
   const expected = week.slot.projected && !past;
   const status = weekStatus(week, today);
   const flag = isActive ? "Open" : isNext ? "Next" : null;
+  const longDate = fmtDay(week.slot.date, { weekday: "long", month: "long", day: "numeric" });
+
+  /*
+   * Straight into Run from the board, without opening the week first. The
+   * next one (or today's) starts; a past one opens for notes, which is how
+   * you go back and write up a meeting after the fact. Weeks further out are
+   * still being planned, so they offer neither.
+   */
+  const run = past ? "notes" : isNext || week.slot.date === today ? "start" : null;
+  const go = () => {
+    const id = ensureSessionId(meetingId, week.slot, sessions, addSession);
+    if (run === "start") startMeeting(id);
+    openSession(id);
+  };
+
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-expanded={isActive}
-      aria-label={`${fmtDay(week.slot.date, { weekday: "long", month: "long", day: "numeric" })}. ${status.text}. ${isActive ? "Close" : "Open"} this week.`}
-      style={{ gridColumn: column, gridRow: 1 }}
-      className={cx(
-        "group/week relative z-[2] flex min-w-0 flex-col gap-0.5 rounded-t-[14px] px-3.5 pt-3.5 pb-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-inset",
-        past && !isActive && "opacity-70 hover:opacity-100"
-      )}
-    >
-      <span className="flex h-[17px] items-center gap-2">
-        <span
-          className={cx(
-            "font-mono text-[10.5px]",
-            isActive ? "text-teal-700 dark:text-teal-300" : "text-quaternary"
+    <div style={{ gridColumn: column, gridRow: 1 }} className="relative z-[2] flex min-w-0">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-expanded={isActive}
+        aria-label={`${longDate}. ${status.text}. ${isActive ? "Close" : "Open"} this week.`}
+        className={cx(
+          "group/week relative flex min-w-0 flex-1 flex-col gap-0.5 rounded-t-[14px] px-3.5 pt-3.5 pb-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-inset",
+          past && !isActive && "opacity-70 hover:opacity-100"
+        )}
+      >
+        {/* Room for Start / Notes, which sit over this row's end. */}
+        <span className={cx("flex h-[17px] min-w-0 items-center gap-2", run && "pr-[4.5rem]")}>
+          <span
+            className={cx(
+              "font-mono text-[10.5px]",
+              isActive ? "text-teal-700 dark:text-teal-300" : "text-quaternary"
+            )}
+          >
+            {fmtDay(week.slot.date, { weekday: "short" }).toUpperCase()}
+          </span>
+          {flag && (
+            <span className="inline-flex h-[17px] items-center rounded-[5px] bg-teal-600 px-1.5 font-mono text-[9.5px] font-medium tracking-[0.06em] text-white uppercase dark:bg-teal-500 dark:text-stone-950">
+              {flag}
+            </span>
           )}
-        >
-          {fmtDay(week.slot.date, { weekday: "short" }).toUpperCase()}
+          {week.exception ? (
+            <span className="truncate font-mono text-[9.5px] tracking-[0.06em] text-teal-700 uppercase dark:text-teal-300">
+              {week.exception}
+            </span>
+          ) : expected && !flag ? (
+            <span className="font-mono text-[9.5px] tracking-[0.06em] text-quaternary">EXPECTED</span>
+          ) : null}
         </span>
-        {flag && (
-          <span className="inline-flex h-[17px] items-center rounded-[5px] bg-teal-600 px-1.5 font-mono text-[9.5px] font-medium tracking-[0.06em] text-white uppercase dark:bg-teal-500 dark:text-stone-950">
-            {flag}
+        <span className="flex items-baseline gap-1.5">
+          <span
+            className={cx(
+              "font-serif leading-[30px] transition-colors group-hover/week:text-teal-700 dark:group-hover/week:text-teal-300",
+              past ? "text-[22px]" : "text-[26px]",
+              expected && "text-secondary"
+            )}
+          >
+            {Number(week.slot.date.slice(8, 10))}
+          </span>
+          <span className="text-[12.5px] text-tertiary">
+            {fmtDay(week.slot.date, { month: "short" })}
+          </span>
+        </span>
+        <span className={cx("truncate text-[11.5px]", isActive ? "text-teal-800 dark:text-teal-300" : status.tone)}>
+          {status.text}
+        </span>
+        {notesPreview && (
+          <span className="mt-1 line-clamp-2 font-serif text-[13px] leading-[17px] text-secondary italic">
+            {notesPreview}
           </span>
         )}
-        {week.exception ? (
-          <span className="truncate font-mono text-[9.5px] tracking-[0.06em] text-teal-700 uppercase dark:text-teal-300">
-            {week.exception}
-          </span>
-        ) : expected && !flag ? (
-          <span className="font-mono text-[9.5px] tracking-[0.06em] text-quaternary">EXPECTED</span>
-        ) : null}
-      </span>
-      <span className="flex items-baseline gap-1.5">
-        <span
-          className={cx(
-            "font-serif leading-[30px] transition-colors group-hover/week:text-teal-700 dark:group-hover/week:text-teal-300",
-            past ? "text-[22px]" : "text-[26px]",
-            expected && "text-secondary"
-          )}
+      </button>
+      {run === "start" ? (
+        <button
+          type="button"
+          onClick={go}
+          aria-label={`Start the ${longDate} meeting`}
+          className="absolute top-2.5 right-2.5 inline-flex h-7 items-center gap-1.5 rounded-[8px] bg-teal-600 px-2.5 text-[12px] font-semibold text-white shadow-xs transition-colors hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950"
         >
-          {Number(week.slot.date.slice(8, 10))}
-        </span>
-        <span className="text-[12.5px] text-tertiary">
-          {fmtDay(week.slot.date, { month: "short" })}
-        </span>
-      </span>
-      <span className={cx("truncate text-[11.5px]", isActive ? "text-teal-800 dark:text-teal-300" : status.tone)}>
-        {status.text}
-      </span>
-      {notesPreview && (
-        <span className="mt-1 line-clamp-2 font-serif text-[13px] leading-[17px] text-secondary italic">
-          {notesPreview}
-        </span>
-      )}
-    </button>
+          <Play aria-hidden className="size-3" />
+          Start
+        </button>
+      ) : run === "notes" ? (
+        <button
+          type="button"
+          onClick={go}
+          aria-label={`Notes for ${longDate}`}
+          className="absolute top-2.5 right-2 inline-flex h-7 items-center gap-1 rounded-[8px] px-2 text-[12px] font-semibold text-tertiary transition-colors hover:bg-primary hover:text-teal-700 touch:min-h-11 dark:hover:text-teal-300"
+        >
+          <Edit03 aria-hidden className="size-3.5" />
+          Notes
+        </button>
+      ) : null}
+    </div>
   );
 }
 

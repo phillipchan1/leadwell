@@ -7,6 +7,7 @@ import { Mark } from "@/components/brand/glyphs";
 import { cx } from "@/utils/cx";
 import { ScopeMenu } from "./ScopeMenu";
 import { MenuItem } from "./Sidebar";
+import { LivePill } from "../LivePill";
 import { PLACES, PlusIcon, SearchIcon, lastPeopleTab, placeOf } from "./places";
 
 /**
@@ -154,22 +155,26 @@ export function PhoneTabBar() {
   };
 
   return (
-    <nav
-      aria-label="Primary"
-      className="pad-safe-bottom chrome-compact z-30 flex shrink-0 items-center bg-leather px-2 pt-1.5 [--pad-safe-bottom:0.375rem] lg:hidden"
-    >
-      {left.map(item)}
-      <div className="flex flex-1 justify-center">
-        <button
-          type="button"
-          aria-label="Capture"
-          onClick={() => openModal({ kind: "capture" })}
-          className="flex size-[52px] items-center justify-center rounded-[18px] bg-teal-400 text-stone-950 shadow-[0_8px_18px_-6px_rgba(0,0,0,0.45)] active:scale-95"
-        >
-          <PlusIcon className="size-6" />
-        </button>
-      </div>
-      {right.map(item)}
-    </nav>
+    <>
+      {/* Sits on the tab bar, so the meeting you stepped out of is a thumb away. */}
+      <LivePill tone="phone" />
+      <nav
+        aria-label="Primary"
+        className="pad-safe-bottom chrome-compact z-30 flex shrink-0 items-center bg-leather px-2 pt-1.5 [--pad-safe-bottom:0.375rem] lg:hidden"
+      >
+        {left.map(item)}
+        <div className="flex flex-1 justify-center">
+          <button
+            type="button"
+            aria-label="Capture"
+            onClick={() => openModal({ kind: "capture" })}
+            className="flex size-[52px] items-center justify-center rounded-[18px] bg-teal-400 text-stone-950 shadow-[0_8px_18px_-6px_rgba(0,0,0,0.45)] active:scale-95"
+          >
+            <PlusIcon className="size-6" />
+          </button>
+        </div>
+        {right.map(item)}
+      </nav>
+    </>
   );
 }

@@ -28,6 +28,10 @@ import {
   type SearchTarget,
 } from "../lib/search";
 import { loadRecents, recentRank, recordRecent } from "../lib/recents";
+import { todayISO } from "../lib/readiness";
+import { ensureSessionId, plannedSlots } from "../lib/topics";
+import { startMeeting, useLive } from "../lib/liveMeeting";
+import { useMeetingsByNext } from "@/hooks/use-meetings-by-next";
 import { Avatar } from "./Avatar";
 import { cx } from "@/utils/cx";
 import { SearchLg } from "@untitledui/icons";
@@ -128,6 +132,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
   const toggleDark = useStore((s) => s.toggleDark);
   const dark = useStore((s) => s.dark);
+  const addSession = useStore((s) => s.addSession);
+  const byNext = useMeetingsByNext();
+  const liveSessionId = useLive((s) => s.sessionId);
 
   const source = useMemo<SearchSource>(
     () => ({
@@ -291,6 +298,78 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     toggleDark,
   ]);
 
+  /**
+   * Meetings as verbs: back into the one you're in, start one, or pick the
+   * notes back up on one that's been. At rest it's only what's live, what's
+   * today and the last few write-ups; typed, any meeting starts by name.
+   */
+  const meetingRows = useMemo<(Row & { resting: boolean })[]>(() => {
+    const today = todayISO();
+    const go = (id: string, fn: () => void) => () => runRow(id, fn);
+    const titleOf = new Map(byNext.map((r) => [r.meeting.id, r.title]));
+    const live = liveSessionId ? sessions.find((o) => o.id === liveSessionId) : undefined;
+    const rows: (Row & { resting: boolean })[] = [];
+
+    if (live && titleOf.has(live.meetingId)) {
+      rows.push({
+        id: "meet:live",
+        label: `Back to ${titleOf.get(live.meetingId)}`,
+        hint: "In progress",
+        group: "Meetings",
+        resting: true,
+        run: go("meet:live", () => openSession(live.id)),
+      });
+    }
+
+    for (const { meeting, title, readiness } of byNext) {
+      const next = plannedSlots(meeting, sessions, topics, today, 2).find((s) => !s.past);
+      if (!next || (live && next.sessionId === live.id)) continue;
+      // When it's due is readiness's answer, the same the sidebar gives. The
+      // board projects a meeting with no day yet onto today as a placeholder;
+      // it can be started by name, but it isn't on today.
+      const due = readiness.nextDate;
+      const id = `meet:start:${meeting.id}`;
+      rows.push({
+        id,
+        label: `Start ${title}`,
+        hint:
+          !due || readiness.daysUntil === null
+            ? "No date yet"
+            : readiness.daysUntil < 0
+              ? "Overdue"
+              : readiness.daysUntil === 0
+                ? "Today"
+                : dayLabel(due),
+        group: "Meetings",
+        resting: readiness.daysUntil === 0,
+        run: go(id, () => {
+          const latest = useStore.getState().sessions;
+          const sessionId = ensureSessionId(meeting.id, next, latest, addSession);
+          startMeeting(sessionId);
+          openSession(sessionId);
+        }),
+      });
+    }
+
+    sessions
+      .filter((o) => o.kind !== "skipped" && o.date <= today && titleOf.has(o.meetingId))
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .slice(0, 12)
+      .forEach((o, i) => {
+        const id = `meet:notes:${o.id}`;
+        rows.push({
+          id,
+          label: `Notes — ${titleOf.get(o.meetingId)}`,
+          hint: o.date === today ? "Today" : dayLabel(o.date),
+          group: "Meetings",
+          resting: i < 3 && o.id !== live?.id,
+          run: go(id, () => openSession(o.id)),
+        });
+      });
+
+    return rows;
+  }, [byNext, sessions, topics, liveSessionId, runRow, openSession, addSession]);
+
   // The list lags the field by at most a frame under load, so typing is never
   // gated on scoring a workspace's worth of prose.
   const deferred = useDeferredValue(query);
@@ -308,15 +387,23 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
             .slice(0, RECENT_LIMIT)
             .map((doc) => ({ ...docRow(doc), group: "Recent" }))
         : [];
-      return clusterByGroup([...recentRows, ...commands]).slice(0, RESTING_LIMIT);
+      const meetingNow = meetingRows.filter((r) => r.resting);
+      return clusterByGroup([...meetingNow, ...recentRows, ...commands]).slice(0, RESTING_LIMIT);
     }
 
-    const commandHits = commands
-      .map((row) => ({
+    const commandHits = [
+      ...commands.map((row) => ({
         row,
         // A match on the subtitle counts, but never beats one on the name.
         s: Math.max(score(trimmed, row.label), score(trimmed, row.hint ?? "") - 400),
-      }))
+      })),
+      // "start sarah" means "Start 1:1 with Sarah Kim": each word has to land,
+      // not the phrase in one piece.
+      ...meetingRows.map((row) => ({
+        row,
+        s: Math.max(score(trimmed, row.label), everyWord(trimmed, row.label) - 100),
+      })),
+    ]
       .filter((r) => r.s > 0)
       .sort((a, b) => b.s - a.s);
 
@@ -332,7 +419,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       .slice(0, 40);
 
     return clusterByGroup(scored.map(({ row }) => row));
-  }, [commands, docRow, index, ranks, recents, trimmed]);
+  }, [commands, meetingRows, docRow, index, ranks, recents, trimmed]);
 
   // A new query invalidates the highlight — otherwise Enter runs whatever
   // happened to be at index 4 in the previous result set.
@@ -486,6 +573,29 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       </SysModal>
     </ModalOverlay>
   );
+}
+
+/** The weakest of each word's match, or 0 when any word misses. */
+function everyWord(query: string, text: string): number {
+  const words = query.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return 0;
+  let worst = Infinity;
+  for (const w of words) {
+    const s = score(w, text);
+    if (!s) return 0;
+    worst = Math.min(worst, s);
+  }
+  return worst;
+}
+
+/** "Thu, Oct 30" — a date short enough for the hint column. */
+function dayLabel(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 /** What you typed, picked out of what was found. */

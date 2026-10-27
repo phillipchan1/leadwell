@@ -13,6 +13,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
       "port": 4173
+    },
+    {
+      "name": "polarch-demo",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["VITE_DEMO=1", "npx", "vite", "--port", "5191", "--strictPort"],
+      "port": 5191
     }
   ]
 }

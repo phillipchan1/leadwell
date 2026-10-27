@@ -11,6 +11,7 @@ import { Mark, Wordmark } from "@/components/brand/glyphs";
 import { cx } from "@/utils/cx";
 import { MeetingsList, SharedWithMeList } from "./MeetingsList";
 import { ScopeMenu } from "./ScopeMenu";
+import { LivePill } from "../LivePill";
 import { PLACES, PlusIcon, SearchIcon, lastPeopleTab, placeOf } from "./places";
 
 /**
@@ -72,6 +73,9 @@ export function Sidebar({
           <PlusIcon className="size-4" />
         </button>
       </div>
+
+      {/* The meeting you stepped out of, one click from going back in. */}
+      <LivePill tone="sidebar" />
 
       <ul className="flex flex-col gap-0.5">
         {PLACES.map((p) => {

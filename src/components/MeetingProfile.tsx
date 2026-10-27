@@ -31,6 +31,7 @@ import {
   readinessOf,
   todayISO,
 } from "../lib/readiness";
+import { startMeeting } from "../lib/liveMeeting";
 import {
   boardLayout,
   curriculumOf,
@@ -147,8 +148,11 @@ export function MeetingProfile({
   );
   const next = layout.weeks.find((w) => !w.slot.past) ?? null;
 
-  const start = (slot: Slot) =>
-    openSession(ensureSessionId(meeting.id, slot, sessions, addSession));
+  const start = (slot: Slot) => {
+    const id = ensureSessionId(meeting.id, slot, sessions, addSession);
+    startMeeting(id);
+    openSession(id);
+  };
 
   const startLabel = next
     ? daysBetween(today, next.slot.date) === 0

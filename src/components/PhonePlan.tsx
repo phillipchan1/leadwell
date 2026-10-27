@@ -13,8 +13,9 @@ import {
   type WeekColumn,
 } from "../lib/topics";
 import { daysBetween, todayISO } from "../lib/readiness";
+import { startMeeting } from "../lib/liveMeeting";
 import { Checkbox } from "@/components/base/checkbox/checkbox";
-import { Play, Plus } from "@untitledui/icons";
+import { Edit03, Play, Plus } from "@untitledui/icons";
 import { InlineComposer } from "./InlineComposer";
 import { TopicDetail } from "./TopicDetail";
 import type { BoardDirection } from "./TopicBoard";
@@ -120,7 +121,12 @@ export function PhonePlan({
           onOpenWeek={() => onSelectWeek(slotKey(week.slot), week.slot)}
           onStart={
             onOpenSession
-              ? () => onOpenSession(ensureSessionId(meeting.id, week.slot, sessions, addSession))
+              ? () => {
+                  const id = ensureSessionId(meeting.id, week.slot, sessions, addSession);
+                  // A past week opens for notes; anything else is starting it.
+                  if (!week.slot.past) startMeeting(id);
+                  onOpenSession(id);
+                }
               : undefined
           }
           onOpenTopic={setOpenId}
@@ -290,7 +296,7 @@ function WeekCard({
             {fmt(week.slot.date, { month: "short" })} · {when}
           </span>
         </button>
-        {next && !placing && onStart && (
+        {(next || days === 0) && !past && !placing && onStart && (
           <button
             type="button"
             onClick={onStart}
@@ -298,6 +304,17 @@ function WeekCard({
           >
             <Play aria-hidden className="size-3" />
             Start
+          </button>
+        )}
+        {/* Going back to write one up after the fact. */}
+        {past && !placing && onStart && (
+          <button
+            type="button"
+            onClick={onStart}
+            className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[9px] px-3 text-[12.5px] font-semibold text-teal-700 dark:text-teal-400"
+          >
+            <Edit03 aria-hidden className="size-3.5" />
+            Notes
           </button>
         )}
       </div>

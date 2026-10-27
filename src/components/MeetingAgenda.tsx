@@ -8,6 +8,7 @@ import {
   todayISO,
   type Check,
 } from "../lib/readiness";
+import { startMeeting } from "../lib/liveMeeting";
 import { aheadForHorizon, ensureSessionId, plannedSlots } from "../lib/topics";
 import { TopicBoard } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
@@ -164,7 +165,11 @@ export function MeetingAgenda({
           {onOpenSession && (
             <button
               type="button"
-              onClick={() => onOpenSession(ensureSessionId(meeting.id, slot, sessions, addSession))}
+              onClick={() => {
+                const id = ensureSessionId(meeting.id, slot, sessions, addSession);
+                startMeeting(id);
+                onOpenSession(id);
+              }}
               className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white shadow-xs transition-colors hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950"
             >
               <Play aria-hidden className="size-3.5" />

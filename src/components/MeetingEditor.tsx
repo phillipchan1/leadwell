@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import { SessionEditor } from "./SessionEditor";
 import { SessionAgenda } from "./SessionAgenda";
@@ -6,6 +6,14 @@ import { ArcRun } from "./arcs/ArcRun";
 import { SharedNotes } from "./sharing/SharedNotes";
 import { RunContext } from "./RunContext";
 import { Avatar } from "./Avatar";
+import { LivePill } from "./LivePill";
+import {
+  endMeeting,
+  getSpeechRecognition,
+  joinMeeting,
+  toggleListening,
+  useLive,
+} from "../lib/liveMeeting";
 
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
@@ -13,35 +21,6 @@ import { confirmAction } from "./ConfirmDialog";
 import { autoFocusUnlessTouch } from "../lib/pointer";
 import { ArrowLeft, DotsVertical, Trash01 } from "@untitledui/icons";
 import { useMenu } from "@/hooks/use-menu";
-
-type SpeechRecognitionLike = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-};
-
-type SpeechRecognitionEventLike = {
-  resultIndex: number;
-  results: {
-    length: number;
-    [i: number]: { isFinal: boolean; [j: number]: { transcript: string } };
-  };
-};
-
-function getSpeechRecognition():
-  | (new () => SpeechRecognitionLike)
-  | null {
-  const w = window as unknown as {
-    SpeechRecognition?: new () => SpeechRecognitionLike;
-    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
 
 function formatEntryDate(iso: string): string {
   if (!iso) return "Untitled entry";
@@ -94,7 +73,11 @@ export function MeetingEditor({
   const [transcript, setTranscript] = useState(session?.transcript ?? "");
   const [date, setDate] = useState(session?.date ?? "");
   const [nextDate, setNextDate] = useState(session?.nextDate ?? "");
-  const [listening, setListening] = useState(false);
+  // The mic belongs to the live meeting, not this screen: leaving Run keeps
+  // it running, and only Done turns it off.
+  const listening = useLive((s) => s.listening && s.sessionId === sessionId);
+  const isLive = useLive((s) => s.sessionId === sessionId);
+  const liveError = useLive((s) => s.error);
   // Resolved once at mount so the control can say up front whether it works.
   const [speechSupported] = useState(() => Boolean(getSpeechRecognition()));
   const [showCapture, setShowCapture] = useState(
@@ -102,11 +85,7 @@ export function MeetingEditor({
   );
   const [error, setError] = useState<string | null>(null);
   const [editingMeta, setEditingMeta] = useState(false);
-  const [showTools, setShowTools] = useState(false);
-
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const transcriptRef = useRef(transcript);
-  transcriptRef.current = transcript;
+  const [showTools, setShowTools] = useState(listening);
 
   useEffect(() => {
     if (!session) return;
@@ -115,13 +94,16 @@ export function MeetingEditor({
     setTranscript(session.transcript ?? "");
     setDate(session.date);
     setNextDate(session.nextDate ?? "");
+    joinMeeting(session.id);
   }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // While the mic writes into the store, the field follows it — without
+  // eating the space you just typed, which the store trims away.
   useEffect(() => {
-    return () => {
-      recognitionRef.current?.stop();
-    };
-  }, []);
+    if (!listening) return;
+    const next = session?.transcript ?? "";
+    setTranscript((cur) => (cur.trim() === next ? cur : next));
+  }, [listening, session?.transcript]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -172,57 +154,22 @@ export function MeetingEditor({
   };
 
   const toggleListen = () => {
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      return;
-    }
-    const Ctor = getSpeechRecognition();
-    if (!Ctor) {
+    setShowCapture(true);
+    setShowTools(true);
+    if (!speechSupported) {
       setError(
         "Live listen isn't supported in this browser. Paste a transcript instead."
       );
-      setShowCapture(true);
-      setShowTools(true);
       return;
     }
     setError(null);
-    setShowCapture(true);
-    setShowTools(true);
-    const rec = new Ctor();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-    let committed = transcriptRef.current;
-    rec.onresult = (event) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const piece = event.results[i][0]?.transcript ?? "";
-        if (event.results[i].isFinal) {
-          committed = `${committed}${committed && !committed.endsWith(" ") ? " " : ""}${piece}`.trimEnd();
-          if (!committed.endsWith("\n")) committed += " ";
-        } else {
-          interim += piece;
-        }
-      }
-      const next = `${committed}${interim}`.trim();
-      setTranscript(next);
-      transcriptRef.current = next;
-      updateSession(session.id, { transcript: next || undefined });
-    };
-    rec.onerror = (e) => {
-      setError(e.error === "not-allowed" ? "Microphone permission denied." : e.error);
-      setListening(false);
-    };
-    rec.onend = () => setListening(false);
-    recognitionRef.current = rec;
-    try {
-      rec.start();
-      setListening(true);
-    } catch {
-      setError("Could not start the microphone.");
-      setListening(false);
-    }
+    toggleListening(session.id);
+  };
+
+  // Done ends the meeting. The arrow only steps out of it.
+  const done = () => {
+    endMeeting(session.id);
+    onClose();
   };
 
   const firstName = subjectName.split(" ")[0] ?? subjectName;
@@ -262,7 +209,12 @@ export function MeetingEditor({
         <button
           type="button"
           onClick={onClose}
-          aria-label={`Leave and go back to ${backLabel}`}
+          aria-label={
+            isLive
+              ? `Step out to ${backLabel} — the meeting keeps running`
+              : `Leave and go back to ${backLabel}`
+          }
+          title={isLive ? "Step out — the meeting keeps running" : undefined}
           className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-leather-hi text-leather-ink transition-colors hover:text-leather-fg"
         >
           <ArrowLeft className="size-4" />
@@ -275,6 +227,9 @@ export function MeetingEditor({
             {nextDate && ` · NEXT ${new Date(`${nextDate}T12:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" }).toUpperCase()}`}
           </span>
         </div>
+        {/* Another meeting still running — reading last week's notes
+            mid-1:1 shouldn't lose the way back to it. */}
+        <LivePill tone="run" exceptSessionId={session.id} />
         <button
           type="button"
           onClick={() => setShowTools((v) => !v)}
@@ -300,7 +255,8 @@ export function MeetingEditor({
         />
         <button
           type="button"
-          onClick={onClose}
+          onClick={done}
+          title={isLive ? "End the meeting" : undefined}
           className="h-9 shrink-0 rounded-[9px] bg-teal-400 px-4 text-[13.5px] font-semibold text-stone-950 transition-[filter] hover:brightness-105"
         >
           Done
@@ -406,7 +362,9 @@ export function MeetingEditor({
                     </button>
                   </div>
 
-                  {error && <p className="meeting-editor-error">{error}</p>}
+                  {(error ?? (isLive ? liveError : null)) && (
+                    <p className="meeting-editor-error">{error ?? liveError}</p>
+                  )}
 
                   {showCapture && (
                     <TextArea
