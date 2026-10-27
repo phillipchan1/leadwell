@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { TrackedMeeting } from "../../types";
 import { useStore } from "../../store/useStore";
 import { arcPlan, liveArcs, shortLabel, tookLonger } from "../../lib/arcs";
 import { heldSessions, sessionsFor, todayISO } from "../../lib/readiness";
-import { plannedSlots, type Slot } from "../../lib/topics";
+import { curriculumOf, plannedSlots, type Slot } from "../../lib/topics";
 import { ArcCover } from "./ArcCover";
 import { ArcStart } from "./ArcStart";
+import { ArcSheet } from "./ArcSheet";
 import { cx } from "@/utils/cx";
 
 const fmt = (iso: string) =>
@@ -14,12 +15,13 @@ const fmt = (iso: string) =>
 type Column = { kind: "slot"; slot: Slot } | { kind: "skipped"; date: string };
 
 /**
- * Plan ahead, for arcs: one ribbon per arc across the weeks — the last few
- * meetings, then the ones coming. It's projected from the arc's position and
- * pace, so a skipped week is a gap the ribbon steps over rather than a
- * chapter lost.
+ * Plan ahead, for arcs. On the board the steps sit in the weeks themselves
+ * (see `ArcGridStep`), so this is one line saying which arcs run and how to
+ * move them. On a phone, which has no grid, it's a ribbon per arc across the
+ * weeks — projected from the arc's position and pace, so a skipped week is a
+ * gap the ribbon steps over rather than a chapter lost.
  */
-export function ArcRibbon({ meeting }: { meeting: TrackedMeeting }) {
+export function ArcRibbon({ meeting, inBoard = false }: { meeting: TrackedMeeting; inBoard?: boolean }) {
   const arcs = useStore((s) => s.arcs);
   const sessions = useStore((s) => s.sessions);
   const topics = useStore((s) => s.topics);
@@ -46,6 +48,7 @@ export function ArcRibbon({ meeting }: { meeting: TrackedMeeting }) {
   }, [meeting, sessions, topics, today]);
 
   if (!live.length) return <ArcStart meeting={meeting} variant="board" />;
+  if (inBoard) return <ArcLine meeting={meeting} />;
   const slots = columns.flatMap((c) => (c.kind === "slot" ? [c.slot] : []));
   const nextDate = slots.find((s) => !s.past)?.date;
   const template = columns.map((c) => (c.kind === "skipped" ? "34px" : "minmax(112px,1fr)")).join(" ");
@@ -147,5 +150,37 @@ export function ArcRibbon({ meeting }: { meeting: TrackedMeeting }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The board's arc line: what's running, where its steps sit, and that they move. */
+function ArcLine({ meeting }: { meeting: TrackedMeeting }) {
+  const arcs = useStore((s) => s.arcs);
+  const [adding, setAdding] = useState(false);
+  const live = liveArcs(arcs, meeting.id);
+  const sections = curriculumOf(meeting);
+  const where = (slotId?: string) => sections.find((c) => c.id === slotId)?.label ?? "Untagged";
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12.5px] text-tertiary">
+      <span className="eyebrow">Arcs</span>
+      {live.map((arc) => (
+        <span key={arc.id} className="inline-flex items-center gap-1.5">
+          <ArcCover arc={arc} size="xs" className="!h-[18px] !w-[13px]" />
+          <span className="font-serif font-semibold text-secondary">{arc.title}</span>
+          <span>
+            {arc.status === "paused" ? "paused" : `in ${where(arc.slotId)}`}
+          </span>
+        </span>
+      ))}
+      <span className="text-quaternary">Drag a step to another week, or right-click it, to move it; the rest slide along.</span>
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        className="font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400 dark:hover:text-teal-300"
+      >
+        + Another arc
+      </button>
+      {adding && <ArcSheet meeting={meeting} onClose={() => setAdding(false)} />}
+    </div>
   );
 }

@@ -372,3 +372,38 @@ export function arcSuggestion(
   const ahead = h.dates.filter((d) => d >= today).sort();
   return { title: titleCase(h.title), weeks: h.places.size, startsOn: ahead[0] };
 }
+
+// ── Moving a step on the board ─────────────────────────────────────────────
+
+export type ArcMove = {
+  /** Weeks that will hold no step of this arc, so the step lands later. */
+  wait: Slot[];
+  /** Weeks that were waiting and will take a step again, so it lands earlier. */
+  unwait: string[];
+};
+
+/**
+ * Drag a step from one week to another. Later: every week from where it is up
+ * to the target waits, so this step and everything after it slide along.
+ * Earlier: only weeks that were waiting can be given back, because a step
+ * never jumps the one before it. Null when there's nothing to change.
+ */
+export function arcMove(arc: Arc, slots: Slot[], fromDate: string, toDate: string): ArcMove | null {
+  if (toDate === fromDate) return null;
+  const ahead = [...slots].filter((s) => !s.past).sort((a, b) => a.date.localeCompare(b.date));
+  const covered = new Set(arc.steps.flatMap((s) => s.coveredIn));
+  const passed = new Set(arc.passedIn ?? []);
+  if (toDate > fromDate) {
+    const wait = ahead.filter(
+      (s) =>
+        s.date >= fromDate &&
+        s.date < toDate &&
+        !(s.sessionId && (covered.has(s.sessionId) || passed.has(s.sessionId)))
+    );
+    return wait.length ? { wait, unwait: [] } : null;
+  }
+  const unwait = ahead
+    .filter((s) => s.date >= toDate && s.date < fromDate && s.sessionId && passed.has(s.sessionId))
+    .map((s) => s.sessionId as string);
+  return unwait.length ? { wait: [], unwait } : null;
+}

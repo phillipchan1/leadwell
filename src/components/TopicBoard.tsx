@@ -9,6 +9,8 @@ import { useStore } from "../store/useStore";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
 import { useBoardSelection } from "@/hooks/use-board-selection";
 import { ContextMenu, type MenuEntry } from "./ContextMenu";
+import { arcPlan, liveArcs } from "../lib/arcs";
+import { ARC_STEP_MIME, ArcGridStep, moveArcStepTo, type ArcStepDrag } from "./arcs/ArcGridStep";
 import { InlineComposer } from "./InlineComposer";
 import { TopicDetail } from "./TopicDetail";
 import {
@@ -905,6 +907,9 @@ function ScheduleGrid({
 }) {
   const sessions = useStore((s) => s.sessions);
   const restoreOccurrence = useStore((s) => s.restoreOccurrence);
+  const arcs = useStore((s) => s.arcs);
+  /** The week an arc step is being dragged over. */
+  const [arcOver, setArcOver] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const scrollLeftRef = useRef(0);
@@ -1038,6 +1043,48 @@ function ScheduleGrid({
     row.slotId
       ? week.cells.find((c) => c.slotId === row.slotId)
       : week.cells.find((c) => !c.slotId);
+
+  /*
+   * Arcs live in the weeks, not above them: each step sits in its arc's
+   * section, in the same column as the rest of that week. (An agenda shows
+   * its arcs in its own band.)
+   */
+  const boardSlots = weeks.map((w) => w.slot);
+  const arcPlans = agenda ? [] : liveArcs(arcs, meetingId).map((arc) => ({ arc, plan: arcPlan(arc, boardSlots) }));
+  const arcRow = (slotId?: string) =>
+    !hasRows ? "all" : slotId && curriculum.some((c) => c.id === slotId) ? slotId : "untagged";
+  const arcStepsAt = (week: WeekColumn, row: GridRow) =>
+    arcPlans.flatMap(({ arc, plan }) =>
+      arcRow(arc.slotId) === row.id
+        ? (plan.get(week.slot.date) ?? []).map((planned) => (
+            <ArcGridStep key={`${arc.id}-${planned.step.id}`} arc={arc} planned={planned} date={week.slot.date} slots={boardSlots} />
+          ))
+        : []
+    );
+  const arcDrop = (week: WeekColumn) => ({
+    over: arcOver === week.key,
+    handlers: {
+      onDragOver: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes(ARC_STEP_MIME)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (arcOver !== week.key) setArcOver(week.key);
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setArcOver(null);
+      },
+      onDrop: (e: React.DragEvent) => {
+        const raw = e.dataTransfer.getData(ARC_STEP_MIME);
+        setArcOver(null);
+        if (!raw) return;
+        e.preventDefault();
+        const { arcId, date } = JSON.parse(raw) as ArcStepDrag;
+        const found = arcPlans.find((p) => p.arc.id === arcId);
+        const step = found?.plan.get(date)?.[0]?.step;
+        if (found && step) moveArcStepTo(found.arc, boardSlots, date, week.slot.date, step.label.split(" · ")[0]);
+      },
+    },
+  });
 
   const preview = (week: WeekColumn) => {
     const s = week.slot.sessionId ? sessions.find((o) => o.id === week.slot.sessionId) : null;
@@ -1231,13 +1278,22 @@ function ScheduleGrid({
                 const cell = cellFor(week, row);
                 const place = { gridColumn: colOf.get(week.key)!, gridRow: ri + 2 };
                 const ruled = hasRows && ri > 0;
+                const arcSteps = arcStepsAt(week, row);
+                const drop = arcPlans.length ? arcDrop(week) : undefined;
                 if (!cell) {
                   return (
                     <div
                       key={`${row.id}-${week.key}`}
                       style={place}
-                      className={cx(ruled && "border-t border-secondary")}
-                    />
+                      {...drop?.handlers}
+                      className={cx(
+                        "relative z-[2] flex flex-col gap-1.5 p-1.5",
+                        ruled && "border-t border-secondary",
+                        drop?.over && "rounded-[11px] outline-[1.5px] outline-teal-600 outline-dashed -outline-offset-4"
+                      )}
+                    >
+                      {arcSteps}
+                    </div>
                   );
                 }
                 return (
@@ -1254,6 +1310,8 @@ function ScheduleGrid({
                     dropLabel={`Drop into ${weekName(week.slot.date)}${row.slotId ? ` · ${row.label}` : ""}`}
                     composerLabel={row.slotId ? `Add to ${row.label}` : "Add a topic"}
                     alwaysCompose={agenda}
+                    lead={arcSteps.length ? arcSteps : undefined}
+                    arcDrop={drop}
                   />
                 );
               })}
@@ -1529,7 +1587,13 @@ function GridCell({
   dropLabel,
   composerLabel,
   alwaysCompose = false,
+  lead,
+  arcDrop,
 }: {
+  /** Arc steps for this week, above its topics. */
+  lead?: ReactNode;
+  /** Takes a dragged arc step: the week it's dropped on is where it lands. */
+  arcDrop?: { over: boolean; handlers: React.HTMLAttributes<HTMLDivElement> };
   /**
    * Keep the composer on screen. The strip hides it until hover so eight
    * weeks don't become thirty identical Add buttons; an agenda has one per
@@ -1577,12 +1641,15 @@ function GridCell({
     <div
       ref={columnRef(cell.key)}
       style={style}
+      {...arcDrop?.handlers}
       className={cx(
         "group/cell relative z-[2] flex min-w-0 flex-col gap-1.5 p-1.5",
         ruled && "border-t border-secondary",
-        active && "rounded-[11px] bg-teal-50/90 outline-[1.5px] outline-teal-600 outline-dashed -outline-offset-4 dark:bg-teal-950/50"
+        (active || arcDrop?.over) &&
+          "rounded-[11px] bg-teal-50/90 outline-[1.5px] outline-teal-600 outline-dashed -outline-offset-4 dark:bg-teal-950/50"
       )}
     >
+      {lead}
       {items.length > 0 && <ul className="flex flex-col gap-1.5">{items}</ul>}
       {active && cell.topics.length === 0 && (
         <p className="px-1.5 py-1 text-[11.5px] font-semibold text-teal-800 dark:text-teal-300">

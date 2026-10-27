@@ -488,6 +488,16 @@ type Store = PersistedData &
     unmarkArcStep: (arcId: string, stepId: string, sessionId: string) => void;
     /** "We didn't touch it that week" — stop asking about that occurrence. */
     passArc: (arcId: string, sessionId: string) => void;
+    /**
+     * Move an arc's steps on the board: weeks in `wait` hold no step (booked
+     * if they're only expected), weeks in `unwait` take steps again. Returns
+     * an exact undo.
+     */
+    moveArcSteps: (
+      arcId: string,
+      wait: { sessionId: string | null; date: string }[],
+      unwait: string[]
+    ) => () => void;
     /** My one line from a step. Empty clears it. */
     setTakeaway: (arcId: string, stepId: string, text: string) => void;
     /** My part of an occurrence's shared write-up. */
@@ -2574,6 +2584,33 @@ export const useStore = create<Store>((set, get) => ({
           : a
       ),
     })),
+  moveArcSteps: (arcId, wait, unwait) => {
+    const s = get();
+    const arc = s.arcs.find((a) => a.id === arcId);
+    if (!arc) return () => {};
+    const created: Session[] = wait
+      .filter((w) => !w.sessionId)
+      .map((w) => ({ id: uid(), meetingId: arc.meetingId, date: w.date }));
+    const waitIds = [
+      ...wait.filter((w) => w.sessionId).map((w) => w.sessionId as string),
+      ...created.map((o) => o.id),
+    ];
+    const before = arc.passedIn;
+    const next = [...(arc.passedIn ?? []).filter((id) => !unwait.includes(id)), ...waitIds];
+    set((st) => ({
+      sessions: [...st.sessions, ...created],
+      arcs: st.arcs.map((a) => (a.id === arcId ? { ...a, passedIn: next.length ? next : undefined } : a)),
+    }));
+    return () =>
+      set((st) => {
+        const createdIds = new Set(created.map((o) => o.id));
+        const used = new Set(st.topics.map((t) => t.sessionId).filter(Boolean));
+        return {
+          sessions: st.sessions.filter((o) => !createdIds.has(o.id) || used.has(o.id)),
+          arcs: st.arcs.map((a) => (a.id === arcId ? { ...a, passedIn: before } : a)),
+        };
+      });
+  },
   setTakeaway: (arcId, stepId, text) =>
     set((s) => {
       const id = takeawayId(stepId, "owner");

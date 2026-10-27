@@ -158,6 +158,8 @@ await applySync(sql, user, {
       arc("good", { cover_url: "https://covers.openlibrary.org/b/id/1711809-M.jpg" }),
       arc("pixel", { cover_url: "https://tracker.example/p.gif" }),
       arc("lookalike", { cover_url: "https://covers.openlibrary.org.evil.example/b/id/1-M.jpg" }),
+      arc("apple", { cover_url: "https://is1-ssl.mzstatic.com/image/thumb/Publication221/v4/b7/28/e8/b728e8ea/cover.jpg/600x600bb.jpg" }),
+      arc("appleish", { cover_url: "https://is1-ssl.mzstatic.com.evil.example/image/thumb/x/600x600bb.jpg" }),
       arc("none", {}),
     ],
   },
@@ -168,6 +170,8 @@ let stored = await coverOf();
 ok(stored.good === "https://covers.openlibrary.org/b/id/1711809-M.jpg", "an Open Library cover is stored");
 ok(stored.pixel === null, "any other URL is dropped");
 ok(stored.lookalike === null, "a look-alike host is dropped");
+ok(stored.apple?.startsWith("https://is1-ssl.mzstatic.com/") === true, "an Apple Books cover is stored");
+ok(stored.appleish === null, "an Apple look-alike is dropped");
 ok(stored.none === null, "no cover is fine");
 
 // A tab still on the previous build upserts the arc without cover_url.

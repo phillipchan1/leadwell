@@ -37,10 +37,12 @@ const EMPTY_JSON_ARRAY_COLUMNS = new Set([
 const PRESERVE_IF_ABSENT = new Set(["is_private", "raised_by", "owner", "email", "cover_url"]);
 
 /**
- * The only covers an arc may show. A shared meeting renders the arc's cover on
- * the guest's page, so anything else (a tracking pixel, say) is dropped.
+ * The only covers an arc may show (Open Library's and Apple Books'). A shared
+ * meeting renders the arc's cover on the guest's page, so anything else (a
+ * tracking pixel, say) is dropped.
  */
-const COVER_URL = /^https:\/\/covers\.openlibrary\.org\/b\/id\/\d{1,12}-[SML]\.jpg$/;
+const COVER_URL =
+  /^https:\/\/(?:covers\.openlibrary\.org\/b\/id\/\d{1,12}-[SML]\.jpg|is\d{1,2}-ssl\.mzstatic\.com\/image\/thumb\/[A-Za-z0-9._\-/]{1,400}\/\d{2,4}x\d{2,4}bb\.(?:jpg|png))$/;
 
 function serialize(column: string, value: unknown): unknown {
   if (JSON_COLUMNS.has(column)) {

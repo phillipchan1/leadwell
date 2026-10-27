@@ -12,6 +12,7 @@ import {
 } from "./arcs";
 import { plannedSlots } from "./topics";
 import { pushBackPlan } from "./pushBack";
+import { mergeBooks, matchScore, parseAppleBooks } from "./bookMatch";
 
 /** Run with `npm run test:arcs`. The arc's whole promise is in these. */
 
@@ -180,6 +181,32 @@ const pbSlots = plannedSlots(meeting, pbSessions, [], today, 6);
 const waiting = arcPlan({ ...arc, passedIn: ["s29"] }, pbSlots);
 ok(!waiting.get("2026-10-29"), "the pushed week has no step");
 ok(waiting.get("2026-11-12")?.[0]?.step.id === "c4", "the step waits for the next meeting");
+
+// Book search across both sources ("Sunday by Design" is on Apple Books, not Open Library).
+const apple = parseAppleBooks({
+  results: [
+    {
+      trackId: 6745012345,
+      trackName: "Sunday By Design",
+      artistName: "Sheldon J. Andrus III",
+      releaseDate: "2026-09-15T07:00:00Z",
+      artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/Publication221/v4/b7/28/e8/b728e8ea/cover.jpg/100x100bb.jpg",
+    },
+    { trackId: "nope", trackName: "Bad id" },
+  ],
+});
+ok(apple.length === 1 && apple[0].key === "apple:6745012345" && apple[0].year === 2026, "Apple results parse");
+ok(apple[0].coverUrl?.endsWith("/600x600bb.jpg") === true, "Apple covers are asked for at 600px");
+const olJunk = [{ key: "/works/OL1W", title: "A Month of Sundays", author: "John Updike" }];
+const found = mergeBooks("sunday by design sheldon andrus", olJunk, apple);
+ok(found.length === 1 && found[0].title === "Sunday By Design", `a new release is found, and an off-target match dropped (got ${found.map((b) => b.title).join(", ")})`);
+const both = mergeBooks(
+  "crucial conversations",
+  [{ key: "/works/OL282391W", title: "Crucial Conversations", author: "Kerry Patterson", coverUrl: "https://covers.openlibrary.org/b/id/1-M.jpg" }],
+  [{ key: "apple:1", title: "Crucial Conversations", author: "Kerry Patterson", coverUrl: "https://is1-ssl.mzstatic.com/image/thumb/x/600x600bb.jpg" }]
+);
+ok(both.length === 1 && both[0].key === "/works/OL282391W", "the same book from both shows once, as Open Library's (it has chapters)");
+ok(matchScore({ title: "Sunday By Design", author: "Sheldon J. Andrus III" }, "Sunday by design") === 1, "case doesn't matter");
 
 if (fails.length) {
   console.error(`arcs.check: ${fails.length}/${checks} failed`);

@@ -108,7 +108,7 @@ export function MeetingPlanner({
   const body =
     view === "board" ? (
       <div className="flex flex-col gap-4">
-      <ArcRibbon meeting={meeting} />
+      <ArcRibbon meeting={meeting} inBoard={!isMobile} />
       {isMobile ? (
         <PhonePlan
           meeting={meeting}

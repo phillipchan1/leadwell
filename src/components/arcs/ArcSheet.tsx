@@ -4,7 +4,7 @@ import { useStore } from "../../store/useStore";
 import { Modal } from "../ui";
 import { ARC_COVERS } from "../../lib/arcs";
 import { draftArc } from "../../lib/arcDraft";
-import { bookChapters, searchBooks, type BookHit } from "../../lib/books";
+import { bookChapters, hasChapterSource, searchBooks, type BookHit } from "../../lib/books";
 import { DEMO } from "../../lib/demo";
 import { curriculumOf, plannedSlots } from "../../lib/topics";
 import { meetingSubjectName, meetingTitle, todayISO } from "../../lib/readiness";
@@ -129,7 +129,9 @@ export function ArcSheet({
   type ChapterState =
     | { status: "loading" }
     | { status: "found"; chapters: Pick<DraftStep, "label" | "read">[]; year?: string; applied: boolean }
-    | { status: "none" | "error" };
+    | { status: "none" | "error" }
+    /** Found where there are no chapter lists (a new release, from Apple Books). */
+    | { status: "unlisted" };
   const [chapterState, setChapterState] = useState<ChapterState | null>(null);
   const hasHistory = steps.some((s) => s.coveredIn?.length);
   const hasSteps = steps.some((s) => s.label.trim());
@@ -148,6 +150,7 @@ export function ArcSheet({
     setPicked({ key: b.key, title: b.title, query: [named, by].filter(Boolean).join(" ") });
     setSearch(null);
     if (hasHistory) return;
+    if (!hasChapterSource(b)) return setChapterState({ status: "unlisted" });
     setChapterState({ status: "loading" });
     try {
       const found = await bookChapters(b.key);
@@ -447,6 +450,8 @@ export function ArcSheet({
                     </button>
                   </>
                 ))}
+              {chapterState.status === "unlisted" &&
+                "No public chapter list for this one yet, and AI won't know a book this new. Copy the contents page (Amazon's or Apple's preview has it) and paste it into a step: each line becomes a step."}
               {chapterState.status === "none" &&
                 "Open Library doesn't list this book's chapters. Draft them with AI, or type them in."}
               {chapterState.status === "error" && "Couldn't get the chapters just now. Draft them with AI, or type them in."}
@@ -484,7 +489,7 @@ export function ArcSheet({
                   }}
                   className="h-7 rounded-full border border-primary px-2.5 text-[12px] font-semibold text-secondary hover:bg-secondary"
                 >
-                  Type them
+                  Type or paste them
                 </button>
               </div>
             </div>
