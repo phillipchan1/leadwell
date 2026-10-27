@@ -15,4 +15,8 @@ OPENAI_API_KEY=
 # OPENAI_MODEL=gpt-5-mini
 # Comma-separated. Sign-up and sign-in only. Set to Phil's email.
 ALLOWED_EMAILS=phillipchan1@gmail.com
+# Optional Google sign-in (Worker secrets in prod). Both set = button on.
+# Local redirect URI: http://localhost:8787/api/auth/callback/google
+# GOOGLE_CLIENT_ID=
+# GOOGLE_CLIENT_SECRET=
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/leadwell

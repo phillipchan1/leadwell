@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { handleAuthRequest, sessionUser } from "./auth.ts";
+import { googleConfigured, handleAuthRequest, sessionUser } from "./auth.ts";
 import {
   API_CORS,
   API_SECURITY,
@@ -50,6 +50,13 @@ app.get("/api/health", (c) =>
     service: "leadwell",
     runtime: "cloudflare-workers",
     realtime: false,
+  }),
+);
+
+// Which sign-in buttons to show. Booleans only; never ids or secrets.
+app.get("/api/auth-providers", (c) =>
+  c.json({ magicLink: true, google: googleConfigured(c.env) }, 200, {
+    "cache-control": "no-store",
   }),
 );
 

@@ -27,6 +27,10 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** Resend fallback from-address (verified in Resend), e.g. `Polarch <login@usedayspring.app>`. */
   AUTH_EMAIL_FROM?: string;
+  /** Worker secret. Google OAuth web client (Polarch). Unset = Google off. */
+  GOOGLE_CLIENT_ID?: string;
+  /** Worker secret. Never a wrangler var. */
+  GOOGLE_CLIENT_SECRET?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   /** Comma-separated allowlist. Empty = no new users. Set to Phil's email. */

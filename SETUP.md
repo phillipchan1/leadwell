@@ -57,7 +57,8 @@ supabase db push
 
 ## 3. Sign-in is a magic link
 
-Auth lives on the Worker. There is no Google OAuth client. Mail goes
+Auth lives on the Worker. Google sign-in is optional (`GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` Worker secrets; see `RUNBOOK.md` → Google sign-in). Mail goes
 through the Cloudflare `EMAIL` binding (login@polarch.day), with Resend as
 the fallback. Set `RESEND_API_KEY`, `AUTH_EMAIL_FROM` (dashboard only, the
 Resend sender), and `ALLOWED_EMAILS` (see
@@ -86,8 +87,8 @@ people are imported automatically the first time you sign in — nothing is lost
 
 ## Optional: a local allowlisted account
 
-Sign-in is email-only magic link. There is no password button and no
-Google sign-in. Put your address in `ALLOWED_EMAILS` (`.dev.vars`),
+Sign-in is a magic link, plus "Continue with Google" when the Google
+secrets are set. There is no password button. Put your address in `ALLOWED_EMAILS` (`.dev.vars`),
 request a link from the sign-in screen, and follow it.
 
 `npm run dev` also exposes `window.useStore` for inspecting or driving

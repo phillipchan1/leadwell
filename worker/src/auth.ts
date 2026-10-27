@@ -95,6 +95,51 @@ export function isAllowedEmail(
   return allowedEmails(env).has(trimmed);
 }
 
+/**
+ * Google is on only when both Worker secrets are set. Otherwise
+ * `/api/auth/sign-in/social` answers "provider not found" and the Login
+ * screen hides the button; the magic link is unaffected either way.
+ */
+export function googleConfigured(
+  env: Pick<Env, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">,
+): boolean {
+  return Boolean(env.GOOGLE_CLIENT_ID?.trim() && env.GOOGLE_CLIENT_SECRET?.trim());
+}
+
+export function googleSocialProviders(env: Pick<Env, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">) {
+  if (!googleConfigured(env)) return undefined;
+  return {
+    google: {
+      clientId: env.GOOGLE_CLIENT_ID!.trim(),
+      clientSecret: env.GOOGLE_CLIENT_SECRET!.trim(),
+      prompt: "select_account" as const,
+    },
+  };
+}
+
+/**
+ * Link Google to the existing user by email. `google` is trusted so Better
+ * Auth will link it, but `validateUserInfo` still refuses any OAuth profile
+ * whose email Google has not verified (see `oauthEmailMustBeVerified`), and
+ * the local user must be verified too (`requireLocalEmailVerified`). Same
+ * email only. Existing users land on their own row; no duplicate is made.
+ */
+export const ACCOUNT_LINKING = {
+  enabled: true,
+  trustedProviders: ["google"] as string[],
+  requireLocalEmailVerified: true,
+  allowDifferentEmails: false,
+};
+
+/** OAuth (Google) must carry a provider-verified email to create, link or sign in. */
+export function oauthEmailMustBeVerified(
+  user: { emailVerified?: unknown },
+  source: { method?: string },
+): boolean {
+  if (source.method !== "oauth") return true;
+  return user.emailVerified === true;
+}
+
 /** Prod keys rate limits on CF-Connecting-IP only so XFF/X-Real-IP cannot spoof. */
 export const PROD_AUTH_IP_HEADERS = ["cf-connecting-ip"] as const;
 export const LOCAL_AUTH_IP_HEADERS = [
@@ -242,6 +287,12 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
         ) {
           return;
         }
+        if (!oauthEmailMustBeVerified(user, source)) {
+          return {
+            error: "email_not_verified",
+            errorDescription: "this account is not allowed",
+          };
+        }
         if (isAllowedEmail(env, typeof user.email === "string" ? user.email : null)) {
           return;
         }
@@ -251,8 +302,12 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
         };
       },
     },
+    socialProviders: googleSocialProviders(env),
     session: authModels.session,
-    account: authModels.account,
+    account: {
+      ...authModels.account,
+      accountLinking: ACCOUNT_LINKING,
+    },
     verification: authModels.verification,
     trustedOrigins: resolveTrustedOrigins(env),
     advanced: {
