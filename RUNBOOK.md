@@ -10,7 +10,7 @@ equivalent is shipped.
 There are no crons, storage buckets, or payments. The public host will
 be **polarch.day** (product rename comes later; Worker/repo stay LeadWell).
 
-Auth is a magic-link email. Primary sender: Cloudflare Email Service (`EMAIL` send_email binding, from `Polarch <login@polarch.day>`). Fallback on any binding error: Resend (`AUTH_EMAIL_FROM`). There is no Google OAuth client.
+Auth is a magic-link email. Primary sender: Cloudflare Email Service (`EMAIL` send_email binding, from `Polarch <login@polarch.day>`). Fallback on any binding error: Resend (`AUTH_EMAIL_FROM`). "Continue with Google" sits next to the magic link when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set (see [Google sign-in](#google-sign-in)); without them the button is hidden and only the magic link runs.
 Sign-in and sign-up are allowlist-only (`ALLOWED_EMAILS`).
 
 ---
@@ -35,6 +35,8 @@ Never put values here.
 | `OPENAI_API_KEY` | wrangler secret | Server-side OpenAI key. The client must never send it. |
 | `OPENAI_MODEL` | wrangler var | Optional. Must be in the Worker allowlist (`gpt-5-mini`, `gpt-5`). Defaults to `gpt-5-mini`. |
 | `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and sign-in. Set to Phil's email. Empty admits nobody. Non-allowlisted magic-link requests still return `{status:true}` and do not send mail. |
+| `GOOGLE_CLIENT_ID` | wrangler secret | Google OAuth web client id (the LeadWell client, project number `75851534029`). Unset or blank = Google off. Never a wrangler var (`config.check.ts`). |
+| `GOOGLE_CLIENT_SECRET` | wrangler secret | That client's secret. Never a wrangler var, never logged, never printed. |
 | `DATABASE_URL` | wrangler secret | Neon connection string. Used when Hyperdrive is unset (preview / local). |
 | `HYPERDRIVE` | wrangler binding | Workers Paid. `wrangler.jsonc` holds the prod config id `c18a2c83cf664a8d9fc9f40bcba47718` (`leadwell-neon`). Local uses `localConnectionString`; preview has none and uses `DATABASE_URL`. |
 
@@ -196,7 +198,8 @@ The script:
    `CREATE POLICY actions_owner … TO authenticated`.
    **Never create roles on the Supabase source.**
 6. Inserts Better Auth `"user"` rows with the **same UUIDs** and emails.
-7. Does **not** map Google identities.
+7. Does **not** map Google identities. The first "Continue with Google" links
+   by verified email to the migrated user (same id), so none are needed.
 8. Compares per-table `COUNT(*)` and `md5` of every public row (`ORDER BY … COLLATE "C"`, so collation differences cannot cause a false mismatch), plus auth-user count/md5 via the function vs `"user"`. Aborts on mismatch. Logs are those counts and md5s — never emails or row data.
 9. After checksums verify, **explicitly `DROP ROLE leadwell_copy`**
    (`REASSIGN OWNED` first so `DROP OWNED` cannot remove tables). If
@@ -415,7 +418,7 @@ DROP SCHEMA migration_tmp CASCADE;
 5. Primary sign-in mail is Cloudflare Email Service from `login@polarch.day`
    (polarch.day onboarded under Email Sending). Resend stays the fallback on
    usedayspring.app; do not move Resend to polarch.day.
-   No Google OAuth client. No Google redirect URI.
+   Google OAuth is optional: see [Google sign-in](#google-sign-in).
 6. Run the migrate script against the empty Neon database (laptop, above) or
    the **cutover-migrate** workflow with `dry_run=false`.
 7. `npm run cf:deploy` (= `npm run build && wrangler deploy --keep-vars`), or
@@ -449,6 +452,11 @@ Vercel stays deployed. Supabase stays live. Nothing is deleted.
   does not leak the allowlist or the cap. Soft-cap DB work (email + log keys)
   is awaited on the request; background send failures log kind/status only
   (no email, token, or IP).
+- `GET /api/auth-providers` → `{ magicLink: true, google: <bool> }` (booleans only).
+- With Google on: "Continue with Google" on `/signin` → Google account picker
+  (app name **Polarch**) → back on `/signin`, signed in as the same user the
+  magic link gives. A non-allowlisted Google account lands on
+  `/signin?error=not_allowed` with no session.
 - Confirm the Supabase dashboard still has the original rows (source untouched).
 
 ---
@@ -586,7 +594,6 @@ proxied `AAAA polarch.day 100::` record.
 - No Cloudflare cron.
 - No R2 / storage.
 - No payments.
-- No Google OAuth client.
 - No Anthropic / Claude proxy.
 - No Supabase realtime replacement (unused).
 - No rename of the Worker, package, or repo (polarch.day is a host only).
@@ -601,3 +608,74 @@ proxied `AAAA polarch.day 100::` record.
 - A binding failure logs `magic-link cloudflare send failed, falling back to resend {kind:"cf_email"}` (no email, no token).
 - Rollback: `wrangler rollback <previous version id>` (Resend-only code). DNS can stay; the sending subdomain can be disabled at
   `DELETE /zones/<zone>/email/sending/subdomains/<id>` if needed.
+
+## Google sign-in
+
+"Continue with Google" is Better Auth `socialProviders.google`, next to the
+magic link. Code: `googleSocialProviders`, `ACCOUNT_LINKING` and
+`validateUserInfo` in `worker/src/auth.ts`; proof: `worker/src/google.check.ts`.
+
+- **On/off.** On only when both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+  are Worker secrets. Otherwise `POST /api/auth/sign-in/social` is 404
+  `PROVIDER_NOT_FOUND`, `/api/auth-providers` says `google:false`, and Login
+  hides the button. The magic link never depends on Google.
+- **Linking.** `accountLinking: { enabled, trustedProviders: ["google"],
+  requireLocalEmailVerified: true, allowDifferentEmails: false }`. A Google
+  login whose email matches an existing (verified) user lands on that user and
+  adds one `account` row (`provider_id='google'`, `account_id`=Google `sub`).
+  No duplicate users. Email match is case-insensitive.
+- **Second Google account, same email.** A different Google account (new
+  `sub`) whose verified email is the same address links to the **same** user
+  as a second `account` row (`provider_id='google'`). That is by design: Google
+  vouches for the verified address, and the allowlist is per email, not per
+  Google account. Audit with
+  `SELECT user_id, count(*) FROM account WHERE provider_id='google' GROUP BY 1;`
+  and remove a stray link with `DELETE FROM account WHERE provider_id='google' AND account_id='<sub>';`.
+- **Email shape.** `validateUserInfo` refuses any email with leading/trailing
+  whitespace or outside printable ASCII (`/^[\x21-\x7e]+$/`) →
+  `invalid_email`. Better Auth lowercases before validation (and
+  `toLowerCase` folds look-alikes such as U+212A KELVIN SIGN to `k`), so the
+  Google provider's `mapProfileToUser` also marks a non-ASCII or padded *raw*
+  Google email unverified, which is refused.
+- **No id-token linking.** `POST /api/auth/link-social` with an `idToken` body
+  skips `validateUserInfo`, so a `hooks.before` refuses it (403
+  `LINK_SOCIAL_ID_TOKEN_DISABLED`). Linking happens only through the redirect
+  flow.
+- **Verified only.** `validateUserInfo` refuses any OAuth profile with
+  `email_verified !== true` (create, link and sign-in), so trusting Google can
+  never let an unverified address adopt a user.
+- **Allowlist.** The same `ALLOWED_EMAILS` check runs on Google create, link
+  and sign-in. Refused → `/signin?error=not_allowed`, no user, no account.
+- **Google Cloud (Phil's console login; no gcloud on the box).** Project
+  number `75851534029`, OAuth client
+  `75851534029-n43ho7oqt9mm598bh4jtm03mpjcfjt8p.apps.googleusercontent.com`
+  (the client the LeadWell Supabase project used).
+  1. APIs & Services → Credentials → that client → **Authorized redirect URIs**:
+     add `https://polarch.day/api/auth/callback/google` (keep the Supabase
+     `/auth/v1/callback` one until Supabase is retired). For a preview Worker
+     also add `https://leadwell-preview.<subdomain>.workers.dev/api/auth/callback/google`.
+  2. Same client → **Add secret** (the old one is only stored hashed in
+     Supabase, so it cannot be recovered). Copy it once.
+  3. OAuth consent screen → Branding → **App name** = `Polarch`
+     (optionally the home page `https://polarch.day`).
+- **Set the secrets** (preview first):
+
+  ```sh
+  npx wrangler secret put GOOGLE_CLIENT_ID --env preview
+  npx wrangler secret put GOOGLE_CLIENT_SECRET --env preview
+  # after QA, prod (no --env):
+  npx wrangler secret put GOOGLE_CLIENT_ID
+  npx wrangler secret put GOOGLE_CLIENT_SECRET
+  ```
+
+  Paste values at the prompt; never on the command line or in `wrangler.jsonc`.
+  Code deploys only with `npm run cf:deploy` (`keep_vars` on).
+- **Errors** come back on `/signin?error=<code>` (`not_allowed`,
+  `email_not_verified`, `invalid_email`, `state_mismatch`, `access_denied`, …)
+  because `onAPIError.errorURL` is `BETTER_AUTH_URL/signin`; Login shows one
+  friendly line.
+- **Rollback.** Turn Google off without a deploy:
+  `npx wrangler secret delete GOOGLE_CLIENT_SECRET` (button disappears, magic
+  link unchanged). Or `wrangler rollback <previous version id>`. No schema
+  change; linked `account` rows are harmless if left, or
+  `DELETE FROM account WHERE provider_id = 'google';`.

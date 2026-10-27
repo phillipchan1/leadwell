@@ -1,4 +1,4 @@
-/** Better Auth client: magic link only. */
+/** Better Auth client: magic link + Google (when the Worker has the secrets). */
 import { magicLinkClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/client";
 
@@ -42,7 +42,9 @@ export function rememberSession(user: AuthUser | null): void {
   }
 }
 
-function userFromSession(data: { user?: { id?: string; email?: string | null } | null } | null): AuthUser | null {
+function userFromSession(
+  data: { user?: { id?: string; email?: string | null } | null } | null,
+): AuthUser | null {
   const user = data?.user;
   if (!user?.id) return null;
   return { id: user.id, email: user.email ?? null };
@@ -76,6 +78,35 @@ export async function signInWithMagicLink(email: string): Promise<void> {
     callbackURL: `${window.location.origin}/signin`,
   });
   if (error) throw new Error(error.message || "Could not send the sign-in link");
+}
+
+/** True when the Worker has GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET. */
+export async function googleSignInAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/auth-providers", { credentials: "include" });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { google?: unknown };
+    return body.google === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Google OAuth redirect. Lands back on /signin (errors arrive as ?error=). */
+export async function signInWithGoogle(): Promise<void> {
+  const origin = window.location.origin;
+  const { error } = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: `${origin}/signin`,
+    errorCallbackURL: `${origin}/signin`,
+  });
+  if (error) throw new Error(error.message || "Google sign-in failed");
+}
+
+/** Friendly text for a Better Auth OAuth `?error=` code. */
+export function googleErrorMessage(code: string | null): string | null {
+  if (!code) return null;
+  return "Google sign-in didn't work for this account. Use the email link instead.";
 }
 
 export async function signOut(): Promise<void> {
