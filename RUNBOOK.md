@@ -575,7 +575,7 @@ proxied `AAAA polarch.day 100::` record.
 4. Sign-in stays magic-link against the intact Polarch Supabase project
    (Vercel). No Google OAuth client was ever required for rollback.
 5. Neon and the Worker stay up but unused (workers.dev URL
-   `https://leadwell.nq-morning-briefing.workers.dev`) until you cut over
+   `https://polarch.nq-morning-briefing.workers.dev`) until you cut over
    again.
 6. **Writes made on Neon after cutover do not exist on Supabase.** Rolling
    back returns Phil to the last Supabase snapshot. Do not write back from
@@ -605,6 +605,7 @@ proxied `AAAA polarch.day 100::` record.
 
 - Prod deploy: `npm run cf:deploy`. `keep_vars: true` keeps dashboard-only vars (`AUTH_EMAIL_FROM`, `BETTER_AUTH_URL`, `AUTH_COOKIE_DOMAIN`). It does **not** protect any var written in `wrangler.jsonc`: config vars always overwrite the dashboard. That is why `AUTH_EMAIL_FROM` is not in the config, so prod keeps `Polarch <login@usedayspring.app>` for the Resend fallback.
 - Before Oct 27 2026, prod was deployed from a generated config (`hyperdrive.id` and vars patched outside the repo). The repo config now carries the real Hyperdrive id, so the repo deploy is the prod deploy.
+- The prod Worker was named `leadwell` until Oct 27 2026, when it was renamed to `polarch` in place (Workers API `PATCH /workers/workers/<id>`). Secrets, the `polarch.day` custom domain and sessions carried over. The Neon project was renamed to `polarch` the same day (id `falling-dream-34644326`, unchanged).
 - If the binding throws after Cloudflare already accepted the message, Resend also sends, so the user can get two links. Either link works; acceptable.
 - `allowed_destination_addresses` is deliberately not set. It only allows Email Routing *verified* destinations, so every allowlisted user would have to verify with Cloudflare first, and new users would silently fail over to Resend. `ALLOWED_EMAILS` plus the rate limit already bound who gets mail.
 - A binding failure logs `magic-link cloudflare send failed, falling back to resend {kind:"cf_email"}` (no email, no token).
