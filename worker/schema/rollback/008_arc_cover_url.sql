@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE public.arcs DROP COLUMN IF EXISTS cover_url;
+COMMIT;

@@ -329,7 +329,7 @@ export async function loadShared(sql: Sql, m: Member, now = new Date()): Promise
         [owner, m.meetingId, addDaysISO(today, -DONE_VISIBLE_DAYS)],
       ),
       sql.unsafe(
-        `SELECT id, title, author, cover, slot_id, pace_every, starts_on, status, steps,
+        `SELECT id, title, author, cover, cover_url, slot_id, pace_every, starts_on, status, steps,
                 passed_in, created_on, closed_on, sort_order
            FROM arcs WHERE user_id = $1 AND meeting_id = $2 AND status <> 'paused'
           ORDER BY sort_order`,
@@ -415,6 +415,7 @@ export async function loadShared(sql: Sql, m: Member, now = new Date()): Promise
       title: r.title,
       author: r.author ?? undefined,
       cover: r.cover ?? undefined,
+      coverUrl: r.cover_url ?? undefined,
       slotId: r.slot_id ?? undefined,
       every: r.pace_every ?? 1,
       startsOn: r.starts_on,

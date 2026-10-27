@@ -1,33 +1,53 @@
+import { useState } from "react";
 import type { Arc } from "../../types";
 import { coverOf } from "../../lib/arcs";
+import { isCoverUrl } from "../../lib/books";
 import { cx } from "@/utils/cx";
 
+const BOOK_SHAPE =
+  "shrink-0 overflow-hidden rounded-[3px_5px_5px_3px] shadow-[inset_3px_0_0_rgb(0_0_0/0.25),0_4px_10px_-4px_rgb(0_0_0/0.45)]";
+
 /**
- * The arc's face: a little book, whether or not it is one. Typographic on
- * purpose — no artwork to fetch, and it reads as *ours* rather than as the
- * publisher's.
+ * The arc's face: a little book, whether or not it is one. Typographic by
+ * default, so an arc that isn't a book still has one. A book arc can carry its
+ * real cover instead; if that image ever fails to load, the typographic one is
+ * back.
  */
 export function ArcCover({
   arc,
   size = "sm",
   className,
 }: {
-  arc: Pick<Arc, "id" | "cover" | "title">;
+  arc: Pick<Arc, "id" | "cover" | "title" | "coverUrl">;
   size?: "xs" | "sm" | "lg";
   className?: string;
 }) {
-  const dims =
-    size === "lg"
-      ? "h-[132px] w-[92px] p-2.5 text-[12px]"
-      : size === "xs"
-        ? "h-[30px] w-[21px] p-[3px] text-[0px]"
-        : "h-[62px] w-[44px] p-1.5 text-[6.5px]";
+  const [failed, setFailed] = useState<string | null>(null);
+  const box = size === "lg" ? "h-[132px] w-[92px]" : size === "xs" ? "h-[30px] w-[21px]" : "h-[62px] w-[44px]";
+  const dims = size === "lg" ? "p-2.5 text-[12px]" : size === "xs" ? "p-[3px] text-[0px]" : "p-1.5 text-[6.5px]";
+  if (isCoverUrl(arc.coverUrl) && failed !== arc.coverUrl) {
+    return (
+      <img
+        src={arc.coverUrl}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(arc.coverUrl ?? null)}
+        // Open Library answers a missing cover with a 1×1 blank, not an error.
+        onLoad={(e) => e.currentTarget.naturalWidth <= 1 && setFailed(arc.coverUrl ?? null)}
+        style={{ background: coverOf(arc) }}
+        className={cx(BOOK_SHAPE, box, "object-cover", className)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden
       style={{ background: coverOf(arc) }}
       className={cx(
-        "grid shrink-0 content-between overflow-hidden rounded-[3px_5px_5px_3px] font-serif leading-[1.05] font-extrabold tracking-[0.02em] text-[#f1efec] uppercase shadow-[inset_3px_0_0_rgb(0_0_0/0.25),0_4px_10px_-4px_rgb(0_0_0/0.45)]",
+        BOOK_SHAPE,
+        "grid content-between font-serif leading-[1.05] font-extrabold tracking-[0.02em] text-[#f1efec] uppercase",
+        box,
         dims,
         className
       )}

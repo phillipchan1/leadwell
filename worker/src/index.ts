@@ -11,6 +11,7 @@ import { assertNoClientKey, proxyOpenAI, sanitizeOpenAIBody } from "./openai.ts"
 import type { Env } from "./env.ts";
 import { authOf, finishRequest, sqlOf, type WorkerContext, type WorkerVars } from "./request.ts";
 import { stripGetSessionToken } from "./sessionBody.ts";
+import { bookQuery, searchBooks } from "./books.ts";
 import { applySync, loadTables, wipeUser } from "./store.ts";
 import {
   ShareError,
@@ -189,6 +190,21 @@ async function handleOpenAI(c: WorkerContext): Promise<Response> {
 
 app.post("/api/openai", (c) => handleOpenAI(c));
 app.post("/functions/v1/openai", (c) => handleOpenAI(c));
+
+// Covers for book arcs (worker/src/books.ts). Signed-in only: it is a
+// convenience when starting an arc, not something a guest page needs.
+app.get("/api/books", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  const q = bookQuery(c.req.query("q"));
+  if (!q) return json({ books: [] });
+  try {
+    return json({ books: await searchBooks(q) });
+  } catch (err) {
+    console.error("book search failed", err instanceof Error ? err.name : typeof err);
+    return json({ error: "book search unavailable" }, 502);
+  }
+});
 
 function hasFileExtension(path: string): boolean {
   return /\.[A-Za-z0-9]{1,16}$/.test(path);

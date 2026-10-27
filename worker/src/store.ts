@@ -34,7 +34,13 @@ const EMPTY_JSON_ARRAY_COLUMNS = new Set([
  * null/false would quietly unlock a private topic or drop who raised it. When
  * the client didn't send one of these, the stored value is left alone.
  */
-const PRESERVE_IF_ABSENT = new Set(["is_private", "raised_by", "owner", "email"]);
+const PRESERVE_IF_ABSENT = new Set(["is_private", "raised_by", "owner", "email", "cover_url"]);
+
+/**
+ * The only covers an arc may show. A shared meeting renders the arc's cover on
+ * the guest's page, so anything else (a tracking pixel, say) is dropped.
+ */
+const COVER_URL = /^https:\/\/covers\.openlibrary\.org\/b\/id\/\d{1,12}-[SML]\.jpg$/;
 
 function serialize(column: string, value: unknown): unknown {
   if (JSON_COLUMNS.has(column)) {
@@ -44,6 +50,7 @@ function serialize(column: string, value: unknown): unknown {
     return typeof value === "string" ? value : JSON.stringify(value);
   }
   if (column === "is_private") return value === true;
+  if (column === "cover_url") return typeof value === "string" && COVER_URL.test(value) ? value : null;
   if (TEXT_ARRAY_COLUMNS.has(column)) {
     return Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : [];
   }

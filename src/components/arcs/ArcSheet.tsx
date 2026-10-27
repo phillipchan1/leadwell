@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Arc, ArcStep, TrackedMeeting } from "../../types";
 import { useStore } from "../../store/useStore";
 import { Modal } from "../ui";
 import { ARC_COVERS } from "../../lib/arcs";
 import { draftArc } from "../../lib/arcDraft";
+import { searchBooks, type BookHit } from "../../lib/books";
 import { curriculumOf, plannedSlots } from "../../lib/topics";
 import { meetingSubjectName, meetingTitle, todayISO } from "../../lib/readiness";
 import { ArcCover } from "./ArcCover";
@@ -78,6 +79,10 @@ export function ArcSheet({
   const [title, setTitle] = useState(arc?.title ?? "");
   const [author, setAuthor] = useState(arc?.author ?? "");
   const [cover, setCover] = useState<number>(arc?.cover ?? Math.floor(Math.random() * ARC_COVERS.length));
+  const [coverUrl, setCoverUrl] = useState<string | undefined>(arc?.coverUrl);
+  const [books, setBooks] = useState<BookHit[]>([]);
+  // "Not a book": no more cover suggestions while this sheet is open.
+  const [notBook, setNotBook] = useState(false);
   const [steps, setSteps] = useState<DraftStep[]>(arc?.steps ?? []);
   const [every, setEvery] = useState(arc?.every ?? 1);
   const [slotId, setSlotId] = useState<string>(
@@ -89,6 +94,30 @@ export function ArcSheet({
   const [openId, setOpenId] = useState<string | null>(null);
 
   const context = meetingTitle(meeting, meetingSubjectName(meeting, { people, teams, managers }));
+
+  // Looks like a book? Offer its cover. Quietly: nothing shows unless Open
+  // Library has a match with a cover, and a failed lookup just shows nothing.
+  const query = title.trim();
+  const lookup = !notBook && !coverUrl && query.length >= 3;
+  useEffect(() => {
+    if (!lookup) return;
+    let live = true;
+    const t = setTimeout(() => {
+      searchBooks(query)
+        .then((hits) => live && setBooks(hits))
+        .catch(() => live && setBooks([]));
+    }, 450);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [lookup, query]);
+  const suggestions = lookup ? books : [];
+
+  const pickBook = (b: BookHit) => {
+    setCoverUrl(b.coverUrl);
+    if (!author.trim() && b.author) setAuthor(b.author);
+  };
 
   const draft = async () => {
     if (!title.trim()) return;
@@ -145,6 +174,7 @@ export function ArcSheet({
       title: title.trim(),
       author: author.trim() || undefined,
       cover,
+      coverUrl,
       slotId: slotId || undefined,
       every,
       startsOn,
@@ -204,27 +234,72 @@ export function ArcSheet({
             <input className={field} value={author} placeholder="Optional" onChange={(e) => setAuthor(e.target.value)} />
           </label>
 
+          {suggestions.length > 0 && (
+            <div className="flex flex-col gap-2 rounded-[12px] border border-secondary p-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className={label}>Is it one of these?</span>
+                <button
+                  type="button"
+                  onClick={() => setNotBook(true)}
+                  className="text-[12px] font-semibold text-tertiary hover:text-secondary"
+                >
+                  Not a book
+                </button>
+              </div>
+              <div className="flex gap-3 overflow-x-auto">
+                {suggestions.map((b) => (
+                  <button
+                    key={b.key}
+                    type="button"
+                    onClick={() => pickBook(b)}
+                    title={[b.title, b.author, b.year].filter(Boolean).join(" · ")}
+                    className="group flex w-[64px] shrink-0 flex-col gap-1 text-left"
+                  >
+                    <ArcCover
+                      arc={{ id: b.key, cover, title: b.title, coverUrl: b.coverUrl }}
+                      className="transition-transform group-hover:-translate-y-0.5"
+                    />
+                    <span className="line-clamp-2 text-[11px] leading-[13px] text-tertiary">
+                      {b.author ?? b.title}
+                      {b.year ? ` · ${b.year}` : ""}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3 rounded-[12px] bg-secondary p-3">
-            <ArcCover arc={{ id: arc?.id ?? "new", cover, title: title || "Your arc" }} />
+            <ArcCover arc={{ id: arc?.id ?? "new", cover, coverUrl, title: title || "Your arc" }} />
             <div className="flex min-w-0 flex-col gap-2">
               <span className="truncate font-serif text-[15px] font-bold text-primary">{title || "Your arc"}</span>
-              <span className="flex gap-1.5" role="radiogroup" aria-label="Cover">
-                {ARC_COVERS.map((c, i) => (
-                  <button
-                    key={c}
-                    type="button"
-                    role="radio"
-                    aria-checked={cover === i}
-                    aria-label={`Cover ${i + 1}`}
-                    onClick={() => setCover(i)}
-                    style={{ background: c }}
-                    className={cx(
-                      "size-5 rounded-[4px] transition-shadow",
-                      cover === i && "shadow-[0_0_0_2px_var(--color-bg-secondary),0_0_0_3.5px_var(--color-gilt)]"
-                    )}
-                  />
-                ))}
-              </span>
+              {coverUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setCoverUrl(undefined)}
+                  className="self-start text-[12.5px] font-semibold text-tertiary hover:text-secondary"
+                >
+                  Use a plain cover instead
+                </button>
+              ) : (
+                <span className="flex gap-1.5" role="radiogroup" aria-label="Cover">
+                  {ARC_COVERS.map((c, i) => (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={cover === i}
+                      aria-label={`Cover ${i + 1}`}
+                      onClick={() => setCover(i)}
+                      style={{ background: c }}
+                      className={cx(
+                        "size-5 rounded-[4px] transition-shadow",
+                        cover === i && "shadow-[0_0_0_2px_var(--color-bg-secondary),0_0_0_3.5px_var(--color-gilt)]"
+                      )}
+                    />
+                  ))}
+                </span>
+              )}
             </div>
           </div>
 

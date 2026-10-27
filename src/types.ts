@@ -593,6 +593,8 @@ export type Arc = {
   author?: string;
   /** Index into the cover palette — the arc's one bit of identity. */
   cover?: number;
+  /** The book's real cover (an Open Library image), when one was picked. */
+  coverUrl?: string;
   /** The standing-agenda band it sits in. Unset = a band of its own, first. */
   slotId?: string;
   /** One step every N meetings. 1 = every meeting. */

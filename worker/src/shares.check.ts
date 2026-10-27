@@ -89,6 +89,7 @@ await applySync(sql, phil, {
         id: "a1",
         meeting_id: "m1",
         title: "Crucial Conversations",
+        cover_url: "https://covers.openlibrary.org/b/id/1711809-M.jpg",
         pace_every: 1,
         starts_on: "2026-10-01",
         status: "active",
@@ -128,6 +129,7 @@ ok(topics.length === 1 && topics[0].id === "t1", "only placed, unlocked topics o
 const fus = doc.followUps as { id: string }[];
 ok(fus.map((f) => f.id).sort().join() === "f1,f2", "locked follow-ups stay off");
 ok((doc.arcs as unknown[]).length === 1, "the arc is shared");
+ok((doc.arcs as { coverUrl?: string }[])[0].coverUrl === "https://covers.openlibrary.org/b/id/1711809-M.jpg", "the book cover is shared");
 ok((doc.meeting as { subjectName: string }).subjectName === "Meghan Lee", "subject name is there");
 ok((doc.owner as { name: string }).name === "Phil Chan", "owner name is there");
 
