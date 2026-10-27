@@ -10,7 +10,7 @@ equivalent is shipped.
 There are no crons, storage buckets, or payments. The public host will
 be **polarch.day** (product rename comes later; Worker/repo stay LeadWell).
 
-Auth is a magic-link email (Resend). There is no Google OAuth client.
+Auth is a magic-link email. Primary sender: Cloudflare Email Service (`EMAIL` send_email binding, from `Polarch <login@polarch.day>`). Fallback on any binding error: Resend (`AUTH_EMAIL_FROM`). There is no Google OAuth client.
 Sign-in and sign-up are allowlist-only (`ALLOWED_EMAILS`).
 
 ---
@@ -29,7 +29,9 @@ Never put values here.
 | `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Must equal or be a parent of the `BETTER_AUTH_URL` host and must not be a public suffix (`workers.dev`, `pages.dev`, `co.uk`, …). Omit on `*.workers.dev` / `*.pages.dev` and local. |
 | `ENVIRONMENT` | `.dev.vars` only | Set to `local` on your laptop. Omit in preview/prod. |
 | `RESEND_API_KEY` | wrangler secret | Resend sending key. Worker sends magic-link mail. |
-| `AUTH_EMAIL_FROM` | wrangler var | Verified Resend from-address (e.g. `login@polarch.day`). |
+| `AUTH_EMAIL_FROM` | wrangler var | Resend **fallback** from-address, verified in Resend (prod: `Polarch <login@usedayspring.app>`). |
+| `CF_EMAIL_FROM` | wrangler var | Cloudflare Email Service from-address. Default `Polarch <login@polarch.day>`. |
+| `EMAIL` | send_email binding | Cloudflare Email Service (Workers Paid). polarch.day is onboarded for sending (cf-bounce MX/SPF, cf-bounce DKIM, `_dmarc`). Remove the binding to send via Resend only. |
 | `OPENAI_API_KEY` | wrangler secret | Server-side OpenAI key. The client must never send it. |
 | `OPENAI_MODEL` | wrangler var | Optional. Must be in the Worker allowlist (`gpt-5-mini`, `gpt-5`). Defaults to `gpt-5-mini`. |
 | `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and sign-in. Set to Phil's email. Empty admits nobody. Non-allowlisted magic-link requests still return `{status:true}` and do not send mail. |
@@ -581,3 +583,10 @@ proxied `AAAA polarch.day 100::` record.
 - No Supabase realtime replacement (unused).
 - No rename of the Worker, package, or repo (polarch.day is a host only).
 - No deletion of the Vercel project or the LeadWell Supabase project.
+
+## Sign-in email: Cloudflare Email Service
+
+- Deploy keeps the dashboard vars: `wrangler deploy --keep-vars` so prod `AUTH_EMAIL_FROM` (Resend fallback) stays `Polarch <login@usedayspring.app>`.
+- A binding failure logs `magic-link cloudflare send failed, falling back to resend {kind:"cf_email"}` (no email, no token).
+- Rollback: `wrangler rollback <previous version id>` (Resend-only code). DNS can stay; the sending subdomain can be disabled at
+  `DELETE /zones/<zone>/email/sending/subdomains/<id>` if needed.

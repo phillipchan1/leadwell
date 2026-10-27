@@ -21,7 +21,7 @@ export async function resendIdempotencyKey(token: string): Promise<string> {
 }
 
 export type MagicLinkSendFailure = {
-  kind: "missing_env" | "resend_http" | "unknown";
+  kind: "missing_env" | "resend_http" | "cf_email" | "unknown";
   status?: number;
 };
 
@@ -60,36 +60,83 @@ export function logMagicLinkSoftCapSkip(
   log("magic-link send skipped", { kind: "soft_cap" });
 }
 
-/**
- * Send a magic-link email through Resend. Fail closed: key and from-address
- * must be set. Uses fetch (no Resend SDK).
- */
-export async function sendMagicLinkEmail(
+const DEFAULT_CF_EMAIL_FROM = "Polarch <login@polarch.day>";
+
+/** Parse `Name <addr>` or `addr` into the Email Service builder shape. */
+export function parseFrom(raw: string): string | { email: string; name: string } {
+  const m = raw.trim().match(/^(.*)<\s*([^<>\s]+@[^<>\s]+)\s*>$/);
+  if (m) {
+    const name = m[1].trim().replace(/^"|"$/g, "");
+    return name ? { email: m[2], name } : m[2];
+  }
+  return raw.trim();
+}
+
+export function cfEmailFrom(env: Pick<Env, "CF_EMAIL_FROM">): string {
+  return env.CF_EMAIL_FROM?.trim() || DEFAULT_CF_EMAIL_FROM;
+}
+
+/** Cloudflare Email Service via the `send_email` binding (from login@polarch.day). */
+async function sendViaCloudflare(
+  binding: SendEmail,
   env: Env,
-  opts: { email: string; url: string; token: string },
+  to: string,
+  body: { subject: string; text: string; html: string },
+): Promise<void> {
+  try {
+    await binding.send({ from: parseFrom(cfEmailFrom(env)), to, subject: body.subject, html: body.html, text: body.text });
+  } catch {
+    // Never surface the binding error text: it can echo the recipient.
+    throw new MagicLinkSendError("cf_email");
+  }
+}
+
+/** Resend fallback (AUTH_EMAIL_FROM, e.g. `Polarch <login@usedayspring.app>`). */
+async function sendViaResend(
+  env: Env,
+  to: string,
+  token: string,
+  body: { subject: string; text: string; html: string },
 ): Promise<void> {
   const key = env.RESEND_API_KEY?.trim();
   const from = authEmailFrom(env);
   if (!key || !from) {
     throw new MagicLinkSendError("missing_env");
   }
-  const body = magicLinkEmail({ url: opts.url });
   const res = await fetch(RESEND_URL, {
     method: "POST",
     headers: {
       authorization: `Bearer ${key}`,
       "content-type": "application/json",
-      "Idempotency-Key": await resendIdempotencyKey(opts.token),
+      "Idempotency-Key": await resendIdempotencyKey(token),
     },
-    body: JSON.stringify({
-      from,
-      to: [opts.email.trim().toLowerCase()],
-      subject: body.subject,
-      html: body.html,
-      text: body.text,
-    }),
+    body: JSON.stringify({ from, to: [to], subject: body.subject, html: body.html, text: body.text }),
   });
   if (!res.ok) {
     throw new MagicLinkSendError("resend_http", res.status);
   }
+}
+
+/**
+ * Send a magic-link email. Primary: Cloudflare Email Service (`EMAIL`
+ * binding, from CF_EMAIL_FROM / login@polarch.day). If the binding is absent
+ * or throws, fall back to Resend (AUTH_EMAIL_FROM). Fail closed if neither works.
+ */
+export async function sendMagicLinkEmail(
+  env: Env,
+  opts: { email: string; url: string; token: string },
+  log: (message: string, detail: MagicLinkSendFailure) => void = console.error,
+): Promise<"cloudflare" | "resend"> {
+  const to = opts.email.trim().toLowerCase();
+  const body = magicLinkEmail({ url: opts.url });
+  if (env.EMAIL) {
+    try {
+      await sendViaCloudflare(env.EMAIL, env, to, body);
+      return "cloudflare";
+    } catch (err) {
+      log("magic-link cloudflare send failed, falling back to resend", describeMagicLinkSendFailure(err));
+    }
+  }
+  await sendViaResend(env, to, opts.token, body);
+  return "resend";
 }
