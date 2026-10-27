@@ -17,7 +17,7 @@
  * It never talks to Supabase.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,8 +63,12 @@ import {
   collectRolesFromDumpSql,
   targetBetterAuthUsersHashQuery,
   TARGET_COPY_ROLE,
+  REQUIRED_EXTENSIONS_SQL,
+  STUB_AUTH_SQL,
   createTargetCopyRoleSql,
   disableTargetCopyRoleSql,
+  grantTargetCopyRoleSchemasSql,
+  TARGET_PANIC_LOGGING_SQL,
 } from "./migrate-users.lib.mjs";
 import {
   ALLOWED_UPLOAD_ARTIFACT_PATHS,
@@ -80,10 +84,16 @@ import {
   usesIsShaPinned,
 } from "./guard-public-ci.mjs";
 import {
+  extractSafeErrorPhrase,
+  firstPhraseErrorLine,
   formatSafeCommandError,
+  SAFE_ERROR_IDENT_MAX,
+  SAFE_ERROR_NAME_ALLOWLIST,
   sanitizePgFailureText,
   sqlstateClassMessage,
+  withPsqlSqlstateVerbosity,
 } from "./safe-cmd.mjs";
+import { SCRATCH_POSTGRES_CONTAINER, SCRATCH_POSTGRES_IMAGE } from "./scratch-postgres.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -205,6 +215,26 @@ ok(raiseSan.sqlstate === "P0001", "plpgsql RAISE keeps SQLSTATE");
 ok(raiseSan.firstError === "plpgsql error", "plpgsql RAISE without : \" uses the class message");
 ok(!/phil@|leaked/.test(raiseSan.firstError), "plpgsql RAISE text does not leak");
 
+const raiseBeforeQuote = 'ERROR:  leaked phil@example.com : "x"\nSQLSTATE P0001';
+const raiseBeforeSan = sanitizePgFailureText(raiseBeforeQuote);
+ok(raiseBeforeSan.sqlstate === "P0001", "P0001 with : \" keeps SQLSTATE");
+ok(raiseBeforeSan.firstError === "plpgsql error", "P0001 always uses the class message");
+ok(!/phil@|leaked/.test(raiseBeforeSan.firstError), "RAISE value before : \" does not leak");
+const raiseLooksSafe = sanitizePgFailureText(
+  "ERROR:  permission denied for table users\nSQLSTATE P0001",
+);
+ok(raiseLooksSafe.firstError === "plpgsql error", "P0001 wins over a permission-denied-shaped RAISE");
+
+const noticeError = [
+  'NOTICE:  trigger error: "phil@example.com"',
+  'ERROR:  invalid input syntax for type text: "ok@example.com"',
+  "SQLSTATE 22P02",
+].join("\n");
+const noticeSan = sanitizePgFailureText(noticeError);
+ok(noticeSan.sqlstate === "22P02", "NOTICE + ERROR keeps SQLSTATE");
+ok(noticeSan.firstError === "ERROR:  invalid input syntax for type text", "NOTICE error: is not treated as ERROR");
+ok(!/phil@|NOTICE|ok@|trigger/.test(noticeSan.firstError), "NOTICE containing error: does not leak");
+
 const singleQuoted = "ERROR:  invalid input syntax for type text: 'it\\'s phil@example.com'\nSQLSTATE 22P02";
 const sqSan = sanitizePgFailureText(singleQuoted);
 ok(sqSan.firstError === "ERROR:  invalid input syntax for type text", "cuts ERROR at first : '");
@@ -214,6 +244,122 @@ ok(
   !/phil@/i.test(formatSafeCommandError("psql", 1, "ERROR:  boom phil@example.com leaked\n", "")),
   "ERROR with no SQLSTATE and no quote-cut uses a fixed message",
 );
+ok(
+  extractSafeErrorPhrase("ERROR:  permission denied for table users") === "permission denied for table users",
+  "safe phrase: permission denied for table",
+);
+ok(
+  extractSafeErrorPhrase('pg_restore: error: could not execute query: ERROR:  permission denied for table users\nCommand was: ALTER TABLE ONLY public.actions ADD CONSTRAINT actions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);\n') ===
+    "permission denied for table users",
+  "safe phrase ignores the Command was: line",
+);
+ok(
+  extractSafeErrorPhrase('ERROR:  role "leadwell_copy" does not exist') === 'role "leadwell_copy" does not exist',
+  "safe phrase: role does not exist",
+);
+ok(
+  extractSafeErrorPhrase('ERROR:  schema "auth" does not exist') === "schema auth does not exist",
+  "safe phrase: schema does not exist",
+);
+ok(
+  extractSafeErrorPhrase("ERROR:  must be owner of table profiles") === "must be owner of profiles",
+  "safe phrase: must be owner of",
+);
+ok(
+  extractSafeErrorPhrase('ERROR:  relation "actions" does not exist') === 'relation "actions" does not exist',
+  "safe phrase: relation does not exist",
+);
+const restoreDenied = sanitizePgFailureText(
+  "pg_restore: error: could not execute query: ERROR:  permission denied for table users\nSQLSTATE 42501",
+);
+ok(restoreDenied.sqlstate === "42501", "permission-denied case keeps SQLSTATE");
+ok(restoreDenied.firstError === "permission denied for table users", "permission denied logs phrase + identifier, not query failed");
+ok(!/ALTER TABLE|fkey|Command was/.test(restoreDenied.firstError), "permission-denied log has no restore SQL");
+ok(
+  withPsqlSqlstateVerbosity("psql", ["-v", "ON_ERROR_STOP=1", "-c", "SELECT 1"]).includes("VERBOSITY=sqlstate"),
+  "psql args include VERBOSITY=sqlstate",
+);
+const forcedVerbosity = withPsqlSqlstateVerbosity("psql", ["-v", "VERBOSITY=terse", "-c", "SELECT 1"]);
+ok(forcedVerbosity.includes("VERBOSITY=sqlstate"), "caller VERBOSITY is replaced with sqlstate");
+ok(!forcedVerbosity.includes("VERBOSITY=terse"), "caller VERBOSITY override is removed");
+ok(forcedVerbosity.filter((a) => /^VERBOSITY=/i.test(a)).length === 1, "VERBOSITY is set once");
+ok(
+  !withPsqlSqlstateVerbosity("pg_dump", ["--file=x"]).includes("VERBOSITY=sqlstate"),
+  "pg_dump is not given VERBOSITY=sqlstate",
+);
+
+ok(SAFE_ERROR_NAME_ALLOWLIST.has("users"), "allowlist includes users");
+ok(SAFE_ERROR_NAME_ALLOWLIST.has("leadwell_copy"), "allowlist includes leadwell_copy");
+ok(SAFE_ERROR_IDENT_MAX === 63, "identifier cap is 63");
+ok(
+  firstPhraseErrorLine("NOTICE:  x\nERROR:  permission denied for table users\n") ===
+    "ERROR:  permission denied for table users",
+  "phrase line is the first ERROR line",
+);
+ok(
+  firstPhraseErrorLine("pg_restore: error: could not find TOC\nERROR:  permission denied for table users\n") ==
+    null,
+  "non-query pg_restore error is not a phrase line",
+);
+ok(
+  firstPhraseErrorLine(
+    "pg_restore: connecting to database\npg_restore: error: could not execute query: ERROR:  permission denied for table users\n",
+  ) === "pg_restore: error: could not execute query: ERROR:  permission denied for table users",
+  "informational pg_restore lines are skipped",
+);
+
+const COPY_SENTINEL = "SENTINEL_CTX_9931";
+const copyRestore = [
+  "pg_restore: error: could not execute query: ERROR:  invalid input syntax for type text",
+  `Command was: COPY public.profiles FROM stdin;`,
+  `CONTEXT:  COPY profiles, line 1: "permission denied for table ${COPY_SENTINEL}"`,
+].join("\n");
+ok(extractSafeErrorPhrase(copyRestore) == null, "COPY value is not treated as a phrase");
+ok(
+  !formatSafeCommandError("pg_restore", 1, copyRestore, "").includes(COPY_SENTINEL),
+  "COPY value sentinel is not logged from stderr",
+);
+
+ok(
+  extractSafeErrorPhrase('ERROR:  relation "missing_table_xyz" does not exist') === "relation does not exist",
+  "does-not-exist without allowlisted name omits the name",
+);
+ok(
+  extractSafeErrorPhrase("ERROR:  must be owner of table not_a_real_table") === "must be owner of",
+  "must-be-owner without allowlisted name omits the name",
+);
+
+const longValue = `${"A".repeat(5000)}${COPY_SENTINEL}`;
+const longSan = sanitizePgFailureText(`ERROR:  invalid input syntax for type text: "${longValue}"\nSQLSTATE 22P02`);
+ok(longSan.firstError === "ERROR:  invalid input syntax for type text", "5000-character value is cut at the quote");
+ok(!longSan.firstError.includes(COPY_SENTINEL), "5000-character value does not leak");
+ok(longSan.firstError.length < 80, "cut ERROR line stays short");
+
+ok(
+  extractSafeErrorPhrase('ERROR:  permission denied for table "users"') === "permission denied for table users",
+  "quoted allowlisted identifier is printed",
+);
+ok(
+  extractSafeErrorPhrase(`ERROR:  permission denied for table "${COPY_SENTINEL}"`) ===
+    "permission denied for table",
+  "quoted non-allowlisted identifier is omitted",
+);
+
+const raiseRestore = `pg_restore: error: could not execute query: ERROR:  permission denied for table ${COPY_SENTINEL}`;
+ok(
+  extractSafeErrorPhrase(raiseRestore) === "permission denied for table",
+  "pg_restore RAISE-shaped phrase omits a non-allowlisted name",
+);
+ok(!formatSafeCommandError("pg_restore", 1, raiseRestore, "").includes(COPY_SENTINEL), "trigger RAISE sentinel is not logged");
+
+const stdoutPhrase = formatSafeCommandError(
+  "psql",
+  1,
+  "ERROR:  syntax error\n",
+  `permission denied for table ${COPY_SENTINEL}\n`,
+);
+ok(!stdoutPhrase.includes(COPY_SENTINEL), "phrase on stdout is not scanned");
+ok(!/permission denied/.test(stdoutPhrase), "stdout phrase is not used as the error");
 
 const hashes = parseHashes("profiles|1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nteams|0|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
 ok(hashes.profiles?.n === 1 && hashes.profiles.hash.length === 32, "parseHashes pipe");
@@ -379,11 +525,31 @@ const dropCopySql = disableTargetCopyRoleSql("postgres");
 ok(/DROP ROLE/.test(dropCopySql), "copy role drop step is explicit DROP ROLE");
 ok(dropCopySql.includes("leadwell_copy") || dropCopySql.includes('"leadwell_copy"'), "drop SQL names leadwell_copy");
 ok(dropCopySql.includes("Never run this on the Supabase source"), "drop SQL forbids the source");
+const grantCopySql = grantTargetCopyRoleSchemasSql(["public", "auth"]);
+ok(/GRANT USAGE, CREATE ON SCHEMA "auth"/.test(grantCopySql), "copy role gets USAGE/CREATE on auth");
+ok(
+  /GRANT REFERENCES ON TABLE "auth"\."users" TO "leadwell_copy"/.test(grantCopySql),
+  "copy role gets REFERENCES on auth.users",
+);
+ok(
+  !/GRANT (SELECT|INSERT|UPDATE|DELETE|TRUNCATE|TRIGGER) ON TABLE/.test(grantCopySql),
+  "copy role is not granted broader table privileges",
+);
 ok(!/raw_user_meta_data|email_confirmed_at/.test(EXPORT_AUTH_USERS_COPY_SQL), "users COPY uses projected TABLE columns");
 ok(!/identity_data/.test(EXPORT_AUTH_IDENTITIES_COPY_SQL), "identities COPY uses projected TABLE columns");
 ok(proveMigrationReaderSetupSql("leadwell_src").includes(MIGRATION_READER_ROLE), "reader setup names the role");
+const supabaseMigFiles = readdirSync(join(root, "supabase/migrations"))
+  .filter((f) => f.endsWith(".sql"))
+  .sort();
+ok(supabaseMigFiles[0] === "0001_init.sql", "supabase migrations start at 0001_init");
+ok(supabaseMigFiles.some((f) => f.startsWith("0017")), "supabase migrations include 0017");
+ok(
+  /references\s+auth\.users/i.test(readFileSync(join(root, "supabase/migrations/0001_init.sql"), "utf8")),
+  "real schema FKs point at auth.users",
+);
 
 const migrateSrc = readFileSync(join(here, "migrate-supabase-to-neon.mjs"), "utf8");
+ok(migrateSrc.includes("grantTargetCopyRoleSchemasSql"), "migrate applies copy-role schema grants after stub auth");
 ok(migrateSrc.includes("rolesToStubFromDumpSql"), "migrate scans dump TO/GRANT for roles");
 ok(migrateSrc.includes("stubSupabaseRolesSql"), "migrate applies role stubs before restore");
 ok(migrateSrc.includes("createTargetCopyRoleSql"), "migrate creates the target copy role");
@@ -483,6 +649,11 @@ ok(
   String(backupStep.env.CUTOVER_DUMP_DIR).includes("leadwell-cutover"),
   "backup dump stays in runner.temp/leadwell-cutover",
 );
+ok(
+  String(backupStep.env?.CUTOVER_DUMP_DIR ?? "") === String(deleteDumpsStep.env?.CUTOVER_DUMP_DIR ?? "") &&
+    Boolean(backupStep.env?.CUTOVER_DUMP_DIR),
+  "backup and delete-dumps use the same CUTOVER_DUMP_DIR",
+);
 const badJobEnvDoc = parseWorkflowDocument(
   [
     "name: t",
@@ -569,6 +740,36 @@ ok(/\bactionlint\b/.test(String(actionlintStep.run)), "actionlint step runs acti
 for (const [jobName, job] of Object.entries(checksDoc.jobs || {})) {
   ok(!envUsesRunnerContext(job?.env), `checks.yml ${jobName} job env does not use runner context`);
 }
+ok(checksDoc.permissions?.contents === "read", "checks.yml permissions are contents: read");
+const checksCheckout = Array.isArray(checksDoc.jobs?.checks?.steps)
+  ? checksDoc.jobs.checks.steps.find((s) => s?.id === "checkout")
+  : null;
+ok(checksCheckout, "checks.yml has a checkout step");
+ok(checksCheckout.with?.["persist-credentials"] === false, "checks checkout persist-credentials is false");
+const cutoverCheckout = Array.isArray(cutoverJob.steps)
+  ? cutoverJob.steps.find((s) => s?.id === "checkout")
+  : null;
+ok(cutoverCheckout, "cutover has a checkout step");
+ok(cutoverCheckout.with?.["persist-credentials"] === false, "cutover checkout persist-credentials is false");
+ok(!Object.hasOwn(checksDoc.jobs?.checks ?? {}, "services"), "checks.yml has no services: postgres");
+ok(!Object.hasOwn(cutoverJob ?? {}, "services"), "cutover-migrate.yml has no services: postgres");
+ok(/id:\s*start-postgres/.test(checksYml) && /id:\s*stop-postgres/.test(checksYml), "checks.yml starts and stops scratch postgres");
+ok(/id:\s*start-postgres/.test(workflow) && /id:\s*stop-postgres/.test(workflow), "cutover starts and stops scratch postgres");
+ok(/id:\s*stop-postgres[\s\S]*always\(\)/.test(checksYml), "checks stop-postgres is always()");
+ok(/id:\s*stop-postgres[\s\S]*always\(\)/.test(workflow), "cutover stop-postgres is always()");
+ok(checksYml.includes("scratch-postgres.mjs stop >/dev/null 2>&1"), "checks stop discards output");
+ok(workflow.includes("scratch-postgres.mjs stop >/dev/null 2>&1"), "cutover stop discards output");
+ok(/id:\s*container-log-guard/.test(checksYml), "checks.yml has a container-log-guard step");
+ok(/id:\s*container-log-guard/.test(workflow), "cutover has a container-log-guard step");
+ok(!/\bdocker logs\b/.test(checksYml), "checks.yml never prints docker logs");
+ok(!/\bdocker logs\b/.test(workflow), "cutover never prints docker logs");
+ok(/^postgres@sha256:[0-9a-f]{64}$/.test(SCRATCH_POSTGRES_IMAGE), "scratch postgres image is SHA-pinned");
+ok(SCRATCH_POSTGRES_CONTAINER === "leadwell-pg", "scratch postgres container name");
+ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_messages = panic"), "panic SQL sets log_min_messages");
+ok(TARGET_PANIC_LOGGING_SQL.includes("log_min_error_statement = panic"), "panic SQL sets log_min_error_statement");
+ok(TARGET_PANIC_LOGGING_SQL.includes("log_error_verbosity = terse"), "panic SQL sets log_error_verbosity");
+ok(TARGET_PANIC_LOGGING_SQL.includes("pg_reload_conf()"), "panic SQL reloads config");
+ok(migrateSrc.includes("TARGET_PANIC_LOGGING_SQL"), "migrate applies panic logging before restore");
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
@@ -767,6 +968,8 @@ ok(codeowners.includes("scripts/migrate-supabase-to-neon.mjs"), "CODEOWNERS cove
 ok(codeowners.includes("scripts/cutover-verify.mjs"), "CODEOWNERS covers cutover-verify");
 ok(codeowners.includes("scripts/migrate-users.lib.mjs"), "CODEOWNERS covers migrate-users.lib");
 ok(codeowners.includes("scripts/loopback.mjs"), "CODEOWNERS covers loopback");
+ok(codeowners.includes("scripts/scratch-postgres.mjs"), "CODEOWNERS covers scratch-postgres");
+ok(codeowners.includes("scripts/prove-container-log.mjs"), "CODEOWNERS covers prove-container-log");
 ok(codeowners.includes("package.json"), "CODEOWNERS covers package.json");
 ok(codeowners.includes("package-lock.json"), "CODEOWNERS covers the lockfile");
 ok(codeowners.includes(".github/CODEOWNERS"), "CODEOWNERS covers itself");
@@ -799,7 +1002,7 @@ const target = process.env.LEADWELL_PROVE_TARGET_URL || "";
 
 function run(cmd, args, opts = {}) {
   const { env, ...rest } = opts;
-  const res = spawnSync(cmd, args, {
+  const res = spawnSync(cmd, withPsqlSqlstateVerbosity(cmd, args), {
     encoding: "utf8",
     cwd: root,
     ...rest,
@@ -1303,6 +1506,103 @@ GRANT SELECT ON public.actions TO authenticated;
       `SELECT count(*) FROM account WHERE provider_id = 'google'`,
     ]).trim();
     ok(google === "0", "Google identities are not mapped");
+
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      source,
+      "-c",
+      "DROP SCHEMA IF EXISTS migration_tmp CASCADE; DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;",
+    ]);
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      target,
+      "-c",
+      "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS auth CASCADE;",
+    ]);
+    const migSetupPath = join(dir, "supabase_mig_setup.sql");
+    writeFileSync(migSetupPath, `${REQUIRED_EXTENSIONS_SQL}\n${STUB_AUTH_SQL}\n${stubSupabaseRolesSql()}\n`);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", migSetupPath]);
+    ok(supabaseMigFiles.length >= 17, "prove applies every committed supabase migration");
+    for (const file of supabaseMigFiles) {
+      run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", join(root, "supabase/migrations", file)]);
+    }
+    run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-d",
+      source,
+      "-c",
+      `INSERT INTO auth.users (id, email, created_at, updated_at)
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'phil@example.com', NOW(), NOW());
+INSERT INTO auth.identities (id, user_id, provider, provider_id, created_at, updated_at)
+VALUES (gen_random_uuid(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'google', 'google-sub-1', NOW(), NOW());
+INSERT INTO public.profiles (user_id, name, title)
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Phil', 'Lead');
+INSERT INTO public.teams (user_id, id, name, capacity_id, sort_order)
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 't1', 'Frontier', 'c1', 0);
+INSERT INTO public.actions (user_id, id, person_id, text)
+VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'a1', 'p1', 'Follow up');`,
+    ]);
+    writeFileSync(join(dir, "reader_mig.sql"), proveMigrationReaderSetupSql(sourceDb));
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", source, "-f", join(dir, "reader_mig.sql")]);
+    const srcFk = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      source,
+      "-c",
+      `SELECT COUNT(*) FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.confrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE c.contype = 'f' AND n.nspname = 'auth' AND t.relname = 'users'`,
+    ]).trim();
+    ok(Number(srcFk) > 0, "supabase migrations source has FKs to auth.users");
+    const migReal = spawnSync(process.execPath, [join(here, "migrate-supabase-to-neon.mjs")], {
+      encoding: "utf8",
+      cwd: root,
+      env: {
+        ...process.env,
+        SUPABASE_DB_URL: source,
+        NEON_DB_URL: target,
+        LEADWELL_MIGRATE_TEST: "1",
+      },
+    });
+    const migRealOut = `${migReal.stdout || ""}\n${migReal.stderr || ""}`;
+    console.log(migRealOut.trim());
+    ok(migReal.status === 0, "supabase-migrations restore exits 0");
+    ok(migRealOut.includes("migration ok"), "supabase-migrations restore prints migration ok");
+    ok(!logLooksLikeRowData(migRealOut), "supabase-migrations restore log has no row data");
+    if (migReal.status !== 0) {
+      throw new Error(`supabase-migrations restore failed:\n${migRealOut.trim()}`);
+    }
+    const dstFk = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      `SELECT COUNT(*) FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.confrelid
+       JOIN pg_namespace n ON n.oid = t.relnamespace
+       WHERE c.contype = 'f' AND n.nspname = 'auth' AND t.relname = 'users'`,
+    ]).trim();
+    ok(Number(dstFk) === Number(srcFk), "restore recreated every auth.users FK");
+    const copyLeftAfterMig = run("psql", [
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tA",
+      "-d",
+      target,
+      "-c",
+      "SELECT COUNT(*) FROM pg_roles WHERE rolname = 'leadwell_copy'",
+    ]).trim();
+    ok(copyLeftAfterMig === "0", "copy role is gone after supabase-migrations restore");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

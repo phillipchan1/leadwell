@@ -5,139 +5,175 @@
       "file": "checks.yml",
       "job": "checks",
       "id": "checkout",
-      "sha256": "ac071fe9b568d37b89bf4ee66234973175e2c0dfe3527792f265e4e82047812a"
+      "sha256": "3a3139e9038d094ce0966f369811ba3d6e4d5bffa525ddb375788f7ea34857b5"
+    },
+    {
+      "file": "checks.yml",
+      "job": "checks",
+      "id": "start-postgres",
+      "sha256": "891238fa195fea820bb0f56120b7ab4b242bd5ce46f668bc829b6d495b8fb1a6"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "actionlint",
-      "sha256": "19a0913b489293f74e7901a26c442d575471414cd7e8332ea067139137d4ccd2"
+      "sha256": "3fcbd83688ec3bd83645cf0434e1e99518e06224e33d41751a9dc8f2846cc06a"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "setup-node",
-      "sha256": "c8cdf684dfa22feb7638be6c7f2881cd02ec2bfbf2948f8b45a00ba767e40633"
+      "sha256": "6b97f961f40e5046f0443fc7583d7623e6609c9c5c0b32b00d7472a88d973c95"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "npm-ci",
-      "sha256": "344abde8e9568da94f23afd0c7215625deb05dc8baedf1f1f715f0314c0787fa"
+      "sha256": "fc252da3a62c84ce006a024d61a1f43f84e6d3947b2a99a28f6238e708bd2874"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "guard",
-      "sha256": "a6d278973db7496fce9901f6200ca51dde796f1dc8aefc0ae05ed664174159f9"
+      "sha256": "4ee8050ec6d34d202a6c68421fdd5c1735d74d28bc3e1f663967b7691dc20e99"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "typecheck",
-      "sha256": "f444ea73270a813ed68bd93d8d74a1d5681acb9dc1885a10280d4da389a79aa0"
+      "sha256": "9e99270f88dba9f84fa23efec6342d42ecf5685aea77b15f3d270b17478d6c35"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "lint",
-      "sha256": "ad9a96034295b7a1f0ed1dd982ed2d529f022cd794975e326b88a6102629e5cd"
+      "sha256": "24d60b78860eaf26e0387790e17df586d16a077e5d9c6cd80085209ece6e86a5"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "test",
-      "sha256": "884b948b059cdee7f337d95ae389ef726ca994621a30240d12a1a80c7377b2fb"
+      "sha256": "e11fe94f6e06cda4e03459793d376a72369c6183305d09b18c9e6be7fe96322e"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "install-pg",
-      "sha256": "822da19e73acd76424dda6e46a8b5f55e32928f8238f7ad342d75f5e445bf452"
+      "sha256": "361ffb36df383d5303bd25c8e89a25035797c6dda069cac5e7a5da2d874ac11d"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "create-prove-dbs",
-      "sha256": "ec2204e36f91fd7926f3b3826a742f5ea73b00b2ac32b7fa0a0d2ec611fb075c"
+      "sha256": "564ab1b7ac3c5b06f8f5bdfc19f6a95e1305eaf06cdc0b4fd47732a7db056bdf"
+    },
+    {
+      "file": "checks.yml",
+      "job": "checks",
+      "id": "container-log-guard",
+      "sha256": "273370dfea5309b10e9cf01091e08ef73caa0d364e1a07f1f65c2b4a63c984ff"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "live-prove",
-      "sha256": "3b80fa435a5d3475643981276ff765b0b1c237ba1d564af7f946a238a716da80"
+      "sha256": "05092b87293361a2e1ee5871498778d98afc8c9e8f2db54f19613ad0c82e92f2"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "wrangler-preview",
-      "sha256": "331c00598be6a1f39231e53e5c40b99954ea29876b1c76603cf3dd8e0e6f2f5c"
+      "sha256": "48f33fe68a64d7cfd1ded4c4ccdabdb0887705a1fdede0533920f5e4372cf398"
+    },
+    {
+      "file": "checks.yml",
+      "job": "checks",
+      "id": "stop-postgres",
+      "sha256": "f9951ec4e7dad54bf4c7171658649364bda8139bb1a402ab9802b19d924a6965"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "checkout",
-      "sha256": "74b3453d85ad88b514b0082d27061cd80b3056c9ec0ac16cb6c1538bcee94ce0"
+      "sha256": "7eb746669e841fe6e0438bf87b06a6de4995b70072b8b7c5ca66a2eda0cacc83"
+    },
+    {
+      "file": "cutover-migrate.yml",
+      "job": "cutover",
+      "id": "start-postgres",
+      "sha256": "867a78dcfa5b0643aa79ee0eb66c04d7355a9cc1cbcc7ed83717ca3f0491f274"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "setup-node",
-      "sha256": "3865a42741c1f89aa832df13292cc54c8499410a8fdfa4501b9c2fb0ce7b3f56"
+      "sha256": "29be077c1a20cb48db34957f38c066312b2fb2e35c566c9be6fa67e445a37565"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "npm-ci",
-      "sha256": "30b90c480770e2ca058584ef68a6b9dca4672222c66f02063049f468fcac40a9"
+      "sha256": "0c17fe747cc63776841bf0dd1a1603123badc2eb718a125111da3e47e793436b"
+    },
+    {
+      "file": "cutover-migrate.yml",
+      "job": "cutover",
+      "id": "container-log-guard",
+      "sha256": "4256aad25cb7139323e6f5b724584f3a298a1c0fe09397126ac09d57db0ca04d"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "mask",
-      "sha256": "14aed66814d8cb3a4dc40fe0a4104585d86d5d4c1affdee47854b17b8e65e2f3"
+      "sha256": "620ec34ef82791e25987b8170ac23af7b9837151361a0f94a83aa33c1c384e5d"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "install-pg",
-      "sha256": "dbddf38e492cf0c7245b01e3970ee1cefecf3d04dc62433c7c1a6f769caffe1c"
+      "sha256": "13ac776ea4e2365f1c27ce29da8f8fc7c59890eda4c1117a172f3df13d1c525b"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "backup",
-      "sha256": "3a86649b8447a6931497adbd536af90e1fea6e19636f0b98a14334105a28377d"
+      "sha256": "6545be17e9dc078e1dce185cc22f873b9dff7137416b6d4982f591fd3647277d"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "scratch",
-      "sha256": "1425b3890dacccdc63ebf50a75a320cfbdd9ac5cde05d9eb953a7aabae30c052"
+      "sha256": "c3eabe0ca58104f73d738d6a285dc9b3b58d71864e2b6a3a7082ceda9fb3ea95"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "migrate",
-      "sha256": "fe4e4651f33853ccad34c57db7d42565209c9ceabe821819a948ef33d5eedbb3"
+      "sha256": "5cd7d3faa0fe819a298369bf7c37104ff9316592dfea94615a57f56343869c59"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "verify",
-      "sha256": "ce41f2b635b0cafcbc1ab2734077b3d39c25a37483f4187339beb38db68032b9"
+      "sha256": "60278eb63f7742b86d488139860a56c81e9e269b5d73476251ba722c3f75fb65"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "leftover-copy-role",
-      "sha256": "35ccb62922fc7caf0a49bea9c500bb24126182ab7a95a95eb430e89ba82d99a0"
+      "sha256": "3ac594e76a42f976a82da768c95dabd5fd23e87ba26d93642192e90c5a3adda1"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "id": "delete-dumps",
-      "sha256": "6fa018014f25b7b1dd311cf0dea1f6d943a88edcf2a2d64fa1e7fd1a69010bc4"
+      "sha256": "78c5ff04416c59255d10c7e67dcd58c1809cadfc3c613f96226084155e1e4f23"
+    },
+    {
+      "file": "cutover-migrate.yml",
+      "job": "cutover",
+      "id": "stop-postgres",
+      "sha256": "ff3a108eee0cf9b71f0d8c965f64ac05ab585a0566fd943fa63ad93a4a8f88a6"
     }
   ],
   "job_steps": [
@@ -146,6 +182,7 @@
       "job": "checks",
       "ids": [
         "checkout",
+        "start-postgres",
         "actionlint",
         "setup-node",
         "npm-ci",
@@ -155,18 +192,22 @@
         "test",
         "install-pg",
         "create-prove-dbs",
+        "container-log-guard",
         "live-prove",
-        "wrangler-preview"
+        "wrangler-preview",
+        "stop-postgres"
       ],
-      "sha256": "6e9d4000b1cc948e7238f28dbbf78978236b04dc78b8c52caf358b454bf1feb2"
+      "sha256": "f9cb689447d71a1e2ff9fd93d07008ecc3834c59b095bc09eb9d68c3778f3d93"
     },
     {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "ids": [
         "checkout",
+        "start-postgres",
         "setup-node",
         "npm-ci",
+        "container-log-guard",
         "mask",
         "install-pg",
         "backup",
@@ -174,9 +215,10 @@
         "migrate",
         "verify",
         "leftover-copy-role",
-        "delete-dumps"
+        "delete-dumps",
+        "stop-postgres"
       ],
-      "sha256": "fbf23ff31b614343cb06314bee0e0389e6cf3cc7555200068e166cd5bbed70d0"
+      "sha256": "db54b685769a6fd7b097c7418132cb7f580c85968c1bc27a462b2f89c302a3c4"
     }
   ],
   "workflow_jobs": [
