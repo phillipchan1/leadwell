@@ -17,7 +17,7 @@
  * It never talks to Supabase.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -715,7 +715,7 @@ function run(cmd, args, opts = {}) {
     env: libpqCleanEnv(env ?? process.env),
   });
   if (res.status !== 0) {
-    throw new Error(`${cmd} ${args.join(" ")} failed (${res.status}): ${(res.stderr || res.stdout || "").trim()}`);
+    throw new Error(formatSafeCommandError(cmd, res.status, res.stderr, res.stdout));
   }
   return res.stdout;
 }
@@ -1018,7 +1018,13 @@ GRANT SELECT ON public.actions TO authenticated;
       "DROP TABLE IF EXISTS restore_t; CREATE TABLE restore_t (id int PRIMARY KEY, email text); INSERT INTO restore_t VALUES (1, 'phil@example.com')",
     ]);
     const restoreDump = join(dir, "restore_fail.dump");
-    run("pg_dump", ["-Fc", "-t", "restore_t", "-f", restoreDump, errUrl]);
+    const pgDump17 = existsSync("/usr/lib/postgresql/17/bin/pg_dump")
+      ? "/usr/lib/postgresql/17/bin/pg_dump"
+      : "pg_dump";
+    const pgRestore17 = existsSync("/usr/lib/postgresql/17/bin/pg_restore")
+      ? "/usr/lib/postgresql/17/bin/pg_restore"
+      : "pg_restore";
+    run(pgDump17, ["-Fc", "-t", "restore_t", "-f", restoreDump, errUrl]);
     run("psql", [
       "-v",
       "ON_ERROR_STOP=1",
@@ -1030,7 +1036,7 @@ GRANT SELECT ON public.actions TO authenticated;
     const restoreFail = spawnSafeModule(`
       import { installSafeErrorHandlers, run } from ${JSON.stringify(join(here, "safe-cmd.mjs"))};
       installSafeErrorHandlers();
-      run("pg_restore", ["--data-only", "--exit-on-error", "--dbname", ${JSON.stringify(errUrl)}, ${JSON.stringify(restoreDump)}]);
+      run(${JSON.stringify(pgRestore17)}, ["--data-only", "--exit-on-error", "--dbname", ${JSON.stringify(errUrl)}, ${JSON.stringify(restoreDump)}]);
     `);
     assertNoRowLeak("pg_restore data-load failure", restoreFail);
 
