@@ -75,6 +75,7 @@ function psql(sql) {
       "postgres",
       "-d",
       "postgres",
+      "-tA",
       "-v",
       "ON_ERROR_STOP=1",
     ],

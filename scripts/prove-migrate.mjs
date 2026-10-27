@@ -899,6 +899,7 @@ const guardSrc = readFileSync(join(here, "prove-container-log.mjs"), "utf8");
 ok(guardSrc.includes("not enforced"), "guard fails when a log setting is not required");
 ok(guardSrc.includes("qa2SettingsSql"), "guard drops each setting in turn");
 ok(guardSrc.includes("import.meta.url"), "container-log CLI does not run on import");
+ok(/-tA/.test(guardSrc), "container-log psql reads settings as tuples-only");
 
 const migrationDir = join(root, "supabase/migrations");
 const raiseWithRow = [];
