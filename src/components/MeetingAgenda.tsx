@@ -12,7 +12,8 @@ import { aheadForHorizon, ensureSessionId, plannedSlots } from "../lib/topics";
 import { TopicBoard } from "./TopicBoard";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
-import { Check as CheckIcon, ChevronLeft, ChevronRight, File06, Lock01, Play, X } from "@untitledui/icons";
+import { Check as CheckIcon, ChevronLeft, ChevronRight, ClockFastForward, File06, Lock01, Play, X } from "@untitledui/icons";
+import { pushBackWeek } from "./pushBack";
 import { ArcBand } from "./arcs/ArcBand";
 import { cx } from "@/utils/cx";
 
@@ -150,6 +151,15 @@ export function MeetingAgenda({
           >
             <File06 aria-hidden className="size-4 text-tertiary" />
             This week
+          </button>
+          <button
+            type="button"
+            onClick={() => pushBackWeek(meeting.id, { sessionId: slot.sessionId, date: slot.date }, false)}
+            title="This week's items move to the next meeting, and every later week's move along one"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[9px] px-3 text-[13px] font-semibold text-secondary transition-colors hover:bg-secondary touch:min-h-11"
+          >
+            <ClockFastForward aria-hidden className="size-4 text-tertiary" />
+            Push back
           </button>
           {onOpenSession && (
             <button

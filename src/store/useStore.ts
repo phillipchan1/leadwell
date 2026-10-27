@@ -55,7 +55,9 @@ import { migratePigments } from "../lib/pigments";
 import { toast } from "../lib/toasts";
 import { emptyMe } from "../lib/repo";
 import { DEMO, toThisWeek } from "../lib/demo";
+import { pushBackPlan } from "../lib/pushBack";
 import {
+  liveArcs,
   markStep,
   practiceText,
   sharedNoteId,
@@ -578,13 +580,24 @@ type Store = PersistedData &
       to: string,
       scope: "one" | "series"
     ) => string;
-    /** This week isn't happening. Its topics go back to Ideas. */
+    /** This week isn't happening. Its topics go back to Ideas (see `pushBack` to move them on instead). */
     skipOccurrence: (
       meetingId: string,
       from: { sessionId: string | null; date: string }
     ) => void;
     /** Undo a skip, or move a moved occurrence back onto its series date. */
     restoreOccurrence: (sessionId: string) => void;
+    /**
+     * Push back: this week's open items move to the next meeting and every
+     * later week's move along one, in order. With `skip`, this week is also
+     * skipped; without, it still happens and its arcs wait a week too.
+     * Returns what moved and an exact undo, or null for an unknown meeting.
+     */
+    pushBack: (
+      meetingId: string,
+      from: { sessionId: string | null; date: string },
+      opts: { skip: boolean }
+    ) => { moved: number; weeks: number; arcs: number; undo: () => void } | null;
     /** A one-off meeting outside the rhythm. Reuses a session already on that date. */
     addExtraOccurrence: (meetingId: string, date: string) => string;
     /** Only offered when the meeting has no sessions — history is never dropped. */
@@ -2911,6 +2924,69 @@ export const useStore = create<Store>((set, get) => ({
         ),
       };
     }),
+  pushBack: (meetingId, from, { skip }) => {
+    const s = get();
+    const meeting = s.meetings.find((m) => m.id === meetingId);
+    if (!meeting) return null;
+    const plan = pushBackPlan(meeting, s.sessions, s.topics, from.date);
+    const fromHeld =
+      (from.sessionId && s.sessions.find((o) => o.id === from.sessionId)) ||
+      s.sessions.find((o) => o.meetingId === meetingId && o.date === from.date && o.kind !== "skipped");
+
+    // Weeks that aren't booked yet are booked to hold what lands in them.
+    const created: Session[] = [];
+    const sessionOn = (date: string, existing: string | null) => {
+      if (existing) return existing;
+      const made = created.find((o) => o.date === date);
+      if (made) return made.id;
+      const o: Session = { id: uid(), meetingId, date };
+      created.push(o);
+      return o.id;
+    };
+    const to = new Map(plan.moves.map((m) => [m.topicId, sessionOn(m.toDate, m.toSessionId)]));
+    const was = new Map(plan.moves.map((m) => [m.topicId, s.topics.find((t) => t.id === m.topicId)?.sessionId]));
+
+    // A week that still happens but is pushed: its arc steps wait a week too.
+    // (A skipped week isn't an occurrence at all, so arcs slide on their own.)
+    const arcsToPass = skip ? [] : liveArcs(s.arcs, meetingId).filter((a) => a.status === "active");
+    const fromId = arcsToPass.length ? sessionOn(from.date, fromHeld?.id ?? null) : fromHeld?.id ?? null;
+    const passed = arcsToPass.filter((a) => fromId && !a.passedIn?.includes(fromId)).map((a) => a.id);
+
+    const sessionsBefore = new Set(s.sessions.map((o) => o.id));
+    set((st) => ({
+      topics: st.topics.map((t) => (to.has(t.id) ? { ...t, sessionId: to.get(t.id) } : t)),
+      sessions: [...st.sessions, ...created],
+      arcs: passed.length
+        ? st.arcs.map((a) => (passed.includes(a.id) ? { ...a, passedIn: [...(a.passedIn ?? []), fromId!] } : a))
+        : st.arcs,
+    }));
+    if (skip) get().skipOccurrence(meetingId, { sessionId: fromHeld?.id ?? null, date: from.date });
+
+    const undo = () =>
+      set((st) => {
+        const createdIds = new Set(created.map((o) => o.id));
+        const topics = st.topics.map((t) =>
+          to.has(t.id) && t.sessionId === to.get(t.id) ? { ...t, sessionId: was.get(t.id) } : t
+        );
+        // Weeks booked for the push go again, unless something else has been put in them since.
+        const stillUsed = new Set(topics.map((t) => t.sessionId).filter(Boolean));
+        let sessions = st.sessions.filter((o) => !createdIds.has(o.id) || stillUsed.has(o.id));
+        if (skip) {
+          sessions = fromHeld
+            ? sessions.map((o) => (o.id === fromHeld.id ? fromHeld : o))
+            : sessions.filter(
+                (o) => sessionsBefore.has(o.id) || !(o.meetingId === meetingId && o.kind === "skipped" && o.seriesDate === from.date)
+              );
+        }
+        const arcs = passed.length
+          ? st.arcs.map((a) =>
+              passed.includes(a.id) ? { ...a, passedIn: (a.passedIn ?? []).filter((id) => id !== fromId) } : a
+            )
+          : st.arcs;
+        return { topics, sessions, arcs };
+      });
+    return { moved: plan.moves.length, weeks: plan.weeks, arcs: passed.length, undo };
+  },
   addExtraOccurrence: (meetingId, date) => {
     const existing = get().sessions.find(
       (o) => o.meetingId === meetingId && o.date === date && o.kind !== "skipped"

@@ -42,6 +42,8 @@ export const toastQueue = new AriaToastQueue<ToastPayload>({
  * should expire on its own.
  */
 const NEUTRAL_TIMEOUT = 4000;
+/** An Undo you can't reach in time isn't one. */
+const ACTION_TIMEOUT = 8000;
 
 export function toast({
   message,
@@ -50,7 +52,7 @@ export function toast({
 }: ToastRequest): string {
   return toastQueue.add(
     { message, tone, action },
-    { timeout: tone === "error" ? undefined : NEUTRAL_TIMEOUT }
+    { timeout: tone === "error" ? undefined : action ? ACTION_TIMEOUT : NEUTRAL_TIMEOUT }
   );
 }
 

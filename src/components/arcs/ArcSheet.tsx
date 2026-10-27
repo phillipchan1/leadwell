@@ -4,11 +4,13 @@ import { useStore } from "../../store/useStore";
 import { Modal } from "../ui";
 import { ARC_COVERS } from "../../lib/arcs";
 import { draftArc } from "../../lib/arcDraft";
-import { searchBooks, type BookHit } from "../../lib/books";
+import { bookChapters, searchBooks, type BookHit } from "../../lib/books";
+import { DEMO } from "../../lib/demo";
 import { curriculumOf, plannedSlots } from "../../lib/topics";
 import { meetingSubjectName, meetingTitle, todayISO } from "../../lib/readiness";
 import { ArcCover } from "./ArcCover";
-import { ArrowDown, ArrowUp, Plus, Stars02, Trash01 } from "@untitledui/icons";
+import { ArcStepList, newStep, type DraftStep } from "./ArcStepList";
+import { Stars02 } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -16,9 +18,6 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const field =
   "h-10 w-full min-w-0 rounded-[10px] border border-primary bg-primary px-3 text-[14px] text-primary outline-none placeholder:text-placeholder focus:border-teal-400 dark:focus:border-teal-600";
 const label = "text-[12px] font-semibold text-tertiary";
-
-type DraftStep = Pick<ArcStep, "id" | "label" | "read" | "prompts" | "practice"> &
-  Partial<Pick<ArcStep, "status" | "coveredIn" | "doneOn">>;
 
 const TEMPLATES: { title: string; steps: string[] }[] = [
   {
@@ -83,8 +82,7 @@ export function ArcSheet({
   const [author, setAuthor] = useState(arc?.author ?? "");
   const [cover, setCover] = useState<number>(arc?.cover ?? Math.floor(Math.random() * ARC_COVERS.length));
   const [coverUrl, setCoverUrl] = useState<string | undefined>(arc?.coverUrl);
-  const [books, setBooks] = useState<BookHit[]>([]);
-  // "Not a book": no more cover suggestions while this sheet is open.
+  // "Not a book": no more book suggestions while this sheet is open.
   const [notBook, setNotBook] = useState(false);
   const [steps, setSteps] = useState<DraftStep[]>(arc?.steps ?? []);
   const [every, setEvery] = useState(arc?.every ?? 1);
@@ -94,66 +92,103 @@ export function ArcSheet({
   const [startsOn, setStartsOn] = useState(arc?.startsOn ?? initial?.startsOn ?? nextDate);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [blankFocus, setBlankFocus] = useState(false);
 
   const context = meetingTitle(meeting, meetingSubjectName(meeting, { people, teams, managers }));
 
-  // Looks like a book? Offer its cover. Quietly: nothing shows unless Open
-  // Library has a match with a cover, and a failed lookup just shows nothing.
-  const query = title.trim();
-  const lookup = !notBook && !coverUrl && query.length >= 3;
+  // ── Finding the book ──
+  // Searches again on every pause in typing (title, plus the author when
+  // given), cancelling the search before it, and always says what it's doing.
+  type Search = { q: string; status: "searching" | "done" | "error"; hits: BookHit[] };
+  const [search, setSearch] = useState<Search | null>(null);
+  const [retry, setRetry] = useState(0);
+  /** The book picked, and the text it was picked for: editing that text searches again. */
+  const [picked, setPicked] = useState<{ key: string; title: string; query: string } | null>(null);
+  const query = [title.trim(), author.trim()].filter(Boolean).join(" ");
+  const untouched = Boolean(arc) && title === arc?.title && author === (arc?.author ?? "");
+  // The offline demo has no Worker to ask.
+  const lookup = !DEMO && !notBook && !untouched && title.trim().length >= 3 && picked?.query !== query;
   useEffect(() => {
     if (!lookup) return;
-    let live = true;
+    const ctl = new AbortController();
     const t = setTimeout(() => {
-      searchBooks(query)
-        .then((hits) => live && setBooks(hits))
-        .catch(() => live && setBooks([]));
-    }, 450);
+      setSearch((prev) => ({ q: query, status: "searching", hits: prev?.hits ?? [] }));
+      searchBooks(query, ctl.signal)
+        .then((hits) => setSearch({ q: query, status: "done", hits }))
+        .catch(() => {
+          if (!ctl.signal.aborted) setSearch({ q: query, status: "error", hits: [] });
+        });
+    }, 300);
     return () => {
-      live = false;
       clearTimeout(t);
+      ctl.abort();
     };
-  }, [lookup, query]);
-  const suggestions = lookup ? books : [];
+  }, [lookup, query, retry]);
 
-  const pickBook = (b: BookHit) => {
+  // ── The book's chapters ──
+  type ChapterState =
+    | { status: "loading" }
+    | { status: "found"; chapters: Pick<DraftStep, "label" | "read">[]; year?: string; applied: boolean }
+    | { status: "none" | "error" };
+  const [chapterState, setChapterState] = useState<ChapterState | null>(null);
+  const hasHistory = steps.some((s) => s.coveredIn?.length);
+  const hasSteps = steps.some((s) => s.label.trim());
+
+  const applyChapters = (chapters: Pick<DraftStep, "label" | "read">[]) =>
+    setSteps(chapters.map((c) => ({ ...newStep(c.label), read: c.read })));
+
+  const pickBook = async (b: BookHit) => {
+    const by = author.trim() || b.author || "";
+    // "crucial conv" → "Crucial Conversations"; a title of their own ("… with Meghan") stays theirs.
+    const typed = title.trim();
+    const named = b.title.toLowerCase().startsWith(typed.toLowerCase()) ? b.title : typed;
+    setTitle(named);
+    setAuthor(by);
     setCoverUrl(b.coverUrl);
-    if (!author.trim() && b.author) setAuthor(b.author);
+    setPicked({ key: b.key, title: b.title, query: [named, by].filter(Boolean).join(" ") });
+    setSearch(null);
+    if (hasHistory) return;
+    setChapterState({ status: "loading" });
+    try {
+      const found = await bookChapters(b.key);
+      if (!found) return setChapterState({ status: "none" });
+      const apply = !hasSteps;
+      if (apply) applyChapters(found.chapters);
+      setChapterState({ status: "found", chapters: found.chapters, year: found.edition.year, applied: apply });
+    } catch {
+      setChapterState({ status: "error" });
+    }
   };
+
+  const fromBook = chapterState?.status === "found" && chapterState.applied;
 
   const draft = async () => {
     if (!title.trim()) return;
     setDrafting(true);
     setError(null);
     try {
+      if (fromBook) {
+        // The chapters are real; the draft only writes what to talk about and try.
+        const out = await draftArc({ title, author, context, chapters: steps.map((s) => s.label) });
+        setSteps(
+          steps.map((s, i) =>
+            s.coveredIn?.length
+              ? s
+              : { ...s, prompts: out.steps[i]?.prompts ?? s.prompts, practice: out.steps[i]?.practice ?? s.practice }
+          )
+        );
+        return;
+      }
       const out = await draftArc({ title, author, context });
       if (out.author && !author.trim()) setAuthor(out.author);
       // Steps already talked about stay; the draft replaces only what hasn't happened.
       const kept = steps.filter((s) => s.coveredIn?.length);
       setSteps([...kept, ...out.steps.slice(kept.length).map((s) => ({ ...s, id: uid() }))]);
-      setOpenId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't draft that.");
     } finally {
       setDrafting(false);
     }
-  };
-
-  const patchStep = (id: string, patch: Partial<DraftStep>) =>
-    setSteps((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const move = (i: number, by: -1 | 1) =>
-    setSteps((list) => {
-      const j = i + by;
-      if (j < 0 || j >= list.length) return list;
-      const next = [...list];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
-    });
-  const addStep = () => {
-    const id = uid();
-    setSteps((list) => [...list, { id, label: `Step ${list.length + 1}`, prompts: [] }]);
-    setOpenId(id);
   };
 
   const clean = steps
@@ -237,38 +272,63 @@ export function ArcSheet({
             <input className={field} value={author} placeholder="Optional" onChange={(e) => setAuthor(e.target.value)} />
           </label>
 
-          {suggestions.length > 0 && (
-            <div className="flex flex-col gap-2 rounded-[12px] border border-secondary p-3">
+          {lookup && search && (
+            <div className="flex flex-col gap-2 rounded-[12px] border border-secondary p-3" aria-live="polite">
               <div className="flex items-baseline justify-between gap-3">
-                <span className={label}>Is it one of these?</span>
-                <button
-                  type="button"
-                  onClick={() => setNotBook(true)}
-                  className="text-[12px] font-semibold text-tertiary hover:text-secondary"
-                >
-                  Not a book
-                </button>
-              </div>
-              <div className="flex gap-3 overflow-x-auto">
-                {suggestions.map((b) => (
+                <span className={cx(label, "min-w-0 truncate")}>
+                  {search.status === "searching"
+                    ? `Looking for “${search.q}”…`
+                    : search.status === "error"
+                      ? "Book search isn't answering."
+                      : search.hits.length
+                        ? "Is it one of these?"
+                        : `No book found for “${search.q}”.`}
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  {search.status === "error" && (
+                    <button
+                      type="button"
+                      onClick={() => setRetry((n) => n + 1)}
+                      className="text-[12px] font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400"
+                    >
+                      Try again
+                    </button>
+                  )}
                   <button
-                    key={b.key}
                     type="button"
-                    onClick={() => pickBook(b)}
-                    title={[b.title, b.author, b.year].filter(Boolean).join(" · ")}
-                    className="group flex w-[64px] shrink-0 flex-col gap-1 text-left"
+                    onClick={() => setNotBook(true)}
+                    className="text-[12px] font-semibold text-tertiary hover:text-secondary"
                   >
-                    <ArcCover
-                      arc={{ id: b.key, cover, title: b.title, coverUrl: b.coverUrl }}
-                      className="transition-transform group-hover:-translate-y-0.5"
-                    />
-                    <span className="line-clamp-2 text-[11px] leading-[13px] text-tertiary">
-                      {b.author ?? b.title}
-                      {b.year ? ` · ${b.year}` : ""}
-                    </span>
+                    Not a book
                   </button>
-                ))}
+                </span>
               </div>
+              {search.status === "done" && !search.hits.length && (
+                <p className="text-[12.5px] text-tertiary">Add the author to narrow it, or carry on without one.</p>
+              )}
+              {search.hits.length > 0 && (
+                <div className={cx("flex gap-3 overflow-x-auto pb-0.5", search.status === "searching" && "opacity-50")}>
+                  {search.hits.map((b) => (
+                    <button
+                      key={b.key}
+                      type="button"
+                      onClick={() => void pickBook(b)}
+                      title={[b.title, b.author, b.year].filter(Boolean).join(" · ")}
+                      className="group flex w-[72px] shrink-0 flex-col gap-1 rounded-[8px] text-left outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+                    >
+                      <ArcCover
+                        arc={{ id: b.key, cover, title: b.title, coverUrl: b.coverUrl }}
+                        className="transition-transform group-hover:-translate-y-0.5"
+                      />
+                      <span className="line-clamp-2 text-[11px] leading-[13px] font-semibold text-secondary">{b.title}</span>
+                      <span className="line-clamp-1 text-[10.5px] leading-[13px] text-tertiary">
+                        {b.author ?? ""}
+                        {b.year ? ` · ${b.year}` : ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -353,19 +413,54 @@ export function ArcSheet({
               className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-primary px-2.5 text-[12.5px] font-semibold text-secondary hover:bg-secondary disabled:opacity-40"
             >
               <Stars02 aria-hidden className={cx("size-3.5 text-gilt", drafting && "animate-pulse")} />
-              {drafting ? "Drafting…" : steps.length ? "Redraft" : "Draft the steps"}
+              {drafting
+                ? "Drafting…"
+                : fromBook
+                  ? "Add talk & try with AI"
+                  : steps.length
+                    ? "Redraft"
+                    : "Draft the steps"}
             </button>
           </div>
           {error && <p className="text-[12.5px] text-cond-critical-ink">{error}</p>}
-          {steps.length > 0 && (
+          {chapterState && (
+            <p className="text-[12.5px] text-tertiary" aria-live="polite">
+              {chapterState.status === "loading" && "Getting the chapters…"}
+              {chapterState.status === "found" &&
+                (chapterState.applied ? (
+                  <>
+                    {chapterState.chapters.length} chapters from Open Library
+                    {chapterState.year ? ` (${chapterState.year} edition)` : ""}. Check them against your copy.
+                  </>
+                ) : (
+                  <>
+                    Open Library lists {chapterState.chapters.length} chapters for this book.{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyChapters(chapterState.chapters);
+                        setChapterState({ ...chapterState, applied: true });
+                      }}
+                      className="font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400"
+                    >
+                      Use them instead
+                    </button>
+                  </>
+                ))}
+              {chapterState.status === "none" &&
+                "Open Library doesn't list this book's chapters. Draft them with AI, or type them in."}
+              {chapterState.status === "error" && "Couldn't get the chapters just now. Draft them with AI, or type them in."}
+            </p>
+          )}
+          {steps.length > 0 && !fromBook && (
             <p className="text-[12px] text-quaternary">A draft. Check chapter numbers and pages against your edition.</p>
           )}
 
           {steps.length === 0 ? (
             <div className="flex flex-col gap-3 rounded-[12px] border border-dashed border-primary p-4">
               <p className="text-[13.5px] text-secondary">
-                Type a book and press <b>Draft the steps</b>: one step per chapter, each with something to talk about and
-                something to try. Or start from a template.
+                Pick the book above to bring in its chapters, or press <b>Draft the steps</b> and AI lays them out with
+                something to talk about and something to try. Or start from a template, or type them yourself.
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {TEMPLATES.map((t) => (
@@ -374,7 +469,7 @@ export function ArcSheet({
                     type="button"
                     onClick={() => {
                       if (!title.trim()) setTitle(t.title);
-                      setSteps(t.steps.map((label) => ({ id: uid(), label, prompts: [] })));
+                      setSteps(t.steps.map((label) => newStep(label)));
                     }}
                     className="h-7 rounded-full border border-primary px-2.5 text-[12px] font-semibold text-secondary hover:bg-secondary"
                   >
@@ -383,86 +478,18 @@ export function ArcSheet({
                 ))}
                 <button
                   type="button"
-                  onClick={addStep}
+                  onClick={() => {
+                    setBlankFocus(true);
+                    setSteps([newStep()]);
+                  }}
                   className="h-7 rounded-full border border-primary px-2.5 text-[12px] font-semibold text-secondary hover:bg-secondary"
                 >
-                  Blank
+                  Type them
                 </button>
               </div>
             </div>
           ) : (
-            <ol className="flex flex-col overflow-hidden rounded-[12px] border border-secondary bg-primary">
-              {steps.map((s, i) => {
-                const open = openId === s.id;
-                const done = s.status === "done";
-                return (
-                  <li key={s.id} className={cx("border-secondary", i > 0 && "border-t", open && "bg-teal-50 dark:bg-teal-950")}>
-                    <div className="flex items-center gap-2 px-3 py-2">
-                      <span className="w-5 shrink-0 font-mono text-[11.5px] text-quaternary">{i + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => setOpenId(open ? null : s.id)}
-                        className={cx(
-                          "min-w-0 flex-1 truncate text-left text-[13.5px]",
-                          done ? "text-quaternary line-through" : "text-primary"
-                        )}
-                      >
-                        {s.label || "Untitled step"}
-                      </button>
-                      {s.read && <span className="hidden shrink-0 font-mono text-[11px] text-quaternary sm:inline">{s.read}</span>}
-                      <span className="flex shrink-0 opacity-60 hover:opacity-100">
-                        <IconBtn label="Move up" onClick={() => move(i, -1)} disabled={i === 0}>
-                          <ArrowUp className="size-3.5" />
-                        </IconBtn>
-                        <IconBtn label="Move down" onClick={() => move(i, 1)} disabled={i === steps.length - 1}>
-                          <ArrowDown className="size-3.5" />
-                        </IconBtn>
-                        <IconBtn
-                          label={`Remove ${s.label}`}
-                          disabled={Boolean(s.coveredIn?.length)}
-                          onClick={() => setSteps((list) => list.filter((x) => x.id !== s.id))}
-                        >
-                          <Trash01 className="size-3.5" />
-                        </IconBtn>
-                      </span>
-                    </div>
-                    {open && (
-                      <div className="flex flex-col gap-2.5 px-3 pb-3 pl-10">
-                        <input
-                          className={cx(field, "h-9 text-[13.5px]")}
-                          value={s.label}
-                          aria-label="Step"
-                          onChange={(e) => patchStep(s.id, { label: e.target.value })}
-                        />
-                        <StepField k="Read" value={s.read ?? ""} placeholder="pp. 49–68" onChange={(v) => patchStep(s.id, { read: v })} />
-                        <StepField
-                          k="Talk"
-                          multiline
-                          value={s.prompts.join("\n")}
-                          placeholder="One question per line"
-                          onChange={(v) => patchStep(s.id, { prompts: v.split("\n") })}
-                        />
-                        <StepField
-                          k="Try"
-                          value={s.practice ?? ""}
-                          placeholder="One thing to practise before next time"
-                          onChange={(v) => patchStep(s.id, { practice: v })}
-                        />
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-              <li className="border-t border-secondary">
-                <button
-                  type="button"
-                  onClick={addStep}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-[13px] font-semibold text-tertiary hover:bg-secondary"
-                >
-                  <Plus className="size-3.5" /> Add a step
-                </button>
-              </li>
-            </ol>
+            <ArcStepList steps={steps} onChange={setSteps} autoFocusLast={blankFocus} />
           )}
         </div>
       </div>
@@ -506,60 +533,5 @@ export function Seg({
         </button>
       ))}
     </span>
-  );
-}
-
-function StepField({
-  k,
-  value,
-  placeholder,
-  onChange,
-  multiline,
-}: {
-  k: string;
-  value: string;
-  placeholder: string;
-  onChange: (v: string) => void;
-  multiline?: boolean;
-}) {
-  return (
-    <label className="grid grid-cols-[44px_1fr] items-start gap-2">
-      <span className="pt-2.5 text-[10.5px] font-semibold tracking-[0.14em] text-teal-700 uppercase dark:text-teal-400">{k}</span>
-      {multiline ? (
-        <textarea
-          rows={2}
-          className={cx(field, "h-auto py-2 text-[13px] leading-[18px]")}
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <input className={cx(field, "h-9 text-[13px]")} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
-      )}
-    </label>
-  );
-}
-
-function IconBtn({
-  label: text,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={text}
-      disabled={disabled}
-      onClick={onClick}
-      className="flex size-7 items-center justify-center rounded-md text-tertiary hover:bg-secondary hover:text-secondary disabled:opacity-30"
-    >
-      {children}
-    </button>
   );
 }

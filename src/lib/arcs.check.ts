@@ -11,6 +11,7 @@ import {
   unmarkedSession,
 } from "./arcs";
 import { plannedSlots } from "./topics";
+import { pushBackPlan } from "./pushBack";
 
 /** Run with `npm run test:arcs`. The arc's whole promise is in these. */
 
@@ -151,6 +152,34 @@ const lower = [tp("l1", "atomic habits ch 1", "q1"), tp("l2", "atomic habits ch 
 ok(arcSuggestion("m1", lower, sugSessions, [], "2026-10-27")?.title === "Atomic Habits", "title-cases a lowercase title");
 const noise = [tp("n1", "Check in pt 1", "q1"), tp("n2", "Check in pt 2", "q2")];
 ok(arcSuggestion("m1", noise, sugSessions, [], "2026-10-27") === null, "series words alone are not a title");
+
+// Push back: the whole run of weeks moves along one.
+const pbSessions: Session[] = [
+  ...sessions,
+  { id: "s29", meetingId: "m1", date: "2026-10-29" },
+  { id: "s12n", meetingId: "m1", date: "2026-11-12" },
+];
+const pbTopics = [
+  tp("p1", "Budget", "s29"),
+  tp("p2", "Hiring plan", "s29"),
+  tp("p3", "Q4 review", "s12n"),
+  { ...tp("p4", "Done already", "s29"), status: "covered" } as Topic,
+  tp("p5", "Someone else's", "s29", "m2"),
+];
+const pb = pushBackPlan(meeting, pbSessions, pbTopics, "2026-10-29", today);
+const dest = (id: string) => pb.moves.find((m) => m.topicId === id);
+ok(pb.moves.length === 3 && pb.weeks === 2, `moves every open item in each week (got ${pb.moves.length}/${pb.weeks})`);
+ok(dest("p1")?.toDate === "2026-11-12" && dest("p1")?.toSessionId === "s12n", "this week's items go to the next meeting, past the skipped 5th");
+ok(dest("p3")?.toDate === "2026-11-19" && dest("p3")?.toSessionId === null, "the next week's go to the one after, booked if need be");
+ok(!dest("p4"), "covered items stay where they happened");
+ok(!dest("p5"), "other meetings are untouched");
+ok(pushBackPlan(meeting, pbSessions, [], "2026-10-29", today).moves.length === 0, "nothing to move, nothing moves");
+
+// A week pushed back holds no arc step: the arc waits.
+const pbSlots = plannedSlots(meeting, pbSessions, [], today, 6);
+const waiting = arcPlan({ ...arc, passedIn: ["s29"] }, pbSlots);
+ok(!waiting.get("2026-10-29"), "the pushed week has no step");
+ok(waiting.get("2026-11-12")?.[0]?.step.id === "c4", "the step waits for the next meeting");
 
 if (fails.length) {
   console.error(`arcs.check: ${fails.length}/${checks} failed`);

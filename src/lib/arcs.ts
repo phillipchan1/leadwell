@@ -120,6 +120,8 @@ export function arcPlan(arc: Arc, slots: Slot[]): Map<string, PlannedStep[]> {
       continue;
     }
     if (slot.past || slot.date < arc.startsOn) continue;
+    // A week pushed back holds no step: the arc waits for the next one.
+    if (slot.sessionId && arc.passedIn?.includes(slot.sessionId)) continue;
     if (arc.status !== "active" || start < 0) continue;
     if (k % every === 0) {
       const index = start + k / every;

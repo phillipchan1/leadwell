@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { pushBackWeek } from "./pushBack";
 import type { Session, TrackedMeeting } from "../types";
 import {
   RHYTHM_LABEL,
@@ -356,11 +357,22 @@ function OccurrenceWhen({
                   Move back
                 </button>
               )}
+              {changeable && (
+                <button
+                  type="button"
+                  onClick={() => pushBackWeek(meeting.id, from, false)}
+                  className={quiet}
+                  title="This week's items move to the next meeting, and every later week's move along one"
+                >
+                  Push back a week
+                </button>
+              )}
               {changeable && recurring && !extra && (
                 <button
                   type="button"
-                  onClick={() => skipOccurrence(meeting.id, from)}
+                  onClick={() => pushBackWeek(meeting.id, from, true)}
                   className={quiet}
+                  title="Not meeting this week: its items, and every later week's, move along one"
                 >
                   Skip this week
                 </button>

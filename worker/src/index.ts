@@ -11,7 +11,7 @@ import { assertNoClientKey, proxyOpenAI, sanitizeOpenAIBody } from "./openai.ts"
 import type { Env } from "./env.ts";
 import { authOf, finishRequest, sqlOf, type WorkerContext, type WorkerVars } from "./request.ts";
 import { stripGetSessionToken } from "./sessionBody.ts";
-import { bookQuery, searchBooks } from "./books.ts";
+import { bookQuery, chaptersFor, searchBooks, workId } from "./books.ts";
 import { applySync, loadTables, wipeUser } from "./store.ts";
 import {
   ShareError,
@@ -203,6 +203,19 @@ app.get("/api/books", async (c) => {
   } catch (err) {
     console.error("book search failed", err instanceof Error ? err.name : typeof err);
     return json({ error: "book search unavailable" }, 502);
+  }
+});
+
+app.get("/api/books/chapters", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  const work = workId(c.req.query("work"));
+  if (!work) return json({ error: "unknown book" }, 400);
+  try {
+    return json((await chaptersFor(work)) ?? { chapters: [] });
+  } catch (err) {
+    console.error("chapter lookup failed", err instanceof Error ? err.name : typeof err);
+    return json({ error: "chapter lookup unavailable" }, 502);
   }
 });
 

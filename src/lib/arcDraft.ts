@@ -25,18 +25,24 @@ Rules:
 - "prompts": one or two open questions to discuss in the meeting — personal, concrete, never a quiz about the content.
 - "practice": one small thing to try before the next meeting, phrased as an instruction ("Before one hard conversation this week, ask: what do I really want?").
 - Keep every string under 140 characters.
-- If you don't recognise the title, still return a reasonable plan rather than refusing.`;
+- If you don't recognise the title, still return a reasonable plan rather than refusing.
+- If the user lists the chapters, return exactly one step per listed chapter, in that order, with each "label" copied word for word.`;
 
 export async function draftArc(input: {
   title: string;
   author?: string;
   /** "1:1 with Meghan", "Frontier staff meeting" — tone for the prompts. */
   context?: string;
+  /** The book's real chapters, when known: the draft only writes Talk and Try for them. */
+  chapters?: string[];
 }): Promise<ArcDraft> {
   const user = [
     `Title: ${input.title.trim()}`,
     input.author?.trim() ? `Author: ${input.author.trim()}` : "",
     input.context?.trim() ? `Where: ${input.context.trim()}` : "",
+    input.chapters?.length
+      ? `Chapters (one step each, labels exactly as written):\n${input.chapters.map((c, i) => `${i + 1}. ${c}`).join("\n")}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
