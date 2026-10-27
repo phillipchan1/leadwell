@@ -179,7 +179,10 @@ export const SOURCE_AUTH_USERS_FN = "migration_tmp.auth_users()";
 export const SOURCE_AUTH_IDENTITIES_FN = "migration_tmp.auth_identities()";
 export const MIGRATION_READER_ROLE = "migration_reader";
 
-/** pg_dump public only. Never dump auth — those rows come from the functions. */
+/** pg_dump public only. Never dump auth — those rows come from the functions.
+ * Do not add --enable-row-security: that would COPY only rows a policy
+ * allows, and migration_reader has no policy (empty dump).
+ */
 export const PG_DUMP_PUBLIC_ARGS = [
   "--format=custom",
   "--no-owner",
@@ -342,21 +345,12 @@ ${MIGRATION_TMP_GRANTS_SQL.trim()}
 COMMIT;
 `;
 
-/** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
-export const PROVE_SUPABASE_ROLE_STUBS_SQL = `
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-    CREATE ROLE anon NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-    CREATE ROLE authenticated NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
-    CREATE ROLE service_role NOLOGIN;
-  END IF;
-END $$;
-`;
+/**
+ * Roles every Supabase dump's RLS policies / grants expect. Vanilla Postgres
+ * and empty Neon do not have these; CREATE POLICY … TO authenticated fails
+ * without them. Always stubbed as NOLOGIN on the restore target.
+ */
+export const DEFAULT_SUPABASE_ROLES = ["anon", "authenticated", "service_role"];
 
 /**
  * Local-Postgres stand-in for the prod wrappers. Same signatures as prod.
@@ -442,7 +436,9 @@ export function assertHashesMatch(src, dst, tables = CHECKSUM_TABLES) {
   }
 }
 
-/** Markdown table of per-table counts and md5 hashes. Safe for a step summary. */
+/** Markdown table of per-table counts and md5 hashes. Safe for a step summary.
+ * Must not include row data, emails, or password hashes — only counts + md5.
+ */
 export function formatChecksumReport(srcHashes, dstHashes, tables = CHECKSUM_TABLES) {
   const lines = [
     "| table | source_count | target_count | source_md5 | target_md5 | ok |",
@@ -603,19 +599,139 @@ export function quoteIdent(ident) {
   return `"${String(ident).replaceAll('"', '""')}"`;
 }
 
-/** Create the read-only source role used by the live prove harness. */
+function quoteStringLiteral(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function unquoteIdent(raw) {
+  const trimmed = String(raw).trim();
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replaceAll('""', '"');
+  }
+  return trimmed;
+}
+
+const SKIP_DUMP_ROLES = new Set([
+  "public",
+  "none",
+  "current_user",
+  "session_user",
+  "current_role",
+]);
+
+const ALLOWED_STUB_ROLE_SET = new Set(DEFAULT_SUPABASE_ROLES.map((role) => role.toLowerCase()));
+
+export function isSkippedDumpRole(name) {
+  const n = String(name).toLowerCase();
+  return !n || SKIP_DUMP_ROLES.has(n);
+}
+
+/** Drop $tag$…$tag$ bodies so CREATE FUNCTION / PROCEDURE SQL is not scanned. */
+export function stripDollarQuotedBodies(sql) {
+  return String(sql).replace(/\$([A-Za-z_][A-Za-z0-9_]*)?\$[\s\S]*?\$\1\$/g, " ");
+}
+
+function stripSqlCommentsAndBodies(sql) {
+  return stripDollarQuotedBodies(sql)
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\n]*/g, " ");
+}
+
+const DUMP_IDENT = String.raw`(?:"[^"]+"|[A-Za-z_][A-Za-z0-9_$]*)`;
+const DUMP_ROLE_LIST = new RegExp(
+  String.raw`\bTO\s+((?:${DUMP_IDENT})(?:\s*,\s*(?:${DUMP_IDENT}))*)`,
+  "i",
+);
+
+/**
+ * Roles named by CREATE POLICY … TO and privilege GRANT … ON … TO.
+ * Skips function bodies, membership GRANT role TO role, and PUBLIC /
+ * session keywords. Does not invent extras.
+ */
+export function collectRolesFromDumpSql(sql) {
+  const roles = new Set();
+  const text = stripSqlCommentsAndBodies(sql);
+  for (const raw of text.split(";")) {
+    const stmt = raw.trim();
+    if (!stmt) continue;
+    const isPolicy = /^CREATE\s+POLICY\b/i.test(stmt);
+    const isPrivilegeGrant = /^GRANT\b/i.test(stmt) && /\bON\b/i.test(stmt);
+    if (!isPolicy && !isPrivilegeGrant) continue;
+    const match = stmt.match(DUMP_ROLE_LIST);
+    if (!match) continue;
+    for (const part of match[1].split(",")) {
+      const name = unquoteIdent(part);
+      if (!isSkippedDumpRole(name)) roles.add(name);
+    }
+  }
+  return [...roles].sort();
+}
+
+export function unexpectedDumpRoles(roles) {
+  return (roles ?? []).filter((role) => !ALLOWED_STUB_ROLE_SET.has(String(role).toLowerCase()));
+}
+
+/**
+ * Always stub the three Supabase roles. Any other TO/GRANT role is a
+ * hard error — we do not create it.
+ */
+export function rolesToStubFromDumpSql(sql) {
+  const extra = unexpectedDumpRoles(collectRolesFromDumpSql(sql));
+  if (extra.length) {
+    throw new Error(
+      `dump TO/GRANT names non-allowlisted role(s): ${extra.join(", ")}. Only ${DEFAULT_SUPABASE_ROLES.join(", ")} may be stubbed.`,
+    );
+  }
+  return [...DEFAULT_SUPABASE_ROLES].sort();
+}
+
+const STUB_ROLES_DOLLAR = "$leadwell_stub_roles$";
+
+/**
+ * Idempotent NOLOGIN stubs. Safe to re-run on the dry-run scratch target
+ * and on Neon (cluster-level CREATE ROLE; IF NOT EXISTS).
+ */
+export function stubSupabaseRolesSql(roles = DEFAULT_SUPABASE_ROLES) {
+  const unique = [...new Set((roles ?? []).map((role) => String(role).trim()).filter(Boolean))].sort();
+  if (!unique.length) return "";
+  const extra = unexpectedDumpRoles(unique);
+  if (extra.length) {
+    throw new Error(
+      `refusing to stub non-allowlisted role(s): ${extra.join(", ")}. Only ${DEFAULT_SUPABASE_ROLES.join(", ")} may be stubbed.`,
+    );
+  }
+  const body = unique
+    .map((role) => {
+      const lit = quoteStringLiteral(role);
+      const ident = quoteIdent(role);
+      return `  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
+    CREATE ROLE ${ident} NOLOGIN;
+  END IF;`;
+    })
+    .join("\n");
+  return `DO ${STUB_ROLES_DOLLAR}\nBEGIN\n${body}\nEND\n${STUB_ROLES_DOLLAR};\n`;
+}
+
+/** Local stand-ins for Supabase roles so the prod REVOKE list can run in CI. */
+export const PROVE_SUPABASE_ROLE_STUBS_SQL = stubSupabaseRolesSql(DEFAULT_SUPABASE_ROLES);
+
+/** Create the read-only source role used by the live prove harness.
+ * Never ALTER … BYPASSRLS here — that must not happen on the source.
+ * Prove dumps as the table owner; this role is only for auth-function tests.
+ */
 export function proveMigrationReaderSetupSql(databaseName) {
   const db = quoteIdent(databaseName);
   const role = quoteIdent(MIGRATION_READER_ROLE);
   return `
-DO $$
+DO $leadwell_prove_reader$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${MIGRATION_READER_ROLE}') THEN
     CREATE ROLE ${role} LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
   ELSE
     ALTER ROLE ${role} WITH LOGIN PASSWORD '${MIGRATION_READER_ROLE}';
   END IF;
-END $$;
+END
+$leadwell_prove_reader$;
 GRANT CONNECT ON DATABASE ${db} TO ${role};
 GRANT USAGE ON SCHEMA public TO ${role};
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO ${role};
@@ -624,6 +740,78 @@ REVOKE ALL ON SCHEMA auth FROM PUBLIC;
 REVOKE ALL ON SCHEMA auth FROM ${role};
 ${PROVE_SUPABASE_ROLE_STUBS_SQL}
 ${PROVE_MIGRATION_TMP_FUNCTIONS_SQL}
+`;
+}
+
+/**
+ * Target-only (Neon / scratch Postgres) role used for pg_restore when RLS
+ * would otherwise block COPY. Never created on the Supabase source.
+ * Password is supplied by the caller and must never be logged.
+ */
+export const TARGET_COPY_ROLE = "leadwell_copy";
+
+export function createTargetCopyRoleSql(password, databaseName) {
+  const role = quoteIdent(TARGET_COPY_ROLE);
+  const lit = quoteStringLiteral(TARGET_COPY_ROLE);
+  const pwd = quoteStringLiteral(password);
+  const db = databaseName
+    ? `GRANT CONNECT ON DATABASE ${quoteIdent(databaseName)} TO ${role};\n`
+    : "";
+  return `DO $leadwell_copy_role$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
+    CREATE ROLE ${role} LOGIN BYPASSRLS PASSWORD ${pwd};
+  ELSE
+    ALTER ROLE ${role} WITH LOGIN BYPASSRLS PASSWORD ${pwd};
+  END IF;
+END
+$leadwell_copy_role$;
+GRANT ${role} TO CURRENT_USER;
+${db}GRANT USAGE, CREATE ON SCHEMA public TO ${role};
+`;
+}
+
+export function grantTargetCopyRoleSchemasSql(schemas = ["public", "auth"]) {
+  const role = quoteIdent(TARGET_COPY_ROLE);
+  return (
+    schemas
+      .map((schema) => `GRANT USAGE, CREATE ON SCHEMA ${quoteIdent(schema)} TO ${role};`)
+      .join("\n") + "\n"
+  );
+}
+
+export function reassignTargetCopyOwnedSql(ownerName) {
+  return `REASSIGN OWNED BY ${quoteIdent(TARGET_COPY_ROLE)} TO ${quoteIdent(ownerName)};\n`;
+}
+
+/**
+ * Explicit drop of the target-only BYPASSRLS copy role. REASSIGN first so
+ * DROP OWNED cannot remove restored tables. Never run on Supabase.
+ */
+export function disableTargetCopyRoleSql(ownerName) {
+  const role = quoteIdent(TARGET_COPY_ROLE);
+  const lit = quoteStringLiteral(TARGET_COPY_ROLE);
+  const ownerLit = quoteStringLiteral(ownerName);
+  return `-- Explicit DROP ROLE of the target-only BYPASSRLS copy role.
+-- Alternative if DROP is blocked: ALTER ROLE ${role} NOLOGIN NOBYPASSRLS;
+-- Never run this on the Supabase source.
+DO $leadwell_drop_copy$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = ${lit}) THEN
+    BEGIN
+      EXECUTE format('REASSIGN OWNED BY %I TO %I', ${lit}, ${ownerLit});
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    BEGIN
+      EXECUTE format('DROP OWNED BY %I', ${lit});
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
+    EXECUTE format('DROP ROLE %I', ${lit});
+  END IF;
+END
+$leadwell_drop_copy$;
 `;
 }
 
@@ -776,8 +964,8 @@ export function findBlankEmails(users) {
 }
 
 export function formatBlankEmailAbort(rows) {
-  const lines = rows.map((row) => `  ${row.id} ${describeSourceEmail(row.email)}`);
-  return `blank source emails:\n${lines.join("\n")}`;
+  const ids = rows.map((row) => row.id).filter(Boolean);
+  return `blank source emails: ${ids.length} user id(s): ${ids.join(", ")}`;
 }
 
 export function findCaseInsensitiveEmailDupes(users) {
@@ -795,8 +983,8 @@ export function findCaseInsensitiveEmailDupes(users) {
 }
 
 export function formatEmailDupeAbort(dupes) {
-  const lines = dupes.flatMap((group) => group.rows.map((row) => `  ${row.id} ${row.email}`));
-  return `case-insensitive email duplicates:\n${lines.join("\n")}`;
+  const ids = dupes.flatMap((group) => group.rows.map((row) => row.id)).filter(Boolean);
+  return `case-insensitive email duplicates: ${ids.length} user id(s) in ${dupes.length} group(s): ${ids.join(", ")}`;
 }
 
 export function formatSourceUsersAbort({ blanks, dupes }) {

@@ -8,7 +8,9 @@
  * SOURCE IS READ-ONLY. The script only runs pg_dump (public, never auth)
  * and COPY … TO STDOUT against SUPABASE_DB_URL. Auth rows come from
  * migration_tmp.auth_users() / migration_tmp.auth_identities() — the
- * source role has no USAGE on auth. It never ALTER/DROP/DISABLE the source.
+ * source role has no USAGE on auth. It never ALTER/DROP/DISABLE the source
+ * and never CREATE ROLE on Supabase. BYPASSRLS, if needed, is a
+ * target-only copy role that is DROP ROLE'd after checksums.
  *
  * Usage:
  *   SUPABASE_DB_URL=postgres://... NEON_DB_URL=postgres://... \
@@ -22,19 +24,31 @@
  * scripts/loopback.mjs. The live cutover (Phil, by hand) uses real Neon
  * and is not a test.
  */
+import { randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
-  closeSync,
   existsSync,
   mkdtempSync,
-  openSync,
   writeFileSync,
   readFileSync,
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { libpqCleanEnv, redactSecrets, refuseUnsafeTestUrl, sourceReadEnv } from "./loopback.mjs";
+import {
+  redactSecrets,
+  refuseUnsafeTestUrl,
+  sourceReadEnv,
+  withRoleUrl,
+} from "./loopback.mjs";
+import {
+  installSafeErrorHandlers,
+  run as runSafe,
+  runToFile as runToFileSafe,
+  safeErrorMessage,
+  safeLoggedMessage,
+  throwSafe,
+} from "./safe-cmd.mjs";
 import {
   BETTER_AUTH_TABLES_SQL,
   CHECKSUM_TABLES,
@@ -46,22 +60,29 @@ import {
   SOURCE_AUTH_IDENTITIES_FN,
   SOURCE_AUTH_USERS_FN,
   STUB_AUTH_SQL,
+  TARGET_COPY_ROLE,
   assertCountsMatch,
   assertHashesMatch,
   assertSourceUsersReady,
   contentHashQuery,
   createdSince,
+  createTargetCopyRoleSql,
+  disableTargetCopyRoleSql,
   dropCreatedSql,
   filterRestoreToc,
   formatNonEmptyTargetAbort,
+  grantTargetCopyRoleSchemasSql,
   isNonEmptyTargetObject,
   loadBetterAuthUsersSql,
   loadStubAuthUsersSql,
   parseAuthUsersCsv,
   parseHashes,
   parseObjectList,
+  reassignTargetCopyOwnedSql,
+  rolesToStubFromDumpSql,
   sourceAuthIdentitiesHashQuery,
   sourceAuthUsersHashQuery,
+  stubSupabaseRolesSql,
   targetBetterAuthUsersHashQuery,
 } from "./migrate-users.lib.mjs";
 
@@ -69,38 +90,33 @@ const dryRun = process.argv.includes("--dry-run");
 const source = process.env.SUPABASE_DB_URL || process.env.SOURCE_DATABASE_URL || "";
 const target = process.env.NEON_DB_URL || process.env.TARGET_DATABASE_URL || "";
 const isTest = process.env.LEADWELL_MIGRATE_TEST === "1";
+const extraRedact = [];
+
+function redact(text) {
+  let out = redactSecrets(String(text));
+  for (const secret of extraRedact) {
+    if (!secret) continue;
+    out = out.split(secret).join("***");
+  }
+  return out;
+}
+
+function databaseNameFromUrl(url) {
+  try {
+    return decodeURIComponent(new URL(url).pathname.replace(/^\//, "").replace(/\/$/, ""));
+  } catch {
+    return "";
+  }
+}
+
+installSafeErrorHandlers();
 
 function run(cmd, args, opts = {}) {
-  const { env, ...rest } = opts;
-  const res = spawnSync(cmd, args, {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-    maxBuffer: 64 * 1024 * 1024,
-    ...rest,
-    env: libpqCleanEnv(env ?? process.env),
-  });
-  if (res.status !== 0) {
-    const err = (res.stderr || res.stdout || "").trim();
-    throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
-  }
-  return res.stdout;
+  return runSafe(cmd, args, { ...opts, redact });
 }
 
 function runToFile(cmd, args, file) {
-  const fd = openSync(file, "w");
-  try {
-    const res = spawnSync(cmd, args, {
-      encoding: "utf8",
-      stdio: ["ignore", fd, "pipe"],
-      env: sourceReadEnv(),
-    });
-    if (res.status !== 0) {
-      const err = (res.stderr || "").trim();
-      throw new Error(redactSecrets(`${cmd} failed (${res.status}): ${err}`));
-    }
-  } finally {
-    closeSync(fd);
-  }
+  return runToFileSafe(cmd, args, file, { env: sourceReadEnv(), redact });
 }
 
 function toolMajor(bin) {
@@ -125,7 +141,7 @@ function serverMajor(url) {
     { env: sourceReadEnv() },
   );
   const n = Number(String(out).trim());
-  if (!Number.isFinite(n) || n < 10000) throw new Error(`unparsable server_version_num: ${out}`);
+  if (!Number.isFinite(n) || n < 10000) throwSafe("unparsable server_version_num");
   return Math.floor(n / 10000);
 }
 
@@ -140,14 +156,14 @@ function resolvePgBin(name, major) {
     if (bin !== name && !existsSync(bin)) continue;
     if (toolMajor(bin) === major) return bin;
   }
-  throw new Error(
+  throwSafe(
     `${name} matching Postgres ${major} not found. Install postgresql-client-${major} (or set PG_BIN).`,
   );
 }
 
 function needBin(name) {
   const res = spawnSync(name, ["--version"], { encoding: "utf8" });
-  if (res.status !== 0) throw new Error(`Missing ${name}. Install PostgreSQL client tools.`);
+  if (res.status !== 0) throwSafe(`Missing ${name}. Install PostgreSQL client tools.`);
 }
 
 function psql(url, extraArgs, sql) {
@@ -162,7 +178,8 @@ const DRY_RUN_LINES = [
   "dry-run: would pg_dump public (exclude auth) and COPY migration_tmp.auth_users() / migration_tmp.auth_identities() from SUPABASE_DB_URL (read-only)",
   "dry-run: would abort before any Neon write if an email is blank or lower(email) is duplicated",
   "dry-run: would refuse a non-empty target (any user table/function/enum/type in public or auth)",
-  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() on NEON_DB_URL",
+  "dry-run: would CREATE EXTENSION IF NOT EXISTS pgcrypto, then stub auth.users + auth.uid() and NOLOGIN roles (anon, authenticated, service_role) on NEON_DB_URL",
+  "dry-run: would CREATE a target-only BYPASSRLS copy role on NEON_DB_URL (never on Supabase) and DROP ROLE it after checksums",
   "dry-run: would pg_restore --exit-on-error with EXTENSION entries filtered out",
   'dry-run: would insert auth.users into Better Auth "user" (same ids); magic-link uses that email (Google identities are not mapped)',
   "dry-run: would compare per-table row counts and content hashes and abort on mismatch",
@@ -175,12 +192,12 @@ if (dryRun && !source && !target) {
 }
 
 if (!source || !target) {
-  console.error("Set SUPABASE_DB_URL and NEON_DB_URL (or pass --dry-run).");
+  console.error(safeLoggedMessage("Set SUPABASE_DB_URL and NEON_DB_URL (or pass --dry-run)."));
   process.exit(2);
 }
 
 if (source === target) {
-  console.error("SUPABASE_DB_URL and NEON_DB_URL must be different. Source is read-only.");
+  console.error(safeLoggedMessage("SUPABASE_DB_URL and NEON_DB_URL must be different. Source is read-only."));
   process.exit(2);
 }
 
@@ -220,7 +237,11 @@ try {
   );
 
   console.log("pre-checking source emails (read-only)…");
-  assertSourceUsersReady(parseAuthUsersCsv(csv));
+  try {
+    assertSourceUsersReady(parseAuthUsersCsv(csv));
+  } catch (err) {
+    throwSafe(err instanceof Error ? err.message : err);
+  }
 
   if (dryRun) {
     console.log(`dry-run: dump at ${dumpPath} (${readFileSync(dumpPath).length} bytes)`);
@@ -235,12 +256,27 @@ try {
   console.log("checking target is empty…");
   const before = parseObjectList(psql(target, ["-tA"], LIST_USER_OBJECTS_TEXT_SQL));
   const dirty = before.filter(isNonEmptyTargetObject);
-  if (dirty.length) throw new Error(formatNonEmptyTargetAbort(dirty));
+    if (dirty.length) throwSafe(formatNonEmptyTargetAbort(dirty));
 
   let wroteTarget = false;
+  let copyRoleCreated = false;
+  let ownerName = "";
   try {
-    console.log("ensuring pgcrypto on Neon (target only)…");
+    ownerName = String(psql(target, ["-tA"], "SELECT current_user")).trim();
+    if (!ownerName) throwSafe("could not read target current_user");
+
+    const copyPassword = randomBytes(24).toString("base64url");
+    extraRedact.push(copyPassword);
+
+    console.log("creating target-only BYPASSRLS copy role (never on source)…");
     wroteTarget = true;
+    const copySqlPath = join(dir, "target_copy_role.sql");
+    writeFileSync(copySqlPath, createTargetCopyRoleSql(copyPassword, databaseNameFromUrl(target)));
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", copySqlPath]);
+    rmSync(copySqlPath, { force: true });
+    copyRoleCreated = true;
+
+    console.log("ensuring pgcrypto on Neon (target only)…");
     writeFileSync(join(dir, "required_ext.sql"), REQUIRED_EXTENSIONS_SQL);
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", join(dir, "required_ext.sql")]);
 
@@ -249,6 +285,19 @@ try {
     const stubUsersPath = join(dir, "load_stub_users.sql");
     writeFileSync(stubUsersPath, loadStubAuthUsersSql(usersPath));
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", stubUsersPath]);
+    writeFileSync(join(dir, "copy_schema_grants.sql"), grantTargetCopyRoleSchemasSql(["public", "auth"]));
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", join(dir, "copy_schema_grants.sql")]);
+
+    const schemaSqlPath = join(dir, "dump.schema.sql");
+    run(pgRestore, ["--schema-only", `--file=${schemaSqlPath}`, dumpPath]);
+    const stubRoles = rolesToStubFromDumpSql(readFileSync(schemaSqlPath, "utf8"));
+    const stubRolesPath = join(dir, "stub_roles.sql");
+    writeFileSync(stubRolesPath, stubSupabaseRolesSql(stubRoles));
+    console.log(`creating stub roles (${stubRoles.join(", ")}) as NOLOGIN on target…`);
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", stubRolesPath]);
+
+    const copyTarget = withRoleUrl(target, TARGET_COPY_ROLE, copyPassword);
+    extraRedact.push(copyTarget);
 
     console.log("restoring into Neon…");
     const tocPath = join(dir, "restore.toc");
@@ -262,9 +311,11 @@ try {
       "-L",
       filteredTocPath,
       "--dbname",
-      target,
+      copyTarget,
       dumpPath,
     ]);
+    writeFileSync(join(dir, "reassign_copy.sql"), reassignTargetCopyOwnedSql(ownerName));
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", join(dir, "reassign_copy.sql")]);
     run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", betterAuthPath]);
 
     console.log('mapping auth.users → "user" (one transaction)…');
@@ -306,10 +357,23 @@ try {
     console.log(
       `  auth_identities (source via ${SOURCE_AUTH_IDENTITIES_FN}): n=${srcIdent.auth_identities?.n ?? "?"} hash=${srcIdent.auth_identities?.hash ?? "?"}`,
     );
+
+    console.log("dropping target BYPASSRLS copy role (explicit DROP ROLE)…");
+    writeFileSync(join(dir, "drop_copy_role.sql"), disableTargetCopyRoleSql(ownerName));
+    run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", join(dir, "drop_copy_role.sql")]);
+    copyRoleCreated = false;
     console.log("migration ok");
   } catch (err) {
+    if (copyRoleCreated && ownerName) {
+      try {
+        writeFileSync(join(dir, "drop_copy_role.sql"), disableTargetCopyRoleSql(ownerName));
+        run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-f", join(dir, "drop_copy_role.sql")]);
+      } catch (dropErr) {
+        console.error(safeErrorMessage(dropErr));
+      }
+    }
     if (wroteTarget) {
-      console.error("load failed — dropping objects this run created…");
+      console.error(safeLoggedMessage("load failed — dropping objects this run created…"));
       const after = parseObjectList(psql(target, ["-tA"], LIST_USER_OBJECTS_TEXT_SQL));
       const created = createdSince(before, after);
       const cleanupPath = join(dir, "cleanup_this_run.sql");

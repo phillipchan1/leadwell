@@ -68,11 +68,21 @@ export function githubAddMaskLines(value) {
       }
     }
     if (u.username) add(u.username);
+    if (u.hostname) add(u.hostname);
+    if (u.host) add(u.host);
     if (u.username && u.password) add(`${u.username}:${u.password}`);
   } catch {
     /* not a URL — still mask the raw value */
   }
   return lines;
+}
+
+/** Rewrite userinfo for a target-only role. Never log the result. */
+export function withRoleUrl(url, role, password) {
+  const u = new URL(String(url));
+  u.username = String(role);
+  u.password = String(password);
+  return u.href;
 }
 
 function parseConnectionString(url) {
