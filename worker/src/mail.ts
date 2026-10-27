@@ -7,9 +7,9 @@ export function authEmailFrom(env: Pick<Env, "AUTH_EMAIL_FROM">): string {
 }
 
 export function magicLinkEmail(opts: { url: string }): { subject: string; text: string; html: string } {
-  const subject = "Your LeadWell sign-in link";
-  const text = `Sign in to LeadWell:\n${opts.url}\n\nThis link expires in a few minutes. If you did not ask for it, ignore this email.`;
-  const html = `<p>Sign in to LeadWell:</p><p><a href="${opts.url}">Open LeadWell</a></p><p>This link expires in a few minutes. If you did not ask for it, ignore this email.</p>`;
+  const subject = "Your Polarch sign-in link";
+  const text = `Sign in to Polarch:\n${opts.url}\n\nThis link expires in a few minutes. If you did not ask for it, ignore this email.`;
+  const html = `<p>Sign in to Polarch:</p><p><a href="${opts.url}">Open Polarch</a></p><p>This link expires in a few minutes. If you did not ask for it, ignore this email.</p>`;
   return { subject, text, html };
 }
 

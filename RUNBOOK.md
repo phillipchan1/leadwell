@@ -488,22 +488,81 @@ Supabase. Optional: take a Neon branch snapshot of the empty target
 before `dry_run=false` so a failed copy can be dropped without touching
 Supabase.
 
-`vercel.json` has `"ignoreCommand": "exit 0"`. Merging this branch to
-`master` does **not** ship a new Vercel build. Production on Vercel stays
-the current deployment (`a147830`). That is the fallback.
+`vercel.json` has `"ignoreCommand": "exit 0"`. Merging to `master` does
+**not** ship a new Vercel build. Production on Vercel stays deployment
+`a147830` and is the fallback:
 
-1. Point the shared URL / bookmark back at that Vercel deployment. Do not
-   delete the Worker.
-2. Sign-in stays magic-link against the intact LeadWell Supabase project
+| What | Value |
+| --- | --- |
+| Fallback URL (public) | **https://leadwell-ochre.vercel.app** |
+| Vercel project | `leadwell` (`prj_bM8EnDRKvIWbLCMfAWtSei1ZGWxw`) |
+| Deployment | `dpl_4hVVw2AQgdzJmmm1dfovs98i2w6T` (`leadwell-a2mlqhnjn-phillipchan1s-projects.vercel.app`), commit `a147830` |
+| Not the fallback | `leadwell.vercel.app` is someone else's app. `leadwell-phillipchan1s-projects.vercel.app` is the same deployment but sits behind Vercel SSO. |
+
+Vercel never served `polarch.day`. Before cutover the `polarch.day`
+Cloudflare zone had **0 DNS records**. Cutover added one thing: a Worker
+custom domain `polarch.day` → Worker `leadwell`, which auto-created a
+proxied `AAAA polarch.day 100::` record.
+
+### Rollback steps (in order)
+
+0. **Read-only Neon dump first.** Writes made on Neon after cutover are
+   not on Supabase, so save them before anything else so Phil's edits can
+   be re-entered by hand. Run from a machine that can reach Postgres on
+   5432 (not the agent box). Use the direct (non-pooler) Neon URL, in a
+   read-only transaction, to a 0600 file outside the repo. Never upload it
+   as an artifact or attach it anywhere.
+
+   ```bash
+   umask 077
+   PGOPTIONS='-c default_transaction_read_only=on' \
+     pg_dump "$NEON_DIRECT_URL" --format=custom --no-owner --no-privileges \
+       --schema=public --file "$HOME/polarch-neon-$(date +%Y%m%d-%H%M).dump"
+   pg_restore --list "$HOME"/polarch-neon-*.dump | grep -c 'TABLE DATA'   # expect 26
+   ```
+
+   Alternative with no 5432 access: in the Neon console, create a branch
+   from `main` at "now" (for example `pre-rollback-YYYYMMDD`). That is a
+   read-only snapshot of the same data.
+1. **Detach `polarch.day` from the Worker.** Do not delete the Worker or
+   the Hyperdrive config.
+   - Dashboard: Workers & Pages → `leadwell` → Settings → Domains & Routes
+     → `polarch.day` → Remove.
+   - Or API (account `c1f7fb7e8c746389e2c56c499805d3e1`):
+
+     ```bash
+     A=c1f7fb7e8c746389e2c56c499805d3e1
+     ID=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+       "https://api.cloudflare.com/client/v4/accounts/$A/workers/domains?hostname=polarch.day" \
+       | jq -r '.result[0].id')   # was 9a9305bff2b42336d26be42945bf4019dd59a1ea
+     curl -s -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+       "https://api.cloudflare.com/client/v4/accounts/$A/workers/domains/$ID" | jq .success
+     ```
+
+   Removing the custom domain also removes its `AAAA 100::` record, so the
+   zone goes back to 0 records (the pre-cutover state). Confirm in
+   DNS → Records.
+2. **Decide what `polarch.day` does afterward.** Pick one:
+   - (a) Leave it detached. `polarch.day` stops resolving, as it did
+     before cutover. Phil uses https://leadwell-ochre.vercel.app.
+   - (b) Redirect to Vercel. Add a proxied `AAAA polarch.day 100::`
+     record, plus a Rules → Redirect Rule: hostname equals `polarch.day`
+     → 302 to `https://leadwell-ochre.vercel.app` (preserve path).
+3. **Verify the fallback.** `curl -sI https://leadwell-ochre.vercel.app/`
+   returns 200 with title `LeadWell`. Sign in with the Supabase magic link
+   on that URL. Old polarch.day Better Auth sessions do not carry over.
+4. Sign-in stays magic-link against the intact LeadWell Supabase project
    (Vercel). No Google OAuth client was ever required for rollback.
-3. Neon and the Worker can stay; they are unused until you cut over again.
-4. **Writes made on Neon after cutover do not exist on Supabase.** Rolling
+5. Neon and the Worker stay up but unused (workers.dev URL
+   `https://leadwell.nq-morning-briefing.workers.dev`) until you cut over
+   again.
+6. **Writes made on Neon after cutover do not exist on Supabase.** Rolling
    back returns Phil to the last Supabase snapshot. Do not write back from
-   Neon to Supabase.
-5. Re-migrate later only into a **new empty** Neon database (the script
+   Neon to Supabase; re-enter edits by hand from the step 0 dump.
+7. Re-migrate later only into a **new empty** Neon database (the script
    refuses a dirty target). Discard an optional Neon branch snapshot if
    you took one before the live copy.
-6. If you applied `004_rate_limit_window_start.sql` and need to drop the
+8. If you applied `004_rate_limit_window_start.sql` and need to drop the
    fixed-window column without a full cutover rollback:
 
    ```sql

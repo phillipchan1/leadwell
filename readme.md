@@ -1,4 +1,4 @@
-# LeadWell
+# Polarch
 
 A web app that shows the teams and people you lead as a visual org-chart tree,
 with an assessment-based profile (CliftonStrengths, Enneagram, MBTI) and an AI
@@ -150,7 +150,7 @@ occurrences, which is how you plan further out without leaving the agenda.
 Meetings are addressed by a slug derived from their name (`/m/staff-meeting`,
 or `/m/sarah-kim` for an unnamed 1:1); ids still resolve and old
 `/meeting/<id>` links redirect to the slug. Each page sets its own tab title, so
-a bookmark reads "Staff meeting — LeadWell". Slugs aren't stored: renaming a
+a bookmark reads "Staff meeting — Polarch". Slugs aren't stored: renaming a
 meeting changes its address.
 
 Because a peek is not tied to the canvas, clicking a row in the People table
@@ -313,7 +313,7 @@ type TrackedMeeting = {
   floorDays?: number;                   // as_needed only — a tolerance, not a rhythm
   nextDate?: string;                    // an explicit booking always wins
   role?: "convene" | "attend";
-  trackerUrl?: string;                  // notes live outside LeadWell (Notion, a Word doc…)
+  trackerUrl?: string;                  // notes live outside Polarch (Notion, a Word doc…)
   trackerName?: string;                 // what to call it; derived from the link otherwise
 };
 
@@ -372,7 +372,7 @@ by deciding about them.
 **Notes that already live somewhere else stay there.** A meeting can carry a
 `trackerUrl` — the Notion page, the Word doc in OneDrive, the shared Google Doc
 you and that report have used for years — and it's an *and*, not an *or*: the
-rhythm, the topic board and the health read stay in LeadWell, and sessions can
+rhythm, the topic board and the health read stay in Polarch, and sessions can
 still be logged here alongside it. Only the write-up moves. Readiness stops
 claiming to know whether the last one was written up (it can't see the page)
 and says where it went instead, rather than parking that person in permanent

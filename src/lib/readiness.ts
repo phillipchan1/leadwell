@@ -553,7 +553,7 @@ export function meetingReadiness(
         : "Last one written up",
       done: writtenUp,
       detail: notesElsewhere
-        ? "Kept outside LeadWell — not checked here"
+        ? "Kept outside Polarch — not checked here"
         : writtenUp
           ? undefined
           : `${dayName(lastSession!.date)} has no notes`,

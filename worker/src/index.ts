@@ -196,6 +196,14 @@ async function fromAssets(
   return res;
 }
 
+/** Unknown API paths: JSON 404 (with API security headers), never the SPA or a 500. */
+function apiNotFound(): Response {
+  return json({ error: "not found" }, 404);
+}
+
+app.all("/api/*", () => apiNotFound());
+app.all("/functions/*", () => apiNotFound());
+
 app.all("/assets/*", (c) => fromAssets(c));
 app.all("*", (c) => fromAssets(c));
 

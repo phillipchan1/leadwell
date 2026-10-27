@@ -2941,7 +2941,7 @@ export const useStore = create<Store>((set, get) => ({
     if (DEMO) {
       // The sample org, moved to this week. Nothing to sign in to or load.
       if (get().phase === "ready") return;
-      get().hydrate(toThisWeek(seedData(), todayISO()), "demo", "demo@leadwell.app", {
+      get().hydrate(toThisWeek(seedData(), todayISO()), "demo", "demo@polarch.day", {
         fromCache: true,
       });
       return;
