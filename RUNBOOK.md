@@ -29,14 +29,14 @@ Never put values here.
 | `AUTH_COOKIE_DOMAIN` | wrangler var | Optional cookie `Domain`. Must equal or be a parent of the `BETTER_AUTH_URL` host and must not be a public suffix (`workers.dev`, `pages.dev`, `co.uk`, …). Omit on `*.workers.dev` / `*.pages.dev` and local. |
 | `ENVIRONMENT` | `.dev.vars` only | Set to `local` on your laptop. Omit in preview/prod. |
 | `RESEND_API_KEY` | wrangler secret | Resend sending key. Worker sends magic-link mail. |
-| `AUTH_EMAIL_FROM` | wrangler var | Resend **fallback** from-address, verified in Resend (prod: `Polarch <login@usedayspring.app>`). |
+| `AUTH_EMAIL_FROM` | dashboard var only (never in `wrangler.jsonc`) | Resend **fallback** from-address, verified in Resend. Prod: `Polarch <login@usedayspring.app>`. Never a polarch.day address: polarch.day is not verified in Resend and `_dmarc.polarch.day` is `p=reject`. `worker/src/config.check.ts` fails CI if the config sets it on polarch.day. |
 | `CF_EMAIL_FROM` | wrangler var | Cloudflare Email Service from-address. Default `Polarch <login@polarch.day>`. |
 | `EMAIL` | send_email binding | Cloudflare Email Service (Workers Paid). polarch.day is onboarded for sending (cf-bounce MX/SPF, cf-bounce DKIM, `_dmarc`). Remove the binding to send via Resend only. |
 | `OPENAI_API_KEY` | wrangler secret | Server-side OpenAI key. The client must never send it. |
 | `OPENAI_MODEL` | wrangler var | Optional. Must be in the Worker allowlist (`gpt-5-mini`, `gpt-5`). Defaults to `gpt-5-mini`. |
 | `ALLOWED_EMAILS` | wrangler var | Comma-separated allowlist for sign-up and sign-in. Set to Phil's email. Empty admits nobody. Non-allowlisted magic-link requests still return `{status:true}` and do not send mail. |
 | `DATABASE_URL` | wrangler secret | Neon connection string. Used when Hyperdrive is unset (preview / local). |
-| `HYPERDRIVE` | wrangler binding | Workers Paid. Replace the placeholder id in `wrangler.jsonc` before production deploy. Local uses `localConnectionString`. |
+| `HYPERDRIVE` | wrangler binding | Workers Paid. `wrangler.jsonc` holds the prod config id `c18a2c83cf664a8d9fc9f40bcba47718` (`leadwell-neon`). Local uses `localConnectionString`; preview has none and uses `DATABASE_URL`. |
 
 ### Client (Vite)
 
@@ -82,6 +82,8 @@ npm run dev
 ```
 
 Or `npm run cf:dev` after a Vite build (Worker serves `dist` + `/api`).
+
+**`wrangler dev` / `cf:dev` sends real email.** The `EMAIL` send_email binding is `remote: true`, so a magic-link request in local dev goes out through Cloudflare Email Service from login@polarch.day to the real address (account `CLOUDFLARE_API_TOKEN` needs Email Sending: Edit). Only allowlisted addresses get mail. Use a bot inbox you own, never a stranger's address.
 
 Apply `worker/schema/001_leadwell.sql`, `002_better_auth.sql`,
 `003_rate_limit.sql`, then `004_rate_limit_window_start.sql` to a local
@@ -407,14 +409,20 @@ DROP SCHEMA migration_tmp CASCADE;
    `npx wrangler domains add polarch.day`). Then set:
    - `BETTER_AUTH_URL` = `https://polarch.day`
    - `AUTH_COOKIE_DOMAIN` = `polarch.day` (no leading dot)
-   - `AUTH_EMAIL_FROM` = `login@polarch.day` (verify the domain in Resend)
+   - `AUTH_EMAIL_FROM` = `Polarch <login@usedayspring.app>` (dashboard only; the Resend fallback. Never polarch.day)
    - `TRUSTED_ORIGINS` only if you still serve `www` or `*.workers.dev`
    Do not rename the Worker, package, or repo.
-5. In Resend, verify **polarch.day** and send from `login@polarch.day`.
+5. Primary sign-in mail is Cloudflare Email Service from `login@polarch.day`
+   (polarch.day onboarded under Email Sending). Resend stays the fallback on
+   usedayspring.app; do not move Resend to polarch.day.
    No Google OAuth client. No Google redirect URI.
 6. Run the migrate script against the empty Neon database (laptop, above) or
    the **cutover-migrate** workflow with `dry_run=false`.
-7. `npm run build && wrangler deploy` (or `--env preview` first).
+7. `npm run cf:deploy` (= `npm run build && wrangler deploy --keep-vars`), or
+   `npm run cf:preview` first. `keep_vars: true` in `wrangler.jsonc` also keeps
+   dashboard vars on a bare `wrangler deploy`. Check first with
+   `npx wrangler deploy --dry-run`: it must list `HYPERDRIVE (c18a2c83…)`,
+   `EMAIL (senders: login@polarch.day)` and no `AUTH_EMAIL_FROM`.
 8. Open `https://polarch.day`. Request a magic-link to Phil's email. Data
    should be Phil's existing org (same `user.id` as the Supabase auth UUID).
 9. Smoke-test. The shared URL is `https://polarch.day`.
@@ -586,7 +594,10 @@ proxied `AAAA polarch.day 100::` record.
 
 ## Sign-in email: Cloudflare Email Service
 
-- Deploy keeps the dashboard vars: `wrangler deploy --keep-vars` so prod `AUTH_EMAIL_FROM` (Resend fallback) stays `Polarch <login@usedayspring.app>`.
+- Prod deploy: `npm run cf:deploy`. `keep_vars: true` keeps dashboard-only vars (`AUTH_EMAIL_FROM`, `BETTER_AUTH_URL`, `AUTH_COOKIE_DOMAIN`). It does **not** protect any var written in `wrangler.jsonc`: config vars always overwrite the dashboard. That is why `AUTH_EMAIL_FROM` is not in the config, so prod keeps `Polarch <login@usedayspring.app>` for the Resend fallback.
+- Before Oct 27 2026, prod was deployed from a generated config (`hyperdrive.id` and vars patched outside the repo). The repo config now carries the real Hyperdrive id, so the repo deploy is the prod deploy.
+- If the binding throws after Cloudflare already accepted the message, Resend also sends, so the user can get two links. Either link works; acceptable.
+- `allowed_destination_addresses` is deliberately not set. It only allows Email Routing *verified* destinations, so every allowlisted user would have to verify with Cloudflare first, and new users would silently fail over to Resend. `ALLOWED_EMAILS` plus the rate limit already bound who gets mail.
 - A binding failure logs `magic-link cloudflare send failed, falling back to resend {kind:"cf_email"}` (no email, no token).
 - Rollback: `wrangler rollback <previous version id>` (Resend-only code). DNS can stay; the sending subdomain can be disabled at
   `DELETE /zones/<zone>/email/sending/subdomains/<id>` if needed.

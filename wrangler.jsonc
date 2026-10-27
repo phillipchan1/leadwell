@@ -4,6 +4,10 @@
   "main": "worker/src/index.ts",
   "compatibility_date": "2026-01-15",
   "compatibility_flags": ["nodejs_compat"],
+  // Every deploy keeps dashboard-only vars (BETTER_AUTH_URL, AUTH_COOKIE_DOMAIN,
+  // AUTH_EMAIL_FROM). keep_vars does NOT protect vars listed below, so never
+  // put AUTH_EMAIL_FROM here (worker/src/config.check.ts enforces it).
+  "keep_vars": true,
   // Static Vite build. Deep links fall back to index.html (same as Vercel SPA).
   "assets": {
     "directory": "./dist",
@@ -19,16 +23,15 @@
   // ENVIRONMENT=local is the only unset-URL fallback.
   "vars": {
     "OPENAI_MODEL": "gpt-5-mini",
-    "AUTH_EMAIL_FROM": "login@polarch.day",
     "CF_EMAIL_FROM": "Polarch <login@polarch.day>",
     "ALLOWED_EMAILS": "phillipchan1@gmail.com"
   },
-  // Replace `id` with a real Hyperdrive config before `wrangler deploy`.
-  // Hyperdrive is Workers Paid. Local / Free preview uses DATABASE_URL.
+  // Prod Hyperdrive `leadwell-neon` (an id, not a secret). Local dev uses
+  // localConnectionString; preview has no Hyperdrive and uses DATABASE_URL.
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "00000000000000000000000000000000",
+      "id": "c18a2c83cf664a8d9fc9f40bcba47718",
       "localConnectionString": "postgresql://postgres:postgres@127.0.0.1:5432/leadwell"
     }
   ],
@@ -49,7 +52,6 @@
       "preview_urls": true,
       "vars": {
         "OPENAI_MODEL": "gpt-5-mini",
-        "AUTH_EMAIL_FROM": "login@polarch.day",
         "CF_EMAIL_FROM": "Polarch <login@polarch.day>",
         "ALLOWED_EMAILS": "phillipchan1@gmail.com"
       },
