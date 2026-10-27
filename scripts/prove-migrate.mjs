@@ -80,10 +80,9 @@ import {
   usesIsShaPinned,
 } from "./guard-public-ci.mjs";
 import {
-  GENERIC_SAFE_ERROR,
   formatSafeCommandError,
   sanitizePgFailureText,
-  stripPgErrorValues,
+  sqlstateClassMessage,
 } from "./safe-cmd.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -169,22 +168,51 @@ const leakyPg = [
 ].join("\n");
 const sanitized = sanitizePgFailureText(leakyPg);
 ok(sanitized.sqlstate === "23505", "sanitizer keeps SQLSTATE");
-ok(/ERROR:/i.test(sanitized.firstError), "sanitizer keeps the first ERROR line");
-ok(!/phil@/i.test(sanitized.firstError), "sanitizer strips emails from ERROR");
-ok(!/Key \(email\)=\(phil@/i.test(sanitized.firstError), "sanitizer strips Key (...)=(...)");
+ok(sanitized.firstError === sqlstateClassMessage("23505"), "unique ERROR without : \" uses the SQLSTATE class message");
+ok(sanitized.firstError === "integrity constraint violation", "23505 class is integrity constraint violation");
+ok(!/phil@/i.test(sanitized.firstError), "class message has no email");
 ok(!/DETAIL|CONTEXT|HINT|WHERE|LINE |Failing row/i.test(sanitized.firstError), "sanitizer drops DETAIL and friends");
 const safeFail = formatSafeCommandError("psql", 1, leakyPg, "");
 ok(!/phil@/i.test(safeFail), "safe command error has no email");
 ok(/psql failed \(1\)/.test(safeFail), "safe command error names cmd and exit");
 ok(/SQLSTATE 23505/.test(safeFail), "safe command error includes SQLSTATE");
 ok(!logLooksLikeRowData(safeFail), "safe command error is not row data");
+
+const quotedValue = 'ERROR:  invalid input syntax for type text: "foo\\"bar@example.com"\nSQLSTATE 22P02';
+const quotedSan = sanitizePgFailureText(quotedValue);
+ok(quotedSan.sqlstate === "22P02", "quoted-value case keeps SQLSTATE");
+ok(quotedSan.firstError === "ERROR:  invalid input syntax for type text", "cuts ERROR at first : \"");
+ok(!/foo|bar@|example\.com/.test(quotedSan.firstError), "quoted value with inner quotes does not leak");
+
+const trailingBs = "ERROR:  invalid input syntax for type text: \"foo\\\nSQLSTATE 22P02";
+const bsSan = sanitizePgFailureText(trailingBs);
+ok(bsSan.firstError === "ERROR:  invalid input syntax for type text", "cuts before a trailing-backslash value");
+ok(!/foo/.test(bsSan.firstError), "trailing backslash value does not leak");
+
+const newlineValue = 'ERROR:  invalid input syntax for type text: "foo\nphil@example.com"\nSQLSTATE 22P02';
+const nlSan = sanitizePgFailureText(newlineValue);
+ok(nlSan.firstError === "ERROR:  invalid input syntax for type text", "cuts before a value that contains a newline");
+ok(!/phil@|foo/.test(nlSan.firstError), "newline inside a quoted value does not leak");
+
+const parenValue = 'ERROR:  new row for relation "t" violates check constraint: "x)phil@example.com"\nSQLSTATE 23514';
+const parenSan = sanitizePgFailureText(parenValue);
+ok(parenSan.firstError === 'ERROR:  new row for relation "t" violates check constraint', "cuts before a value with ) inside");
+ok(!/phil@|x\)/.test(parenSan.firstError), ") inside parens in the value does not leak");
+
+const raiseText = "ERROR:  RAISE leaked phil@example.com and a quote \"x\"\nSQLSTATE P0001";
+const raiseSan = sanitizePgFailureText(raiseText);
+ok(raiseSan.sqlstate === "P0001", "plpgsql RAISE keeps SQLSTATE");
+ok(raiseSan.firstError === "plpgsql error", "plpgsql RAISE without : \" uses the class message");
+ok(!/phil@|leaked/.test(raiseSan.firstError), "plpgsql RAISE text does not leak");
+
+const singleQuoted = "ERROR:  invalid input syntax for type text: 'it\\'s phil@example.com'\nSQLSTATE 22P02";
+const sqSan = sanitizePgFailureText(singleQuoted);
+ok(sqSan.firstError === "ERROR:  invalid input syntax for type text", "cuts ERROR at first : '");
+ok(!/phil@|it/.test(sqSan.firstError), "single-quoted value does not leak");
+
 ok(
-  !/\(phil@/i.test(stripPgErrorValues("DETAIL:  Key (email)=(phil@example.com) already exists.")),
-  "stripPgErrorValues removes Key values",
-);
-ok(
-  formatSafeCommandError("psql", 1, "ERROR:  boom phil@example.com leaked\n", "") === GENERIC_SAFE_ERROR,
-  "safe command error becomes generic if it still looks like row data",
+  !/phil@/i.test(formatSafeCommandError("psql", 1, "ERROR:  boom phil@example.com leaked\n", "")),
+  "ERROR with no SQLSTATE and no quote-cut uses a fixed message",
 );
 
 const hashes = parseHashes("profiles|1|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nteams|0|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n");
@@ -426,8 +454,50 @@ ok(workflow.includes("pg_restore --list") || workflow.includes("--list"), "cutov
 ok(/id:\s*backup/.test(workflow), "cutover has a named backup step");
 ok(/id:\s*leftover-copy-role/.test(workflow), "cutover has a leftover leadwell_copy always() step");
 ok(/id:\s*leftover-copy-role[\s\S]*always\(\)/.test(workflow), "leftover copy-role step is always()");
+ok(/catch\s*\{[\s\S]*console\.log\("unknown"\)/.test(workflow), "leftover-role check errors log unknown");
+ok(!/catch\s*\{[\s\S]*console\.log\("no"\)/.test(workflow), "leftover-role check errors do not log no");
 ok(workflow.includes("scripts/safe-cmd.mjs"), "cutover backup uses the shared safe runner");
-ok(workflow.includes("CUTOVER_DUMP_DIR") && workflow.includes("runner.temp"), "backup dump stays in runner.temp");
+const RUNNER_CONTEXT_RE = /\$\{\{\s*runner\./;
+function envUsesRunnerContext(env) {
+  if (!env || typeof env !== "object" || Array.isArray(env)) return false;
+  return Object.values(env).some((v) => RUNNER_CONTEXT_RE.test(String(v ?? "")));
+}
+const cutoverDoc = parseWorkflowDocument(workflow);
+const cutoverJob = cutoverDoc.jobs?.cutover;
+ok(cutoverJob && typeof cutoverJob === "object", "cutover job parses");
+ok(!envUsesRunnerContext(cutoverJob.env), "cutover job env does not use runner context");
+ok(!Object.hasOwn(cutoverJob.env ?? {}, "CUTOVER_DUMP_DIR"), "CUTOVER_DUMP_DIR is not job-level env");
+const backupStep = Array.isArray(cutoverJob.steps) ? cutoverJob.steps.find((s) => s?.id === "backup") : null;
+const deleteDumpsStep = Array.isArray(cutoverJob.steps) ? cutoverJob.steps.find((s) => s?.id === "delete-dumps") : null;
+ok(backupStep, "parsed backup step");
+ok(deleteDumpsStep, "parsed delete-dumps step");
+ok(
+  RUNNER_CONTEXT_RE.test(String(backupStep.env?.CUTOVER_DUMP_DIR ?? "")),
+  "backup step env sets CUTOVER_DUMP_DIR from runner.temp",
+);
+ok(
+  RUNNER_CONTEXT_RE.test(String(deleteDumpsStep.env?.CUTOVER_DUMP_DIR ?? "")),
+  "delete-dumps step env sets CUTOVER_DUMP_DIR from runner.temp",
+);
+ok(
+  String(backupStep.env.CUTOVER_DUMP_DIR).includes("leadwell-cutover"),
+  "backup dump stays in runner.temp/leadwell-cutover",
+);
+const badJobEnvDoc = parseWorkflowDocument(
+  [
+    "name: t",
+    "on: push",
+    "jobs:",
+    "  j:",
+    "    runs-on: ubuntu-latest",
+    "    env:",
+    '      CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover',
+    "    steps:",
+    "      - id: s",
+    "        run: echo hi",
+  ].join("\n"),
+);
+ok(envUsesRunnerContext(badJobEnvDoc.jobs.j.env), "helper flags runner context in job env");
 ok(!/leadwell-source-dump/.test(workflow), "cutover does not upload a source dump artifact");
 ok(
   /id:\s*delete-dumps[\s\S]*always\(\)/.test(workflow) ||
@@ -483,6 +553,22 @@ ok(/console\.log\(\s*` {2}\$\{table\}: source=/.test(migrateSrc), "migrate logs 
 const checksYml = readFileSync(join(root, ".github/workflows/checks.yml"), "utf8");
 ok(checksYml.includes("scripts/guard-public-ci.mjs"), "checks.yml runs the hasher");
 ok(checksYml.includes("githubAddMaskLines"), "checks.yml masks DB URLs before use");
+const checksDoc = parseWorkflowDocument(checksYml);
+const actionlintStep = Array.isArray(checksDoc.jobs?.checks?.steps)
+  ? checksDoc.jobs.checks.steps.find((s) => s?.id === "actionlint")
+  : null;
+ok(actionlintStep, "checks.yml has an actionlint step");
+ok(!actionlintStep.uses, "actionlint is a run step (binary downloaded, not an unpinned action)");
+ok(/sha256sum --check/.test(String(actionlintStep.run)), "actionlint verifies the binary checksum");
+ok(
+  /^[0-9a-f]{64}$/i.test(String(actionlintStep.env?.ACTIONLINT_SHA256 ?? "")),
+  "actionlint pins the linux amd64 tarball by SHA-256",
+);
+ok(/actionlint_\$\{ACTIONLINT_VERSION\}_linux_amd64\.tar\.gz/.test(String(actionlintStep.run)), "actionlint downloads the official linux amd64 release");
+ok(/\bactionlint\b/.test(String(actionlintStep.run)), "actionlint step runs actionlint");
+for (const [jobName, job] of Object.entries(checksDoc.jobs || {})) {
+  ok(!envUsesRunnerContext(job?.env), `checks.yml ${jobName} job env does not use runner context`);
+}
 ok(workflow.includes("githubAddMaskLines"), "cutover masks DB URLs before use");
 ok(workflow.includes("default_transaction_read_only=on"), "source dump sets default_transaction_read_only");
 ok(workflow.includes("SOURCE_DATABASE_URL") && workflow.includes("NEON_DATABASE_URL"), "cutover uses named secrets");
@@ -676,6 +762,11 @@ ok(codeowners.includes("scripts/guard-public-ci.allowlist.json"), "CODEOWNERS co
 ok(codeowners.includes("scripts/guard-public-ci.mjs"), "CODEOWNERS covers the hasher");
 ok(codeowners.includes("scripts/regen-public-ci-allowlist.mjs"), "CODEOWNERS covers the regen script");
 ok(codeowners.includes("scripts/prove-migrate.mjs"), "CODEOWNERS covers prove-migrate");
+ok(codeowners.includes("scripts/safe-cmd.mjs"), "CODEOWNERS covers safe-cmd");
+ok(codeowners.includes("scripts/migrate-supabase-to-neon.mjs"), "CODEOWNERS covers the migrate script");
+ok(codeowners.includes("scripts/cutover-verify.mjs"), "CODEOWNERS covers cutover-verify");
+ok(codeowners.includes("scripts/migrate-users.lib.mjs"), "CODEOWNERS covers migrate-users.lib");
+ok(codeowners.includes("scripts/loopback.mjs"), "CODEOWNERS covers loopback");
 ok(codeowners.includes("package.json"), "CODEOWNERS covers package.json");
 ok(codeowners.includes("package-lock.json"), "CODEOWNERS covers the lockfile");
 ok(codeowners.includes(".github/CODEOWNERS"), "CODEOWNERS covers itself");

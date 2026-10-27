@@ -1,7 +1,8 @@
 /**
  * Safe subprocess + error logging for public-repo cutover.
  * Never echo raw stdout/stderr. Failure text is the command name, exit
- * code, SQLSTATE if present, and the first ERROR line with values stripped.
+ * code, SQLSTATE if present, and either the ERROR line cut before the
+ * first quoted value or a fixed message for the SQLSTATE class.
  */
 import { spawnSync } from "node:child_process";
 import { closeSync, openSync } from "node:fs";
@@ -11,23 +12,24 @@ import { assertSafeMigrateLog, logLooksLikeRowData } from "./guard-public-ci.mjs
 
 export const GENERIC_SAFE_ERROR = "command failed (details omitted; log looked like row data)";
 
-/** Replace quoted literals, Key (...)=(...), and parenthesised value lists. */
-export function stripPgErrorValues(line) {
-  let s = String(line);
-  s = s.replace(/\bKey\s*\([^)]*\)\s*=\s*\([^)]*\)/gi, "Key (...)");
-  s = s.replace(/'(?:[^']|'')*'/g, "'…'");
-  s = s.replace(/\$[A-Za-z0-9_]*\$[\s\S]*?\$[A-Za-z0-9_]*\$/g, "$$…$$");
-  s = s.replace(/"(?:[^"\\]|\\.)*"/g, '"…"');
-  s = s.replace(/\([^)]*\)/g, "(…)");
-  return s;
-}
+/** Fixed text per SQLSTATE class — used when the ERROR line has no safe cut. */
+export const SQLSTATE_CLASS_MESSAGES = Object.freeze({
+  "08": "connection exception",
+  22: "data exception",
+  23: "integrity constraint violation",
+  28: "invalid authorization",
+  40: "transaction rollback",
+  42: "syntax error or access rule violation",
+  53: "insufficient resources",
+  57: "operator intervention",
+  P0: "plpgsql error",
+  XX: "internal error",
+});
 
-function isDroppedPgLine(line) {
-  const s = String(line);
-  if (/^\s*(DETAIL|CONTEXT|LINE|HINT|WHERE)\s*:/i.test(s)) return true;
-  if (/Failing row contains/i.test(s)) return true;
-  if (/^\s*Command was:/i.test(s)) return true;
-  return false;
+export function sqlstateClassMessage(sqlstate) {
+  if (!sqlstate) return "query failed";
+  const cls = String(sqlstate).slice(0, 2).toUpperCase();
+  return SQLSTATE_CLASS_MESSAGES[cls] ?? "query failed";
 }
 
 export function extractSqlstate(text) {
@@ -39,16 +41,35 @@ export function extractSqlstate(text) {
   );
 }
 
-/** First ERROR / pg_restore error line, values stripped. Drop DETAIL and friends. */
+/**
+ * ERROR: prefix plus text up to the first `: "` or `: '` after ERROR:.
+ * Returns null when there is no such cut (caller uses the SQLSTATE class).
+ */
+export function cutErrorLineAtQuotedValue(text) {
+  const s = String(text ?? "");
+  const errorAt = s.search(/ERROR:/i);
+  if (errorAt < 0) return null;
+  const fromError = s.slice(errorAt).split(/\r?\n/, 1)[0];
+  const head = fromError.match(/^ERROR:/i)?.[0] ?? "ERROR:";
+  const rest = fromError.slice(head.length);
+  const cutDq = rest.indexOf(': "');
+  const cutSq = rest.indexOf(": '");
+  const cuts = [cutDq, cutSq].filter((i) => i >= 0);
+  if (!cuts.length) return null;
+  const cut = Math.min(...cuts);
+  return `${head}${rest.slice(0, cut)}`.replace(/\r?\n[\s\S]*$/, "").trimEnd();
+}
+
+/**
+ * SQLSTATE plus a safe ERROR prefix (cut at the first quoted value) or a
+ * fixed message for the SQLSTATE class. Never regex-strips values.
+ */
 export function sanitizePgFailureText(text) {
   const raw = String(text ?? "");
   const sqlstate = extractSqlstate(raw);
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim() && !isDroppedPgLine(line));
-  const errorLine =
-    lines.find((line) => /^\s*(?:ERROR|pg_restore:\s*error):/i.test(line)) ??
-    lines.find((line) => /ERROR:/i.test(line)) ??
-    "";
-  return { sqlstate, firstError: errorLine ? stripPgErrorValues(errorLine) : "" };
+  const cut = cutErrorLineAtQuotedValue(raw);
+  const firstError = cut ?? (sqlstate ? sqlstateClassMessage(sqlstate) : "query failed");
+  return { sqlstate, firstError };
 }
 
 /** If the text looks like row data, replace it with a generic message. */

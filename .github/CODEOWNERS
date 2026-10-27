@@ -3,6 +3,11 @@ scripts/guard-public-ci.allowlist.json @phillipchan1
 scripts/guard-public-ci.mjs @phillipchan1
 scripts/regen-public-ci-allowlist.mjs @phillipchan1
 scripts/prove-migrate.mjs @phillipchan1
+scripts/safe-cmd.mjs @phillipchan1
+scripts/migrate-supabase-to-neon.mjs @phillipchan1
+scripts/cutover-verify.mjs @phillipchan1
+scripts/migrate-users.lib.mjs @phillipchan1
+scripts/loopback.mjs @phillipchan1
 package.json @phillipchan1
 package-lock.json @phillipchan1
 .github/CODEOWNERS @phillipchan1

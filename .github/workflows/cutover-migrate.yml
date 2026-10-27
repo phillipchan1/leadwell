@@ -49,7 +49,6 @@ jobs:
       SOURCE_DATABASE_URL: ${{ secrets.SOURCE_DATABASE_URL }}
       NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
       DRY_RUN: ${{ inputs.dry_run }}
-      CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
     steps:
       - id: checkout
         name: Checkout
@@ -139,6 +138,8 @@ jobs:
         name: Verified dump backup
         env:
           PGOPTIONS: "-c default_transaction_read_only=on"
+          # runner context is valid in step env, not job env.
+          CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
         run: |
           set +x
           set -eu
@@ -277,7 +278,7 @@ jobs:
             run("psql", ["-v", "ON_ERROR_STOP=1", "-d", target, "-c", disableTargetCopyRoleSql(owner)]);
             console.log("yes");
           } catch {
-            console.log("no");
+            console.log("unknown");
             process.exit(0);
           }
           JS
@@ -285,6 +286,8 @@ jobs:
       - id: delete-dumps
         name: Delete dumps
         if: ${{ always() }}
+        env:
+          CUTOVER_DUMP_DIR: ${{ runner.temp }}/leadwell-cutover
         run: |
           set +x
           set -eu
