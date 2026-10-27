@@ -624,6 +624,23 @@ magic link. Code: `googleSocialProviders`, `ACCOUNT_LINKING` and
   login whose email matches an existing (verified) user lands on that user and
   adds one `account` row (`provider_id='google'`, `account_id`=Google `sub`).
   No duplicate users. Email match is case-insensitive.
+- **Second Google account, same email.** A different Google account (new
+  `sub`) whose verified email is the same address links to the **same** user
+  as a second `account` row (`provider_id='google'`). That is by design: Google
+  vouches for the verified address, and the allowlist is per email, not per
+  Google account. Audit with
+  `SELECT user_id, count(*) FROM account WHERE provider_id='google' GROUP BY 1;`
+  and remove a stray link with `DELETE FROM account WHERE provider_id='google' AND account_id='<sub>';`.
+- **Email shape.** `validateUserInfo` refuses any email with leading/trailing
+  whitespace or outside printable ASCII (`/^[\x21-\x7e]+$/`) →
+  `invalid_email`. Better Auth lowercases before validation (and
+  `toLowerCase` folds look-alikes such as U+212A KELVIN SIGN to `k`), so the
+  Google provider's `mapProfileToUser` also marks a non-ASCII or padded *raw*
+  Google email unverified, which is refused.
+- **No id-token linking.** `POST /api/auth/link-social` with an `idToken` body
+  skips `validateUserInfo`, so a `hooks.before` refuses it (403
+  `LINK_SOCIAL_ID_TOKEN_DISABLED`). Linking happens only through the redirect
+  flow.
 - **Verified only.** `validateUserInfo` refuses any OAuth profile with
   `email_verified !== true` (create, link and sign-in), so trusting Google can
   never let an unverified address adopt a user.
@@ -654,7 +671,9 @@ magic link. Code: `googleSocialProviders`, `ACCOUNT_LINKING` and
   Paste values at the prompt; never on the command line or in `wrangler.jsonc`.
   Code deploys only with `npm run cf:deploy` (`keep_vars` on).
 - **Errors** come back on `/signin?error=<code>` (`not_allowed`,
-  `email_not_verified`, `state_mismatch`, …) and Login shows one friendly line.
+  `email_not_verified`, `invalid_email`, `state_mismatch`, `access_denied`, …)
+  because `onAPIError.errorURL` is `BETTER_AUTH_URL/signin`; Login shows one
+  friendly line.
 - **Rollback.** Turn Google off without a deploy:
   `npx wrangler secret delete GOOGLE_CLIENT_SECRET` (button disappears, magic
   link unchanged). Or `wrangler rollback <previous version id>`. No schema

@@ -8,6 +8,9 @@
  * - email_verified=false is refused: no link, no new user (even though google is trusted)
  * - the magic link keeps working with Google on
  * - /api/auth-providers reports booleans only
+ * - padded or non-ASCII emails are refused (QA2 #22 nits 1-2)
+ * - /link-social with an idToken is refused (nit 4); OAuth errors land on /signin (nit 5)
+ * - a second Google account with the same verified email links to the same user (nit 6)
  *
  * Google's token endpoint is mocked; the id_token is an unsigned JWT, which is
  * exactly what Better Auth decodes on the authorization-code path.
@@ -20,6 +23,7 @@ import {
   googleConfigured,
   googleSocialProviders,
   handleAuthRequest,
+  LINK_SOCIAL_ID_TOKEN_BLOCKED,
   type AuthDatabase,
 } from "./auth.ts";
 import { applySchema } from "./isolationDb.ts";
@@ -57,7 +61,7 @@ const baseEnv = {
   BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
   BETTER_AUTH_URL: origin,
   ENVIRONMENT: "local" as const,
-  ALLOWED_EMAILS: "phil@example.com,pat@example.com,new@example.com",
+  ALLOWED_EMAILS: "phil@example.com,pat@example.com,new@example.com,kate@example.com",
   RESEND_API_KEY: "re_test",
   AUTH_EMAIL_FROM: "login@polarch.day",
 };
@@ -124,13 +128,16 @@ async function count(sql: string, params: unknown[] = []): Promise<number> {
   return r.rows[0].n;
 }
 
+// Magic-link send is 3/min per IP; give each request its own IP.
+let mlSeq = 0;
 async function magicLinkSignIn(auth: ReturnType<typeof createAuth>, email: string) {
+  const mlIp = `203.0.113.${++mlSeq}`;
   const before = mailedUrls.length;
   const send = await handleAuthRequest(
     auth,
     new Request(`${origin}/api/auth/sign-in/magic-link`, {
       method: "POST",
-      headers: { origin, "content-type": "application/json", "cf-connecting-ip": "203.0.113.20" },
+      headers: { origin, "content-type": "application/json", "cf-connecting-ip": mlIp },
       body: JSON.stringify({ email, callbackURL: `${origin}/signin` }),
     }),
   );
@@ -142,7 +149,7 @@ async function magicLinkSignIn(auth: ReturnType<typeof createAuth>, email: strin
   if (!link) return { sendStatus: send.status, verifyStatus: 0, cookie: "" };
   const verify = await handleAuthRequest(
     auth,
-    new Request(link, { headers: { origin, "cf-connecting-ip": "203.0.113.20" } }),
+    new Request(link, { headers: { origin, "cf-connecting-ip": mlIp } }),
   );
   return { sendStatus: send.status, verifyStatus: verify.status, cookie: cookieHeader(verify) };
 }
@@ -285,6 +292,95 @@ try {
   const unvLink = await googleSignIn(auth, { sub: "g-evil", email: "pat@example.com", email_verified: false });
   ok((await sessionEmail(auth, unvLink.cookie)) === null, "unverified: cannot take over existing Pat");
   ok((await count(`account WHERE user_id = $1`, [pat?.id ?? ""])) === 0, "unverified: no account on Pat");
+
+  // ---- nit 1: padded email cannot pass the trimmed allowlist into a second user ----
+  const usersPre = await count(`"user"`);
+  for (const [label, email] of [
+    ["leading space", " phil@example.com"],
+    ["trailing space", "phil@example.com "],
+    ["both", " phil@example.com "],
+    ["tab", "phil@example.com\t"],
+  ] as const) {
+    const r = await googleSignIn(auth, { sub: `g-pad-${label}`, email, email_verified: true });
+    ok(r.location?.startsWith(`${origin}/signin?error=invalid_email`) ?? false, `padded (${label}): invalid_email (got ${r.location})`);
+    ok((await sessionEmail(auth, r.cookie)) === null, `padded (${label}): no session`);
+    ok((await count(`account WHERE account_id = $1`, [`g-pad-${label}`])) === 0, `padded (${label}): no account`);
+  }
+  ok((await count(`"user"`)) === usersPre, "padded: no user created");
+
+  // ---- nit 2: non-ASCII look-alikes (KELVIN SIGN folds to k) ----
+  for (const [label, email] of [
+    ["kelvin sign", "\u212Aate@example.com"],
+    ["fullwidth", "\uff4bate@example.com"],
+    ["zero-width", "kate@example.com\u200b"],
+    ["latin-1", "k\u00e5te@example.com"],
+  ] as const) {
+    const r = await googleSignIn(auth, { sub: `g-uni-${label}`, email, email_verified: true });
+    ok(
+      /^http:\/\/localhost:8787\/signin\?error=(invalid_email|email_not_verified)&/.test(r.location ?? ""),
+      `non-ASCII (${label}): refused (got ${r.location})`,
+    );
+    ok((await sessionEmail(auth, r.cookie)) === null, `non-ASCII (${label}): no session`);
+  }
+  ok((await count(`"user"`)) === usersPre, "non-ASCII: no user created");
+  const kate = await googleSignIn(auth, { sub: "g-kate", email: "kate@example.com", email_verified: true });
+  ok((await sessionEmail(auth, kate.cookie))?.email === "kate@example.com", "plain ASCII kate@ still signs in");
+
+  // ---- nit 5: OAuth errors land on /signin, not Better Auth's /error ----
+  const forged = await handleAuthRequest(
+    auth,
+    new Request(`${origin}/api/auth/callback/google?code=x&state=forged-state`, {
+      headers: { "cf-connecting-ip": "198.51.100.200" },
+      redirect: "manual",
+    }),
+  );
+  const forgedLoc = forged.headers.get("location") ?? "";
+  ok(forgedLoc.startsWith(`${origin}/signin?error=`), `forged state lands on /signin?error= (got ${forgedLoc})`);
+  const noCode = await handleAuthRequest(
+    auth,
+    new Request(`${origin}/api/auth/callback/google?error=access_denied`, {
+      headers: { "cf-connecting-ip": "198.51.100.201" },
+      redirect: "manual",
+    }),
+  );
+  const noCodeLoc = noCode.headers.get("location") ?? "";
+  ok(noCodeLoc.startsWith(`${origin}/signin?error=`), `access_denied lands on /signin?error= (got ${noCodeLoc})`);
+
+  // ---- nit 4: /link-social with an idToken is refused; redirect linking still works ----
+  const philSession = await magicLinkSignIn(auth, "phil@example.com");
+  for (const idToken of [{ token: "forged.id.token" }, { token: "x", nonce: "n" }, "raw-string"]) {
+    const res = await handleAuthRequest(
+      auth,
+      new Request(`${origin}/api/auth/link-social`, {
+        method: "POST",
+        headers: { origin, cookie: philSession.cookie, "content-type": "application/json", "cf-connecting-ip": "198.51.100.210" },
+        body: JSON.stringify({ provider: "google", idToken }),
+      }),
+    );
+    const body = (await res.json().catch(() => ({}))) as { code?: string };
+    ok(res.status === 403, `link-social idToken ${JSON.stringify(idToken)}: 403 (got ${res.status})`);
+    ok(body.code === "LINK_SOCIAL_ID_TOKEN_DISABLED" || body.code === LINK_SOCIAL_ID_TOKEN_BLOCKED, `link-social idToken: our code (got ${body.code})`);
+  }
+  ok(tokenCalls.length > 0 && (await count(`account WHERE user_id = $1`, [philId])) === 1, "link-social idToken: no account added");
+  const linkRedirect = await handleAuthRequest(
+    auth,
+    new Request(`${origin}/api/auth/link-social`, {
+      method: "POST",
+      headers: { origin, cookie: philSession.cookie, "content-type": "application/json", "cf-connecting-ip": "198.51.100.211" },
+      body: JSON.stringify({ provider: "google", callbackURL: `${origin}/signin` }),
+    }),
+  );
+  const linkRedirectBody = (await linkRedirect.json().catch(() => ({}))) as { url?: string };
+  ok(
+    linkRedirect.status === 200 && (linkRedirectBody.url ?? "").startsWith("https://accounts.google.com/"),
+    `link-social redirect flow still allowed (got ${linkRedirect.status})`,
+  );
+
+  // ---- nit 6: a second Google account with the same verified email links to Phil ----
+  const second = await googleSignIn(auth, { sub: "g-phil-2", email: "phil@example.com", email_verified: true });
+  ok((await sessionEmail(auth, second.cookie))?.id === philId, "second Google sub, same verified email: lands on Phil");
+  ok((await count(`account WHERE provider_id = 'google' AND user_id = $1`, [philId])) === 2, "second Google sub: two google accounts on Phil (documented)");
+  ok((await count(`"user" WHERE lower(email) = 'phil@example.com'`)) === 1, "second Google sub: still one Phil user");
 
   // ---- magic link for a Google-linked user still works ----
   const philAgain = await magicLinkSignIn(auth, "phil@example.com");

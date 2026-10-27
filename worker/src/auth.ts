@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { bearer, magicLink } from "better-auth/plugins";
 import { Pool } from "pg";
 import {
@@ -113,6 +114,12 @@ export function googleSocialProviders(env: Pick<Env, "GOOGLE_CLIENT_ID" | "GOOGL
       clientId: env.GOOGLE_CLIENT_ID!.trim(),
       clientSecret: env.GOOGLE_CLIENT_SECRET!.trim(),
       prompt: "select_account" as const,
+      // Better Auth lowercases the email before validateUserInfo sees it, and
+      // toLowerCase folds look-alikes (U+212A KELVIN SIGN -> "k"). Judge the
+      // raw Google email here: anything but plain printable ASCII is treated
+      // as unverified, which validateUserInfo then refuses.
+      mapProfileToUser: (profile: { email?: unknown }) =>
+        emailShapeOk(profile.email) ? {} : { emailVerified: false },
     },
   };
 }
@@ -130,6 +137,20 @@ export const ACCOUNT_LINKING = {
   requireLocalEmailVerified: true,
   allowDifferentEmails: false,
 };
+
+/**
+ * Stored emails must be exactly what the allowlist compares: no padding
+ * (isAllowedEmail trims, Better Auth stores as-is, so " phil@x " would become
+ * a second user) and printable ASCII only (toLowerCase folds U+212A KELVIN
+ * SIGN to "k", so a Unicode look-alike could pass the allowlist).
+ */
+export const EMAIL_ASCII = /^[\x21-\x7e]+$/;
+export function emailShapeOk(email: unknown): email is string {
+  return typeof email === "string" && email === email.trim() && EMAIL_ASCII.test(email);
+}
+
+/** Better Auth's id-token link path skips validateUserInfo; Polarch links by redirect only. */
+export const LINK_SOCIAL_ID_TOKEN_BLOCKED = "link_social_id_token_disabled";
 
 /** OAuth (Google) must carry a provider-verified email to create, link or sign in. */
 export function oauthEmailMustBeVerified(
@@ -287,6 +308,12 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
         ) {
           return;
         }
+        if (!emailShapeOk(user.email)) {
+          return {
+            error: "invalid_email",
+            errorDescription: "this account is not allowed",
+          };
+        }
         if (!oauthEmailMustBeVerified(user, source)) {
           return {
             error: "email_not_verified",
@@ -303,6 +330,23 @@ export function createAuth(env: Env, database?: AuthDatabase, options?: CreateAu
       },
     },
     socialProviders: googleSocialProviders(env),
+    // OAuth failures (bad state, no code, refused profile) land on the Login
+    // screen as /signin?error=<code>, never Better Auth's bare /error page.
+    onAPIError: { errorURL: baseURL ? `${baseURL}/signin` : "/signin" },
+    hooks: {
+      // POST /link-social with an idToken bypasses validateUserInfo (and, with
+      // google trusted, the email_verified check). Refuse it outright.
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== "/link-social") return;
+        const body = ctx.body as { idToken?: unknown } | undefined;
+        if (body && body.idToken !== undefined && body.idToken !== null) {
+          throw new APIError("FORBIDDEN", {
+            code: LINK_SOCIAL_ID_TOKEN_BLOCKED,
+            message: "Link Google with the Continue with Google button.",
+          });
+        }
+      }),
+    },
     session: authModels.session,
     account: {
       ...authModels.account,
