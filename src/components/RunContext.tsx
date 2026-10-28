@@ -5,10 +5,13 @@ import { formatLastPrayed } from "../lib/prayer";
 import { DOMAIN_COLOR, THEME_DOMAIN } from "../data/frameworks";
 import { HEALTH_PILL, HealthMeter, PrayerFlame } from "./brand/glyphs";
 import { cx } from "@/utils/cx";
+import { KnownList } from "./knowledge/KnownList";
+import { FixturesList } from "./knowledge/FixturesList";
 
 /*
  * What you want in your peripheral vision while you're in the room: your read
- * on them, how they're best led, what was promised, and — for your eyes only —
+ * on them, how they're best led, what earlier meetings settled, the standing
+ * work that should come up, what was promised, and — for your eyes only —
  * what you're carrying for them. Read-only on purpose. The room is for them.
  */
 export function RunContext({
@@ -71,6 +74,11 @@ export function RunContext({
           )}
         </section>
       )}
+
+      {/* What earlier meetings settled, and the standing work that should
+          come up — so nobody has to ask twice. */}
+      <KnownList subjectKind={kind} subjectId={id} compact className="border-t border-secondary pt-5" />
+      <FixturesList subjectKind={kind} subjectId={id} compact className="border-t border-secondary pt-5" />
 
       {promised.length > 0 && (
         <section className="flex flex-col gap-2.5 border-t border-secondary pt-5">

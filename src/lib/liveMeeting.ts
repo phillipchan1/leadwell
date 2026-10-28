@@ -10,6 +10,7 @@ import {
   type SpeechRecognitionLike,
 } from "./transcriber";
 import { transcriptionPrompt } from "./vocabulary";
+import { applyGlossary } from "./glossary";
 
 /**
  * The meeting you're in, held outside any one screen.
@@ -232,7 +233,7 @@ function beginSpeech(sessionId: string) {
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const piece = (event.results[i][0]?.transcript ?? "").trim();
       if (!piece) continue;
-      if (event.results[i].isFinal) base = join(base, piece);
+      if (event.results[i].isFinal) base = join(base, applyGlossary(piece, useStore.getState().glossary));
       else pending = join(pending, piece);
     }
     interim = pending;
@@ -508,7 +509,7 @@ async function drain() {
         if (useLive.getState().error?.endsWith("Retrying…") || useLive.getState().error?.startsWith("Offline")) {
           useLive.setState({ error: null });
         }
-        const text = result.text.trim();
+        const text = applyGlossary(result.text.trim(), useStore.getState().glossary);
         // A paragraph per stretch: it was cut at a pause, so it reads like one.
         if (text) write(item.sessionId, joinParagraph(transcriptOf(item.sessionId), text));
       } else {

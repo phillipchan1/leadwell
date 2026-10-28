@@ -8,6 +8,7 @@ import {
   type SpeechRecognitionLike,
 } from "./transcriber";
 import { transcriptionPrompt } from "./vocabulary";
+import { applyGlossary } from "./glossary";
 
 /**
  * Dictate: your own words into the write-up, where the caret is.
@@ -168,7 +169,8 @@ function editableTarget(el: Element | null): Target | null {
  * and markdown all see an ordinary edit. A space goes first unless the caret
  * already sits after one.
  */
-function insert(text: string) {
+function insert(raw: string) {
+  const text = applyGlossary(raw, useStore.getState().glossary);
   if (!text) return;
   const el = target;
   if (el && el.isConnected) {

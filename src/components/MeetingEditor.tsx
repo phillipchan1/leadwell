@@ -11,12 +11,16 @@ import { endMeeting, joinMeeting, toggleListening, useLive } from "../lib/liveMe
 import { canTranscribe } from "../lib/transcriber";
 import { ListenStatus } from "./ListenStatus";
 import { DictateButton } from "./DictateButton";
+import { TranscriptField } from "./TranscriptField";
+import { WrapUpSheet } from "./WrapUpSheet";
+import { markWrapped, wasWrapped } from "../lib/wrapUp";
+import { addDays, todayISO } from "../lib/readiness";
+import { DEMO } from "../lib/demo";
 
 import { Input } from "@/components/base/input/input";
-import { TextArea } from "@/components/base/textarea/textarea";
 import { confirmAction } from "./ConfirmDialog";
 import { autoFocusUnlessTouch } from "../lib/pointer";
-import { ArrowLeft, DotsVertical, Trash01 } from "@untitledui/icons";
+import { ArrowLeft, DotsVertical, Stars02, Trash01 } from "@untitledui/icons";
 import { useMenu } from "@/hooks/use-menu";
 
 function formatEntryDate(iso: string): string {
@@ -83,6 +87,8 @@ export function MeetingEditor({
   const [error, setError] = useState<string | null>(null);
   const [editingMeta, setEditingMeta] = useState(false);
   const [showTools, setShowTools] = useState(listening);
+  // The wrap-up sheet, and what closing it means: leaving Run (Done) or not.
+  const [wrapping, setWrapping] = useState<"done" | "menu" | null>(null);
 
   useEffect(() => {
     if (!session) return;
@@ -102,9 +108,22 @@ export function MeetingEditor({
     setTranscript((cur) => (cur.trim() === next ? cur : next));
   }, [session?.transcript]);
 
+  // Likewise the write-up and the point, which the wrap-up and Dictate write
+  // from outside the editor. Left stale, the next keystroke would put the old
+  // text back over theirs.
+  useEffect(() => {
+    const next = session?.notes ?? "";
+    setNotes((cur) => (cur.trim() === next ? cur : next));
+  }, [session?.notes]);
+  useEffect(() => {
+    const next = session?.point ?? "";
+    setPoint((cur) => (cur.trim() === next ? cur : next));
+  }, [session?.point]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      // The sheet owns Escape while it's open.
+      if (e.key !== "Escape" || wrapping) return;
       if (showCapture || showTools || editingMeta) {
         e.preventDefault();
         setShowCapture(false);
@@ -117,7 +136,7 @@ export function MeetingEditor({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [showCapture, showTools, editingMeta, onClose]);
+  }, [showCapture, showTools, editingMeta, wrapping, onClose]);
 
   if (!session || !meeting) {
     return null;
@@ -164,9 +183,26 @@ export function MeetingEditor({
   };
 
   // Done ends the meeting. The arrow only steps out of it.
-  const done = () => {
+  const finish = () => {
     endMeeting(session.id);
     onClose();
+  };
+
+  /*
+   * Done wraps up first when there's something to wrap up: a meeting that was
+   * live or just happened, with a transcript or notes, not wrapped up before.
+   * Tidying an old write-up just closes. The demo has no AI to ask.
+   */
+  const done = () => {
+    const recent = isLive || session.date >= addDays(todayISO(), -1);
+    const hasContent = Boolean(transcript.trim() || notes.trim());
+    if (!DEMO && recent && hasContent && !wasWrapped(session.id)) setWrapping("done");
+    else finish();
+  };
+  const closeWrapUp = () => {
+    const leaving = wrapping === "done";
+    setWrapping(null);
+    if (leaving) finish();
   };
 
   const firstName = subjectName.split(" ")[0] ?? subjectName;
@@ -238,6 +274,7 @@ export function MeetingEditor({
           {listening ? "● Listening" : "Transcribe"}
         </button>
         <EntryMenu
+          onWrapUp={() => setWrapping("menu")}
           onDelete={async () => {
             if (
               await confirmAction({
@@ -365,10 +402,7 @@ export function MeetingEditor({
                   )}
 
                   {showCapture && (
-                    <TextArea
-                      aria-label="Transcript"
-                      size="md"
-                      textAreaClassName="meeting-editor-transcript"
+                    <TranscriptField
                       placeholder={`Paste a transcript from ${person ? `your 1:1 with ${firstName}` : meetingLabel}, or use Listen…`}
                       value={transcript}
                       onChange={saveTranscript}
@@ -414,15 +448,27 @@ export function MeetingEditor({
           </aside>
         </div>
       </div>
+
+      {wrapping && (
+        <WrapUpSheet
+          sessionId={session.id}
+          onDone={closeWrapUp}
+          onSkip={() => {
+            // Turned down once is an answer; Done won't ask again.
+            markWrapped(session.id);
+            closeWrapUp();
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /**
- * Destructive actions for the open entry, held behind one control so "Delete"
+ * Less-used actions for the open entry, held behind one control so "Delete"
  * is never adjacent to a benign button in the topbar.
  */
-function EntryMenu({ onDelete }: { onDelete: () => void }) {
+function EntryMenu({ onWrapUp, onDelete }: { onWrapUp: () => void; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
   const { triggerProps, menuProps, close } = useMenu(open, setOpen);
 
@@ -441,8 +487,20 @@ function EntryMenu({ onDelete }: { onDelete: () => void }) {
         <div
           {...menuProps}
           aria-label="Entry actions"
-          className="absolute right-0 z-50 mt-1 w-44 overflow-hidden rounded-xl border border-stone-200 bg-primary py-1 shadow-xl dark:border-stone-700"
+          className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl border border-stone-200 bg-primary py-1 shadow-xl dark:border-stone-700"
         >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              close(false);
+              onWrapUp();
+            }}
+            className="flex min-h-11 w-full items-center gap-2.5 px-4 text-left text-sm text-primary active:bg-secondary"
+          >
+            <Stars02 className="size-4 shrink-0 text-tertiary" />
+            Wrap up with AI
+          </button>
           <button
             type="button"
             role="menuitem"

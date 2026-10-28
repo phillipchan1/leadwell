@@ -671,3 +671,65 @@ export type MeetingShare = {
   joinedOn?: string;
   lastSeenOn?: string;
 };
+
+// ── What Polarch learns ──────────────────────────────────────────────────────
+//
+// Three kinds of knowledge that build up as meetings happen, each from
+// something you already do: fixing a transcript teaches the glossary, wrapping
+// up a meeting files its decisions, and what keeps coming up becomes a fixture.
+// All three are yours alone — never on a shared page, never sent to a
+// connected assistant.
+
+/**
+ * A word the transcriber should get right. `heard` is how it came out wrong,
+ * when the term was learned from a correction; every incoming stretch of
+ * transcript has it replaced, and `meant` is in the vocabulary from then on.
+ */
+export type GlossaryTerm = {
+  id: string;
+  heard?: string;
+  meant: string;
+  createdOn: string;
+};
+
+export type FixtureCadence = "weekly" | "monthly" | "quarterly" | "yearly" | "as_needed";
+
+/**
+ * Something a team (or a person) does over and over, with no end: Sunday
+ * setup, the monthly budget, vision night. Not an arc — an arc finishes — and
+ * not a section of the agenda, which is how one meeting is laid out. A fixture
+ * is part of what the team *is*, and the meeting is one place it comes up.
+ */
+export type Fixture = {
+  id: string;
+  subjectKind: MeetingSubjectKind;
+  subjectId: string;
+  title: string;
+  /** Who carries it, as you'd say it: "Dana", "me", "the worship team". */
+  owner?: string;
+  cadence: FixtureCadence;
+  notes?: string;
+  /** The last occurrence it was talked about in, by date. */
+  lastTouchedOn?: string;
+  createdOn: string;
+  order: number;
+};
+
+export type KnowledgeKind = "decision" | "theme" | "fact";
+
+/**
+ * One thing known about a person or team: a decision made, a theme that keeps
+ * coming back, a fact worth not having to ask twice. Filed by the wrap-up (or
+ * by hand) and read back in Run, beside the next meeting.
+ */
+export type KnowledgeItem = {
+  id: string;
+  subjectKind: MeetingSubjectKind;
+  subjectId: string;
+  kind: KnowledgeKind;
+  text: string;
+  /** The occurrence it came out of. */
+  sessionId?: string;
+  notedOn: string;
+  pinned?: boolean;
+};

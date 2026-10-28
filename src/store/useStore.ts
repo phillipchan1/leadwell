@@ -3,7 +3,11 @@ import type {
   Action,
   ActionColumn,
   Arc,
+  Fixture,
   FollowUp,
+  GlossaryTerm,
+  KnowledgeItem,
+  KnowledgeKind,
   MeetingShare,
   ChatMessage,
   Domain,
@@ -80,6 +84,9 @@ import {
   seedFollowUps,
   seedArcs,
   seedTakeaways,
+  seedFixtures,
+  seedGlossary,
+  seedKnowledge,
   seedMeetings,
   seedDomains,
   seedGoals,
@@ -477,6 +484,30 @@ type Store = PersistedData &
       patch: Partial<Pick<FollowUp, "text" | "owner" | "private">>
     ) => void;
     deleteFollowUp: (id: string) => void;
+    // what Polarch learns — see the types for what each one is
+    /** Learn a word. A second correction of the same mishearing replaces the first. */
+    addGlossaryTerm: (meant: string, heard?: string) => string;
+    deleteGlossaryTerm: (id: string) => void;
+    addFixture: (
+      subjectKind: MeetingSubjectKind,
+      subjectId: string,
+      title: string,
+      opts?: Partial<Pick<Fixture, "owner" | "cadence" | "notes" | "lastTouchedOn">>
+    ) => string;
+    updateFixture: (
+      id: string,
+      patch: Partial<Pick<Fixture, "title" | "owner" | "cadence" | "notes" | "lastTouchedOn">>
+    ) => void;
+    deleteFixture: (id: string) => void;
+    addKnowledge: (
+      subjectKind: MeetingSubjectKind,
+      subjectId: string,
+      kind: KnowledgeKind,
+      text: string,
+      opts?: { sessionId?: string; notedOn?: string }
+    ) => string;
+    updateKnowledge: (id: string, patch: Partial<Pick<KnowledgeItem, "text" | "kind" | "pinned">>) => void;
+    deleteKnowledge: (id: string) => void;
     // arcs — worked through one step per occurrence
     addArc: (
       arc: Omit<Arc, "id" | "order" | "createdOn" | "status"> & { status?: Arc["status"] }
@@ -901,6 +932,9 @@ function migrateDoc(doc: PersistedData): PersistedData {
     arcs: doc.arcs ?? [],
     takeaways: doc.takeaways ?? [],
     sharedNotes: doc.sharedNotes ?? [],
+    glossary: doc.glossary ?? [],
+    fixtures: doc.fixtures ?? [],
+    knowledge: doc.knowledge ?? [],
   };
 }
 
@@ -975,6 +1009,9 @@ function seedData(): PersistedData {
     arcs: seedArcs,
     takeaways: seedTakeaways,
     sharedNotes: [],
+    glossary: seedGlossary,
+    fixtures: seedFixtures,
+    knowledge: seedKnowledge,
   };
 }
 
@@ -1005,6 +1042,9 @@ function blankData(): PersistedData {
     arcs: [],
     takeaways: [],
     sharedNotes: [],
+    glossary: [],
+    fixtures: [],
+    knowledge: [],
   };
 }
 
@@ -1038,6 +1078,9 @@ const PERSISTED_KEYS: (keyof PersistedData)[] = [
   "arcs",
   "takeaways",
   "sharedNotes",
+  "glossary",
+  "fixtures",
+  "knowledge",
 ];
 
 /** True when a cached doc was serialized without one of the persisted slices. */
@@ -1290,6 +1333,9 @@ function importLegacyLocalData(): PersistedData | null {
     arcs: [],
     takeaways: [],
     sharedNotes: [],
+    glossary: [],
+    fixtures: [],
+    knowledge: [],
     domains: saved.domains ?? seedDomains,
     managers: saved.managers ?? [],
     wins: saved.wins ?? [],
@@ -2496,6 +2542,68 @@ export const useStore = create<Store>((set, get) => ({
     })),
   deleteFollowUp: (id) =>
     set((s) => ({ followUps: s.followUps.filter((f) => f.id !== id) })),
+
+  addGlossaryTerm: (meant, heard) => {
+    const m = meant.trim();
+    const h = heard?.trim() || undefined;
+    if (!m || (h && h.toLowerCase() === m.toLowerCase())) return "";
+    const same = (g: GlossaryTerm) =>
+      h ? g.heard?.toLowerCase() === h.toLowerCase() : !g.heard && g.meant.toLowerCase() === m.toLowerCase();
+    const existing = get().glossary.find(same);
+    if (existing) {
+      if (existing.meant !== m) {
+        set((s) => ({ glossary: s.glossary.map((g) => (g.id === existing.id ? { ...g, meant: m } : g)) }));
+      }
+      return existing.id;
+    }
+    const id = uid();
+    set((s) => ({ glossary: [...s.glossary, { id, heard: h, meant: m, createdOn: todayISO() }] }));
+    return id;
+  },
+  deleteGlossaryTerm: (id) => set((s) => ({ glossary: s.glossary.filter((g) => g.id !== id) })),
+
+  addFixture: (subjectKind, subjectId, title, opts = {}) => {
+    const t = title.trim();
+    if (!t) return "";
+    const id = uid();
+    set((s) => ({
+      fixtures: [
+        ...s.fixtures,
+        {
+          id,
+          subjectKind,
+          subjectId,
+          title: t,
+          owner: opts.owner?.trim() || undefined,
+          cadence: opts.cadence ?? "monthly",
+          notes: opts.notes?.trim() || undefined,
+          lastTouchedOn: opts.lastTouchedOn,
+          createdOn: todayISO(),
+          order: s.fixtures.length,
+        },
+      ],
+    }));
+    return id;
+  },
+  updateFixture: (id, patch) =>
+    set((s) => ({ fixtures: s.fixtures.map((f) => (f.id === id ? { ...f, ...patch } : f)) })),
+  deleteFixture: (id) => set((s) => ({ fixtures: s.fixtures.filter((f) => f.id !== id) })),
+
+  addKnowledge: (subjectKind, subjectId, kind, text, opts = {}) => {
+    const t = text.trim();
+    if (!t) return "";
+    const id = uid();
+    set((s) => ({
+      knowledge: [
+        ...s.knowledge,
+        { id, subjectKind, subjectId, kind, text: t, sessionId: opts.sessionId, notedOn: opts.notedOn ?? todayISO() },
+      ],
+    }));
+    return id;
+  },
+  updateKnowledge: (id, patch) =>
+    set((s) => ({ knowledge: s.knowledge.map((k) => (k.id === id ? { ...k, ...patch } : k)) })),
+  deleteKnowledge: (id) => set((s) => ({ knowledge: s.knowledge.filter((k) => k.id !== id) })),
 
   addArc: (input) => {
     const id = uid();

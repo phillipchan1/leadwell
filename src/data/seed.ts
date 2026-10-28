@@ -1,6 +1,9 @@
 import type {
   Arc,
   ArcStep,
+  Fixture,
+  GlossaryTerm,
+  KnowledgeItem,
   Takeaway,
   Capacity,
   Domain,
@@ -1059,4 +1062,67 @@ export const seedTakeaways: Takeaway[] = [
     text: "I go to silence, and then I call it being patient.",
     on: "2026-06-24",
   },
+];
+
+/**
+ * What the sample org already knows: the staff's standing work, a decision
+ * from Sarah's last 1:1, and one name the transcriber got wrong once.
+ */
+export const seedFixtures: Fixture[] = [
+  {
+    id: "fx-setup",
+    subjectKind: "team",
+    subjectId: "team-frontier",
+    title: "Sunday setup",
+    owner: "Elena",
+    cadence: "weekly",
+    lastTouchedOn: "2026-08-10",
+    createdOn: "2026-07-01",
+    order: 0,
+  },
+  {
+    id: "fx-budget",
+    subjectKind: "team",
+    subjectId: "team-frontier",
+    title: "Ministry budget review",
+    owner: "me",
+    cadence: "monthly",
+    lastTouchedOn: "2026-06-29",
+    createdOn: "2026-07-01",
+    order: 1,
+  },
+  {
+    id: "fx-vision",
+    subjectKind: "team",
+    subjectId: "team-frontier",
+    title: "Vision night",
+    cadence: "quarterly",
+    notes: "Whole staff plus key volunteers; book the hall a month out.",
+    createdOn: "2026-07-01",
+    order: 2,
+  },
+];
+
+export const seedKnowledge: KnowledgeItem[] = [
+  {
+    id: "kn-sarah-handoff",
+    subjectKind: "person",
+    subjectId: "p-sarah",
+    kind: "decision",
+    text: "Elena takes over Sunday setup next month; Sarah keeps the final call on the song list.",
+    notedOn: "2026-06-24",
+  },
+  {
+    id: "kn-sarah-theme",
+    subjectKind: "person",
+    subjectId: "p-sarah",
+    kind: "theme",
+    text: "Saying yes to everything, then running on empty by Thursday.",
+    notedOn: "2026-08-05",
+    pinned: true,
+  },
+];
+
+export const seedGlossary: GlossaryTerm[] = [
+  { id: "gl-elena", heard: "Alayna", meant: "Elena", createdOn: "2026-08-12" },
 ];

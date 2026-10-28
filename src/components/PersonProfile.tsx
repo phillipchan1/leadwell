@@ -36,6 +36,8 @@ import { WinsLedger } from "./WinsLedger";
 import { PrepPanel } from "./PrepPanel";
 import { confirmAction } from "./ConfirmDialog";
 import { deleteWithUndo } from "../lib/undo";
+import { KnownList } from "./knowledge/KnownList";
+import { FixturesList } from "./knowledge/FixturesList";
 
 /**
  * Person panel, in the five modes every entity shares (see lib/entityModes).
@@ -338,6 +340,8 @@ export function PersonProfile({
         {/* ── Profile: who they are, and how to lead them ───────────────── */}
         {mode === "profile" && (
           <div className="flex flex-col gap-6 p-4 sm:p-6">
+            {/* What they carry week in, week out — theirs, and their team's in their name. */}
+            <FixturesList subjectKind="person" subjectId={person.id} />
             {isLeadUp ? (
               <LeadUpManual
                 key={person.id}
@@ -546,6 +550,7 @@ export function PersonProfile({
         {/* ── Notes: my running record ──────────────────────────────────── */}
         {mode === "notes" && (
           <div className="flex flex-col gap-6 p-4 sm:p-6">
+            <KnownList subjectKind="person" subjectId={person.id} />
             <NotesPanel subjectId={person.id} />
             {isLeadUp && <WinsLedger subjectId={person.id} />}
           </div>

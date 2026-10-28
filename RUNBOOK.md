@@ -94,7 +94,11 @@ in. **Apply `005` to prod before deploying the Worker that ships arcs and
 shared meetings**: that Worker writes the new tables on every sync. Rollback:
 `worker/schema/rollback/005_arcs_and_sharing.sql`. `008_arc_cover_url.sql` (book
 covers on arcs) goes on prod before the Worker that writes `cover_url`; rollback
-`worker/schema/rollback/008_arc_cover_url.sql`. `004` is a `BEGIN`/`COMMIT`
+`worker/schema/rollback/008_arc_cover_url.sql`. **`009_knowledge.sql` (glossary,
+fixtures, what we know) goes on prod before the Worker that ships them**: that
+Worker reads the new tables on every load, so without them nobody can sign in.
+Rollback `worker/schema/rollback/009_knowledge.sql`; see
+[docs/meetings-that-learn.md](docs/meetings-that-learn.md). `004` is a `BEGIN`/`COMMIT`
 transaction. To undo just that column (same statement as
 `worker/schema/rollback/004_rate_limit_window_start.sql`):
 

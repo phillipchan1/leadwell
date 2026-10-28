@@ -24,7 +24,10 @@ export type TableName =
   | "node_positions"
   | "arcs"
   | "arc_takeaways"
-  | "shared_notes";
+  | "shared_notes"
+  | "glossary"
+  | "fixtures"
+  | "knowledge";
 
 export const TABLE_KEY: Record<TableName, string> = {
   profiles: "user_id",
@@ -51,6 +54,9 @@ export const TABLE_KEY: Record<TableName, string> = {
   arcs: "id",
   arc_takeaways: "id",
   shared_notes: "id",
+  glossary: "id",
+  fixtures: "id",
+  knowledge: "id",
 };
 
 export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
@@ -231,6 +237,31 @@ export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
   ],
   arc_takeaways: ["user_id", "id", "arc_id", "step_id", "by_member", "text", "taken_on"],
   shared_notes: ["user_id", "id", "meeting_id", "session_id", "by_member", "body", "updated_on"],
+  glossary: ["user_id", "id", "heard", "meant", "created_on"],
+  fixtures: [
+    "user_id",
+    "id",
+    "subject_kind",
+    "subject_id",
+    "title",
+    "owner",
+    "cadence",
+    "notes",
+    "last_touched_on",
+    "created_on",
+    "sort_order",
+  ],
+  knowledge: [
+    "user_id",
+    "id",
+    "subject_kind",
+    "subject_id",
+    "kind",
+    "text",
+    "session_id",
+    "noted_on",
+    "pinned",
+  ],
 };
 
 export const JSON_COLUMNS = new Set([

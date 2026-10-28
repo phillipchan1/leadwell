@@ -22,6 +22,8 @@ import { EntityHeader, IdentityChip } from "./EntityHeader";
 import { meetingFor, type CheckFix } from "../lib/readiness";
 import { confirmAction } from "./ConfirmDialog";
 import { deleteWithUndo } from "../lib/undo";
+import { KnownList } from "./knowledge/KnownList";
+import { FixturesList } from "./knowledge/FixturesList";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -484,6 +486,9 @@ export function TeamProfile({
               </div>
             </section>
 
+            {/* The standing work this team exists to keep doing. */}
+            <FixturesList subjectKind="team" subjectId={team.id} />
+
             {/* People */}
             <section>
               <div className="mb-2 flex items-baseline justify-between">
@@ -612,6 +617,7 @@ export function TeamProfile({
         {/* ── Notes ────────────────────────────────────────────────────── */}
         {mode === "notes" && (
           <div className="px-4 py-5 sm:px-6">
+            <KnownList subjectKind="team" subjectId={team.id} className="mb-8" />
             <form
               onSubmit={(e) => {
                 e.preventDefault();

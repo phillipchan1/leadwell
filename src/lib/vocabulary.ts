@@ -1,4 +1,4 @@
-import type { Arc, Manager, Me, MeetingShare, Person, Tag, Team, TrackedMeeting } from "../types";
+import type { Arc, Fixture, GlossaryTerm, Manager, Me, MeetingShare, Person, Tag, Team, TrackedMeeting } from "../types";
 import { meetingSubjectName, meetingTitle } from "./readiness";
 
 export type VocabularySource = {
@@ -10,6 +10,8 @@ export type VocabularySource = {
   arcs: Arc[];
   tags: Tag[];
   shares: MeetingShare[];
+  glossary: GlossaryTerm[];
+  fixtures: Fixture[];
 };
 
 /** Room for the words; the rest of the prompt is what was just said. */
@@ -21,9 +23,10 @@ const TAIL_CHARS = 350;
  * make "Meghan" and "Crucial Conversations" come back spelled right.
  *
  * Closest first, because the prompt has a budget and the end of the list is
- * what gets cut: who is in the room, then the meeting's own words (its arcs
- * and its standing agenda), then everyone else you lead — a 1:1 is where
- * other people get talked about — and the workspace's tags last.
+ * what gets cut: who is in the room, then the glossary (words you've already
+ * had to correct once), the meeting's own words (its arcs and its standing
+ * agenda), then everyone else you lead — a 1:1 is where other people get
+ * talked about — and the workspace's tags last.
  */
 export function meetingVocabulary(src: VocabularySource, meetingId: string): string[] {
   const meeting = src.meetings.find((m) => m.id === meetingId);
@@ -39,6 +42,10 @@ export function meetingVocabulary(src: VocabularySource, meetingId: string): str
       for (const p of src.people) if (p.teamId === meeting.subjectId) words.push(p.name);
     }
     for (const s of src.shares) if (s.meetingId === meeting.id && s.name) words.push(s.name);
+  }
+  for (const g of src.glossary) words.push(g.meant);
+  if (meeting) {
+    const subject = meetingSubjectName(meeting, src);
     words.push(meetingTitle(meeting, subject));
     for (const a of src.arcs) {
       if (a.meetingId !== meeting.id || a.status === "done") continue;
@@ -46,6 +53,9 @@ export function meetingVocabulary(src: VocabularySource, meetingId: string): str
       if (a.author) words.push(a.author);
     }
     for (const slot of meeting.curriculum ?? []) words.push(slot.label);
+    for (const f of src.fixtures) {
+      if (f.subjectKind === meeting.subjectKind && f.subjectId === meeting.subjectId) words.push(f.title);
+    }
   }
   for (const p of src.people) words.push(p.name);
   for (const t of src.teams) words.push(t.name);

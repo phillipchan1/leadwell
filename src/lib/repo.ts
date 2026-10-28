@@ -22,6 +22,9 @@ import { apiDelete, apiGet, apiPatch, apiPut, readApiError } from "./api";
 import type {
   Arc,
   ArcStep,
+  Fixture,
+  GlossaryTerm,
+  KnowledgeItem,
   SharedNote,
   Takeaway,
   Action,
@@ -89,6 +92,12 @@ export type PersistedData = {
   takeaways: Takeaway[];
   /** Each chair's part of an occurrence's shared write-up. */
   sharedNotes: SharedNote[];
+  /** Words the transcriber should get right, mostly learned from corrections. */
+  glossary: GlossaryTerm[];
+  /** The standing things each team (or person) does. */
+  fixtures: Fixture[];
+  /** What's known about each person and team: decisions, themes, facts. */
+  knowledge: KnowledgeItem[];
 };
 
 // --- small helpers ----------------------------------------------------------
@@ -782,6 +791,74 @@ const map = {
       updatedOn: (r.updated_on as string | null) ?? "",
     }),
   },
+  glossary: {
+    table: "glossary",
+    toRow: (u: string, g: GlossaryTerm): Row => ({
+      user_id: u,
+      id: g.id,
+      heard: nn(g.heard),
+      meant: g.meant,
+      created_on: g.createdOn,
+    }),
+    fromRow: (r: Row): GlossaryTerm => ({
+      id: r.id as string,
+      heard: opt(r.heard as string | null),
+      meant: (r.meant as string) ?? "",
+      createdOn: (r.created_on as string | null) ?? "",
+    }),
+  },
+  fixtures: {
+    table: "fixtures",
+    toRow: (u: string, f: Fixture): Row => ({
+      user_id: u,
+      id: f.id,
+      subject_kind: f.subjectKind,
+      subject_id: f.subjectId,
+      title: f.title,
+      owner: nn(f.owner),
+      cadence: f.cadence,
+      notes: nn(f.notes),
+      last_touched_on: nn(f.lastTouchedOn),
+      created_on: f.createdOn,
+      sort_order: f.order,
+    }),
+    fromRow: (r: Row): Fixture => ({
+      id: r.id as string,
+      subjectKind: r.subject_kind as Fixture["subjectKind"],
+      subjectId: r.subject_id as string,
+      title: (r.title as string) ?? "",
+      owner: opt(r.owner as string | null),
+      cadence: (r.cadence as Fixture["cadence"]) ?? "monthly",
+      notes: opt(r.notes as string | null),
+      lastTouchedOn: opt(r.last_touched_on as string | null),
+      createdOn: (r.created_on as string | null) ?? "",
+      order: (r.sort_order as number) ?? 0,
+    }),
+  },
+  knowledge: {
+    table: "knowledge",
+    toRow: (u: string, k: KnowledgeItem): Row => ({
+      user_id: u,
+      id: k.id,
+      subject_kind: k.subjectKind,
+      subject_id: k.subjectId,
+      kind: k.kind,
+      text: k.text,
+      session_id: nn(k.sessionId),
+      noted_on: k.notedOn,
+      pinned: Boolean(k.pinned),
+    }),
+    fromRow: (r: Row): KnowledgeItem => ({
+      id: r.id as string,
+      subjectKind: r.subject_kind as KnowledgeItem["subjectKind"],
+      subjectId: r.subject_id as string,
+      kind: (r.kind as KnowledgeItem["kind"]) ?? "fact",
+      text: (r.text as string) ?? "",
+      sessionId: opt(r.session_id as string | null),
+      notedOn: (r.noted_on as string | null) ?? "",
+      pinned: r.pinned ? true : undefined,
+    }),
+  },
 } as const;
 
 /** Collections that map 1:1 to an id-keyed table. */
@@ -909,6 +986,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
   const arcs = grab("arcs");
   const takeaways = grab("arc_takeaways");
   const sharedNotes = grab("shared_notes");
+  const glossary = grab("glossary");
+  const fixtures = grab("fixtures");
+  const knowledge = grab("knowledge");
 
   const data: PersistedData = {
     me: meFromRow(prof as Parameters<typeof meFromRow>[0]),
@@ -942,6 +1022,9 @@ export async function loadAll(userId: string): Promise<PersistedData | null> {
     arcs: arcs.map(map.arcs.fromRow).sort((a, b) => a.order - b.order),
     takeaways: takeaways.map(map.takeaways.fromRow),
     sharedNotes: sharedNotes.map(map.sharedNotes.fromRow),
+    glossary: glossary.map(map.glossary.fromRow),
+    fixtures: fixtures.map(map.fixtures.fromRow).sort((a, b) => a.order - b.order),
+    knowledge: knowledge.map(map.knowledge.fromRow),
   };
   return data;
 }

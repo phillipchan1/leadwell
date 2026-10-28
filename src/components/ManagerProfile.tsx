@@ -18,6 +18,7 @@ import { WinsLedger } from "./WinsLedger";
 import { PrayerPanel } from "./Prayer";
 import type { Density } from "./EntitySurface";
 import { confirmAction } from "./ConfirmDialog";
+import { KnownList } from "./knowledge/KnownList";
 
 /**
  * Side panel for a leader I report to, in the five modes every entity shares.
@@ -183,7 +184,8 @@ export function ManagerProfile({
         )}
 
         {mode === "notes" && (
-          <div className="p-4 sm:p-6">
+          <div className="flex flex-col gap-6 p-4 sm:p-6">
+            <KnownList subjectKind="manager" subjectId={manager.id} />
             <NotesPanel
               subjectId={manager.id}
               placeholder="What they said, what they signalled, what to remember…"
