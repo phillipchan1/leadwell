@@ -201,7 +201,10 @@ export function TopicBoard({
   /*
    * Between the width where the tray moves up beside the weeks and the width
    * where both fit, the tray would leave room for barely one whole week. It
-   * folds to its rail there too.
+   * folds to its rail there too. Narrower still it stacks *above* the weeks,
+   * and a screen of ideas pushes the plan out of sight beneath it, so it
+   * folds there as well. (An agenda has room beside its one running order, so
+   * only the stacked width folds it.)
    */
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [cramped, setCramped] = useState(false);
@@ -1938,7 +1941,9 @@ function IdeasTray({
       <div
         ref={columnRef("backlog")}
         className={cx(
-          "-mx-1 flex max-h-[min(30rem,55vh)] flex-col gap-3 overflow-y-auto rounded-xl px-1 py-0.5",
+          // Stacked above the weeks (opened from the rail in a narrow board) the
+          // list stays short, so the first week is still on screen below it.
+          "-mx-1 flex max-h-52 flex-col gap-3 overflow-y-auto rounded-xl px-1 py-0.5 @3xl:max-h-[min(30rem,55vh)]",
           drag && "min-h-16",
           dropActive("backlog") && !groups.some((g) => g.key !== "backlog" && drag?.over === g.key) &&
             "ring-2 ring-teal-500"
