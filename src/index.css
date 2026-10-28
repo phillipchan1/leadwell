@@ -1645,8 +1645,35 @@ label:focus-within > .field-label,
   animation-delay: calc(min(var(--i, 0), 8) * 35ms);
 }
 
+/* Ideas: a card lifts a pixel under the pointer. Unlayered, so it adds
+   `translate` to the card's own transition list. */
+.ideas-board [data-drag-item] {
+  transition-property: border-color, box-shadow, translate;
+  transition-duration: var(--dur-quick);
+}
+.ideas-board [data-drag-item]:hover {
+  translate: 0 -1px;
+}
+
+/* "All filed.": the ring settles, then the tick draws. */
+@keyframes filed-pop {
+  from { scale: 0.6; opacity: 0; }
+}
+@keyframes filed-draw {
+  from { stroke-dashoffset: 14; }
+}
+.filed-check {
+  animation: filed-pop var(--dur-base) var(--ease-spring) backwards;
+}
+.filed-check path {
+  stroke-dasharray: 14;
+  animation: filed-draw 420ms var(--ease-out) 160ms backwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mode-tabs__bar--live { transition: none; }
+  .ideas-board [data-drag-item]:hover { translate: none; }
+  .filed-check, .filed-check path { animation: none; }
   .live-breathe { animation: none; }
   .rise-stagger > * { animation: none; }
   button:not(:disabled):active,

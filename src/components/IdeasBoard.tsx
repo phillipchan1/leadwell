@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 import { Plus, SearchLg, Trash01, X } from "@untitledui/icons";
+import { NativeSelect } from "@/components/base/select/select-native";
 import { cx } from "@/utils/cx";
 import { useBoardDnD } from "@/hooks/use-board-dnd";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -34,12 +35,12 @@ const UNASSIGNED = "unassigned";
 const fmt = (iso: string, opts: Intl.DateTimeFormatOptions) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
 
-/** "TODAY", "TOMORROW", "WED 19". */
+/** "today", "tomorrow", "Wed 19". */
 function nextLabel(date: string, today: string): string {
   const d = daysBetween(today, date);
-  if (d === 0) return "TODAY";
-  if (d === 1) return "TOMORROW";
-  return `${fmt(date, { weekday: "short" }).toUpperCase()} ${Number(date.slice(8, 10))}`;
+  if (d === 0) return "today";
+  if (d === 1) return "tomorrow";
+  return `${fmt(date, { weekday: "short" })} ${Number(date.slice(8, 10))}`;
 }
 
 /** An empty column is only a drop target, so it stays narrow. */
@@ -59,6 +60,11 @@ const EMPTY_COL_W = 208; // 13rem
  * Scoped to unscheduled topics on purpose. Anything already in a week belongs
  * to the planner; showing it in both would make two surfaces argue about one
  * card. Parked ideas are set aside, so they only show when asked for.
+ *
+ * The capture box is the hero and everything else steps back: columns are a
+ * header line rather than a box, the filters are one row of chips, and "Up
+ * next" — a drop target for the very next occurrence — only appears while
+ * you're dragging, which is the only time it's of use.
  */
 export function IdeasBoard() {
   const topics = useStore((s) => s.topics);
@@ -364,7 +370,6 @@ export function IdeasBoard() {
     { id: "aging", label: "Aging" },
     { id: "parked", label: "Parked" },
   ];
-  const counts = { all: count("all"), returned: count("returned"), parked: count("parked") };
 
   const renderCard = (col: Column) => (topic: Topic) => (
     <TopicCard
@@ -400,7 +405,7 @@ export function IdeasBoard() {
             onChange={(e) => updateTag(tag.id, { label: e.target.value })}
             className="min-w-0 flex-1 rounded-md bg-transparent px-1 py-0.5 text-[14px] font-semibold text-primary outline-none hover:bg-primary focus:bg-primary"
           />
-          <span className="font-mono text-[11px] text-quaternary">{col.topics.length}</span>
+          <span className="text-[12px] text-quaternary tabular-nums">{col.topics.length}</span>
           <button
             type="button"
             aria-label={`Recolor ${tag.label}`}
@@ -443,19 +448,19 @@ export function IdeasBoard() {
           />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate font-serif text-[17px] leading-5 text-primary">{col.label}</span>
-            <span className="truncate font-mono text-[10.5px] text-quaternary">
-              {m.subjectKind === "team" ? "TEAM" : "1:1"}
-              {next ? ` · NEXT ${nextLabel(next, today)}` : ""}
+            <span className="truncate text-[12px] text-quaternary">
+              {m.subjectKind === "team" ? "Team" : "1:1"}
+              {next ? ` · next ${nextLabel(next, today)}` : ""}
             </span>
           </span>
-          <span className="font-mono text-[11px] text-quaternary">{col.topics.length}</span>
+          <span className="text-[12px] text-quaternary tabular-nums">{col.topics.length}</span>
         </button>
       );
     }
     return (
       <div className="flex items-baseline gap-2 px-1 pb-1.5">
         <span className="text-[14px] font-semibold text-primary">{col.label}</span>
-        <span className="font-mono text-[11px] text-quaternary">{col.topics.length}</span>
+        <span className="text-[12px] text-quaternary tabular-nums">{col.topics.length}</span>
       </div>
     );
   };
@@ -466,21 +471,10 @@ export function IdeasBoard() {
     <div className="relative flex min-h-0 flex-1 flex-col gap-5 pb-24">
       <MeetingsSwitch current="ideas" />
 
-      <header className="flex flex-wrap items-end gap-x-5 gap-y-2">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em] sm:text-[40px] sm:leading-[44px]">
-            Ideas
-          </h1>
-          <p className="font-serif text-[17px] text-secondary italic sm:text-[18px]">
-            What do I want to raise?
-          </p>
-        </div>
-        <span className="ml-auto pb-1.5 font-mono text-[11.5px] tracking-[0.03em] text-quaternary max-sm:hidden">
-          {counts.all} OPEN
-          {counts.returned ? ` · ${counts.returned} CAME BACK` : ""}
-          {counts.parked ? ` · ${counts.parked} PARKED` : ""}
-        </span>
-      </header>
+      {/* The counts live on the chips below; the box says what the page is for. */}
+      <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em] sm:text-[40px] sm:leading-[44px]">
+        Ideas
+      </h1>
 
       <CaptureBar
         meetings={meetings}
@@ -489,28 +483,8 @@ export function IdeasBoard() {
         onCapture={(raw) => captureTopics(raw)}
       />
 
-      {/* Lenses */}
+      {/* One row: what to show on the left, how to arrange it on the right. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="inline-flex gap-0.5 rounded-[11px] bg-tertiary p-[3px]" role="radiogroup" aria-label="Group by">
-          {(["meeting", "tag"] as const).map((g) => (
-            <button
-              key={g}
-              type="button"
-              role="radio"
-              aria-checked={groupBy === g}
-              onClick={() => setGroupBy(g)}
-              className={cx(
-                "h-8 rounded-lg px-3 text-[13px] transition-colors touch:min-h-11",
-                groupBy === g
-                  ? "bg-primary font-semibold text-primary shadow-[0_1px_2px_rgba(10,34,37,0.12)]"
-                  : "font-medium text-tertiary hover:text-secondary"
-              )}
-            >
-              By {g}
-            </button>
-          ))}
-        </div>
-
         <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Show">
           {REFINES.map((r) => {
             const n = count(r.id);
@@ -525,14 +499,14 @@ export function IdeasBoard() {
                 className={cx(
                   "inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium transition-colors touch:min-h-11",
                   on
-                    ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900"
+                    ? "bg-fg-primary text-bg-primary"
                     : r.id === "returned"
                       ? "text-cond-watch-ink hover:bg-secondary"
                       : "text-tertiary hover:bg-secondary hover:text-secondary"
                 )}
               >
                 {r.label}
-                <span className="font-mono text-[10.5px] opacity-70">{n}</span>
+                <span className="tabular-nums opacity-70">{n}</span>
               </button>
             );
           })}
@@ -552,7 +526,7 @@ export function IdeasBoard() {
         )}
         <div
           className={cx(
-            "flex h-9 w-full items-center gap-2 rounded-[9px] bg-tertiary px-2.5 sm:w-56",
+            "flex h-9 w-full items-center gap-2 rounded-[9px] px-2.5 transition-colors focus-within:bg-secondary hover:bg-secondary sm:w-48",
             !(!isPhone && (stripAt.back || stripAt.forward)) && "sm:ml-auto"
           )}
         >
@@ -568,6 +542,17 @@ export function IdeasBoard() {
             <ButtonUtility size="xs" color="tertiary" icon={X} tooltip="Clear" onClick={() => setQuery("")} />
           )}
         </div>
+        <NativeSelect
+          size="sm"
+          className="w-auto"
+          aria-label="Group by"
+          value={groupBy}
+          onChange={(e) => setGroupBy(e.target.value as GroupBy)}
+          options={[
+            { label: "By meeting", value: "meeting" },
+            { label: "By tag", value: "tag" },
+          ]}
+        />
 
         {groupBy === "tag" &&
           (addingTag ? (
@@ -588,7 +573,7 @@ export function IdeasBoard() {
                 onKeyDown={(e) => e.key === "Escape" && setAddingTag(false)}
                 placeholder="Tag name"
                 aria-label="New tag name"
-                className="h-9 w-32 rounded-[9px] border border-teal-300 bg-primary px-2.5 text-[13px] outline-none dark:border-teal-700"
+                className="h-9 w-32 rounded-[9px] border border-primary bg-primary px-2.5 text-[13px] outline-none focus:border-fg-quaternary"
               />
               <button
                 type="submit"
@@ -601,10 +586,11 @@ export function IdeasBoard() {
             <button
               type="button"
               onClick={() => setAddingTag(true)}
-              className="inline-flex h-9 items-center gap-1.5 rounded-[9px] px-2.5 text-[13px] font-semibold text-teal-700 hover:bg-secondary dark:text-teal-400"
+              aria-label="New tag"
+              title="New tag"
+              className="inline-flex size-9 items-center justify-center rounded-[9px] text-tertiary hover:bg-secondary hover:text-primary touch:size-11"
             >
-              <Plus aria-hidden className="size-4" />
-              New tag
+              <Plus aria-hidden className="size-5" />
             </button>
           ))}
       </div>
@@ -632,7 +618,7 @@ export function IdeasBoard() {
           )}
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 items-start gap-5">
+        <div className="relative flex min-h-0 flex-1 items-start">
           <div
             // A new lens starts from its first column, not wherever the last one was scrolled.
             key={groupBy}
@@ -641,7 +627,7 @@ export function IdeasBoard() {
             onWheel={chainVerticalWheel}
             className="scroll-contain min-w-0 flex-1 overflow-x-auto pb-3"
           >
-            <div className="inline-flex min-w-full items-start gap-3">
+            <div className="ideas-board inline-flex min-w-full items-start gap-3">
               {columns.map((col) => {
                 const queue = isQueue(col);
                 // An empty column is only a target: narrow, and quiet about it.
@@ -652,24 +638,26 @@ export function IdeasBoard() {
                     aria-label={col.label}
                     data-lane
                     style={{ width: empty ? EMPTY_COL_W : colW }}
+                    // No box: a header line is enough to say where a column
+                    // starts. While dragging, each one outlines itself as a
+                    // place to land.
                     className={cx(
-                      "group/col flex min-h-[24rem] shrink-0 flex-col gap-2 rounded-[16px] p-3",
-                      queue
-                        ? "border-[1.5px] border-dashed border-primary"
-                        : empty
-                          ? "bg-secondary"
-                          : "bg-tertiary"
+                      "group/col flex min-h-[24rem] shrink-0 flex-col gap-2 rounded-[14px] px-1.5 pt-1 pb-3 transition-shadow duration-[var(--dur-base)]",
+                      dnd.drag && "shadow-[inset_0_0_0_1px_var(--color-border-secondary)]"
                     )}
                   >
-                    {columnHeader(col)}
+                    <div className="border-b border-secondary">{columnHeader(col)}</div>
                     {queue && empty && !dnd.drag && (
-                      <div className="flex flex-col gap-3 px-1">
-                        <p className="text-[12.5px] leading-[18px] text-tertiary">
+                      <div className="flex flex-col gap-1.5 px-1 pt-2">
+                        <p className="flex items-center gap-2 font-serif text-[17px] text-secondary italic">
+                          <FiledCheck />
+                          All filed.
+                        </p>
+                        <p className="text-[12.5px] leading-[18px] text-quaternary">
                           {groupBy === "tag"
                             ? "Ideas with no tag land here."
                             : "Ideas with no meeting yet land here."}
                         </p>
-                        <p className="font-serif text-[17px] text-secondary italic">All filed.</p>
                       </div>
                     )}
                     {(
@@ -703,12 +691,13 @@ export function IdeasBoard() {
             </div>
           </div>
 
-          {/* Up next — schedule without going via the planner */}
-          <aside className="sticky top-0 hidden w-[15rem] shrink-0 flex-col gap-2.5 rounded-[16px] border border-secondary bg-primary px-3.5 py-4 xl:flex">
-            <span className="eyebrow">Up next</span>
-            <p className="text-[12.5px] leading-[18px] text-tertiary">
-              Drop an idea on a meeting to put it on the very next one.
-            </p>
+          {/* Up next — schedule without going via the planner. Only while
+              dragging: the rest of the time it was the sidebar's Up next
+              again. It floats over the strip so the columns don't move under
+              the card you're carrying. */}
+          {dnd.drag && (
+          <aside className="absolute top-0 right-0 z-20 flex w-[15rem] animate-[rise-in_var(--dur-base)_var(--ease-out)] flex-col gap-2 rounded-[16px] border border-secondary bg-primary px-3 py-3.5 shadow-[0_14px_32px_-12px_rgba(10,34,37,0.3)]">
+            <span className="px-1 text-[13px] font-medium text-secondary">Put it on the next one</span>
             <ul className="flex flex-col gap-1">
               {upNext.map(({ meeting, slot }) => {
                 const zone = slot.sessionId
@@ -725,10 +714,8 @@ export function IdeasBoard() {
                       className={cx(
                         "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left transition-colors",
                         active
-                          ? "bg-teal-50 shadow-[inset_0_0_0_1.5px_var(--color-teal-600)] dark:bg-teal-950/50"
-                          : dnd.drag
-                            ? "shadow-[inset_0_0_0_1px_var(--color-border-primary)]"
-                            : "hover:bg-secondary"
+                          ? "bg-secondary shadow-[inset_0_0_0_1.5px_var(--color-fg-primary)]"
+                          : "shadow-[inset_0_0_0_1px_var(--color-border-secondary)]"
                       )}
                     >
                       <RhythmRing reading={reading} size={20} />
@@ -737,8 +724,8 @@ export function IdeasBoard() {
                       </span>
                       <span
                         className={cx(
-                          "shrink-0 font-mono text-[10.5px]",
-                          soon ? "text-teal-700 dark:text-teal-300" : "text-quaternary"
+                          "shrink-0 text-[12px]",
+                          soon ? "font-medium text-star" : "text-quaternary"
                         )}
                       >
                         {slot.projected ? "~" : ""}
@@ -750,6 +737,7 @@ export function IdeasBoard() {
               })}
             </ul>
           </aside>
+          )}
         </div>
       )}
 
@@ -761,7 +749,7 @@ export function IdeasBoard() {
           className="sticky bottom-4 z-30 mx-auto flex max-w-full flex-wrap items-center gap-1.5 rounded-[14px] bg-leather py-2 pr-2 pl-4 text-leather-fg shadow-[0_14px_32px_-10px_rgba(10,34,37,0.45),0_2px_6px_rgba(10,34,37,0.18)]"
         >
           <span className="text-[13px] font-semibold">
-            <span className="font-mono text-teal-400">{ids.length}</span> selected
+            <span className="tabular-nums">{ids.length}</span> selected
           </span>
           <i aria-hidden className="mx-1.5 h-5 w-px bg-leather-line" />
           <span className="text-[12px] text-leather-ink">Tag</span>
@@ -870,9 +858,21 @@ export function IdeasBoard() {
   );
 }
 
+/** The Inbox's empty moment: a check that draws itself once. */
+function FiledCheck() {
+  return (
+    <svg aria-hidden viewBox="0 0 20 20" className="filed-check size-5 shrink-0 text-cond-thriving-ink">
+      <circle cx="10" cy="10" r="9" fill="currentColor" opacity="0.14" />
+      <path d="M6 10.4l2.6 2.6L14 7.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /**
  * The capture box, with the grammar read back as you type: where the idea
- * will land and what it'll be tagged, before you press Enter.
+ * will land and what it'll be tagged, before you press Enter. At rest it's
+ * just the box; the line under it opens when you start, so the syntax is
+ * there when you're writing and gone when you're reading the board.
  */
 function CaptureBar({
   meetings,
@@ -887,6 +887,8 @@ function CaptureBar({
 }) {
   const tags = useStore((s) => s.tags);
   const [draft, setDraft] = useState("");
+  const [focused, setFocused] = useState(false);
+  const open = focused || draft.trim() !== "";
   const lines = splitCaptureLines(draft);
   const preview = lines.length === 1 ? parseCapture(lines[0]) : null;
   const meeting =
@@ -897,7 +899,9 @@ function CaptureBar({
 
   return (
     <form
-      className="flex flex-col gap-2.5 rounded-[16px] border border-secondary bg-primary p-3 pl-4 shadow-[0_1px_2px_rgba(10,34,37,0.05)] focus-within:border-teal-300 dark:focus-within:border-teal-800"
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setFocused(false)}
+      className="flex flex-col rounded-[18px] border border-secondary bg-primary p-3.5 pl-5 shadow-[0_1px_2px_rgba(10,34,37,0.05)] transition-[border-color,box-shadow] duration-[var(--dur-base)] focus-within:border-fg-quaternary focus-within:shadow-[0_0_0_3px_var(--color-bg-tertiary)]"
       onSubmit={(e) => {
         e.preventDefault();
         if (!draft.trim()) return;
@@ -923,20 +927,31 @@ function CaptureBar({
               (e.target as HTMLTextAreaElement).style.height = "auto";
             }
           }}
-          placeholder="Something to raise…  #tag @name"
+          placeholder="Something to raise…"
           aria-label="Capture an idea"
-          className="min-h-9 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[16px] leading-6 outline-none placeholder:text-quaternary"
+          // The form draws the focus (border and halo); the app-wide ring on
+          // the textarea too would put a second box inside the first.
+          className="min-h-10 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-[18px] leading-7 outline-none placeholder:text-quaternary focus-visible:shadow-none"
         />
         <button
           type="submit"
           disabled={!draft.trim()}
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-teal-700 disabled:opacity-40 dark:bg-teal-500 dark:text-stone-950"
+          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[10px] bg-teal-600 px-4 text-[13.5px] font-semibold text-white transition-[background-color,opacity] hover:bg-teal-700 disabled:opacity-0 dark:bg-teal-500 dark:text-stone-950"
         >
           Add <span className="font-mono text-[11px] opacity-80">↵</span>
         </button>
       </div>
+      {/* 0fr → 1fr: the line opens to its own height, whatever wraps. */}
       <div
-        className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-secondary pt-2.5 text-[12.5px] text-tertiary"
+        className={cx(
+          "grid transition-[grid-template-rows,opacity] duration-[var(--dur-base)] ease-[var(--ease-out)]",
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+        aria-hidden={!open}
+      >
+      <div className="min-h-0 overflow-hidden">
+      <div
+        className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-secondary pt-2.5 text-[12.5px] text-tertiary"
         aria-live="polite"
       >
         {lines.length > 1 ? (
@@ -984,6 +999,8 @@ function CaptureBar({
             <span className="font-mono text-[11.5px]">!</span> urgent
           </span>
         </span>
+      </div>
+      </div>
       </div>
     </form>
   );
