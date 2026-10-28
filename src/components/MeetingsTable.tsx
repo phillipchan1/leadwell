@@ -305,14 +305,14 @@ function MeetingCard({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
           <span>{kindLabel(r)}</span>
           <span>·</span>
           <span>{RHYTHM_LABEL[r.meeting.rhythm]}</span>
-          {r.runway.level !== "none" && (
-            <>
-              <span>·</span>
-              <RunwayCover runway={r.runway} />
-            </>
-          )}
           {r.loose > 0 && <LooseBadge count={r.loose} />}
         </div>
+        {r.runway.level !== "none" && (
+          <div className="mt-2 flex items-center gap-2.5 pl-[26px]" title={runwayTitle(r.runway)}>
+            <RunwayTrack runway={r.runway} className="min-w-0 flex-1" />
+            <RunwayCover runway={r.runway} />
+          </div>
+        )}
       </button>
     </li>
   );
@@ -340,12 +340,9 @@ function MeetingRow({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
             <span className="text-xs text-quaternary">As needed</span>
           ) : (
             <>
-              {/* The count is the answer; the twelve weeks behind it come up
-                  under the pointer. Fingers get it all the time. */}
-              <RunwayTrack
-                runway={r.runway}
-                className="w-[168px] shrink-0 transition-opacity duration-[var(--dur-base)] hoverable:opacity-0 hoverable:group-hover:opacity-100 hoverable:group-focus-visible:opacity-100"
-              />
+              {/* Always drawn: the point is scanning down the column and seeing
+                  which bars are short, without pointing at each row. */}
+              <RunwayTrack runway={r.runway} className="w-[168px] shrink-0" />
               <RunwayCover runway={r.runway} />
             </>
           )}

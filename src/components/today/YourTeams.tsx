@@ -3,6 +3,8 @@ import type { Team } from "@/types";
 import { useStore } from "@/store/useStore";
 import { STATE_LABEL, formatCountdown, meetingsFor, readinessOf, todayISO, type Readiness } from "@/lib/readiness";
 import { delegatedTeamIds } from "@/lib/teams";
+import { runwayOf, type Runway } from "@/lib/runway";
+import { RunwayCover, RunwayTrack, runwayTitle } from "../RunwayTrack";
 import { Avatar } from "../Avatar";
 import { RhythmRing, STATE_TEXT } from "../brand/glyphs";
 
@@ -46,6 +48,7 @@ export function YourTeams({ scopeId, skip }: { scopeId: string | null; skip?: Re
           team,
           primary,
           readiness: primary ? readinessOf(primary, data, today) : null,
+          runway: primary ? runwayOf(primary, sessions, topics, today) : null,
         };
       })
       .sort((a, b) => urgency(a.readiness) - urgency(b.readiness));
@@ -74,6 +77,7 @@ export function YourTeams({ scopeId, skip }: { scopeId: string | null; skip?: Re
             key={row.team.id}
             team={row.team}
             readiness={row.readiness}
+            runway={row.runway}
             nextStep={teamActions.find((a) => a.teamId === row.team.id && !a.done)?.text}
             onOpenMeeting={row.primary ? () => selectMeeting(row.primary!.id) : undefined}
             onOpenTeam={() => selectTeam(row.team.id)}
@@ -87,12 +91,14 @@ export function YourTeams({ scopeId, skip }: { scopeId: string | null; skip?: Re
 function TeamRow({
   team,
   readiness,
+  runway,
   nextStep,
   onOpenMeeting,
   onOpenTeam,
 }: {
   team: Team;
   readiness: Readiness | null;
+  runway: Runway | null;
   nextStep?: string;
   onOpenMeeting?: () => void;
   onOpenTeam: () => void;
@@ -102,6 +108,7 @@ function TeamRow({
     : team.noMeeting
       ? "No standing meeting, by choice"
       : "No meeting tracked yet";
+  const showRunway = Boolean(runway && runway.level !== "none");
   return (
     <li className="flex items-center gap-3 border-t border-secondary px-4 py-3 first:border-t-0">
       <Avatar name={team.name} size={28} className="!rounded-[8px]" />
@@ -112,7 +119,23 @@ function TeamRow({
         <span className="truncate text-[13px] text-quaternary">
           {[when.charAt(0).toUpperCase() + when.slice(1), nextStep].filter(Boolean).join(" · ")}
         </span>
+        {/* How far ahead it's planned — the leadership-block read of which
+            team needs planning. Under the name on a phone, beside it above. */}
+        {showRunway && (
+          <span className="mt-1 flex items-center gap-2.5 sm:hidden" title={runwayTitle(runway!)}>
+            <RunwayTrack runway={runway!} className="min-w-0 flex-1" />
+            <RunwayCover runway={runway!} />
+          </span>
+        )}
       </button>
+      {showRunway && (
+        <span className="flex shrink-0 items-center gap-2.5 max-sm:hidden" title={runwayTitle(runway!)}>
+          <RunwayTrack runway={runway!} className="w-[132px]" />
+          <span className="w-[92px]">
+            <RunwayCover runway={runway!} />
+          </span>
+        </span>
+      )}
       {readiness && onOpenMeeting && (
         <button
           type="button"
