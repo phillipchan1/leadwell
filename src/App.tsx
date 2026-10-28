@@ -34,6 +34,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { ShortcutsPanel } from "./components/ShortcutsPanel";
 import { useShortcut } from "@/hooks/use-shortcut";
 import { cx } from "@/utils/cx";
+import { useEnterMotion } from "@/hooks/use-enter-motion";
 
 /**
  * The canvas (React Flow), the org table and the session editor are the three
@@ -347,6 +348,8 @@ export default function App() {
     }
   }, [phase, signInPath, navigate]);
   const tab = useStore((s) => s.tab);
+  // Every place arrives the same way; the screen you left just goes.
+  const mainRef = useEnterMotion<HTMLElement>(tab);
   const focused = useStore((s) => s.focused);
   const sessionId = useStore((s) => s.sessionId);
   const settingsOpen = useStore((s) => s.settingsOpen);
@@ -471,6 +474,7 @@ export default function App() {
              clipped. */
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <main
+              ref={mainRef}
               className={cx(
                 "min-h-0",
                 // Horizontal padding is `pad-safe-x`'s alone — `p-4` sets the

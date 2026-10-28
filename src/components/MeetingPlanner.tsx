@@ -15,7 +15,7 @@ import { SessionHistoryTable } from "./SessionHistoryTable";
 import { OccurrenceNotesPanel } from "./OccurrenceNotesPanel";
 import { OccurrenceNotesSheet } from "./OccurrenceNotesSheet";
 import { useRovingFocus } from "@/hooks/use-roving-focus";
-import { Calendar, ChevronDown } from "@untitledui/icons";
+import { Calendar, CalendarPlus01, ChevronDown } from "@untitledui/icons";
 import { todayISO } from "../lib/readiness";
 import { ArcRibbon } from "./arcs/ArcRibbon";
 import { cx } from "@/utils/cx";
@@ -292,12 +292,31 @@ export function MeetingPlanner({
 export function AddOneOff({
   onAdd,
   className,
+  iconOnly,
 }: {
   onAdd: (date: string) => void;
   className?: string;
+  /** A quiet square for a header that already has its one primary button. */
+  iconOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(todayISO());
+  if (!open && iconOnly) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Add a one-off date"
+        title="Add a one-off date"
+        className={cx(
+          "inline-flex size-9 shrink-0 items-center justify-center rounded-[9px] text-tertiary hover:bg-secondary hover:text-secondary touch:size-11",
+          className
+        )}
+      >
+        <CalendarPlus01 aria-hidden className="size-[18px]" />
+      </button>
+    );
+  }
   if (!open) {
     return (
       <button

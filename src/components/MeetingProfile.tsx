@@ -157,53 +157,52 @@ export function MeetingProfile({
     openSession(id);
   };
 
+  // The button already sits on the meeting's page; "today's meeting" was
+  // the page title said again.
   const startLabel = next
     ? daysBetween(today, next.slot.date) === 0
-      ? "Start today's meeting"
+      ? "Start"
       : `Start ${weekName(next.slot.date)}`
     : null;
 
+  /* One primary button. Share and a one-off date are things you do rarely,
+     so they're quiet icons beside it, words on hover. */
   const actions = (
     <>
       <button
         type="button"
         onClick={() => setSharing(true)}
+        aria-label={shared ? `Shared with ${sharedWithLabel(shares)}` : "Share"}
+        title={shared ? `Visible to ${sharedWithLabel(shares)}` : "Share"}
         className={cx(
-          "inline-flex h-9 shrink-0 items-center gap-2 rounded-full text-[13px] font-semibold transition-colors touch:min-h-11",
-          shared
-            ? "bg-secondary pr-3 pl-1 text-secondary hover:bg-tertiary"
-            : "rounded-[9px] px-3 text-secondary hover:bg-secondary"
+          "inline-flex h-9 shrink-0 items-center justify-center rounded-[9px] text-tertiary hover:bg-secondary hover:text-secondary touch:min-h-11",
+          shared ? "px-1.5" : "w-9 touch:w-11"
         )}
       >
         {shared ? (
-          <>
-            <span className="flex">
-              {shares.slice(0, 3).map((sh, i) => (
-                <Avatar
-                  key={sh.id}
-                  name={sh.name ?? sh.email}
-                  size={26}
-                  className={cx("ring-2 ring-[var(--color-bg-secondary)]", i > 0 && "-ml-2")}
-                />
-              ))}
-            </span>
-            Visible to {sharedWithLabel(shares)}
-          </>
+          <span className="flex">
+            {shares.slice(0, 3).map((sh, i) => (
+              <Avatar
+                key={sh.id}
+                name={sh.name ?? sh.email}
+                size={24}
+                className={cx("ring-2 ring-[var(--color-bg-primary)]", i > 0 && "-ml-2")}
+              />
+            ))}
+          </span>
         ) : (
-          <>
-            <Users01 aria-hidden className="size-4 text-tertiary" />
-            Share
-          </>
+          <Users01 aria-hidden className="size-[18px]" />
         )}
       </button>
       <AddOneOff
+        iconOnly
         onAdd={(date) => showWeek(`s:${addExtraOccurrence(meeting.id, date)}`)}
       />
       {next && startLabel && (
         <button
           type="button"
           onClick={() => start(next.slot)}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] bg-teal-600 px-3.5 text-[13px] font-semibold text-white shadow-xs transition-colors hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400"
+          className="ml-1 inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] bg-teal-600 px-4 text-[13px] font-semibold text-white shadow-xs hover:bg-teal-700 touch:min-h-11 dark:bg-teal-500 dark:text-stone-950 dark:hover:bg-teal-400"
         >
           <Play aria-hidden className="size-3.5" />
           {startLabel}
@@ -248,10 +247,13 @@ export function MeetingProfile({
                     with <span className="font-serif text-[15.5px] text-primary">{subjectName}</span>
                   </span>
                 )}
-                <span className="whitespace-nowrap">
-                  <span aria-hidden className="mr-2 text-quaternary">·</span>
-                  {meeting.role === "attend" ? "you attend" : "you convene"}
-                </span>
+                {/* Convening is the norm; only the exception is worth a word. */}
+                {meeting.role === "attend" && (
+                  <span className="whitespace-nowrap">
+                    <span aria-hidden className="mr-2 text-quaternary">·</span>
+                    you attend
+                  </span>
+                )}
               </p>
               <PhoneRhythm meeting={meeting} />
             </div>
@@ -351,9 +353,11 @@ export function MeetingProfile({
 }
 
 /**
- * The three things worth knowing before you plan: is the rhythm holding,
- * what's on the next one, and which parts of the standing agenda keep getting
- * skipped.
+ * The three things worth knowing before you plan — is the rhythm holding,
+ * what's on the next one, how many ideas are waiting — as one quiet line
+ * under the title. They used to be three boxed cards with a label each, which
+ * gave a status line the weight of the page's content. Which sections keep
+ * getting skipped is the Plan ahead board's job; it shows it week by week.
  */
 function MeetingStatus({
   meeting,
@@ -375,119 +379,60 @@ function MeetingStatus({
   const tags = useStore((s) => s.tags);
   const reading = readinessOf(meeting, { meetings: [meeting], sessions, topics });
   const curriculum = curriculumOf(meeting);
-  const upcoming = weeks.filter((w) => !w.slot.past);
-  const nextWeek = next ? upcoming.find((w) => w.slot.date === next.date) : undefined;
-  const minutes = curriculum.reduce((n, s) => n + (s.minutes ?? 0), 0);
+  const nextWeek = next ? weeks.find((w) => !w.slot.past && w.slot.date === next.date) : undefined;
   const filledIn = (slotId: string) =>
     Boolean(nextWeek?.cells.some((c) => c.slotId === slotId && c.topics.length > 0));
-  const planned = curriculum.filter((s) => filledIn(s.id));
-  const openNames = curriculum.filter((s) => !filledIn(s.id)).map((s) => s.label);
-  const plannedAhead = upcoming.reduce((n, w) => n + w.topics.length, 0);
+  const planned = curriculum.filter((s) => filledIn(s.id)).length;
+  const topicCount = nextWeek?.topics.length ?? 0;
+  const when = formatCountdown(reading);
+
+  const item = "inline-flex items-center gap-2 rounded-md whitespace-nowrap transition-colors hover:text-primary";
 
   return (
     // On a phone the plan is the point; the rhythm rides under the title.
-    <div className="grid overflow-hidden rounded-[16px] border border-secondary bg-primary max-md:hidden @2xl:grid-cols-3">
-      <Cell label="Rhythm" aside={RHYTHM_LABEL[meeting.rhythm].toUpperCase()} onClick={onRhythm}>
-        <span className={cx("inline-flex flex-wrap items-center gap-x-2.5 gap-y-1", STATE_TEXT[reading.state])}>
-          <RhythmRing reading={reading} size={24} />
-          <span className="font-mono text-[13px] font-medium whitespace-nowrap uppercase">{formatCountdown(reading)}</span>
-          <span className="text-[13px] font-semibold whitespace-nowrap">{STATE_LABEL[reading.state]}</span>
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13.5px] text-tertiary max-md:hidden">
+      <button type="button" onClick={onRhythm} className={item} title="Rhythm and schedule">
+        <RhythmRing reading={reading} size={18} />
+        <span className={cx("font-semibold", STATE_TEXT[reading.state])}>
+          {when.charAt(0).toUpperCase() + when.slice(1)} · {STATE_LABEL[reading.state]}
         </span>
-        <p className="text-[13.5px] leading-5 text-secondary">
-          {reading.lastMet
-            ? `Last met ${fmt(reading.lastMet, { weekday: "short", month: "short", day: "numeric" })}.`
-            : "Not met yet."}
-        </p>
-      </Cell>
-
-      <Cell
-        label="Next up"
-        aside={minutes ? `${minutes} MIN` : undefined}
-        onClick={next ? () => onNext(next) : undefined}
-      >
-        {next ? (
-          <>
-            <p className="font-serif text-[19px] leading-6">
-              {fmt(next.date, { weekday: "long", month: "long", day: "numeric" })}
-            </p>
-            {curriculum.length > 0 ? (
-              <>
-                <span className="flex gap-1" aria-hidden>
-                  {curriculum.map((s) => (
-                    <span
-                      key={s.id}
-                      style={{ flexGrow: s.minutes || 1 }}
-                      className={cx(
-                        "h-1.5 basis-0 rounded-full",
-                        filledIn(s.id) ? slotDotClass(curriculum, s.id, tags) : "bg-quaternary"
-                      )}
-                    />
-                  ))}
-                </span>
-                <p className="text-[13px] leading-5 text-secondary">
-                  {planned.length} of {curriculum.length} sections planned
-                  {openNames.length > 0 && openNames.length < curriculum.length
-                    ? `. ${listNames(openNames)} ${openNames.length === 1 ? "is" : "are"} open.`
-                    : "."}
-                </p>
-              </>
-            ) : (
-              <p className="text-[13px] leading-5 text-secondary">
-                {nextWeek?.topics.length
-                  ? `${nextWeek.topics.length} topic${nextWeek.topics.length === 1 ? "" : "s"} planned.`
-                  : "Nothing planned yet."}
-              </p>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="font-serif text-[19px] leading-6 text-secondary">Nothing coming up</p>
-            <p className="text-[13px] leading-5 text-secondary">
-              Set a rhythm in Settings, or add a one-off date.
-            </p>
-          </>
+        {reading.lastMet && (
+          <span>last met {fmt(reading.lastMet, { month: "short", day: "numeric" })}</span>
         )}
-      </Cell>
+      </button>
 
-      {curriculum.length > 0 && upcoming.length > 0 ? (
-        <Cell label="Coverage" aside={`NEXT ${upcoming.length} ${upcoming.length === 1 ? "WEEK" : "WEEKS"}`}>
-          <div className="grid grid-cols-[minmax(0,auto)_auto_1fr] items-center gap-x-2.5 gap-y-1.5 text-[12.5px]">
-            {curriculum.map((s) => {
-              const filled = upcoming.map((w) =>
-                w.cells.some((c) => c.slotId === s.id && c.topics.length > 0)
-              );
-              const n = filled.filter(Boolean).length;
-              const dot = slotDotClass(curriculum, s.id, tags);
-              return (
-                <div key={s.id} className="contents" title={`${s.label}: planned in ${n} of the next ${filled.length}`}>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <i aria-hidden className={cx("size-2 shrink-0 rounded-[2px]", dot)} />
-                    <span className="truncate">{s.label}</span>
-                  </span>
-                  <span aria-hidden className="flex items-end gap-[2.5px]">
-                    {filled.slice(0, 12).map((on, i) => (
-                      <i key={i} className={cx("h-2.5 w-[5px] rounded-[1.5px]", on ? dot : "bg-quaternary")} />
-                    ))}
-                  </span>
-                  <span className="font-mono text-[11px] text-quaternary">
-                    {n}/{filled.length}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </Cell>
+      {next ? (
+        <button type="button" onClick={() => onNext(next)} className={item} title="Open the agenda">
+          {curriculum.length > 0 ? (
+            <>
+              <span className="flex w-14 gap-0.5" aria-hidden>
+                {curriculum.map((s) => (
+                  <span
+                    key={s.id}
+                    style={{ flexGrow: s.minutes || 1 }}
+                    className={cx(
+                      "h-1.5 basis-0 rounded-full transition-colors duration-300",
+                      filledIn(s.id) ? slotDotClass(curriculum, s.id, tags) : "bg-quaternary"
+                    )}
+                  />
+                ))}
+              </span>
+              {planned} of {curriculum.length} sections planned
+            </>
+          ) : topicCount ? (
+            `${topicCount} topic${topicCount === 1 ? "" : "s"} planned`
+          ) : (
+            "Nothing planned yet"
+          )}
+        </button>
       ) : (
-        <Cell label="Ideas">
-          <p className="font-serif text-[19px] leading-6">
-            {ideas} waiting
-          </p>
-          <p className="text-[13px] leading-5 text-secondary">
-            {plannedAhead
-              ? `${plannedAhead} topic${plannedAhead === 1 ? "" : "s"} planned ahead.`
-              : "Nothing planned ahead yet."}
-          </p>
-        </Cell>
+        <span>Nothing coming up</span>
+      )}
+
+      {ideas > 0 && (
+        <span className="whitespace-nowrap">
+          {ideas} idea{ideas === 1 ? "" : "s"} waiting
+        </span>
       )}
     </div>
   );
@@ -504,44 +449,6 @@ function PhoneRhythm({ meeting }: { meeting: TrackedMeeting }) {
       <span className="font-mono text-[12px] font-medium uppercase">{formatCountdown(reading)}</span>
       <span className="text-[12.5px] font-semibold">{STATE_LABEL[reading.state]}</span>
     </span>
-  );
-}
-
-function listNames(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
-function Cell({
-  label,
-  aside,
-  onClick,
-  children,
-}: {
-  label: string;
-  aside?: string;
-  onClick?: () => void;
-  children: ReactNode;
-}) {
-  const body = (
-    <>
-      <span className="flex w-full items-center gap-2">
-        <span className="eyebrow">{label}</span>
-        {aside && (
-          <span className="ml-auto shrink-0 font-mono text-[11px] whitespace-nowrap text-quaternary">{aside}</span>
-        )}
-      </span>
-      {children}
-    </>
-  );
-  const cls =
-    "flex min-w-0 flex-col gap-2.5 border-secondary px-5 py-4 text-left not-last:border-b @2xl:not-last:border-r @2xl:not-last:border-b-0";
-  return onClick ? (
-    <button type="button" onClick={onClick} className={cx(cls, "transition-colors hover:bg-secondary")}>
-      {body}
-    </button>
-  ) : (
-    <div className={cls}>{body}</div>
   );
 }
 

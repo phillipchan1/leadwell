@@ -3,6 +3,7 @@ import {
   TabList,
   Tabs,
 } from "@/components/application/tabs/tabs";
+import { useLayoutEffect, useRef } from "react";
 import { PrayerIcon } from "./Prayer";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { modeTabs, type EntityMode, type ModeSubject } from "../lib/entityModes";
@@ -36,7 +37,54 @@ export function EntityModeTabs({
    */
   const phone = useMediaQuery("(max-width: 639px)");
 
+  /*
+   * One underline that slides to the selected tab, instead of each tab drawing
+   * its own and the line blinking from one to the next. Measured after layout
+   * so counts and the phone's shared-out widths are already settled.
+   */
+  const strip = useRef<HTMLDivElement>(null);
+  const countKey = JSON.stringify(counts ?? {});
+  const bar = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const host = strip.current;
+    const line = bar.current;
+    if (!host || !line) return;
+    // react-aria renders the tabs from its collection a beat after the strip
+    // mounts, so the selected one is looked up each time, never captured.
+    const place = () => {
+      const on = host.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (!on) return false;
+      const a = host.getBoundingClientRect();
+      const b = on.getBoundingClientRect();
+      line.style.width = `${b.width}px`;
+      line.style.transform = `translateX(${b.left - a.left}px)`;
+      return true;
+    };
+    let raf = 0;
+    const settle = () => {
+      if (!place()) raf = requestAnimationFrame(settle);
+      // The first placement shouldn't slide in from the left edge.
+      else raf = requestAnimationFrame(() => line.classList.add("mode-tabs__bar--live"));
+    };
+    settle();
+    const ro = new ResizeObserver(() => place());
+    ro.observe(host);
+    // Arrow keys move selection without a re-render reaching here first.
+    const mo = new MutationObserver(() => place());
+    mo.observe(host, { subtree: true, attributes: true, attributeFilter: ["aria-selected"] });
+    // A phone's strip can scroll sideways; the line rides with its tab.
+    const onScroll = () => place();
+    host.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      mo.disconnect();
+      host.removeEventListener("scroll", onScroll, { capture: true });
+    };
+  }, [mode, phone, countKey]);
+
   return (
+    <div ref={strip} className="mode-tabs relative shrink-0">
     <Tabs
       selectedKey={mode}
       onSelectionChange={(key) => onMode(key as EntityMode)}
@@ -63,5 +111,7 @@ export function EntityModeTabs({
         }}
       </TabList>
     </Tabs>
+      <span ref={bar} aria-hidden className="mode-tabs__bar" />
+    </div>
   );
 }

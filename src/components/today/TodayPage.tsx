@@ -21,7 +21,7 @@ import { shortSincePrayed } from "@/lib/prayer";
 import { nextArcSteps, stepTag } from "@/lib/arcs";
 import { ensureSessionId, plannedSlots } from "@/lib/topics";
 import { startMeeting } from "@/lib/liveMeeting";
-import { Play } from "@untitledui/icons";
+import { ArrowRight, Lightbulb02, Play } from "@untitledui/icons";
 import type { Arc, ArcStep, TrackedMeeting } from "@/types";
 import { Avatar } from "../Avatar";
 import { YourTeams } from "./YourTeams";
@@ -29,10 +29,11 @@ import { HealthMeter, PrayerFlame, RhythmRing, STATE_TEXT } from "../brand/glyph
 import { cx } from "@/utils/cx";
 
 /*
- * Today — the front door. It answers "what needs me?" and nothing else: the
- * one next move, the week ahead, ideas waiting for a home, who you're
- * carrying, how the people you lead are doing, and anyone with no decision
- * yet. Every row is a door to where the work actually happens.
+ * Today — the front door. It answers "what needs me?" and nothing else, in
+ * reading order: the one next move, the week ahead, then one person who needs
+ * you. Prayer, health and undecided compete for that last slot and only the
+ * most urgent gets a card; the rest are a line of links. Every row is a door
+ * to where the work actually happens.
  */
 
 const weekdayLong = (iso: string) =>
@@ -44,7 +45,7 @@ const weekdayLong = (iso: string) =>
 const dayParts = (iso: string) => {
   const d = new Date(`${iso}T00:00:00Z`);
   return {
-    weekday: d.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }).toUpperCase(),
+    weekday: d.toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }),
     day: d.getUTCDate(),
   };
 };
@@ -73,80 +74,50 @@ export function TodayPage() {
     [people, teams, managers, meetings, sessions, topics, scopeId, today]
   );
   const scope = domains.find((d) => d.id === scopeId);
+  const thisWeekIds = useMemo(() => new Set(model.thisWeek.map((r) => r.meeting.id)), [model]);
   const now = new Date();
-  const dateLine = now
-    .toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
-    .toUpperCase();
+  const dateLine = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
     <div className="px-4 pt-6 pb-16 sm:px-8 lg:px-12 lg:pt-11">
       <div className="mx-auto flex max-w-[1120px] flex-col gap-8 lg:gap-9">
-        <header className="flex flex-wrap items-end justify-between gap-6">
-          <div className="flex min-w-0 flex-col gap-2.5">
-            <span className="font-mono text-[12px] tracking-[0.04em] text-quaternary">
-              {dateLine}
-              {scope && (
-                <>
-                  {" · "}
-                  <span className="inline-flex items-center gap-1.5">
-                    <i className="inline-block size-2 rounded-[2px]" style={{ backgroundColor: scope.color }} aria-hidden="true" />
-                    {scope.name.toUpperCase()}
-                  </span>
-                </>
-              )}
-            </span>
-            <h1 className="font-serif text-[34px] leading-[40px] font-[450] tracking-[-0.01em] text-balance sm:text-[44px] sm:leading-[50px]">
-              {greeting(now)}
-              {me.name ? `, ${firstName(me.name)}` : ""}.
-            </h1>
-            <p className="max-w-[560px] text-[15.5px] leading-[23px] text-secondary">
-              {summaryLine(model, weekdayLong)}
-            </p>
-          </div>
-          <dl className="flex gap-6 pb-1">
-            <Stat value={`${model.readyThisWeek}`} of={model.thisWeek.length} label="ready this week" />
-            <Stat value={`${model.drifting.length}`} label="drifting" tone={model.drifting.length ? "critical" : undefined} />
-            <Stat value={`${model.undecided.length}`} label="undecided" />
-          </dl>
+        {/* The brief under the greeting already says how the week stands, so
+            no counters beside it. */}
+        <header className="flex min-w-0 flex-col gap-2.5">
+          <span className="text-[13px] text-quaternary">
+            {dateLine}
+            {scope && (
+              <>
+                {" · "}
+                <span className="inline-flex items-center gap-1.5">
+                  <i className="inline-block size-2 rounded-[2px]" style={{ backgroundColor: scope.color }} aria-hidden="true" />
+                  {scope.name}
+                </span>
+              </>
+            )}
+          </span>
+          <h1 className="font-serif text-[34px] leading-[40px] font-[450] tracking-[-0.01em] text-balance sm:text-[44px] sm:leading-[50px]">
+            {greeting(now)}
+            {me.name ? `, ${firstName(me.name)}` : ""}.
+          </h1>
+          <p className="max-w-[560px] text-[15.5px] leading-[23px] text-secondary">
+            {summaryLine(model, weekdayLong)}
+          </p>
         </header>
 
         <div className="flex flex-wrap items-start gap-7">
           <div className="flex min-w-0 flex-[1.75_1_520px] flex-col gap-7">
             {model.nextMove ? <NextMove row={model.nextMove} /> : <AllClear />}
             <ComingUp rows={model.thisWeek} nextWeek={model.nextWeek} />
-            <YourTeams scopeId={scopeId} />
             <IdeasWaiting ideas={model.ideas} />
+            <YourTeams scopeId={scopeId} skip={thisWeekIds} />
           </div>
-          <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-5">
+          <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
             <SharedWithYou />
-            <Carrying rows={model.carrying} />
-            <HowTheyreDoing health={model.health} />
-            <Undecided subjects={model.undecided} />
+            <NeedsYou model={model} />
           </aside>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Stat({
-  value,
-  of,
-  label,
-  tone,
-}: {
-  value: string;
-  of?: number;
-  label: string;
-  tone?: "critical";
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dd className={cx("order-1 font-mono text-[22px] font-medium tabular-nums", tone === "critical" && "text-cond-critical-ink")}>
-        {value}
-        {of !== undefined && <span className="text-quaternary">/{of}</span>}
-      </dd>
-      <dt className="order-2 text-[12px] text-quaternary">{label}</dt>
     </div>
   );
 }
@@ -241,14 +212,12 @@ function NextMove({ row }: { row: MeetingRow }) {
       aria-label="Your next move"
       className="flex flex-col gap-[18px] rounded-2xl border border-secondary bg-primary px-5 py-6 sm:px-7"
     >
-      <div className="flex flex-wrap items-center gap-2.5">
-        <span className="eyebrow">Your next move</span>
-        <span className={cx("inline-flex items-center gap-1.5 font-mono text-[11.5px] font-medium", STATE_TEXT[r.state])}>
-          <RhythmRing reading={r} size={16} />
-          {STATE_LABEL[r.state].toUpperCase()}
-          {r.state === "drifting" && weeks !== null && weeks >= 2 ? ` · ${weeks} WK` : ""}
-        </span>
-      </div>
+      {/* The headline is the label; the card only says how it stands. */}
+      <span className={cx("inline-flex items-center gap-1.5 text-[13px] font-medium", STATE_TEXT[r.state])}>
+        <RhythmRing reading={r} size={16} />
+        {STATE_LABEL[r.state]}
+        {r.state === "drifting" && weeks !== null && weeks >= 2 ? ` · ${weeks} weeks` : ""}
+      </span>
       <div className="flex items-start gap-[18px]">
         {subject && (
           <button type="button" onClick={() => open(subject)} className="shrink-0 rounded-full" aria-label={`Open ${subject.name}`}>
@@ -285,15 +254,6 @@ function NextMove({ row }: { row: MeetingRow }) {
             Pray for {subject.kind === "team" ? subject.name : firstName(subject.name)}
           </button>
         )}
-        {subject && (
-          <button
-            type="button"
-            onClick={() => open(subject)}
-            className="inline-flex h-10 items-center rounded-[9px] px-3 text-[14px] font-medium text-tertiary hover:bg-secondary"
-          >
-            Open {subject.kind === "team" ? "team" : "profile"}
-          </button>
-        )}
       </div>
     </section>
   );
@@ -313,8 +273,7 @@ function isCold(s: Subject): boolean {
 
 function AllClear() {
   return (
-    <section className="flex flex-col gap-2 rounded-2xl border border-dashed border-primary px-7 py-6">
-      <span className="eyebrow">Your next move</span>
+    <section aria-label="Your next move" className="flex flex-col gap-2 rounded-2xl border border-dashed border-primary px-7 py-6">
       <h2 className="font-serif text-[26px] leading-[32px] font-[450]">Nothing is owed right now.</h2>
       <p className="text-[14.5px] leading-[22px] text-secondary">
         Every meeting you track is ready or resting. A good week to take someone up in prayer, or to
@@ -364,7 +323,7 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
     <section className="flex flex-col gap-3.5">
       <div className="flex items-baseline justify-between">
         <h2 className="text-[15px] leading-5 font-semibold">Coming up this week</h2>
-        <button type="button" onClick={() => setTab("meetings")} className="text-[13px] font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400">
+        <button type="button" onClick={() => setTab("meetings")} className="text-[13px] font-medium text-tertiary hover:text-primary">
           All meetings
         </button>
       </div>
@@ -384,15 +343,16 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
               <li
                 key={row.meeting.id}
                 className={cx(
+                  "group",
                   // The action column is fixed so every row's status lines up;
                   // at `auto` each row sized it to its own label.
                   "grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-3.5 @min-[560px]:grid-cols-[64px_minmax(0,1fr)_140px_7.5rem] @min-[560px]:px-5",
                   i > 0 && "border-t border-secondary"
                 )}
               >
-                <span className="flex flex-col font-mono leading-tight">
-                  <span className="text-[11px] text-quaternary">{r.projected ? `~${weekday}` : weekday}</span>
-                  <span className="text-[20px] font-medium tabular-nums">{day}</span>
+                <span className="flex flex-col leading-tight">
+                  <span className="text-[12px] text-quaternary">{r.projected ? `~${weekday}` : weekday}</span>
+                  <span className="font-mono text-[20px] font-medium tabular-nums">{day}</span>
                 </span>
                 <button type="button" onClick={() => selectMeeting(row.meeting.id)} className="flex min-w-0 flex-col gap-0.5 text-left">
                   <span className="truncate font-serif text-[19px] leading-[23px] font-medium hover:underline hover:decoration-1 hover:underline-offset-4">
@@ -403,7 +363,6 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                   <span className="line-clamp-2 text-[13px] text-quaternary @min-[560px]:line-clamp-1">
                     {[
                       row.meeting.subjectKind === "person" ? "1:1" : row.subject?.kind === "team" ? row.subject.name : row.subject?.name,
-                      RHYTHM_LABEL[row.meeting.rhythm].toLowerCase(),
                       row.agenda ? `${row.agenda} on the agenda` : "nothing on the agenda",
                       ...arcLines(row.meeting),
                     ]
@@ -427,10 +386,13 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                       Start
                     </button>
                   ) : action ? (
+                    // The ring already says what's missing; the fix only
+                    // surfaces under the pointer. Fingers can't hover, so
+                    // touch keeps it showing.
                     <button
                       type="button"
                       onClick={() => fix(row, action.check)}
-                      className="text-right text-[13px] font-semibold whitespace-nowrap text-teal-700 hover:text-teal-800 dark:text-teal-400"
+                      className="text-right text-[13px] font-semibold whitespace-nowrap text-primary transition-opacity duration-[var(--dur-quick)] hoverable:opacity-0 hoverable:group-hover:opacity-100 hoverable:focus-visible:opacity-100"
                     >
                       {action.label}
                     </button>
@@ -456,7 +418,7 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
                 <button type="button" onClick={() => selectMeeting(row.meeting.id)} className="font-serif text-[15px] text-secondary hover:underline">
                   {row.title}
                 </button>{" "}
-                <span className="font-mono text-[11.5px]">
+                <span>
                   {row.reading.projected ? "~" : ""}
                   {weekday} {day}
                 </span>
@@ -473,74 +435,82 @@ function ComingUp({ rows, nextWeek }: { rows: MeetingRow[]; nextWeek: MeetingRow
 
 function IdeasWaiting({ ideas }: { ideas: ReturnType<typeof buildToday>["ideas"] }) {
   const setTab = useStore((s) => s.setTab);
-  const tags = useStore((s) => s.tags);
-  const meetings = useStore((s) => s.meetings);
-  const people = useStore((s) => s.people);
-  const teams = useStore((s) => s.teams);
-  const managers = useStore((s) => s.managers);
+  // Capture lives in the sidebar; an empty Ideas has nothing to ask of you.
+  if (!ideas.count) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => setTab("ideas")}
+      className="group -my-2 inline-flex items-center gap-2.5 self-start rounded-lg px-0.5 py-1 text-[14px] text-secondary hover:text-primary"
+    >
+      <Lightbulb02 aria-hidden className="size-4 text-quaternary" />
+      <span>
+        <b className="font-semibold text-primary tabular-nums">{ideas.count}</b> {ideas.count === 1 ? "idea" : "ideas"} waiting
+        {ideas.aging ? `, ${ideas.aging} aging` : ""}
+      </span>
+      <ArrowRight aria-hidden className="size-4 text-quaternary transition-transform duration-[var(--dur-quick)] group-hover:translate-x-0.5" />
+    </button>
+  );
+}
+
+// ── The one person who needs you ───────────────────────────────────────────
+
+type Panel = "carrying" | "health" | "undecided";
+
+/** Whichever of the three is most urgent gets the card. */
+function pickPanel(model: ReturnType<typeof buildToday>): Panel | null {
+  const { carrying, health, undecided } = model;
+  if (carrying.some((r) => r.state === "cold")) return "carrying";
+  if (health.weakest.some((s) => s.health && (s.health.level === "strained" || s.health.level === "critical"))) return "health";
+  if (undecided.length) return "undecided";
+  if (carrying.length) return "carrying";
+  if (health.total) return "health";
+  return null;
+}
+
+function NeedsYou({ model }: { model: ReturnType<typeof buildToday> }) {
+  const setTab = useStore((s) => s.setTab);
+  const setHealthScan = useStore((s) => s.setHealthScan);
   const openModal = useStore((s) => s.openModal);
-  if (!ideas.count) {
-    return (
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-primary px-5 py-4">
-        <p className="text-[14px] text-tertiary">No ideas waiting. Anything you capture lands in Ideas until it has a meeting.</p>
-        <button type="button" onClick={() => openModal({ kind: "capture" })} className="text-[13px] font-semibold text-teal-700 dark:text-teal-400">
-          Capture one
-        </button>
-      </section>
-    );
-  }
-  const meetingName = (id?: string) => {
-    const m = meetings.find((x) => x.id === id);
-    if (!m) return null;
-    const pool = m.subjectKind === "person" ? people : m.subjectKind === "team" ? teams : managers;
-    return m.name ?? pool.find((x) => x.id === m.subjectId)?.name ?? null;
-  };
+  const panel = pickPanel(model);
+  if (!panel) return null;
+
+  const links = [
+    panel !== "carrying" && model.carrying.length > 0 && {
+      key: "carrying",
+      label: `${model.carrying.length} carried in prayer`,
+      go: () => setTab("prayer"),
+    },
+    panel !== "health" && model.health.total > 0 && {
+      key: "health",
+      label: "How they're doing",
+      go: () => {
+        setHealthScan(["watch", "strained", "critical"]);
+        setTab("table");
+      },
+    },
+    panel !== "undecided" && model.undecided.length > 0 && {
+      key: "undecided",
+      label: `${model.undecided.length} undecided`,
+      go: () => openModal({ kind: "triage" }),
+    },
+  ].filter((l): l is { key: string; label: string; go: () => void } => Boolean(l));
 
   return (
-    <section className="flex flex-col gap-3.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[15px] leading-5 font-semibold">
-          Ideas waiting for a home
-          <span className="ml-2 font-mono text-[12px] font-medium text-quaternary">
-            {ideas.count}
-            {ideas.aging ? ` · ${ideas.aging} aging` : ""}
-          </span>
-        </h2>
-        <button type="button" onClick={() => setTab("ideas")} className="text-[13px] font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400">
-          Open Ideas
-        </button>
-      </div>
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
-        {ideas.waiting.map((t) => {
-          const tag = tags.find((x) => t.tagIds?.includes(x.id));
-          const home = meetingName(t.meetingId);
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab("ideas")}
-              className="flex flex-col gap-3 rounded-xl border border-secondary bg-primary px-4 py-3.5 text-left transition-colors hover:border-primary"
-            >
-              <span className="text-[14px] leading-5 font-medium">{t.text}</span>
-              <span className="mt-auto flex items-center justify-between gap-2 text-[12px] text-quaternary">
-                {t.carried >= 2 ? (
-                  <span className="inline-flex h-5 items-center rounded-[5px] bg-gilt-soft px-1.5 font-mono text-[10.5px] text-gilt-ink">
-                    carried {t.carried}×
-                  </span>
-                ) : tag ? (
-                  <span>{tag.label}</span>
-                ) : (
-                  <span>No tag</span>
-                )}
-                <span className={cx(home ? "text-secondary" : "font-semibold text-teal-700 dark:text-teal-400")}>
-                  {home ? `For ${home}` : "Needs a meeting"}
-                </span>
-              </span>
+    <>
+      {panel === "carrying" && <Carrying rows={model.carrying} />}
+      {panel === "health" && <HowTheyreDoing health={model.health} />}
+      {panel === "undecided" && <Undecided subjects={model.undecided} />}
+      {links.length > 0 && (
+        <nav aria-label="More on Today" className="flex flex-wrap gap-x-4 gap-y-1 px-1">
+          {links.map((l) => (
+            <button key={l.key} type="button" onClick={l.go} className="text-[13px] font-medium text-tertiary hover:text-primary">
+              {l.label}
             </button>
-          );
-        })}
-      </div>
-    </section>
+          ))}
+        </nav>
+      )}
+    </>
   );
 }
 
@@ -557,8 +527,8 @@ function Carrying({ rows }: { rows: ReturnType<typeof buildToday>["carrying"] })
         <path d="M0 0h14v30l-7-6-7 6z" fill="#6A51A4" />
       </svg>
       <div className="flex items-baseline gap-2.5">
-        <span className="text-[11px] font-semibold tracking-[0.1em] text-vesper-glow uppercase">Carrying</span>
-        <span className="font-mono text-[11.5px] text-leather-ink">
+        <span className="text-[13px] font-medium text-vesper-glow">Carrying</span>
+        <span className="text-[12px] text-leather-ink">
           {rows.length}
           {cold ? ` · ${cold} gone quiet` : ""}
         </span>
@@ -575,8 +545,8 @@ function Carrying({ rows }: { rows: ReturnType<typeof buildToday>["carrying"] })
                 <span className="flex items-center gap-2">
                   <PrayerFlame state={r.state} size={14} className="[&_path]:fill-vesper-glow [&_path]:stroke-vesper-glow" />
                   <span className="truncate font-serif text-[17px] font-medium">{r.name}</span>
-                  <span className={cx("ml-auto shrink-0 font-mono text-[11px]", r.state === "cold" ? "text-teal-400" : "text-leather-ink")}>
-                    {r.state === "cold" ? `QUIET · ${r.silence ?? "?"}D` : shortSincePrayed(r.prayer).toUpperCase()}
+                  <span className={cx("ml-auto shrink-0 text-[12px]", r.state === "cold" ? "text-vesper-glow" : "text-leather-ink")}>
+                    {r.state === "cold" ? `quiet ${r.silence ?? "?"} days` : shortSincePrayed(r.prayer)}
                   </span>
                 </span>
                 {r.prayer?.focus && (
@@ -646,7 +616,7 @@ function HowTheyreDoing({ health }: { health: ReturnType<typeof buildToday>["hea
           setHealthScan(["watch", "strained", "critical"]);
           setTab("table");
         }}
-        className="self-start text-[13px] font-semibold text-teal-700 hover:text-teal-800 dark:text-teal-400"
+        className="self-start text-[13px] font-medium text-tertiary hover:text-primary"
       >
         See every weak spot
       </button>

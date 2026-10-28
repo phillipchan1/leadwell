@@ -47,7 +47,7 @@ export function LivePill({
       aria-hidden
       className={cx(
         "size-2 shrink-0 rounded-full",
-        listening ? "animate-pulse bg-red-500" : "shadow-[inset_0_0_0_1.5px_currentColor]"
+        listening ? "live-breathe bg-star" : "shadow-[inset_0_0_0_1.5px_currentColor]"
       )}
     />
   );

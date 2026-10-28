@@ -1557,7 +1557,7 @@ label:focus-within > .field-label,
   .notion-editor-content li[data-type="taskItem"] input[type="checkbox"] {
     width: 20px;
     height: 20px;
-    accent-color: #b04528;
+    accent-color: var(--color-teal-600);
   }
 
   .notion-editor-content li[data-type="taskItem"] > label::after {
@@ -1565,4 +1565,90 @@ label:focus-within > .field-label,
     position: absolute;
     inset: -12px;
   }
+}
+
+
+/* ── Motion ─────────────────────────────────────────────────────────────
+   A calm machine: one curve, three durations, nothing loops except what is
+   actually live. Entrances are WAAPI (hooks/use-enter-motion.ts) so screens
+   keep their state; everything here is CSS-only polish. */
+
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-quick: 140ms;
+  --dur-base: 220ms;
+  --dur-slow: 360ms;
+}
+
+/* The entity strip's one underline (EntityModeTabs). Each tab's own border
+   is hidden so the line slides instead of blinking from tab to tab. */
+.mode-tabs [role="tab"] {
+  border-bottom-color: transparent !important;
+  transition: color var(--dur-quick) var(--ease-out);
+}
+.mode-tabs__bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-fg-primary);
+  pointer-events: none;
+}
+.mode-tabs__bar--live {
+  transition:
+    transform var(--dur-slow) var(--ease-out),
+    width var(--dur-slow) var(--ease-out);
+}
+
+/* Press: buttons give a little under the finger. `scale`, not `transform`,
+   so it never fights the translate a centred icon button already carries.
+   In base, so any button's own transition utilities still win. */
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, scale;
+    transition-duration: var(--dur-quick);
+    transition-timing-function: var(--ease-out);
+  }
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    scale: 0.97;
+    transition-duration: 60ms;
+  }
+  /* Tabs, drag handles and the canvas move by other means. */
+  [role="tab"]:active,
+  [draggable="true"]:active,
+  .react-flow button:active {
+    scale: none;
+  }
+}
+
+/* Live: the one loop in the app. A slow breath, not a blink. */
+@keyframes live-breathe {
+  0%, 100% { opacity: 1; scale: 1; }
+  50% { opacity: 0.45; scale: 0.82; }
+}
+.live-breathe {
+  animation: live-breathe 2.4s var(--ease-out) infinite;
+}
+
+/* A list's first appearance: items rise in turn. Set `--i` per item; the
+   delay caps at eight so a long list doesn't drag. */
+@keyframes rise-in {
+  from { opacity: 0; translate: 0 6px; }
+}
+.rise-stagger > * {
+  animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(min(var(--i, 0), 8) * 35ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-tabs__bar--live { transition: none; }
+  .live-breathe { animation: none; }
+  .rise-stagger > * { animation: none; }
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active { scale: none; }
 }

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useRef, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import { PANEL_PCT_DEFAULT, useStore } from "../store/useStore";
 import type { Manager, Person, Team, TrackedMeeting } from "../types";
 import { EntityChrome, useEntityTrail } from "./EntityChrome";
@@ -6,6 +6,7 @@ import { useSwipePager } from "@/hooks/use-sheet";
 import { Skeleton } from "./Skeleton";
 import { keyboardOwner } from "@/lib/keys";
 import { findMeeting } from "../lib/slugs";
+import { rise } from "@/hooks/use-enter-motion";
 
 /**
  * The profiles pull in the whole markdown stack and the assessment editors —
@@ -89,6 +90,18 @@ export function useSelectedEntity(): Selected {
 
 export function EntityBody({ density }: { density: Density }) {
   const selected = useSelectedEntity();
+  const section = useStore((s) => s.section);
+  const ref = useRef<HTMLDivElement>(null);
+  const id = selected ? `${selected.kind}:${entityId(selected)}` : null;
+  const shown = useRef(id);
+  /* A new entity rises whole; a new tab on the same one moves only the pane
+     under the strip, so the header you're reading stays put. */
+  useEffect(() => {
+    const root = ref.current;
+    if (shown.current !== id) rise(root);
+    else rise(root?.querySelector(".pane-scroll"), { distance: 4, duration: 220 });
+    shown.current = id;
+  }, [id, section]);
   if (!selected) return null;
 
   const body = () => {
@@ -131,10 +144,25 @@ export function EntityBody({ density }: { density: Density }) {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div ref={ref} className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <Suspense fallback={<ProfileFallback />}>{body()}</Suspense>
     </div>
   );
+}
+
+function entityId(s: NonNullable<Selected>): string {
+  switch (s.kind) {
+    case "person":
+      return s.person.id;
+    case "team":
+      return s.team.id;
+    case "manager":
+      return s.manager.id;
+    case "meeting":
+      return s.meeting.id;
+    case "me":
+      return "me";
+  }
 }
 
 /**

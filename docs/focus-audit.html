@@ -1,0 +1,390 @@
+<title>Polarch Focus Audit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; screens as numbered cards only because the order is the order you hit them in a day. */
+:root {
+  --bg: #fbfaf9;
+  --surface: #ffffff;
+  --sunk: #f1efec;
+  --ink: #1d1b1a;
+  --ink-2: #57524d;
+  --ink-3: #8e8882;
+  --line: #e7e4e0;
+  --star: #cc5533;
+  --good: #247e56;
+  --warn: #a3591c;
+  --bad: #a1252e;
+  --bad-soft: #fbecea;
+  --good-soft: #e6f4ec;
+  --display: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  --body: "DM Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141312; --surface: #1d1b1a; --sunk: #252321; --ink: #f1efec; --ink-2: #b4aea8; --ink-3: #807a74;
+    --line: #2f2c2a; --star: #e06a47; --good: #5cc795; --warn: #f0ab5f; --bad: #f07a80; --bad-soft: #3a1a1c; --good-soft: #13301f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141312; --surface: #1d1b1a; --sunk: #252321; --ink: #f1efec; --ink-2: #b4aea8; --ink-3: #807a74;
+  --line: #2f2c2a; --star: #e06a47; --good: #5cc795; --warn: #f0ab5f; --bad: #f07a80; --bad-soft: #3a1a1c; --good-soft: #13301f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--body); margin: 0; }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 56px 96px; padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(34px, 6vw, 52px); line-height: 1.05; font-weight: 800; }
+h2 { font-size: 26px; line-height: 1.2; font-weight: 700; margin-top: 72px; }
+h3 { font-size: 19px; line-height: 1.3; font-weight: 700; }
+p { margin: 0; max-width: 64ch; }
+.lede { font-size: 19px; line-height: 1.55; color: var(--ink-2); margin-top: 18px; }
+.lede b { color: var(--ink); font-weight: 600; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.section-intro { color: var(--ink-2); margin-top: 10px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--star); vertical-align: middle; margin-right: 8px; }
+
+.evidence { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-top: 32px; }
+.evidence div { background: var(--surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; }
+.evidence strong { font: 600 28px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.evidence span { font-size: 13.5px; color: var(--ink-2); line-height: 1.4; }
+
+.jobs { margin-top: 24px; display: flex; flex-direction: column; }
+.job { display: grid; grid-template-columns: 112px 1fr; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.job:last-child { border-bottom: 1px solid var(--line); }
+.job .freq { font: 500 12.5px/1.6 var(--mono); color: var(--ink-3); padding-top: 2px; }
+.job .what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.job .what b { font-weight: 600; }
+.job .what span { color: var(--ink-2); font-size: 15px; }
+@media (max-width: 520px) { .job { grid-template-columns: 1fr; gap: 2px; } }
+
+.rules { counter-reset: r; margin-top: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.rule { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.rule b { font: 700 15.5px/1.35 var(--display); letter-spacing: -0.01em; }
+.rule span { font-size: 14.5px; color: var(--ink-2); line-height: 1.5; }
+
+.screen { margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 16px; }
+.screen header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.screen .n { font: 500 13px var(--mono); color: var(--ink-3); }
+.screen .verb { font-size: 14px; color: var(--ink-2); }
+.screen .verb::before { content: "Its one job: "; color: var(--ink-3); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+.col { border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.col h4 { margin: 0 0 8px; font: 600 13px/1.3 var(--body); }
+.col ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; line-height: 1.45; }
+.cut { background: var(--bad-soft); }
+.cut h4 { color: var(--bad); }
+.keep { background: var(--good-soft); }
+.keep h4 { color: var(--good); }
+.read { font-size: 14.5px; color: var(--ink-2); }
+.read b { color: var(--ink); font-weight: 600; }
+code { font: 500 13px var(--mono); background: var(--sunk); padding: 1px 5px; border-radius: 5px; }
+
+/* Before/after of the meeting header, drawn in the app's own vocabulary. */
+.compare { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 8px; }
+.mock { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; overflow-x: auto; }
+.mock .tag { font: 500 12px var(--mono); color: var(--ink-3); margin-bottom: 14px; display: block; }
+.m-head { display: flex; gap: 14px; align-items: flex-start; min-width: 560px; }
+.m-av { width: 44px; height: 44px; border-radius: 50%; background: #d1edeb; color: #085955; display: grid; place-items: center; font: 700 16px var(--display); flex-shrink: 0; }
+.m-title { flex: 1; min-width: 0; }
+.m-title b { font: 700 26px/1.1 var(--display); letter-spacing: -0.02em; display: block; }
+.m-title small { font-size: 13.5px; color: var(--ink-2); }
+.m-actions { display: flex; gap: 6px; align-items: center; }
+.btn { font: 600 12.5px var(--body); border-radius: 9px; padding: 8px 12px; border: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; }
+.btn.loud { background: var(--star); border-color: var(--star); color: #fff; }
+.btn.ink { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.btn.icon { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border-color: transparent; }
+.btn.icon svg { width: 16px; height: 16px; stroke: var(--ink-2); fill: none; stroke-width: 1.8; }
+.m-strip { margin-top: 16px; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 12px; min-width: 560px; }
+.m-strip > div { padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.m-strip > div + div { border-left: 1px solid var(--line); }
+.eb { font: 600 10.5px var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); display: flex; justify-content: space-between; }
+.eb i { font: 400 10.5px var(--mono); font-style: normal; }
+.red { color: var(--star); font: 500 12px var(--mono); }
+.m-line { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; color: var(--ink-2); min-width: 560px; }
+.m-line .ring { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--ink-3); border-radius: 50%; vertical-align: -2px; margin-right: 6px; }
+.m-line b { color: var(--ink); font-weight: 600; }
+.m-tabs { margin-top: 18px; display: flex; gap: 22px; font: 600 13.5px var(--body); color: var(--ink-3); border-bottom: 1px solid var(--line); min-width: 560px; }
+.m-tabs span { padding-bottom: 8px; }
+.m-tabs .on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.m-tabs em { font-style: normal; font: 500 11px var(--mono); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; margin-left: 4px; }
+
+.motion { margin-top: 24px; display: flex; flex-direction: column; }
+.mo { display: grid; grid-template-columns: 170px 1fr 86px; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); align-items: baseline; font-size: 15px; }
+.mo:last-child { border-bottom: 1px solid var(--line); }
+.mo b { font-weight: 600; }
+.mo span { color: var(--ink-2); }
+.mo code { justify-self: end; }
+@media (max-width: 600px) { .mo { grid-template-columns: 1fr; gap: 2px; } .mo code { justify-self: start; } }
+.demo { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.demo div { flex: 1 1 140px; height: 54px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); animation: rise 520ms cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i) * 45ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+.replay { font: 600 13px var(--body); background: none; border: 1px solid var(--line); color: var(--ink); border-radius: 9px; padding: 7px 12px; cursor: pointer; margin-top: 12px; }
+.replay:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .demo div { animation: none; } }
+
+.shipped { margin-top: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px 20px; }
+.shipped li { padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.shipped li:first-child { border-top: 0; }
+.shipped ul { list-style: none; margin: 0; padding: 0; }
+.shipped b { font-weight: 600; }
+.shipped span { color: var(--ink-2); }
+</style>
+
+<div class="wrap">
+  <h1>Everything is set at the same volume</h1>
+  <p class="lede">Polarch has the right features. What it lacks is <b>rank</b>. Terracotta means "you can press this", "this is the brand", "this is now" and "this is a problem" all at once, so it lands on ten things per screen. Small uppercase labels announce every block, mono type makes dates look like alerts, and help text sits on screen long after you've learned it. The fix is to give each screen one loud thing and let the rest go quiet.</p>
+
+  <div class="evidence" role="list">
+    <div role="listitem"><strong>10</strong><span>terracotta elements on the 1:1 Dennis page</span></div>
+    <div role="listitem"><strong>4×</strong><span>"Oct 28" on the same screen; "every other week" 3×</span></div>
+    <div role="listitem"><strong>138</strong><span><code>font-mono</code> uses; 71 <code>uppercase</code></span></div>
+    <div role="listitem"><strong>~970</strong><span>border classes; almost every block is boxed</span></div>
+    <div role="listitem"><strong>3</strong><span>keyframes in the whole app; screens and tabs swap with no transition</span></div>
+  </div>
+
+  <h2>Who this is for</h2>
+  <p class="section-intro">You lead people in three places at once: a product team at work, a church staff and its ministries, and the people at home. You aren't running a CRM. You're trying to walk into each conversation ready and leave nobody behind. Here is what you actually do, ranked by how often you do it.</p>
+  <div class="jobs">
+    <div class="job"><span class="freq">many / day</span><span class="what"><b>Catch a thought about someone</b><span>"Raise the vacation with Dennis." Two seconds, then it's filed to the right meeting.</span></span></div>
+    <div class="job"><span class="freq">daily</span><span class="what"><b>Know who's next and whether you're ready</b><span>One answer: the next meeting and what's on it.</span></span></div>
+    <div class="job"><span class="freq">few / week</span><span class="what"><b>Run the meeting</b><span>Agenda on the left, notes in the middle, nothing else asking for you.</span></span></div>
+    <div class="job"><span class="freq">weekly</span><span class="what"><b>Plan ahead</b><span>Drop ideas onto future weeks.</span></span></div>
+    <div class="job"><span class="freq">weekly</span><span class="what"><b>Notice who's slipping, and pray</b><span>Someone has drifted. Someone you're carrying has gone quiet.</span></span></div>
+    <div class="job"><span class="freq">rarely</span><span class="what"><b>Set things up</b><span>Rhythms, sharing, arcs, settings. These should be one click away, never on the main path.</span></span></div>
+  </div>
+  <p class="section-intro" style="margin-top:16px">So the app comes down to three verbs: <b>catch</b>, <b>prepare</b> and <b>run</b>. Every screen should open on one of them. Everything else is reference, so it can sit quietly until you go looking.</p>
+
+  <h2>Eight rules for the whole app</h2>
+  <div class="rules">
+    <div class="rule"><b>One loud thing per screen</b><span>Only one filled button per view. Everything else is ink text or an icon.</span></div>
+    <div class="rule"><b>Color means state, never "pressable"</b><span>Buttons and links are ink. Green, amber and red are only for health and readiness. Violet is only for prayer.</span></div>
+    <div class="rule"><b>The star means now</b><span>Terracotta stays in the mark and marks what is live or today: the live pill and the next meeting. Nothing else gets it.</span></div>
+    <div class="rule"><b>Only label what can't speak for itself</b><span>A date doesn't need "NEXT UP" above it. Section labels are sentence case, quiet, and used only where you have to scan.</span></div>
+    <div class="rule"><b>Say it once</b><span>Each fact appears in one place. The rhythm goes in the subtitle, not in the subtitle, a stat card and the board.</span></div>
+    <div class="rule"><b>Icons for repeat verbs, words for the main one</b><span>Share, add a date, more, close: these become icons with tooltips. The one primary verb keeps its words.</span></div>
+    <div class="rule"><b>Mono for numbers in columns</b><span>Use it for countdowns that line up, and never in caps. "WED · TODAY" becomes "Today".</span></div>
+    <div class="rule"><b>Show help on empty or on hover</b><span>"Drag an idea onto a week…" shows once, on an empty board or behind a ? icon. It doesn't sit there forever.</span></div>
+  </div>
+
+  <h2>Screen by screen</h2>
+  <p class="section-intro">For each screen: what to cut, what to keep, and what you should see first, second and third.</p>
+
+  <section class="screen" id="meeting">
+    <header><span class="n">01</span><h3>Meeting page (1:1 Dennis)</h3><span class="verb">prepare the next one</span></header>
+    <div class="compare">
+      <div class="mock" aria-label="Current header">
+        <span class="tag">Now</span>
+        <div class="m-head">
+          <div class="m-av">DP</div>
+          <div class="m-title"><b>1:1 Dennis</b><small>Every other week on Wednesdays · with Dennis Pham · you convene</small></div>
+          <div class="m-actions"><span class="btn">Share</span><span class="btn">One-off date</span><span class="btn loud">Start today's meeting</span></div>
+        </div>
+        <div class="m-strip">
+          <div><span class="eb">Rhythm <i>EVERY OTHER WEEK</i></span><span class="red">◯ WED · TODAY  Loose end</span><span>Last met Wed, Oct 28.</span></div>
+          <div><span class="eb">Next up</span><b>Wednesday, October 28</b><span>2 topics planned.</span></div>
+          <div><span class="eb">Ideas</span><b>1 waiting</b><span>2 topics planned ahead.</span></div>
+        </div>
+        <div class="m-tabs"><span>Agenda</span><span class="on">Plan ahead <em>3</em></span><span>Settings</span><span>Write-ups <em>1</em></span></div>
+      </div>
+      <div class="mock" aria-label="Proposed header">
+        <span class="tag">Proposed</span>
+        <div class="m-head">
+          <div class="m-av">DP</div>
+          <div class="m-title"><b>1:1 Dennis</b><small>Every other Wednesday · with Dennis Pham</small></div>
+          <div class="m-actions">
+            <span class="btn icon" title="Share"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20c.8-3.4 3.2-5 6-5s5.2 1.6 6 5M16 4.5a3.5 3.5 0 0 1 0 7M21 20c-.5-2.4-1.9-3.9-3.8-4.6"/></svg></span>
+            <span class="btn icon" title="Add a one-off date"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/></svg></span>
+            <span class="btn ink">▶ Start</span>
+          </div>
+        </div>
+        <div class="m-line"><span><span class="ring"></span><b>Today</b> · last one not written up</span><span>2 topics planned</span><span>1 idea waiting</span></div>
+        <div class="m-tabs"><span class="on">Agenda</span><span>Plan ahead <em>3</em></span><span>Write-ups <em>1</em></span><span>Settings</span></div>
+      </div>
+    </div>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>The three boxed stat cards. They collapse into one quiet line under the title.</li>
+        <li>"you convene". Show it only when it's the exception ("you attend").</li>
+        <li>Mono caps "WED · TODAY", "EVERY OTHER WEEK" and "WED EXPECTED" ×3 on the board columns.</li>
+        <li>The "Booked / Expected" legend and the "Drag an idea onto a week. Right-click…" sentence. Dashed vs solid already says it, so the hint moves behind a ? icon.</li>
+        <li>"Working through a book…? Start an arc" and "+ Split weeks into sections" as always-on links. Both move into a <b>⋯</b> menu on the board.</li>
+        <li>The red border around the next week. Keep the "Next" marker and a light fill instead.</li>
+        <li>On the Agenda tab: a second filled "Start meeting" (the header already has one), and four boxed readiness checks where three are green ticks. Show only the check that's open, such as "Last one not written up · Write it up".</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li><b>Start</b> as the only filled button, in ink. It says "Start", because the page already says which meeting it is.</li>
+        <li>The rhythm ring, inline with the status line.</li>
+        <li>The tab order follows the verbs: Agenda (prepare), Plan ahead, Write-ups, then Settings last.</li>
+        <li>Share and one-off date become icons with tooltips.</li>
+      </ul></div>
+    </div>
+    <p class="read"><b>First read:</b> the name and Start. <b>Second:</b> the next meeting's topics. <b>Third:</b> future weeks.</p>
+  </section>
+
+  <section class="screen" id="today">
+    <header><span class="n">02</span><h3>Today</h3><span class="verb">tell me the one next move</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>The three counters (0/3 ready · 2 drifting · 7 undecided) next to the greeting. They repeat the sentence right below them.</li>
+        <li>"Your teams" cards. They're a second dashboard inside the first, with next step, your read and slug for each team. Fold them into People.</li>
+        <li>"Nobody falls off the edge", "How they're doing" and "Carrying". Three side cards all ask for attention. Show one, whichever is most urgent, and link the rest.</li>
+        <li>The <code>/m/staff-meeting</code> slugs. Those are developer furniture.</li>
+        <li>Mono caps badges ("DRIFTING · 7 WK", "QUIET · 52D").</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>The greeting plus a one-line brief. It's the best writing in the app.</li>
+        <li>"Your next move" as the one hero, with one ink button.</li>
+        <li>"Coming up this week" as a quiet list: date, name, ring. Its action shows on hover; only today's row shows Start.</li>
+        <li>"Ideas waiting" as a single line: "9 ideas waiting, 7 aging →".</li>
+      </ul></div>
+    </div>
+    <p class="read"><b>First read:</b> your next move. <b>Second:</b> this week. <b>Third:</b> one person who needs you.</p>
+  </section>
+
+  <section class="screen" id="meetings">
+    <header><span class="n">03</span><h3>Meetings list</h3><span class="verb">which one needs prep</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>The question subtitle ("Am I ready to sit down?") plus the mono stats line. Pick one.</li>
+        <li>The 12-week runway bars on every row, with "NONE" in red caps. Six rows of red "NONE" is a wall of alarm. Show the runway on hover or for the selected row, and say "Nothing planned" in grey.</li>
+        <li>"Dormant" with a dashed ring on six rows. Group never-met meetings under one collapsed "Not started (6)".</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>Sort by next, with the name in display weight and the countdown in tabular mono, lowercase.</li>
+        <li>Readiness as ring plus word, which is the only color on the row.</li>
+        <li>"New recurring meeting" as a + icon next to search, not a filled terracotta button.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen" id="ideas">
+    <header><span class="n">04</span><h3>Ideas</h3><span class="verb">catch it and file it</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>The helper row under the capture box ("Enter to add. Paste a list… #tag label @name meeting ! urgent"). Show it as ghost text inside the field, and the full syntax on focus.</li>
+        <li>Two rows of controls (By meeting / By tag, All · Aging · Parked, More, search). That's three segmented controls. Keep grouping in a ⋯ menu and filters as one chip row.</li>
+        <li>The "Up next" side rail. It repeats the sidebar's Up next.</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>The capture box as the hero, large, with a quiet border and its focus ring in ink.</li>
+        <li>Columns per meeting, without boxes: a header line and cards that lift on hover.</li>
+        <li>"All filed." as the empty Inbox state. That moment deserves a small check animation.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen" id="run">
+    <header><span class="n">05</span><h3>Run (live meeting)</h3><span class="verb">be present, take notes</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>The right rail stacks four cards: your read, remember, what we know and carrying. Collapse it to one "Context" drawer that's closed by default, with a single icon in the header.</li>
+        <li>The Blocks / Markdown toggle and "⌘/ to toggle" in the editor header. Move them to ⋯.</li>
+        <li>The "Why we met this time…" placeholder and "## Summary / Decisions / Commitments" scaffolding in grey. Use one placeholder line and put the structure in the wrap-up.</li>
+        <li>The boxed arc card above the agenda. It becomes the first agenda row.</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>The dark header bar with a live dot that breathes slowly and Done as the only filled button.</li>
+        <li>The agenda rail with a progress bar that fills smoothly as you check things.</li>
+        <li>Notes as a wide, calm page.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen" id="person">
+    <header><span class="n">06</span><h3>Person page</h3><span class="verb">how are they, and what's next</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>Three header buttons (Edit, Write a note, Plan the 1:1) on top of a three-card strip (My read, Rhythm, Carrying). That's the meeting-page pattern again. Use the same fix: one status line and one primary button.</li>
+        <li>A health picker with five pill buttons, always open. Show the current read as a chip that opens the picker.</li>
+        <li>The readiness checklist (5 rows of green checks). Show only the item that isn't done.</li>
+        <li>Tag chips for Church · ENFJ · Enneagram · Manager under the role. Move them to Profile.</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>Name, role, and their read as one sentence ("Plate is past full").</li>
+        <li>Goals with progress bars that animate to their value on open.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen" id="people">
+    <header><span class="n">07</span><h3>People (circles)</h3><span class="verb">who do I lead, at a glance</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>The lens tabs (Plan · Prep · Assess · Pray) with counts, plus the question in italics, plus Circles/Tree/List. That's two navigations above the canvas. Keep the view switch as icons and the lens as a single dropdown.</li>
+        <li>The explainer paragraph under the side card ("You sit at the center…").</li>
+        <li>The "What's next for each team" card, which repeats Today's teams.</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>The circle canvas itself. It's the most distinctive screen in the app. Let it fill the page.</li>
+        <li>On open, rings draw outward and people settle into place. This is the app's one big signature animation.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen" id="prayer">
+    <header><span class="n">08</span><h3>Prayer</h3><span class="verb">pray for one person, now</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>Three buttons on every card (Mark prayed, Write what you're praying, Lay down). Keep one primary button, "Prayed", and put the rest in ⋯.</li>
+        <li>The bookmark ribbon on top of the "gone quiet" card on top of the section label. Pick one signal.</li>
+        <li>The "Take someone up" card with its explanation. Make it a + in the header.</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>The violet. It's the one place color carries meaning, and it should stay that way.</li>
+        <li>The flame glyph, which can flicker once when you mark someone prayed.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section class="screen" id="chrome">
+    <header><span class="n">09</span><h3>Sidebar and chrome</h3><span class="verb">get me there</span></header>
+    <div class="cols">
+      <div class="col cut"><h4>Cut or move</h4><ul>
+        <li>Badge counts on Meetings (4) and Ideas (26). They're always on, so they mean nothing. Keep only a dot when something is genuinely new.</li>
+        <li>The Up next list's colored dots plus mono weekday plus "Today" in terracotta. Use one dot style, with today's in the star color.</li>
+        <li>The "1/6 ‹ ›" pager, collapse and close cluster on the entity header. Keep close. Pager and collapse are keyboard shortcuts plus icons that appear on hover.</li>
+      </ul></div>
+      <div class="col keep"><h4>Keep and sharpen</h4><ul>
+        <li>The dark frame. Against a calm page, it's what gives the app its character.</li>
+        <li>The live pill, with a breathing dot and a timer that ticks without jitter.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <h2>Motion: a calm machine</h2>
+  <p class="section-intro">Everything arrives and nothing pops. One easing curve, three durations, and no loops except for something that is actually live.</p>
+  <div class="motion">
+    <div class="mo"><b>Screen change</b><span>The new screen rises 6px and fades in. The old one doesn't animate out, so nothing waits.</span><code>260ms</code></div>
+    <div class="mo"><b>Tab change</b><span>The underline slides to the new tab, and the panel below fades up.</span><code>220ms</code></div>
+    <div class="mo"><b>Lists and cards</b><span>The first view staggers in, 30–40ms per item and capped at 8, so long lists don't drag.</span><code>360ms</code></div>
+    <div class="mo"><b>Hover</b><span>Cards lift 1px with a softer shadow, and row actions fade in.</span><code>140ms</code></div>
+    <div class="mo"><b>Press</b><span>Buttons scale to 0.97 and spring back.</span><code>90ms</code></div>
+    <div class="mo"><b>Live</b><span>The live dot breathes slowly. It's the only looping animation in the app.</span><code>2.4s</code></div>
+    <div class="mo"><b>Done</b><span>The check draws itself, the row settles, then it collapses.</span><code>300ms</code></div>
+  </div>
+  <div class="demo" id="demo" aria-hidden="true"><div style="--i:0"></div><div style="--i:1"></div><div style="--i:2"></div><div style="--i:3"></div><div style="--i:4"></div></div>
+  <button class="replay" id="replay" type="button">Replay the stagger</button>
+
+  <h2>What this first pass changes</h2>
+  <p class="section-intro">These are app-wide changes, so every screen gets quieter at once. Each screen's cuts above come next, one screen at a time.</p>
+  <div class="shipped"><ul>
+    <li><b>Ink replaces terracotta for anything pressable.</b> <span>It's one token block in <code>brand.css</code>, so every button, link, selected state and focus ring goes charcoal, or pale in dark mode. The star keeps the mark, the live pill and "today".</span></li>
+    <li><b>Section labels stop shouting.</b> <span>The <code>eyebrow</code> utility is now sentence case at normal tracking, across all 38 uses.</span></li>
+    <li><b>Motion tokens and entrances.</b> <span>Screens and entity tabs rise in on change, the tab underline slides, buttons press, and it all respects reduced motion.</span></li>
+    <li><b>The meeting header.</b> <span>Share and one-off date are icons, Start is the one primary button, the boxed stat cards became one status line, and "you convene" is gone.</span></li>
+    <li><b>The dark frame.</b> <span>The capture + and Run's Done button are pale ink, the selected place is white, the badge counts are muted, and "Today" in Up next is the one star-colored word. The live dot breathes slowly instead of blinking red.</span></li>
+  </ul></div>
+  <p class="section-intro" style="margin-top:16px">To undo the color change, restore the press-ramp block at the top of <code>src/styles/brand.css</code>. Nothing else depends on it.</p>
+</div>
+<script>
+  document.getElementById("replay").addEventListener("click", () => {
+    const d = document.getElementById("demo");
+    d.querySelectorAll("div").forEach((el) => { el.style.animation = "none"; void el.offsetWidth; el.style.animation = ""; });
+  });
+</script>

@@ -67,7 +67,7 @@ export function Sidebar({
           aria-label="Capture (C)"
           title="Capture (C)"
           onClick={() => openModal({ kind: "capture" })}
-          className="flex size-9 items-center justify-center rounded-[9px] bg-teal-400 text-stone-950 transition-transform hover:brightness-105 active:scale-95"
+          className="flex size-9 items-center justify-center rounded-[9px] bg-leather-fg text-stone-950 transition-transform hover:bg-white active:scale-95"
         >
           <PlusIcon className="size-4" />
         </button>
@@ -100,7 +100,7 @@ export function Sidebar({
                 <span
                   className={cx(
                     "size-[17px] shrink-0",
-                    isActive ? (p.id === "prayer" ? "text-vesper-glow" : "text-teal-400") : p.id === "prayer" ? "text-vesper-glow" : ""
+                    isActive ? (p.id === "prayer" ? "text-vesper-glow" : "text-leather-fg") : p.id === "prayer" ? "text-vesper-glow" : ""
                   )}
                 >
                   {p.icon({ className: "size-[17px]", active: isActive })}
@@ -108,10 +108,7 @@ export function Sidebar({
                 {p.label}
                 {count ? (
                   <span
-                    className={cx(
-                      "ml-auto font-mono text-[11px]",
-                      p.id === "ideas" ? "text-leather-ink" : "text-teal-400"
-                    )}
+                    className="ml-auto font-mono text-[11px] text-leather-mute"
                   >
                     {count}
                   </span>

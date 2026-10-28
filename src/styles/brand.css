@@ -29,19 +29,24 @@
   --color-stone-900: #22201e;
   --color-stone-950: #181615;
 
-  /* Terracotta. 600 is Clay (light press + links). 400/500 are Ember
-     (dark press + links). Star is never a step on this ramp. */
-  --color-teal-50: #f8ebe6;
-  --color-teal-100: #f3d8cf;
-  --color-teal-200: #e8b8a8;
-  --color-teal-300: #e8a08a;
-  --color-teal-400: #ec7c58;
-  --color-teal-500: #ec7c58;
-  --color-teal-600: #b04528;
-  --color-teal-700: #8f3820;
-  --color-teal-800: #6e2b19;
-  --color-teal-900: #4a1d11;
-  --color-teal-950: #2a110a;
+  /* Press ramp — ink, not terracotta. Everything you can press (buttons,
+     links, selected states, focus) used to be Clay, so a screen carried ten
+     terracotta things and none of them ranked. Press is now charcoal in light
+     and pale in dark (see `.dark` below); the only hue left on a screen is
+     state (condition ramp), prayer (vesper) and the Star, which means "now".
+     The ramp keeps the `teal` name every component was written against. To
+     put Clay back, restore this block from git. */
+  --color-teal-50: #f1efec;
+  --color-teal-100: #e7e4e0;
+  --color-teal-200: #d9d5d0;
+  --color-teal-300: #bdb7b1;
+  --color-teal-400: #8e8882;
+  --color-teal-500: #67615c;
+  --color-teal-600: #22201e;
+  --color-teal-700: #3a3633;
+  --color-teal-800: #181615;
+  --color-teal-900: #181615;
+  --color-teal-950: #181615;
 
   /* Night chrome: sidebar, tab bar, the Run header. Stays dark in both
      themes — Night, not the old teal leather. */
@@ -132,10 +137,10 @@
 
 @layer base {
   :root {
-    --color-bg-brand-solid: #b04528;
-    --color-bg-brand-solid_hover: #8f3820;
+    --color-bg-brand-solid: #22201e;
+    --color-bg-brand-solid_hover: #3a3633;
     --color-text-primary_on-brand: #ffffff;
-    --color-focus-ring: #b04528;
+    --color-focus-ring: #67615c;
   }
 
   h1,
@@ -158,12 +163,27 @@
     --color-gilt-soft: #2a1814;
     --color-gilt-line: #4a2a22;
 
-    /* Ember fill, Night label — AA 6.52:1. Do not put white on Ember. */
-    --color-bg-brand-solid: #ec7c58;
-    --color-bg-brand-solid_hover: #d4623e;
+    /* Pale fill, Night label. The press ramp flips here: the steps dark
+       variants reach for (300–500) go pale, the ones they use for lines and
+       soft grounds (700–950) go deep. 600 sits mid-grey so the few classes
+       with no dark variant still show. */
+    --color-teal-50: #2a2725;
+    --color-teal-100: #2d2a27;
+    --color-teal-200: #3a3633;
+    --color-teal-300: #d9d5d0;
+    --color-teal-400: #ece9e5;
+    --color-teal-500: #f1efec;
+    --color-teal-600: #8e8882;
+    --color-teal-700: #4f4a46;
+    --color-teal-800: #3a3633;
+    --color-teal-900: #2d2a27;
+    --color-teal-950: #2a2725;
+
+    --color-bg-brand-solid: #f1efec;
+    --color-bg-brand-solid_hover: #ffffff;
     --color-text-primary_on-brand: #181615;
-    --color-fg-brand-primary: #ec7c58;
-    --color-focus-ring: #ec7c58;
+    --color-fg-brand-primary: #ece9e5;
+    --color-focus-ring: #a39d97;
 
     --color-vesper: #bcabf1;
     --color-vesper-soft: #1f1b33;
@@ -227,12 +247,13 @@
   }
 }
 
-/* Eyebrow: the small uppercase section label. Used sparingly. */
+/* Eyebrow: the small section label. Sentence case at body tracking — the
+   all-caps version made every block announce itself, so the content under it
+   had to shout back. */
 @utility eyebrow {
-  font-size: 0.6875rem;
-  line-height: 0.875rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--color-text-quaternary);
 }
