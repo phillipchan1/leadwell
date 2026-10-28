@@ -310,13 +310,17 @@ export async function loadShared(sql: Sql, m: Member, now = new Date()): Promise
            FROM one_on_ones WHERE user_id = $1 AND meeting_id = $2 ORDER BY date`,
         [owner, m.meetingId],
       ),
-      // Placing is sharing: only topics on a week, never the ideas tray, and
-      // never one the owner locked.
+      // Placing is sharing: topics on a week, never one the owner locked. Of
+      // the ideas tray, only what was shared on purpose — the guest's own
+      // ideas, and the owner's they chose to share — and only while open.
       sql.unsafe(
         `SELECT id, text, slot_id, session_id, status, raised_by, sort_order, created_on
            FROM topics
-          WHERE user_id = $1 AND meeting_id = $2 AND session_id IS NOT NULL
-            AND is_private = false AND status <> 'dropped'
+          WHERE user_id = $1 AND meeting_id = $2 AND is_private = false
+            AND (
+              (session_id IS NOT NULL AND status <> 'dropped')
+              OR (session_id IS NULL AND status = 'open' AND (is_shared OR raised_by IS NOT NULL))
+            )
           ORDER BY sort_order`,
         [owner, m.meetingId],
       ),
@@ -390,7 +394,7 @@ export async function loadShared(sql: Sql, m: Member, now = new Date()): Promise
       meetingId: m.meetingId,
       text: r.text,
       slotId: r.slot_id ?? undefined,
-      sessionId: r.session_id,
+      sessionId: r.session_id ?? undefined,
       status: r.status,
       raisedBy: r.raised_by ?? undefined,
       order: r.sort_order ?? 0,
@@ -448,21 +452,23 @@ export async function loadShared(sql: Sql, m: Member, now = new Date()): Promise
 
 /**
  * The guest adds something to an occurrence. The first thing put into a
- * projected week books it — the same rule the owner's planner follows.
+ * projected week books it — the same rule the owner's planner follows. With
+ * no date it's an idea for later: it lands in the owner's tray, still theirs.
  */
 export async function guestAddTopic(
   sql: Sql,
   m: Member,
   input: { text?: unknown; date?: unknown; slotId?: unknown },
   now = new Date(),
-): Promise<{ id: string; sessionId: string }> {
+): Promise<{ id: string; sessionId: string | null }> {
   const text = typeof input.text === "string" ? input.text.trim() : "";
   const date = typeof input.date === "string" ? input.date : "";
+  const later = input.date === undefined || input.date === null || date === "";
   if (!text) throw new ShareError(400, "say what you'd like to raise");
   if (text.length > MAX_TOPIC_CHARS) throw new ShareError(400, "that's a bit long for an agenda item");
-  if (!ISO_DATE_RE.test(date)) throw new ShareError(400, "pick a meeting");
+  if (!later && !ISO_DATE_RE.test(date)) throw new ShareError(400, "pick a meeting");
   const today = todayUTC(now);
-  if (date < addDaysISO(today, -1) || date > addDaysISO(today, 400)) {
+  if (!later && (date < addDaysISO(today, -1) || date > addDaysISO(today, 400))) {
     throw new ShareError(400, "pick an upcoming meeting");
   }
 
@@ -480,25 +486,7 @@ export async function guestAddTopic(
     throw new ShareError(429, "that's a lot for one day — try again tomorrow");
   }
 
-  const onDay = (await sql.unsafe(
-    `SELECT id, occurrence_kind FROM one_on_ones
-      WHERE user_id = $1 AND meeting_id = $2 AND (date = $3 OR series_date = $3::date)`,
-    [m.ownerId, m.meetingId, date],
-  )) as unknown as Row[];
-  const held = onDay.find((r) => r.occurrence_kind !== "skipped");
-  if (!held && onDay.some((r) => r.occurrence_kind === "skipped")) {
-    throw new ShareError(409, "that week is skipped");
-  }
-
-  let sessionId = held?.id as string | undefined;
-  if (!sessionId) {
-    sessionId = crypto.randomUUID();
-    await sql.unsafe(
-      `INSERT INTO one_on_ones (user_id, id, person_id, meeting_id, date)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [m.ownerId, sessionId, meeting.subject_id as string, m.meetingId, date],
-    );
-  }
+  const sessionId = later ? null : await bookedOn(sql, m, meeting, date);
 
   const order = (await sql.unsafe(
     `SELECT COALESCE(max(sort_order), -1)::int + 1 AS n FROM topics WHERE user_id = $1 AND meeting_id = $2`,
@@ -523,6 +511,27 @@ export async function guestAddTopic(
     ],
   );
   return { id, sessionId };
+}
+
+/** The occurrence on that date, booking it if it was only projected. */
+async function bookedOn(sql: Sql, m: Member, meeting: Row, date: string): Promise<string> {
+  const onDay = (await sql.unsafe(
+    `SELECT id, occurrence_kind FROM one_on_ones
+      WHERE user_id = $1 AND meeting_id = $2 AND (date = $3 OR series_date = $3::date)`,
+    [m.ownerId, m.meetingId, date],
+  )) as unknown as Row[];
+  const held = onDay.find((r) => r.occurrence_kind !== "skipped");
+  if (held) return held.id as string;
+  if (onDay.some((r) => r.occurrence_kind === "skipped")) {
+    throw new ShareError(409, "that week is skipped");
+  }
+  const sessionId = crypto.randomUUID();
+  await sql.unsafe(
+    `INSERT INTO one_on_ones (user_id, id, person_id, meeting_id, date)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [m.ownerId, sessionId, meeting.subject_id as string, m.meetingId, date],
+  );
+  return sessionId;
 }
 
 /** Only the guest's own topics can be taken back, and only while still open. */

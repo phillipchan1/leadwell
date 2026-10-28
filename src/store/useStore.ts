@@ -435,6 +435,7 @@ type Store = PersistedData &
           | "tagIds"
           | "meetingId"
           | "private"
+          | "shared"
         >
       >
     ) => void;

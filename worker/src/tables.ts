@@ -168,6 +168,7 @@ export const TABLE_COLUMNS: Record<TableName, readonly string[]> = {
     "slot_id",
     "is_private",
     "raised_by",
+    "is_shared",
   ],
   follow_ups: [
     "user_id",

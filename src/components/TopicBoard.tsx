@@ -53,6 +53,7 @@ import {
   Plus,
   Trash01,
   Lock01,
+  Users01,
 } from "@untitledui/icons";
 import { StripPager, fitColumns, pageStrip } from "./StripPager";
 import {
@@ -63,7 +64,8 @@ import { announce } from "@/lib/announce";
 import { MOD_LABEL, hasMod, isTypingTarget, ownsKeyboard } from "@/lib/keys";
 import { IdeasIcon } from "./shell/places";
 import { Avatar } from "./Avatar";
-import { shareFirstName } from "../lib/shares";
+import { shareFirstName, sharedWithLabel, sharesFor } from "../lib/shares";
+import { FromThemBar, FromThemContext, useFreshFromThem, useFromThem } from "./sharing/fromThem";
 import { cx } from "@/utils/cx";
 
 /**
@@ -164,6 +166,19 @@ export function TopicBoard({
   const addTopic = useStore((s) => s.addTopic);
   const updateTopic = useStore((s) => s.updateTopic);
   const meetingShared = useStore((s) => s.shares.some((x) => x.meetingId === meeting.id));
+  const allShares = useStore((s) => s.shares);
+  const meetingShares = useMemo(() => sharesFor(allShares, meeting.id), [allShares, meeting.id]);
+  // What the other chair brought, ideas included: theirs to see apart from mine.
+  const theirTopics = useMemo(
+    () => (meetingShared ? topics.filter((t) => t.meetingId === meeting.id && t.raisedBy) : []),
+    [topics, meeting.id, meetingShared]
+  );
+  const freshFromThem = useFreshFromThem(meeting.id, theirTopics, meetingShared);
+  const [onlyTheirs, setOnlyTheirs] = useState(false);
+  const fromThem = useMemo(
+    () => ({ theirs: onlyTheirs && meetingShared, fresh: freshFromThem }),
+    [onlyTheirs, meetingShared, freshFromThem]
+  );
   const deleteTopics = useStore((s) => s.deleteTopics);
   const placeTopicsAt = useStore((s) => s.placeTopicsAt);
   const revertTopics = useStore((s) => s.revertTopics);
@@ -192,8 +207,8 @@ export function TopicBoard({
   const [cramped, setCramped] = useState(false);
   useLayoutEffect(() => {
     const el = rootRef.current;
-    if (!el || occurrence) return;
-    const check = () => setCramped(el.clientWidth >= 768 && el.clientWidth < 1000);
+    if (!el) return;
+    const check = () => setCramped(el.clientWidth < (occurrence ? 768 : 1000));
     check();
     if (typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(check);
@@ -570,7 +585,22 @@ export function TopicBoard({
         icon: <Flag01 className="size-4" />,
         onSelect: () => flagAll(targets, !allUrgent),
       },
-      ...(meetingShared
+      ...(meetingShared && targets.every((t) => !t.sessionId && !t.raisedBy)
+        ? ([
+            // An idea isn't on a week, so it isn't shared until you say so.
+            {
+              type: "item",
+              label: targets.every((t) => t.shared)
+                ? `Stop sharing${count}`
+                : `Share${count} with ${sharedWithLabel(meetingShares)}`,
+              icon: <Users01 className="size-4" />,
+              onSelect: () => {
+                const share = !targets.every((t) => t.shared);
+                for (const t of targets) updateTopic(t.id, { shared: share, private: share ? false : t.private });
+              },
+            },
+          ] satisfies MenuEntry[])
+        : meetingShared
         ? ([
             {
               type: "item",
@@ -578,7 +608,7 @@ export function TopicBoard({
               icon: <Lock01 className="size-4" />,
               onSelect: () => {
                 const lock = !targets.every((t) => t.private);
-                for (const t of targets) updateTopic(t.id, { private: lock });
+                for (const t of targets) updateTopic(t.id, { private: lock, shared: lock ? false : t.shared });
               },
             },
           ] satisfies MenuEntry[])
@@ -723,7 +753,17 @@ export function TopicBoard({
   const ideaCount = ideaGroups.reduce((n, g) => n + g.topics.length, 0);
 
   return (
+    <FromThemContext.Provider value={fromThem}>
     <div ref={rootRef} className="@container flex flex-col gap-4" {...selection.rootProps}>
+      {meetingShared && (
+        <FromThemBar
+          shares={meetingShares}
+          theirs={theirTopics}
+          fresh={freshFromThem}
+          showing={onlyTheirs}
+          onShow={setOnlyTheirs}
+        />
+      )}
       {loose.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-cond-watch-soft px-4 py-3">
           <p className="min-w-0 flex-1 text-[13.5px] leading-5 text-cond-watch-ink">
@@ -857,6 +897,7 @@ export function TopicBoard({
         />
       )}
     </div>
+    </FromThemContext.Provider>
   );
 }
 
@@ -2133,6 +2174,9 @@ function BoardCard({
   };
 
   const shares = useStore((s) => s.shares);
+  const fromThem = useFromThem();
+  const isNew = fromThem.fresh.has(topic.id);
+  const stepsBack = fromThem.theirs && !topic.raisedBy;
   const meta = cardMeta(topic, covered);
   // On a shared meeting the card says whose it is and whether it's mine alone.
   const raiser = topic.raisedBy ? shares.find((s) => s.id === topic.raisedBy) : undefined;
@@ -2141,6 +2185,21 @@ function BoardCard({
       <span key="raised" className="inline-flex items-center gap-1 font-sans text-[11px] font-semibold tracking-normal text-teal-700 normal-case dark:text-teal-400">
         <Avatar name={raiser?.name ?? raiser?.email ?? "?"} size={14} />
         {raiser ? `${shareFirstName(raiser)} raised` : "Raised by a guest"}
+      </span>
+    );
+  }
+  if (isNew) {
+    meta.unshift(
+      <span key="new" className="inline-flex items-center gap-1 font-sans text-[11px] font-semibold tracking-normal text-teal-700 normal-case dark:text-teal-400">
+        <i aria-hidden className="size-1.5 rounded-full bg-teal-600 dark:bg-teal-400" />
+        New
+      </span>
+    );
+  }
+  if (topic.shared && !topic.sessionId && !topic.raisedBy && !topic.private) {
+    meta.push(
+      <span key="shared" className="inline-flex items-center gap-1" title="On the shared page, under Ideas for later">
+        <Users01 aria-hidden className="size-3" /> Shared
       </span>
     );
   }
@@ -2185,6 +2244,7 @@ function BoardCard({
             : "border-secondary bg-primary shadow-[0_1px_1.5px_rgba(10,34,37,0.05)] hover:border-primary hover:shadow-[0_2px_6px_-2px_rgba(10,34,37,0.14)]",
         picked &&
           "border-teal-600 bg-teal-50 shadow-[0_0_0_1px_var(--color-teal-600)] hover:border-teal-600 dark:border-teal-500 dark:bg-teal-950/50 dark:shadow-[0_0_0_1px_var(--color-teal-500)]",
+        stepsBack && !picked && "opacity-35 hover:opacity-100",
         isDragging && "opacity-35"
       )}
     >

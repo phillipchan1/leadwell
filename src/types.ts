@@ -462,6 +462,11 @@ export type Topic = {
    * meeting is what shares it; this is the one-click exception.
    */
   private?: boolean;
+  /**
+   * An idea not on a week yet, shown on the shared page anyway: "have a think
+   * about this". A guest's own ideas are shared by being theirs.
+   */
+  shared?: boolean;
   /** Who put it on the agenda. Unset = me; otherwise a `MeetingMember` id. */
   raisedBy?: MemberRef;
 };

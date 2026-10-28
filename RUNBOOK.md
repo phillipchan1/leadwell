@@ -98,7 +98,10 @@ covers on arcs) goes on prod before the Worker that writes `cover_url`; rollback
 fixtures, what we know) goes on prod before the Worker that ships them**: that
 Worker reads the new tables on every load, so without them nobody can sign in.
 Rollback `worker/schema/rollback/009_knowledge.sql`; see
-[docs/meetings-that-learn.md](docs/meetings-that-learn.md). `004` is a `BEGIN`/`COMMIT`
+[docs/meetings-that-learn.md](docs/meetings-that-learn.md). **`010_shared_ideas.sql`
+(`topics.is_shared`) goes on prod before the Worker that ships shared ideas**:
+that Worker writes the column on every topic sync, so without it saving fails.
+Rollback `worker/schema/rollback/010_shared_ideas.sql`. `004` is a `BEGIN`/`COMMIT`
 transaction. To undo just that column (same statement as
 `worker/schema/rollback/004_rate_limit_window_start.sql`):
 

@@ -34,7 +34,7 @@ const EMPTY_JSON_ARRAY_COLUMNS = new Set([
  * null/false would quietly unlock a private topic or drop who raised it. When
  * the client didn't send one of these, the stored value is left alone.
  */
-const PRESERVE_IF_ABSENT = new Set(["is_private", "raised_by", "owner", "email", "cover_url"]);
+const PRESERVE_IF_ABSENT = new Set(["is_private", "is_shared", "raised_by", "owner", "email", "cover_url"]);
 
 /**
  * The only covers an arc may show (Open Library's and Apple Books'). A shared

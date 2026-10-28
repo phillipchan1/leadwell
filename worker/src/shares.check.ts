@@ -152,6 +152,33 @@ await rejects(guestSetNote(sql, member!, "sx", { body: "x" }, now), 404, "notes 
 await guestRemoveTopic(sql, member!, added.id);
 await rejects(guestRemoveTopic(sql, member!, "t1"), 404, "can't remove what the owner raised");
 
+// Shared ideas: the tray stays private unless an idea is shared on purpose.
+await applySync(sql, phil, {
+  upserts: {
+    topics: [
+      { id: "t5", meeting_id: "m1", text: "Sabbatical rhythm", status: "open", lane: "backlog", urgent: false, carried: 0, sort_order: 5, is_shared: true },
+      { id: "t6", meeting_id: "m1", text: "PRIVATE-SHARED-BUT-LOCKED", status: "open", lane: "backlog", urgent: false, carried: 0, sort_order: 6, is_shared: true, is_private: true },
+      { id: "t7", meeting_id: "m1", text: "PRIVATE-SHARED-DONE", status: "covered", lane: "backlog", urgent: false, carried: 0, sort_order: 7, is_shared: true },
+    ],
+  },
+});
+const idea = await guestAddTopic(sql, member!, { text: "Retreat in spring?" }, now);
+ok(idea.sessionId === null, "an idea without a date books nothing");
+const ideasDoc = await loadShared(sql, member!, now);
+const ideasText = JSON.stringify(ideasDoc);
+ok(!ideasText.includes("PRIVATE"), `shared ideas leak nothing: ${ideasText.match(/PRIVATE-[A-Z-]+/g)}`);
+const ideaIds = (ideasDoc.topics as { id: string; sessionId?: string }[]).filter((t) => !t.sessionId).map((t) => t.id);
+ok(ideaIds.includes("t5") && ideaIds.includes(idea.id) && ideaIds.length === 2, `only the shared idea and hers (${ideaIds})`);
+const ownerIdea = ((await loadTables(sql, phil)).tables.topics as { id: string; raised_by: string | null; session_id: string | null }[]).find((t) => t.id === idea.id);
+ok(ownerIdea?.raised_by === member!.id && ownerIdea.session_id === null, "her idea lands in the owner's tray as hers");
+// A stale client that doesn't know the flag can't unshare an idea.
+await applySync(sql, phil, {
+  upserts: { topics: [{ id: "t5", meeting_id: "m1", text: "Sabbatical rhythm", status: "open", lane: "backlog", urgent: false, carried: 0, sort_order: 5 }] },
+});
+ok(((await loadShared(sql, member!, now)).topics as { id: string }[]).some((t) => t.id === "t5"), "an upsert without is_shared leaves it shared");
+await guestRemoveTopic(sql, member!, idea.id);
+await rejects(guestRemoveTopic(sql, member!, "t5"), 404, "can't remove the owner's shared idea");
+
 // The owner sees all of it through the ordinary load.
 const ownerDoc = await loadTables(sql, phil);
 const ownerTopics = ownerDoc.tables.topics as { id: string; raised_by: string | null; slot_id: string | null; tag_ids: string[] }[];

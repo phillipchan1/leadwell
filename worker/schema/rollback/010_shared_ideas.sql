@@ -1,0 +1,3 @@
+BEGIN;
+ALTER TABLE public.topics DROP COLUMN IF EXISTS is_shared;
+COMMIT;

@@ -195,14 +195,12 @@ function Shared({ doc, token, reload }: { doc: SharedDoc; token: string; reload:
         </header>
 
         <main className="flex flex-col gap-5 bg-secondary px-4 py-5 sm:rounded-b-[24px] sm:bg-primary sm:px-5">
-          {ahead.length > 0 && (
-            <Composer
-              slots={ahead}
-              sessions={doc.sessions}
-              curriculum={meeting.curriculum}
-              onAdd={(input) => act(() => call(token, "/topics", { method: "POST", body: JSON.stringify(input) }))}
-            />
-          )}
+          <Composer
+            slots={ahead}
+            sessions={doc.sessions}
+            curriculum={meeting.curriculum}
+            onAdd={(input) => act(() => call(token, "/topics", { method: "POST", body: JSON.stringify(input) }))}
+          />
           {error && <p className="rounded-[10px] bg-cond-critical-soft px-3 py-2 text-[13px] text-cond-critical-ink">{error}</p>}
 
           {next &&
@@ -237,9 +235,15 @@ function Shared({ doc, token, reload }: { doc: SharedDoc; token: string; reload:
 
           {ahead.length > 1 && (
             <Section title="Coming up">
-              <ComingUp slots={slots} doc={doc} />
+              <ComingUp slots={slots} doc={doc} nameOf={nameOf} />
             </Section>
           )}
+
+          <Ideas
+            doc={doc}
+            nameOf={nameOf}
+            onRemove={(id) => act(() => call(token, `/topics/${id}`, { method: "DELETE" }))}
+          />
 
           {lastHeld?.sessionId && (
             <AfterLast
@@ -308,21 +312,23 @@ function Composer({
   slots: Slot[];
   sessions: Session[];
   curriculum: CurriculumSlot[];
-  onAdd: (input: { text: string; date: string; slotId?: string }) => Promise<void>;
+  /** No date: an idea for later, not on any meeting yet. */
+  onAdd: (input: { text: string; date?: string; slotId?: string }) => Promise<void>;
 }) {
   const [text, setText] = useState("");
   const [date, setDate] = useState(slots[0]?.date ?? "");
+  const [later, setLater] = useState(false);
   const [slotId, setSlotId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const weeks = slots
     .filter((s) => !sessions.some((x) => x.kind === "skipped" && (x.seriesDate ?? x.date) === s.date))
     .slice(0, 4);
-  const target = weeks.find((w) => w.date === date) ?? weeks[0];
+  const target = later ? undefined : (weeks.find((w) => w.date === date) ?? weeks[0]);
 
   const submit = async () => {
-    if (!text.trim() || !target || busy) return;
+    if (!text.trim() || busy) return;
     setBusy(true);
-    await onAdd({ text: text.trim(), date: target.date, slotId });
+    await onAdd({ text: text.trim(), date: target?.date, slotId });
     setBusy(false);
     setText("");
   };
@@ -343,7 +349,7 @@ function Composer({
           aria-label="Something to raise"
           placeholder={
             !target
-              ? "Add something…"
+              ? "An idea for later…"
               : target.date === weeks[0]?.date
                 ? `Add to ${weekday(target.date)}…`
                 : `Add to ${fmt(target.date, { weekday: "short", month: "short", day: "numeric" })}…`
@@ -365,13 +371,22 @@ function Composer({
             {c.label}
           </Chip>
         ))}
-        {curriculum.length > 0 && weeks.length > 1 && <span className="mx-0.5 w-px self-stretch bg-tertiary" />}
-        {weeks.length > 1 &&
-          weeks.map((w) => (
-            <Chip key={w.date} on={target?.date === w.date} onClick={() => setDate(w.date)}>
-              {fmt(w.date, { weekday: "short", month: "short", day: "numeric" })}
-            </Chip>
-          ))}
+        {curriculum.length > 0 && <span className="mx-0.5 w-px self-stretch bg-tertiary" />}
+        {weeks.map((w) => (
+          <Chip
+            key={w.date}
+            on={target?.date === w.date}
+            onClick={() => {
+              setDate(w.date);
+              setLater(false);
+            }}
+          >
+            {fmt(w.date, { weekday: "short", month: "short", day: "numeric" })}
+          </Chip>
+        ))}
+        <Chip on={!target} onClick={() => setLater(true)}>
+          Later
+        </Chip>
       </div>
     </form>
   );
@@ -560,7 +575,7 @@ function FollowUps({
   );
 }
 
-function ComingUp({ slots, doc }: { slots: Slot[]; doc: SharedDoc }) {
+function ComingUp({ slots, doc, nameOf }: { slots: Slot[]; doc: SharedDoc; nameOf: (by?: string) => string }) {
   const ahead = slots.filter((s) => !s.past).slice(1, 4);
   const skipped = doc.sessions.filter(
     (s) => s.kind === "skipped" && ahead.length && (s.seriesDate ?? s.date) > slots.filter((x) => !x.past)[0].date && (s.seriesDate ?? s.date) < ahead[ahead.length - 1].date
@@ -586,8 +601,9 @@ function ComingUp({ slots, doc }: { slots: Slot[]; doc: SharedDoc }) {
                   </span>
                 ))}
                 {items.map((t) => (
-                  <span key={t.id} className="truncate text-secondary">
-                    {t.text}
+                  <span key={t.id} className="flex min-w-0 items-center gap-1.5 text-secondary">
+                    <Avatar name={nameOf(t.raisedBy)} size={16} />
+                    <span className="truncate">{t.text}</span>
                   </span>
                 ))}
                 {!steps.length && !items.length && <span className="text-quaternary">Nothing yet</span>}
@@ -599,6 +615,51 @@ function ComingUp({ slots, doc }: { slots: Slot[]; doc: SharedDoc }) {
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * Ideas not on a meeting yet: theirs, and the ones the owner chose to share.
+ * The owner decides when each comes up; this is where both of you park them.
+ */
+function Ideas({
+  doc,
+  nameOf,
+  onRemove,
+}: {
+  doc: SharedDoc;
+  nameOf: (by?: string) => string;
+  onRemove: (id: string) => void;
+}) {
+  const ideas = doc.topics.filter((t) => !t.sessionId);
+  const owner = first(doc.owner.name || "they");
+  return (
+    <Section title="Ideas for later">
+      {ideas.length ? (
+        <ul className="flex flex-col gap-1.5">
+          {ideas.map((t) => (
+            <li key={t.id} className="flex items-center gap-2.5 rounded-[12px] border border-dashed border-primary bg-primary px-3 py-2.5">
+              <Avatar name={nameOf(t.raisedBy)} size={22} />
+              <span className="min-w-0 flex-1 text-[14px] leading-[19px]">{t.text}</span>
+              {t.raisedBy === doc.me.id && (
+                <button
+                  type="button"
+                  aria-label={`Take back “${t.text}”`}
+                  onClick={() => onRemove(t.id)}
+                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-quaternary hover:bg-secondary hover:text-secondary"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-[12px] border border-dashed border-primary px-3.5 py-3 text-[13.5px] text-tertiary">
+          Nothing parked yet. Add something with Later and {owner} will find a meeting for it.
+        </p>
+      )}
+    </Section>
   );
 }
 

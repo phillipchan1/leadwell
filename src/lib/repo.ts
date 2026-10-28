@@ -478,6 +478,7 @@ const map = {
       sort_order: t.order,
       slot_id: nn(t.slotId),
       is_private: Boolean(t.private),
+      is_shared: Boolean(t.shared),
       raised_by: nn(t.raisedBy),
     }),
     fromRow: (r: Row): Topic => ({
@@ -502,6 +503,7 @@ const map = {
       closedOn: opt(r.closed_on as string | null),
       order: (r.sort_order as number) ?? 0,
       private: r.is_private ? true : undefined,
+      shared: r.is_shared ? true : undefined,
       raisedBy: opt(r.raised_by as string | null),
     }),
   },
