@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Tab as TabItem,
   TabList,
@@ -19,6 +19,8 @@ type Props = {
   mode?: EditorMode;
   onModeChange?: (mode: EditorMode) => void;
   sessionId?: string;
+  /** Extra controls at the end of the mode bar — Run puts Dictate here. */
+  actions?: ReactNode;
 };
 
 function modeStorageKey(sessionId?: string) {
@@ -44,6 +46,7 @@ export function SessionEditor({
   mode: controlledMode,
   onModeChange,
   sessionId,
+  actions,
 }: Props) {
   const [mode, setMode] = useState<EditorMode>(
     controlledMode ?? loadMode(sessionId)
@@ -95,7 +98,10 @@ export function SessionEditor({
               <TabItem id="markdown" label="Markdown" />
             </TabList>
           </Tabs>
-          <span className="session-editor-mode-hint">{formatChord("mod+shift+m")} to toggle</span>
+          <span className="flex items-center gap-3">
+            <span className="session-editor-mode-hint">{formatChord("mod+shift+m")} to toggle</span>
+            {actions}
+          </span>
         </div>
       )}
 

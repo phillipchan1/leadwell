@@ -7,13 +7,10 @@ import { SharedNotes } from "./sharing/SharedNotes";
 import { RunContext } from "./RunContext";
 import { Avatar } from "./Avatar";
 import { LivePill } from "./LivePill";
-import {
-  endMeeting,
-  getSpeechRecognition,
-  joinMeeting,
-  toggleListening,
-  useLive,
-} from "../lib/liveMeeting";
+import { endMeeting, joinMeeting, toggleListening, useLive } from "../lib/liveMeeting";
+import { canTranscribe } from "../lib/transcriber";
+import { ListenStatus } from "./ListenStatus";
+import { DictateButton } from "./DictateButton";
 
 import { Input } from "@/components/base/input/input";
 import { TextArea } from "@/components/base/textarea/textarea";
@@ -79,7 +76,7 @@ export function MeetingEditor({
   const isLive = useLive((s) => s.sessionId === sessionId);
   const liveError = useLive((s) => s.error);
   // Resolved once at mount so the control can say up front whether it works.
-  const [speechSupported] = useState(() => Boolean(getSpeechRecognition()));
+  const [speechSupported] = useState(canTranscribe);
   const [showCapture, setShowCapture] = useState(
     Boolean(session?.transcript?.trim())
   );
@@ -97,13 +94,13 @@ export function MeetingEditor({
     joinMeeting(session.id);
   }, [session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // While the mic writes into the store, the field follows it — without
-  // eating the space you just typed, which the store trims away.
+  // The mic writes into the store, sometimes after it's been turned off (the
+  // last stretch is still being transcribed), so the field follows the store —
+  // without eating the space you just typed, which the store trims away.
   useEffect(() => {
-    if (!listening) return;
     const next = session?.transcript ?? "";
     setTranscript((cur) => (cur.trim() === next ? cur : next));
-  }, [listening, session?.transcript]);
+  }, [session?.transcript]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -348,7 +345,7 @@ export function MeetingEditor({
                     ) : (
                       <span
                         className="meeting-editor-chip cursor-not-allowed opacity-60"
-                        title="Live listen needs speech recognition, which this browser doesn't offer"
+                        title="Live listen needs a microphone this browser can record from"
                       >
                         Listen unavailable — paste a transcript
                       </span>
@@ -360,6 +357,7 @@ export function MeetingEditor({
                     >
                       Transcript
                     </button>
+                    <ListenStatus sessionId={session.id} />
                   </div>
 
                   {(error ?? (isLive ? liveError : null)) && (
@@ -385,6 +383,15 @@ export function MeetingEditor({
                 sessionId={session.id}
                 value={notes}
                 onChange={saveNotes}
+                actions={
+                  <DictateButton
+                    meetingId={meeting.id}
+                    onAppend={(text) => {
+                      const cur = useStore.getState().sessions.find((o) => o.id === session.id)?.notes ?? "";
+                      saveNotes(cur.trim() ? `${cur.trimEnd()}\n\n${text}` : text);
+                    }}
+                  />
+                }
                 placeholder={`What did you and ${firstName} cover?\n\n## Summary\n\n## Decisions\n- \n\n## Commitments\n- `}
                 autoFocus={!notes.trim() && autoFocusUnlessTouch()}
               />

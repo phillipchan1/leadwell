@@ -33,6 +33,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
+  /** Optional. Meeting audio model, from the allowlist in transcribe.ts. */
+  OPENAI_TRANSCRIBE_MODEL?: string;
   /** Comma-separated allowlist. Empty = no new users. Set to Phil's email. */
   ALLOWED_EMAILS?: string;
 }

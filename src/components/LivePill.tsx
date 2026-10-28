@@ -2,13 +2,8 @@ import { useEffect, useState } from "react";
 import { Microphone01, MicrophoneOff01, X } from "@untitledui/icons";
 import { useStore } from "../store/useStore";
 import { meetingSubjectName, meetingTitle } from "../lib/readiness";
-import {
-  endMeeting,
-  formatElapsed,
-  getSpeechRecognition,
-  toggleListening,
-  useLive,
-} from "../lib/liveMeeting";
+import { endMeeting, formatElapsed, toggleListening, useLive } from "../lib/liveMeeting";
+import { canTranscribe } from "../lib/transcriber";
 import { cx } from "@/utils/cx";
 
 /**
@@ -37,7 +32,7 @@ export function LivePill({
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
   const openSession = useStore((s) => s.openSession);
-  const [canListen] = useState(() => Boolean(getSpeechRecognition()));
+  const [canListen] = useState(canTranscribe);
   const now = useNow(Boolean(sessionId));
 
   if (!sessionId || !session || !meeting || sessionId === exceptSessionId) return null;

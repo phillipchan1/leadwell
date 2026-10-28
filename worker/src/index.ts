@@ -8,6 +8,12 @@ import {
   json,
 } from "./cors.ts";
 import { assertNoClientKey, proxyOpenAI, sanitizeOpenAIBody } from "./openai.ts";
+import {
+  MAX_AUDIO_BYTES,
+  readTranscribeForm,
+  transcribe,
+  transcribeConfigured,
+} from "./transcribe.ts";
 import type { Env } from "./env.ts";
 import { authOf, finishRequest, sqlOf, type WorkerContext, type WorkerVars } from "./request.ts";
 import { stripGetSessionToken } from "./sessionBody.ts";
@@ -190,6 +196,38 @@ async function handleOpenAI(c: WorkerContext): Promise<Response> {
 
 app.post("/api/openai", (c) => handleOpenAI(c));
 app.post("/functions/v1/openai", (c) => handleOpenAI(c));
+
+// Meeting audio, one segment at a time (worker/src/transcribe.ts). The GET
+// tells Run which engine to listen with before it opens the mic.
+app.get("/api/transcribe", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  return json({ available: transcribeConfigured(c.env) });
+});
+
+app.post("/api/transcribe", async (c) => {
+  const user = await requireUser(c);
+  if (!user) return json({ error: "not authenticated" }, 401);
+  try {
+    assertNoClientKey(c.req.raw.headers);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : "bad request" }, 400);
+  }
+  // Refuse an oversized body before reading it; the form check catches a liar.
+  if (Number(c.req.header("content-length") ?? 0) > MAX_AUDIO_BYTES + 64 * 1024) {
+    return json({ error: "audio is too large" }, 413);
+  }
+  let input;
+  try {
+    input = readTranscribeForm(await c.req.raw.formData(), c.env);
+  } catch (err) {
+    return json({ error: err instanceof Error ? err.message : "invalid form" }, 400);
+  }
+  const res = await transcribe(c.env, input);
+  const headers = new Headers(res.headers);
+  for (const [k, v] of Object.entries(API_SECURITY)) headers.set(k, v);
+  return new Response(res.body, { status: res.status, headers });
+});
 
 // Covers for book arcs (worker/src/books.ts). Signed-in only: it is a
 // convenience when starting an arc, not something a guest page needs.
