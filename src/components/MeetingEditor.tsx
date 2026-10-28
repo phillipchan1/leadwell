@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useStore } from "../store/useStore";
+import { readTrail, splitPath } from "../lib/navTrail";
+import { parseRoute } from "../lib/routes";
+import { findMeeting, type SlugSource } from "../lib/slugs";
+import { placeOf } from "./shell/places";
 import { SessionEditor } from "./SessionEditor";
 import { SessionAgenda } from "./SessionAgenda";
 import { ArcRun } from "./arcs/ArcRun";
@@ -14,7 +19,7 @@ import { DictateButton } from "./DictateButton";
 import { TranscriptField } from "./TranscriptField";
 import { WrapUpSheet } from "./WrapUpSheet";
 import { markWrapped, wasWrapped } from "../lib/wrapUp";
-import { addDays, todayISO } from "../lib/readiness";
+import { addDays, meetingSubjectName, meetingTitle, todayISO } from "../lib/readiness";
 import { DEMO } from "../lib/demo";
 
 import { Input } from "@/components/base/input/input";
@@ -35,6 +40,32 @@ function formatEntryDate(iso: string): string {
   });
 }
 
+/** A page, in the words the arrow should use for it. */
+function describeOpener(opener: string | null, data: SlugSource): string | null {
+  if (!opener) return null;
+  const { pathname, search } = splitPath(opener);
+  const route = parseRoute(pathname, search);
+  if (route.view === "tab" && !route.peek) return placeOf(route.tab).label;
+  const sel = route.view === "focus" ? route.target : route.peek;
+  if (!sel) return null;
+  switch (sel.kind) {
+    case "person":
+      return data.people.find((p) => p.id === sel.id)?.name ?? null;
+    case "team":
+      return data.teams.find((t) => t.id === sel.id)?.name ?? null;
+    case "manager":
+      return data.managers.find((m) => m.id === sel.id)?.name ?? null;
+    case "meeting": {
+      const meeting = findMeeting(data, sel.id);
+      return meeting
+        ? meetingTitle(meeting, meetingSubjectName(meeting, data))
+        : null;
+    }
+    case "me":
+      return "your profile";
+  }
+}
+
 export function MeetingEditor({
   sessionId,
   onClose,
@@ -47,6 +78,7 @@ export function MeetingEditor({
   const people = useStore((s) => s.people);
   const teams = useStore((s) => s.teams);
   const managers = useStore((s) => s.managers);
+  const { state: locationState } = useLocation();
   const updateSession = useStore((s) => s.updateSession);
   const deleteSession = useStore((s) => s.deleteSession);
   const session = sessions.find((o) => o.id === sessionId);
@@ -206,13 +238,16 @@ export function MeetingEditor({
   };
 
   const firstName = subjectName.split(" ")[0] ?? subjectName;
-  const backLabel = person
-    ? person.name
-    : team
-      ? team.name
-      : manager
-        ? manager.name
-        : subjectName;
+  // The arrow goes back to wherever the write-up was opened from, so that's
+  // what it names — "Today" if you came from Today, not the subject's profile.
+  const backLabel =
+    describeOpener(readTrail(locationState).opener, {
+      meetings,
+      people,
+      teams,
+      managers,
+    }) ??
+    (person ? person.name : team ? team.name : manager ? manager.name : subjectName);
 
   const subjectPhoto = person?.photo ?? manager?.photo;
   const runTitle = meeting.name?.trim()

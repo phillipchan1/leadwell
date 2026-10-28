@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
-import { useDismiss } from "@/hooks/use-dismiss";
 import type { Person } from "../types";
 import {
   DOMAIN_COLOR,
@@ -59,7 +58,6 @@ export function PersonProfile({
   const capacities = useStore((s) => s.capacities);
   const section = useStore((s) => s.section);
   const setSection = useStore((s) => s.setSection);
-  const selectPerson = useStore((s) => s.selectPerson);
   const selectTeam = useStore((s) => s.selectTeam);
   const deletePerson = useStore((s) => s.deletePerson);
   const updateLeadUp = useStore((s) => s.updateLeadUp);
@@ -115,10 +113,6 @@ export function PersonProfile({
   useEffect(() => {
     setFocusSessionId(undefined);
   }, [person.id]);
-
-  // Ordering comes from the stack, not from a guard list — an editor
-  // opened inside this panel registers after it and gets Escape first.
-  useDismiss(() => selectPerson(null));
 
   /**
    * Send a failing readiness check where it gets fixed. Every fix now lands in

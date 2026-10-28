@@ -110,8 +110,11 @@ export function MeetingProfile({
   const pad = focus ? "px-4 sm:px-8" : "px-4 sm:px-6";
   const [selectedSlotKey, setSelectedSlotKey] = useState<string | null>(null);
 
-  // Escape closes the open week first, then the meeting.
-  useDismiss(() => (selectedSlotKey ? setSelectedSlotKey(null) : clearSelection()));
+  // Escape closes the open week. Only the week: with none open there's nothing
+  // here to answer, and the next one down the stack — the meeting, from
+  // EntityChrome — closes. Registering only while a week is open is what keeps
+  // it from ever being the one that closes the meeting.
+  useDismiss(() => setSelectedSlotKey(null), selectedSlotKey !== null);
 
   const closeNotes = useCallback(() => setSelectedSlotKey(null), []);
   const onSelectWeek = useCallback((key: string) => setSelectedSlotKey(key), []);

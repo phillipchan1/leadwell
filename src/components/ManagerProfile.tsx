@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
-import { useDismiss } from "@/hooks/use-dismiss";
 import type { Manager } from "../types";
 import { ProfileAdminLinks } from "./ui";
 import { EntityHeader, IdentityChip } from "./EntityHeader";
@@ -46,7 +45,6 @@ export function ManagerProfile({
   const addSession = useStore((s) => s.addSession);
   const section = useStore((s) => s.section);
   const setSection = useStore((s) => s.setSection);
-  const selectManager = useStore((s) => s.selectManager);
   const selectMeeting = useStore((s) => s.selectMeeting);
   const updateManagerLeadUp = useStore((s) => s.updateManagerLeadUp);
   const deleteManager = useStore((s) => s.deleteManager);
@@ -81,10 +79,6 @@ export function ManagerProfile({
     }
     setMode("meetings");
   };
-
-  // Ordering comes from the stack, not from a guard list — an editor
-  // opened inside this panel registers after it and gets Escape first.
-  useDismiss(() => selectManager(null));
 
   return (
     <aside

@@ -121,6 +121,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const wins = useStore((s) => s.wins);
   const prayers = useStore((s) => s.prayers);
   const setTab = useStore((s) => s.setTab);
+  // "Go to" leaves what's open behind, like the sidebar and the g shortcuts.
+  // `setTab` keeps it as a peek on the new tab — on a phone that peek fills the
+  // screen, so the palette looked like it had done nothing.
+  const goToTab = useStore((s) => s.goToTab);
   const selectPerson = useStore((s) => s.selectPerson);
   const selectTeam = useStore((s) => s.selectTeam);
   const selectManager = useStore((s) => s.selectManager);
@@ -196,7 +200,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           selectMe(true);
           break;
         case "ideas":
-          setTab("ideas");
+          goToTab("ideas");
           break;
       }
     },
@@ -207,7 +211,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
       selectManager,
       selectMeeting,
       selectMe,
-      setTab,
+      goToTab,
     ]
   );
 
@@ -238,12 +242,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const go = (id: string, fn: () => void) => () => runRow(id, fn);
 
     const nav: Row[] = [
-      { id: "go:today", label: "Go to Today", group: "Go to", hint: "G then T", run: go("go:today", () => setTab("today")) },
-      { id: "go:tree", label: "Go to People · Tree", group: "Go to", hint: "G then C", run: go("go:tree", () => setTab("tree")) },
-      { id: "go:table", label: "Go to People · List", group: "Go to", hint: "G then B", run: go("go:table", () => setTab("table")) },
-      { id: "go:meetings", label: "Go to Meetings", group: "Go to", hint: "G then M", run: go("go:meetings", () => setTab("meetings")) },
-      { id: "go:ideas", label: "Go to Ideas", group: "Go to", hint: "G then I", run: go("go:ideas", () => setTab("ideas")) },
-      { id: "go:prayer", label: "Go to Prayer", group: "Go to", hint: "G then R", run: go("go:prayer", () => setTab("prayer")) },
+      { id: "go:today", label: "Go to Today", group: "Go to", hint: "G then T", run: go("go:today", () => goToTab("today")) },
+      { id: "go:tree", label: "Go to People · Tree", group: "Go to", hint: "G then C", run: go("go:tree", () => goToTab("tree")) },
+      { id: "go:table", label: "Go to People · List", group: "Go to", hint: "G then B", run: go("go:table", () => goToTab("table")) },
+      { id: "go:meetings", label: "Go to Meetings", group: "Go to", hint: "G then M", run: go("go:meetings", () => goToTab("meetings")) },
+      { id: "go:ideas", label: "Go to Ideas", group: "Go to", hint: "G then I", run: go("go:ideas", () => goToTab("ideas")) },
+      { id: "go:prayer", label: "Go to Prayer", group: "Go to", hint: "G then R", run: go("go:prayer", () => goToTab("prayer")) },
       { id: "new:capture", label: "Capture a topic", group: "Create", hint: "C", run: go("new:capture", () => openModal({ kind: "capture" })) },
       { id: "go:me", label: "Open my profile", group: "Go to", run: go("go:me", () => selectMe(true)) },
 

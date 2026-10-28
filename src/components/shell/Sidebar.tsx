@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Keyboard01, Moon01, Settings01, Sun } from "@untitledui/icons";
 import { useStore } from "@/store/useStore";
 import { routePath } from "@/lib/routes";
@@ -256,7 +255,7 @@ function MeRow() {
   const setHelpOpen = useStore((s) => s.setHelpOpen);
   const [open, setOpen] = useState(false);
   const { triggerProps, menuProps, close } = useMenu(open, setOpen);
-  const navigate = useNavigate();
+  const openMe = useStore((s) => s.openMe);
 
   const initialsOf = (name: string) =>
     name
@@ -272,7 +271,7 @@ function MeRow() {
         href="/me"
         onClick={(e) => {
           e.preventDefault();
-          navigate("/me");
+          openMe();
         }}
         className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1"
       >

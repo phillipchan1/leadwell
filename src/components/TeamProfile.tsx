@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
-import { useDismiss } from "@/hooks/use-dismiss";
 import type { Team } from "../types";
 import { hasLeadershipRead } from "../lib/derive";
 import { entityMode, modeSection, type EntityMode } from "../lib/entityModes";
@@ -80,10 +79,6 @@ export function TeamProfile({
   const teamNotes = useStore((s) => s.teamNotes);
   const addTeamNote = useStore((s) => s.addTeamNote);
   const deleteTeamNote = useStore((s) => s.deleteTeamNote);
-
-  // Ordering comes from the stack, not from a guard list — an editor
-  // opened inside this panel registers after it and gets Escape first.
-  useDismiss(() => selectTeam(null));
 
   const capacity = capacities.find((c) => c.id === team.capacityId);
   const domain = domains.find((d) => d.id === team.domainId);

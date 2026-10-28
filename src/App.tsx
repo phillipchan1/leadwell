@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useStore, setNavigate } from "./store/useStore";
 import {
@@ -8,6 +8,7 @@ import {
   parseRoute,
   routePath,
 } from "./lib/routes";
+import { readTrail, nextTrail, splitPath, type Where } from "./lib/navTrail";
 import { meetingSubjectName, meetingTitle } from "./lib/readiness";
 import { defaultModeFor, entityModeFor, modeTabs } from "./lib/entityModes";
 import { SettingsModal } from "./components/SettingsModal";
@@ -91,9 +92,50 @@ function useRouteSync() {
   const applyRoute = useStore((s) => s.applyRoute);
   const phase = useStore((s) => s.phase);
 
+  // Where we are as of the last render, kept current by hand between renders
+  // so two navigations in one tick build on each other.
+  const here = useRef<Where>(location);
+  here.current = location;
+  // A pop is async: a second Back/X/Esc before it lands would pop again and
+  // walk past the page we meant to return to.
+  const popping = useRef(false);
+  useEffect(() => {
+    popping.current = false;
+  }, [location.key]);
+
   // Registered in layout so a click in the first paint already navigates.
   useEffect(() => {
-    setNavigate((path, opts) => navigate(path, { replace: opts?.replace }));
+    // A sheet (see `useHistoryDismiss`) parks an extra entry on the current
+    // URL. Anything that navigates from under one replaces it rather than
+    // stacking on top, or the sheet's entry is left behind as a dead Back press
+    // — and a count of entries to pop would be off by one.
+    const sheetOnTop = () =>
+      typeof window !== "undefined" && Boolean(window.history.state?.__sheet);
+
+    setNavigate({
+      go: (path, opts) => {
+        const trail = nextTrail(here.current, path, {
+          replace: Boolean(opts?.replace),
+          opener: opts?.opener,
+        });
+        const state = trail ? { trail } : null;
+        navigate(path, { replace: opts?.replace || sheetOnTop(), state });
+        here.current = { ...splitPath(path), state };
+      },
+      pop: (steps, to) => {
+        if (popping.current) return;
+        if (steps > 0 && !sheetOnTop()) {
+          popping.current = true;
+          // If the pop goes nowhere, don't leave the guard up for good.
+          window.setTimeout(() => (popping.current = false), 600);
+          navigate(-steps);
+          return;
+        }
+        navigate(to, { replace: true });
+        here.current = { ...splitPath(to), state: null };
+      },
+      trail: () => readTrail(here.current.state),
+    });
     return () => setNavigate(null);
   }, [navigate]);
 
@@ -104,12 +146,18 @@ function useRouteSync() {
     // `/people` is now a saved filter on the table. Old links, bookmarks and
     // anything already in someone's history keep working.
     if (path === LEGACY_PEOPLE_PATH) {
-      navigate(PEOPLE_FILTER_PATH + location.hash, { replace: true });
+      navigate(PEOPLE_FILTER_PATH + location.hash, {
+        replace: true,
+        state: location.state,
+      });
       return;
     }
     // Overview was the old dashboard; Today is what replaced the idea of one.
     if (path === LEGACY_OVERVIEW_PATH) {
-      navigate("/" + location.search + location.hash, { replace: true });
+      navigate("/" + location.search + location.hash, {
+        replace: true,
+        state: location.state,
+      });
       return;
     }
     const route = parseRoute(location.pathname, location.search);
@@ -129,7 +177,10 @@ function useRouteSync() {
           target: { ...route.target, id },
         });
         if (canonical !== location.pathname) {
-          navigate(canonical + location.search + location.hash, { replace: true });
+          navigate(canonical + location.search + location.hash, {
+            replace: true,
+            state: location.state,
+          });
         }
       }
     }
@@ -144,10 +195,7 @@ function useRouteSync() {
  * instead of rendering an empty panel.
  */
 function useDropStaleSelection() {
-  const navigate = useNavigate();
   const phase = useStore((s) => s.phase);
-  const focused = useStore((s) => s.focused);
-  const tab = useStore((s) => s.tab);
   const sessionId = useStore((s) => s.sessionId);
   const sessions = useStore((s) => s.sessions);
   const selectedMe = useStore((s) => s.selectedMe);
@@ -164,25 +212,16 @@ function useDropStaleSelection() {
 
   useEffect(() => {
     if (phase !== "ready") return;
+    // A write-up that's gone — deleted from its own editor, or a stale link —
+    // leaves the editor the way closing it does, to whoever opened it.
     if (sessionId && !sessions.some((o) => o.id === sessionId)) {
-      navigate("/", { replace: true });
+      useStore.getState().closeSession();
       return;
     }
     if (selected || selectedMe || !hasSelectionInUrl) return;
-    navigate(focused ? "/" : routePath({ view: "tab", tab, peek: null }), {
-      replace: true,
-    });
-  }, [
-    phase,
-    sessionId,
-    sessions,
-    selected,
-    selectedMe,
-    hasSelectionInUrl,
-    focused,
-    tab,
-    navigate,
-  ]);
+    // The entity itself is gone: leave as X would, not to the front door.
+    useStore.getState().clearSelection();
+  }, [phase, sessionId, sessions, selected, selectedMe, hasSelectionInUrl]);
 }
 
 /**

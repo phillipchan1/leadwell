@@ -116,21 +116,32 @@ import {
 
 export type { Tab, Selection } from "../lib/routes";
 
+import { NO_TRAIL, type Trail } from "../lib/navTrail";
+
 /**
  * Selection lives in the URL, not in this store — the setters below navigate,
  * and `applyRoute` writes the result back. The router installs this at mount.
  */
-type Navigate = (path: string, opts?: { replace?: boolean }) => void;
-let navigate: Navigate | null = null;
+export type Navigator = {
+  go: (path: string, opts?: { replace?: boolean; opener?: boolean }) => void;
+  /**
+   * Leave by walking `steps` entries back through history. With none to walk
+   * (or when popping can't be trusted) it replaces this entry with `to`.
+   */
+  pop: (steps: number, to: string) => void;
+  /** Where the entry we're on was opened from. */
+  trail: () => Trail;
+};
+let nav: Navigator | null = null;
 
-export function setNavigate(fn: Navigate | null) {
-  navigate = fn;
+export function setNavigate(next: Navigator | null) {
+  nav = next;
 }
 
-function go(path: string, opts?: { replace?: boolean }) {
+function go(path: string, opts?: { replace?: boolean; opener?: boolean }) {
   // Before the router mounts (or in tests) fall back to a plain URL write so a
   // selection is never silently dropped.
-  if (navigate) navigate(path, opts);
+  if (nav) nav.go(path, opts);
   else if (typeof window !== "undefined")
     window.history.replaceState({}, "", path);
 }
@@ -257,13 +268,20 @@ type Store = PersistedData &
     /** Open one recurring meeting — the planner unless told otherwise. */
     selectMeeting: (id: string | null, section?: string) => void;
     selectMe: (open: boolean) => void;
-    /** Close whatever is open, without stepping up the breadcrumb. */
+    /** Open my own profile as a full page. */
+    openMe: () => void;
+    /**
+     * Close whatever is open and return to the page it was opened from — the
+     * same destination as Back, X and Esc, which all call this.
+     */
     clearSelection: () => void;
+    /** Page to a sibling of the same kind, keeping the section. */
+    pageTo: (id: string) => void;
     /** Switch the selected entity's sub-page (person tab, team section). */
     setSection: (section: string | null) => void;
     /** Open the full-screen session editor (promotes to focus). */
     openSession: (sessionId: string) => void;
-    /** Close the session editor, return to the entity's session list. */
+    /** Close the session editor, returning to the page it was opened from. */
     closeSession: () => void;
     /** Promote the current peek to its full-page focus route. */
     openFocus: () => void;
@@ -1425,21 +1443,46 @@ function currentSelection(s: UIState): Selection | null {
   return null;
 }
 
-/** Navigate to a tab surface, optionally switching tabs on the way. */
+/**
+ * Navigate to a tab surface, optionally switching tabs on the way. A focus
+ * route names no tab, so `s.tab` is the one behind it — falling back to Today
+ * here is what made X from a full page land somewhere you had never been.
+ */
 function goTab(
   s: UIState,
   sel: Selection | null,
   tab?: Tab,
   opts?: { replace?: boolean }
 ) {
-  go(
+  go(routePath({ view: "tab", tab: tab ?? s.tab, peek: sel }), opts);
+}
+
+/**
+ * Where an entity with no remembered origin goes on leaving: a deep link or a
+ * cold start. A full page you landed on cold has no tab behind it, so it falls
+ * to the list its kind belongs to rather than to Today.
+ */
+function homeFor(s: UIState, sel: Selection | null): Tab {
+  if (!s.focused || s.tab !== DEFAULT_TAB) return s.tab;
+  if (sel?.kind === "meeting") return "meetings";
+  return sel && sel.kind !== "me" ? "table" : DEFAULT_TAB;
+}
+
+/**
+ * Back, X and Esc: return to the page the open entity was opened from. The one
+ * place that rule lives — the controls differ only in how they look.
+ */
+function leave(s: UIState) {
+  const trail = nav?.trail() ?? NO_TRAIL;
+  const to =
+    trail.origin ??
     routePath({
       view: "tab",
-      tab: tab ?? (s.focused ? DEFAULT_TAB : s.tab),
-      peek: sel,
-    }),
-    opts
-  );
+      tab: homeFor(s, currentSelection(s)),
+      peek: null,
+    });
+  if (nav) nav.pop(trail.origin === null ? 0 : trail.depth, to);
+  else go(to, { replace: true });
 }
 
 /**
@@ -1513,7 +1556,7 @@ export const useStore = create<Store>((set, get) => ({
           : sel.kind === "manager"
             ? s.managers.find((m) => m.id === sel.id)?.domainId === id
             : true;
-    if (!survives) goTo(s, null, { replace: true });
+    if (!survives) leave(s);
   },
   toggleHealthScan: (value) =>
     set((s) => ({
@@ -1534,31 +1577,26 @@ export const useStore = create<Store>((set, get) => ({
   // every time you changed mode would break that. The canvas just stops
   // *applying* a scan its mode doesn't own — see MODE_SCAN.
   setTreeMode: (mode) => set({ treeMode: mode }),
-  /**
-   * Closing a person steps up to their team rather than dismissing outright —
-   * the breadcrumb parent is where you came from, so that's where back goes.
-   */
+  // Closing is always `leave`: back to the page it was opened from. Stepping
+  // up to the team here made Esc land somewhere the X and Back never did; the
+  // breadcrumb is the way up.
   selectPerson: (id, section) => {
     const s = get();
-    if (!id) {
-      const teamId = s.people.find((p) => p.id === s.selectedPersonId)?.teamId;
-      goTo(s, teamId ? { kind: "team", id: teamId } : null);
-      return;
-    }
+    if (!id) return leave(s);
     goTo(s, { kind: "person", id, section });
   },
-  selectTeam: (id, section) =>
-    goTo(get(), id ? { kind: "team", id, section } : null),
-  // A manager stands above me on the canvas — always reached from the tree.
+  selectTeam: (id, section) => {
+    const s = get();
+    if (!id) return leave(s);
+    goTo(s, { kind: "team", id, section });
+  },
+  // Opens where you are. It used to jump to the Tree tab ("a manager stands
+  // above me on the canvas") — fine from the canvas, a surprise from Today,
+  // Prayer or the palette, and closing left you there.
   selectManager: (id, section) => {
     const s = get();
-    if (!id) {
-      goTo(s, null);
-      return;
-    }
-    const sel: Selection = { kind: "manager", id, section };
-    if (s.focused) go(routePath({ view: "focus", target: sel }));
-    else goTab(s, sel, "tree");
+    if (!id) return leave(s);
+    goTo(s, { kind: "manager", id, section });
   },
   // A meeting is reached from Home, the Meetings tab or its subject's profile,
   // and there's no canvas node for it — so it always opens in focus, where the
@@ -1566,10 +1604,7 @@ export const useStore = create<Store>((set, get) => ({
   // ahead — the board of today's meeting and the ones after it.
   selectMeeting: (id, section) => {
     const s = get();
-    if (!id) {
-      goTo(s, null);
-      return;
-    }
+    if (!id) return leave(s);
     go(
       routePath({
         view: "focus",
@@ -1579,15 +1614,20 @@ export const useStore = create<Store>((set, get) => ({
   },
   selectMe: (open) => {
     const s = get();
-    if (!open) {
-      goTo(s, null);
-      return;
-    }
-    const sel: Selection = { kind: "me", id: "" };
-    if (s.focused) go(routePath({ view: "focus", target: sel }));
-    else goTab(s, sel, "tree");
+    if (!open) return leave(s);
+    goTo(s, { kind: "me", id: "" });
   },
-  clearSelection: () => goTo(get(), null),
+  openMe: () =>
+    go(routePath({ view: "focus", target: { kind: "me", id: "" } })),
+  clearSelection: () => leave(get()),
+  // Sideways to a sibling: same kind, same section, and no new history entry —
+  // Back should leave the entity, not walk back through everyone you paged past.
+  pageTo: (id) => {
+    const s = get();
+    const sel = currentSelection(s);
+    if (!sel || sel.kind === "me") return;
+    goTo(s, { kind: sel.kind, id, section: sel.section }, { replace: true });
+  },
   // Sub-page moves replace history: back should leave the entity, not walk tabs.
   setSection: (section) => {
     const s = get();
@@ -1604,53 +1644,33 @@ export const useStore = create<Store>((set, get) => ({
     const meeting = s.meetings.find((m) => m.id === session.meetingId);
     if (!meeting) return;
 
-    // Land back where you opened it from. Coming off the planner, closing the
-    // write-up should return to the board, not jump sideways to a profile you
-    // were never on.
+    // Where the editor sits in the URL only decides what a *cold* link shows
+    // behind it. Closing returns to the page it was opened from (`opener`), so
+    // opening from the planner lands back on the board, from a peek on the
+    // peek, and from Today on Today.
+    let target: Selection;
     if (resolveMeetingKey(s, s.selectedMeetingId ?? "") === meeting.id) {
-      go(
-        routePath({
-          view: "focus",
-          target: {
-            kind: "meeting",
-            id: meeting.id,
-            section: "notes",
-            sessionId,
-          },
-        })
-      );
-      return;
-    }
-
-    let sel: Selection;
-    if (meeting.subjectKind === "person") {
-      sel = {
-        kind: "person",
-        id: meeting.subjectId,
-        section: "sessions",
-        sessionId,
-      };
-    } else if (meeting.subjectKind === "manager") {
-      sel = {
-        kind: "manager",
-        id: meeting.subjectId,
-        section: "sessions",
-        sessionId,
-      };
+      target = { kind: "meeting", id: meeting.id, section: "notes", sessionId };
     } else {
-      sel = {
-        kind: "team",
-        id: meeting.subjectId,
-        section: "sessions",
-        sessionId,
-      };
+      const kind =
+        meeting.subjectKind === "person" || meeting.subjectKind === "manager"
+          ? meeting.subjectKind
+          : "team";
+      target = { kind, id: meeting.subjectId, section: "sessions", sessionId };
     }
-    go(routePath({ view: "focus", target: sel }));
+    go(routePath({ view: "focus", target }), { opener: true });
   },
   closeSession: () => {
     const s = get();
     const sel = currentSelection(s);
     if (!sel?.sessionId) return;
+    // Opened from somewhere: it is the entry right behind this one.
+    const { opener } = nav?.trail() ?? NO_TRAIL;
+    if (nav && opener !== null) {
+      nav.pop(1, opener);
+      return;
+    }
+    // A cold link, or a write-up that vanished under us: the entity it's on.
     const { sessionId: _removed, ...rest } = sel;
     // Teams embed meetings on the main profile — no sessions sub-page to land on.
     const target =
@@ -1659,7 +1679,7 @@ export const useStore = create<Store>((set, get) => ({
         : rest.kind === "meeting"
           ? { ...rest, section: rest.section ?? "notes" }
           : { ...rest, section: rest.section ?? "sessions" };
-    go(routePath({ view: "focus", target }));
+    go(routePath({ view: "focus", target }), { replace: true });
   },
   openFocus: () => {
     const sel = currentSelection(get());
@@ -1792,7 +1812,7 @@ export const useStore = create<Store>((set, get) => ({
         nodePositions,
       };
     });
-    if (before.selectedManagerId === id) goTo(before, null, { replace: true });
+    if (before.selectedManagerId === id) leave(before);
   },
 
   /**
@@ -1994,8 +2014,7 @@ export const useStore = create<Store>((set, get) => ({
     const hitPerson = before.people.some(
       (p) => p.teamId === id && p.id === before.selectedPersonId
     );
-    if (before.selectedTeamId === id || hitPerson)
-      goTo(before, null, { replace: true });
+    if (before.selectedTeamId === id || hitPerson) leave(before);
   },
 
   addTeamAction: (teamId, text, dueDate) =>
@@ -2094,13 +2113,8 @@ export const useStore = create<Store>((set, get) => ({
         nodePositions,
       };
     });
-    // Step up to the team they were on, same as closing their panel.
-    if (before.selectedPersonId === id) {
-      const teamId = before.people.find((p) => p.id === id)?.teamId;
-      goTo(before, teamId ? { kind: "team", id: teamId } : null, {
-        replace: true,
-      });
-    }
+    // Same as closing their panel: back to where it was opened from.
+    if (before.selectedPersonId === id) leave(before);
   },
   movePerson: (personId, teamId) =>
     set((s) => ({

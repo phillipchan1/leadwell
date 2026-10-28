@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Moon01, Settings01, Sun, User01 } from "@untitledui/icons";
 import { useStore } from "@/store/useStore";
 import { useMenu } from "@/hooks/use-menu";
@@ -21,7 +20,7 @@ export function PhoneHeader() {
   const dark = useStore((s) => s.dark);
   const toggleDark = useStore((s) => s.toggleDark);
   const setSettingsOpen = useStore((s) => s.setSettingsOpen);
-  const navigate = useNavigate();
+  const openMe = useStore((s) => s.openMe);
   const [open, setOpen] = useState(false);
   const { triggerProps, menuProps, close } = useMenu(open, setOpen);
 
@@ -86,7 +85,7 @@ export function PhoneHeader() {
             label="Your profile"
             onSelect={() => {
               close(false);
-              navigate("/me");
+              openMe();
             }}
           />
           <MenuItem

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useStore, useActiveTeamId } from "../store/useStore";
 import { useShortcut } from "@/hooks/use-shortcut";
+import { useDismiss } from "@/hooks/use-dismiss";
 import { useMeetingsByNext } from "@/hooks/use-meetings-by-next";
 import { meetingTitle } from "../lib/readiness";
 import { findMeeting } from "../lib/slugs";
@@ -34,8 +35,8 @@ export function useEntityTrail() {
   const selectPerson = useStore((s) => s.selectPerson);
   const selectTeam = useStore((s) => s.selectTeam);
   const selectManager = useStore((s) => s.selectManager);
-  const selectMeeting = useStore((s) => s.selectMeeting);
   const clearSelection = useStore((s) => s.clearSelection);
+  const pageTo = useStore((s) => s.pageTo);
   const openFocus = useStore((s) => s.openFocus);
   const closeFocus = useStore((s) => s.closeFocus);
 
@@ -67,7 +68,7 @@ export function useEntityTrail() {
         label: person.name,
         siblings: siblings.map((p) => ({ id: p.id, name: p.name })),
         currentId: person.id,
-        select: selectPerson,
+        select: pageTo,
       };
     }
     if (team) {
@@ -82,7 +83,7 @@ export function useEntityTrail() {
         label: team.name,
         siblings: siblings.map((t) => ({ id: t.id, name: t.name })),
         currentId: team.id,
-        select: selectTeam,
+        select: pageTo,
       };
     }
     if (manager) {
@@ -91,7 +92,7 @@ export function useEntityTrail() {
         label: manager.name,
         siblings: managers.map((m) => ({ id: m.id, name: m.name })),
         currentId: manager.id,
-        select: selectManager,
+        select: pageTo,
       };
     }
     if (meeting) {
@@ -116,7 +117,7 @@ export function useEntityTrail() {
         // Soonest first, the order the sidebar lists them in.
         siblings: meetingRows.map((r) => ({ id: r.meeting.id, name: r.title })),
         currentId: meeting.id,
-        select: selectMeeting,
+        select: pageTo,
       };
     }
     if (selectedMe) {
@@ -145,7 +146,7 @@ export function useEntityTrail() {
     selectPerson,
     selectTeam,
     selectManager,
-    selectMeeting,
+    pageTo,
   ]);
 
   const index = trail
@@ -209,25 +210,26 @@ export function EntityChrome({ mode }: { mode: "peek" | "focus" }) {
     enabled: Boolean(trail && next),
   });
 
-  useShortcut(close, {
-    chord: "Escape",
-    label: "Close the open entity",
-    group: "Navigation",
-    enabled: Boolean(trail),
-  });
+  // Escape is on the shared stack (see `useDismiss`), not the shortcut
+  // registry: the registry runs first and ignores the stack, so with a topic
+  // drawer or an open week on top, one Escape closed it *and* the meeting.
+  // Anything opened after this mounts sits above it and answers first.
+  useDismiss(close, Boolean(trail));
 
   if (!trail) return null;
 
   return (
     <div className="chrome-compact flex shrink-0 items-center gap-2 border-b border-secondary bg-stone-50 px-3 py-2 sm:px-4 dark:bg-stone-950/60">
       {/* In iOS standalone there is no browser back and no edge gesture out of
-          a full-page surface, so this is the only exit — it gets a label. */}
+          a full-page surface, so this is the only exit — it gets a label.
+          It leaves, same as X and Esc: shrinking to the split view is the
+          Minimize button's job, and below xl that view is the same screen. */}
       {mode === "focus" ? (
         <Button
           size="sm"
           color="link-gray"
           iconLeading={ArrowLeft}
-          onClick={closeFocus}
+          onClick={close}
           className="shrink-0"
         >
           <span className="max-sm:sr-only">Back</span>
