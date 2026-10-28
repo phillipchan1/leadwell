@@ -5,91 +5,115 @@
       "file": "checks.yml",
       "job": "checks",
       "id": "checkout",
-      "sha256": "3a3139e9038d094ce0966f369811ba3d6e4d5bffa525ddb375788f7ea34857b5"
+      "sha256": "4012ef91861dc3da162befb8b051321c29fc428f517abc298834b3c1d9f0a5ca"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "start-postgres",
-      "sha256": "891238fa195fea820bb0f56120b7ab4b242bd5ce46f668bc829b6d495b8fb1a6"
+      "sha256": "e2e8f416eba483d1f65085ac2e1126bcffb9ebf60852214424c25618fab1ea13"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "actionlint",
-      "sha256": "3fcbd83688ec3bd83645cf0434e1e99518e06224e33d41751a9dc8f2846cc06a"
+      "sha256": "f7407466df8a69c3a0a3bbec056c8ad36baa8bd6f25158cc20aacfde3de3434c"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "setup-node",
-      "sha256": "6b97f961f40e5046f0443fc7583d7623e6609c9c5c0b32b00d7472a88d973c95"
+      "sha256": "dccb67e048f4b7cb2b4c5d3949c9597677a5d282066de15e1765a1d879f6f44a"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "npm-ci",
-      "sha256": "fc252da3a62c84ce006a024d61a1f43f84e6d3947b2a99a28f6238e708bd2874"
+      "sha256": "1fd85596d4f95dc9e84afa6b28a5c423c85b3e289911c9f1480cc6c47557c90c"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "guard",
-      "sha256": "4ee8050ec6d34d202a6c68421fdd5c1735d74d28bc3e1f663967b7691dc20e99"
+      "sha256": "f17f10930e7d2c39b68cc18cf7b656ab18b86e06ebe2d048c9b4dec7b88be359"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "typecheck",
-      "sha256": "9e99270f88dba9f84fa23efec6342d42ecf5685aea77b15f3d270b17478d6c35"
+      "sha256": "bfb2de5f8ccd4d4e085bd0d95565afc9291bd8d5550e0e2ce2c0dea07491f439"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "lint",
-      "sha256": "24d60b78860eaf26e0387790e17df586d16a077e5d9c6cd80085209ece6e86a5"
+      "sha256": "a304dd6766cab991422e2ce102dcb0b8502695e055c0f335ab134432d2df6044"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "test",
-      "sha256": "e11fe94f6e06cda4e03459793d376a72369c6183305d09b18c9e6be7fe96322e"
+      "sha256": "a8fbd5ce11980860feb8a22417bdfe9a28160501c4c81be2abef8865f1a16871"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "install-pg",
-      "sha256": "361ffb36df383d5303bd25c8e89a25035797c6dda069cac5e7a5da2d874ac11d"
+      "sha256": "e33336fcb9ec033d913b756ba2e6c7acfad647fe53c5d99e55e3a9622bad5e4e"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "create-prove-dbs",
-      "sha256": "1c6ea3ec10159fea518e6fe5b281b343ed9ec44dbc8cb9700ade8c23e31b781e"
+      "sha256": "b1a4b33f0131a434d76d6bb4b6ea523c1deda07ab44bc45c5cf8a25019a88448"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "container-log-guard",
-      "sha256": "273370dfea5309b10e9cf01091e08ef73caa0d364e1a07f1f65c2b4a63c984ff"
+      "sha256": "c4705698d248928ba350eed50e0b748bb3b5a824ef020328355722bad1687e80"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "live-prove",
-      "sha256": "5b01a4f4c0a20413c2db9fa76aab7210472bcacfa02459d5f266c166ffdd4b6c"
+      "sha256": "2b847f626c8c46873f5f746bea8d48a1a1cc7d09d43a887cd237aaacd2101232"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "wrangler-preview",
-      "sha256": "185e011d93c5dd337dda3efb37dcec92c4c7601e3279557fcd43cbd3dbcef763"
+      "sha256": "4ad6b070bba37b2e0cbb0f118d4215d79afc62e6d0d28a2a252cc67b39133256"
     },
     {
       "file": "checks.yml",
       "job": "checks",
       "id": "stop-postgres",
-      "sha256": "f9951ec4e7dad54bf4c7171658649364bda8139bb1a402ab9802b19d924a6965"
+      "sha256": "ec13c8ecaad311e28a4c5cecbcbededd1bb1ba48ca771576727e18a7328e9db4"
+    },
+    {
+      "file": "checks.yml",
+      "job": "deploy",
+      "id": "checkout",
+      "sha256": "7adf5d7c8986d2143930bb6a0b9b2de757761ce782ca7e19fb9f111807eb0bec"
+    },
+    {
+      "file": "checks.yml",
+      "job": "deploy",
+      "id": "setup-node",
+      "sha256": "58a60b87ca7ce0f26c67108966e1f03f27b0ed50092a0988e4deedc3ba658e9f"
+    },
+    {
+      "file": "checks.yml",
+      "job": "deploy",
+      "id": "npm-ci",
+      "sha256": "3de692ebbf2b39bfa8e077ce46e6b7a11abfb63d82f76012b3ae90f7561f4529"
+    },
+    {
+      "file": "checks.yml",
+      "job": "deploy",
+      "id": "cf-deploy",
+      "sha256": "d3911b582310f3b8e8c9f0a7e3f018d97ab5fdfd21e952fef5dceae92c2da7b0"
     },
     {
       "file": "cutover-migrate.yml",
@@ -200,6 +224,17 @@
       "sha256": "f9cb689447d71a1e2ff9fd93d07008ecc3834c59b095bc09eb9d68c3778f3d93"
     },
     {
+      "file": "checks.yml",
+      "job": "deploy",
+      "ids": [
+        "checkout",
+        "setup-node",
+        "npm-ci",
+        "cf-deploy"
+      ],
+      "sha256": "d036cb4a09939117b1d0d91fd3c24f2667a757bea5637db966038749b67855ab"
+    },
+    {
       "file": "cutover-migrate.yml",
       "job": "cutover",
       "ids": [
@@ -225,9 +260,10 @@
     {
       "file": "checks.yml",
       "jobs": [
-        "checks"
+        "checks",
+        "deploy"
       ],
-      "sha256": "46dbac18dd44ade7ab46ab6f42ed16b938b800a8c3608f3332f959c86cb848a0"
+      "sha256": "2174de67b7e7677290db600731c5fa7d81675a84557eea88c1a25fe803478570"
     },
     {
       "file": "cutover-migrate.yml",
