@@ -15,6 +15,8 @@ import {
 } from "@/lib/readiness";
 import { boardLayout, curriculumOf, slotDotClass } from "@/lib/topics";
 import { nextArcSteps } from "@/lib/arcs";
+import { runwayOf, type Runway } from "@/lib/runway";
+import { RunwayCover, RunwayTrack, runwayTitle } from "../RunwayTrack";
 import { ArcCover } from "../arcs/ArcCover";
 import { delegatedTeamIds } from "@/lib/teams";
 import { meetingSlugs } from "@/lib/slugs";
@@ -70,6 +72,7 @@ export function YourTeams({ scopeId }: { scopeId: string | null }) {
           primary,
           others: own.slice(1),
           readiness: primary ? readinessOf(primary, data, today) : null,
+          runway: primary ? runwayOf(primary, sessions, topics, today) : null,
         };
       })
       .sort((a, b) => urgency(a.readiness) - urgency(b.readiness));
@@ -99,6 +102,7 @@ export function YourTeams({ scopeId }: { scopeId: string | null }) {
   const titleOf = (m: TrackedMeeting) => meetingTitle(m, meetingSubjectName(m, names));
   const slugs = meetingSlugs({ meetings, people, teams, managers });
   const needYou = rows.filter((r) => r.readiness && isBehind(r.readiness.state)).length;
+  const short = rows.filter((r) => r.runway?.level === "bare" || r.runway?.level === "thin").length;
 
   return (
     <section className="flex flex-col gap-3.5">
@@ -107,6 +111,7 @@ export function YourTeams({ scopeId }: { scopeId: string | null }) {
         <span className="font-mono text-[11px] text-quaternary uppercase">
           {rows.length} {rows.length === 1 ? "team" : "teams"}
           {needYou > 0 ? ` · ${needYou} ${needYou === 1 ? "needs" : "need"} you` : ""}
+          {short > 0 ? ` · ${short} planned under a month` : ""}
         </span>
       </div>
       {/* The container is the wrapper: a grid can't query its own width. */}
@@ -120,6 +125,7 @@ export function YourTeams({ scopeId }: { scopeId: string | null }) {
             meeting={row.primary}
             others={row.others}
             readiness={row.readiness}
+            runway={row.runway}
             title={row.primary ? titleOf(row.primary) : ""}
             slug={row.primary ? slugs.slugById.get(row.primary.id) : undefined}
             tags={tags}
@@ -149,6 +155,7 @@ function TeamCard({
   meeting,
   others,
   readiness,
+  runway,
   title,
   slug,
   tags,
@@ -163,6 +170,7 @@ function TeamCard({
   meeting?: TrackedMeeting;
   others: TrackedMeeting[];
   readiness: Readiness | null;
+  runway: Runway | null;
   title: string;
   slug?: string;
   tags: { id: string; color: number }[];
@@ -299,6 +307,16 @@ function TeamCard({
       )}
 
       <dl className="grid gap-1.5 text-[13px]">
+        {/* The next meeting is above; this is how many after it are spoken
+            for — the leadership-block read of which team needs planning. */}
+        {runway && runway.level !== "none" && (
+          <Fact label="Runway">
+            <span className="flex items-center gap-2.5" title={runwayTitle(runway)}>
+              <RunwayTrack runway={runway} className="min-w-0 flex-1" />
+              <RunwayCover runway={runway} />
+            </span>
+          </Fact>
+        )}
         <Fact label="Next step">
           {nextStep ?? <span className="text-quaternary">None set</span>}
         </Fact>

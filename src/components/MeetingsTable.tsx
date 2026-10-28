@@ -13,6 +13,8 @@ import {
   type Readiness,
 } from "../lib/readiness";
 import { looseTopics, topicsFor } from "../lib/topics";
+import { RUNWAY_DAYS, runwayOf, type Runway } from "../lib/runway";
+import { RunwayCover, RunwayTrack, runwayTitle } from "./RunwayTrack";
 import { Card } from "./ui";
 import { Th } from "./Th";
 import { Button } from "@/components/base/buttons/button";
@@ -24,7 +26,7 @@ import { SearchLg } from "@untitledui/icons";
 import { tableRowActivationProps } from "@/lib/rowActivation";
 import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 
-type SortKey = "next" | "name" | "planned" | "state";
+type SortKey = "next" | "name" | "runway" | "state";
 
 type Row = {
   meeting: TrackedMeeting;
@@ -35,6 +37,8 @@ type Row = {
   open: number;
   /** Open topics slotted into an occurrence that's already gone. */
   loose: number;
+  /** How far ahead it's already planned. */
+  runway: Runway;
 };
 
 const KIND_FILTERS: { label: string; value: "" | MeetingSubjectKind }[] = [
@@ -79,6 +83,7 @@ export function MeetingsTable() {
         readiness: readinessOf(meeting, { meetings, sessions, topics }),
         open: mine.filter((t) => t.status === "open").length,
         loose: looseTopics(topics, sessions, meeting.id).length,
+        runway: runwayOf(meeting, sessions, topics),
       };
     });
 
@@ -96,8 +101,14 @@ export function MeetingsTable() {
       switch (sortKey) {
         case "name":
           return dir * x.title.localeCompare(y.title);
-        case "planned":
-          return dir * (x.open - y.open);
+        case "runway":
+          // Shortest cover first when ascending: the leadership block works
+          // down the list from the meeting that will catch you soonest.
+          // As-needed has no runway and sorts last either way.
+          if ((x.runway.level === "none") !== (y.runway.level === "none")) {
+            return x.runway.level === "none" ? 1 : -1;
+          }
+          return dir * (x.runway.days - y.runway.days || x.runway.ahead - y.runway.ahead);
         case "state":
           // Worst first when ascending — the list is a to-do, not an index.
           return (
@@ -127,6 +138,7 @@ export function MeetingsTable() {
     sortKey === key ? (asc ? "asc" : "desc") : undefined;
 
   const totalLoose = rows.reduce((n, r) => n + r.loose, 0);
+  const short = rows.filter((r) => r.runway.level === "bare" || r.runway.level === "thin").length;
 
   return (
     <div className="scroll-contain min-h-0 flex-1 overflow-y-auto">
@@ -140,6 +152,22 @@ export function MeetingsTable() {
             <p className="font-serif text-[17px] text-secondary italic">Am I ready to sit down?</p>
             <p className="mt-1 font-mono text-[11.5px] tracking-[0.03em] text-quaternary uppercase">
               {rows.length} recurring
+              {short > 0 && (
+                <>
+                  {" · "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortKey("runway");
+                      setAsc(true);
+                    }}
+                    className="cursor-pointer uppercase hover:text-secondary"
+                    title="Sort by runway, shortest first"
+                  >
+                    {short} planned less than a month out
+                  </button>
+                </>
+              )}
               {totalLoose > 0 && (
                 <>
                   {" · "}
@@ -221,6 +249,12 @@ export function MeetingsTable() {
                       </span>
                       {r.loose > 0 && <LooseBadge count={r.loose} />}
                     </div>
+                    {r.runway.level !== "none" && (
+                      <div className="mt-2 flex items-center gap-2.5 pl-[26px]" title={runwayTitle(r.runway)}>
+                        <RunwayTrack runway={r.runway} className="min-w-0 flex-1" />
+                        <RunwayCover runway={r.runway} />
+                      </div>
+                    )}
                   </button>
                 </li>
               ))}
@@ -238,10 +272,13 @@ export function MeetingsTable() {
                       Next
                     </Th>
                     <Th
-                      sorted={sortedAs("planned")}
-                      onClick={() => sortBy("planned")}
+                      sorted={sortedAs("runway")}
+                      onClick={() => sortBy("runway")}
                     >
-                      Planned
+                      Runway
+                      <span className="ml-1.5 font-mono text-[10.5px] font-normal tracking-[0.03em] text-quaternary uppercase">
+                        next {Math.round(RUNWAY_DAYS / 7)} wks
+                      </span>
                     </Th>
                     <Th sorted={sortedAs("state")} onClick={() => sortBy("state")}>
                       Readiness
@@ -277,8 +314,15 @@ export function MeetingsTable() {
                         </span>
                       </td>
                       <td className="px-4 py-2">
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-quaternary">
-                          <span className="tabular-nums">{r.open}</span>
+                        <div className="flex items-center gap-2.5" title={runwayTitle(r.runway)}>
+                          {r.runway.level === "none" ? (
+                            <span className="text-xs text-quaternary">As needed</span>
+                          ) : (
+                            <>
+                              <RunwayTrack runway={r.runway} className="w-[168px] shrink-0" />
+                              <RunwayCover runway={r.runway} />
+                            </>
+                          )}
                           {r.loose > 0 && <LooseBadge count={r.loose} />}
                         </div>
                       </td>
