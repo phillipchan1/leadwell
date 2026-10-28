@@ -2,9 +2,9 @@ import { cx } from "@/utils/cx";
 import { RUNWAY_DAYS, formatAhead, type Runway, type RunwayLevel } from "../lib/runway";
 
 /*
- * How far ahead a meeting is planned, drawn the same wherever it appears —
- * the Meetings list and the team cards on Today — so the shape learned in one
- * place reads in the other.
+ * How far ahead a meeting is planned. The track carries the color; the cover
+ * beside it stays grey, so on a row of the Meetings list readiness is still
+ * the one colored thing.
  */
 const RUNWAY_MARK: Record<RunwayLevel, string> = {
   deep: "bg-cond-thriving",
@@ -12,14 +12,6 @@ const RUNWAY_MARK: Record<RunwayLevel, string> = {
   thin: "bg-cond-watch",
   bare: "bg-cond-critical",
   none: "bg-quaternary",
-};
-
-const RUNWAY_TEXT: Record<RunwayLevel, string> = {
-  deep: "text-cond-thriving-ink",
-  steady: "text-cond-solid-ink",
-  thin: "text-cond-watch-ink",
-  bare: "text-cond-critical-ink",
-  none: "text-quaternary",
 };
 
 /**
@@ -59,8 +51,8 @@ export function RunwayTrack({ runway, className }: { runway: Runway; className?:
 
 export function RunwayCover({ runway }: { runway: Runway }) {
   return (
-    <span className={cx("shrink-0 font-mono text-xs whitespace-nowrap uppercase tabular-nums", RUNWAY_TEXT[runway.level])}>
-      {formatAhead(runway)}
+    <span className="shrink-0 text-xs whitespace-nowrap text-quaternary tabular-nums">
+      {runway.level !== "none" && runway.ahead === 0 ? "Nothing planned" : formatAhead(runway)}
     </span>
   );
 }

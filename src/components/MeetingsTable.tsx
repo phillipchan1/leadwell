@@ -17,12 +17,11 @@ import { RUNWAY_DAYS, runwayOf, type Runway } from "../lib/runway";
 import { RunwayCover, RunwayTrack, runwayTitle } from "./RunwayTrack";
 import { Card } from "./ui";
 import { Th } from "./Th";
-import { Button } from "@/components/base/buttons/button";
 import { Input } from "@/components/base/input/input";
 import { NativeSelect } from "@/components/base/select/select-native";
 import { NewMeetingRow } from "./NewMeetingRow";
 import { MeetingsSwitch } from "./shell/MeetingsSwitch";
-import { SearchLg } from "@untitledui/icons";
+import { ChevronDown, Plus, SearchLg } from "@untitledui/icons";
 import { tableRowActivationProps } from "@/lib/rowActivation";
 import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 
@@ -55,6 +54,10 @@ const KIND_FILTERS: { label: string; value: "" | MeetingSubjectKind }[] = [
  * profile it hung off, so there was no answer to "what do I actually run?".
  * This is that answer, sorted by what's next, with the two numbers that decide
  * whether you're ready: what's planned, and what got dropped.
+ *
+ * Readiness is the only color on a row. How far ahead it's planned is a grey
+ * count, with the twelve-week track under the pointer; meetings that have
+ * never met fold under "Not started" so they don't stand in the queue.
  */
 export function MeetingsTable() {
   const { meetings, sessions, topics, people, teams, managers, selectMeeting } =
@@ -64,6 +67,7 @@ export function MeetingsTable() {
   const [sortKey, setSortKey] = useState<SortKey>("next");
   const [asc, setAsc] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [showDormant, setShowDormant] = useState(false);
   const searchRef = useSearchShortcut();
 
   const rows = useMemo<Row[]>(() => {
@@ -137,6 +141,10 @@ export function MeetingsTable() {
   const sortedAs = (key: SortKey): "asc" | "desc" | undefined =>
     sortKey === key ? (asc ? "asc" : "desc") : undefined;
 
+  // A search looks everywhere; otherwise the never-met wait below the fold.
+  const searching = query.trim() !== "";
+  const active = searching ? rows : rows.filter((r) => r.readiness.state !== "dormant");
+  const dormant = searching ? [] : rows.filter((r) => r.readiness.state === "dormant");
   const totalLoose = rows.reduce((n, r) => n + r.loose, 0);
   const short = rows.filter((r) => r.runway.level === "bare" || r.runway.level === "thin").length;
 
@@ -146,56 +154,42 @@ export function MeetingsTable() {
           from every other place's gutter. */}
       <div className="flex flex-col gap-4">
         <MeetingsSwitch current="meetings" />
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em]">Meetings</h1>
-            <p className="font-serif text-[17px] text-secondary italic">Am I ready to sit down?</p>
-            <p className="mt-1 font-mono text-[11.5px] tracking-[0.03em] text-quaternary uppercase">
-              {rows.length} recurring
-              {short > 0 && (
-                <>
-                  {" · "}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSortKey("runway");
-                      setAsc(true);
-                    }}
-                    className="cursor-pointer uppercase hover:text-secondary"
-                    title="Sort by runway, shortest first"
-                  >
-                    {short} planned less than a month out
-                  </button>
-                </>
-              )}
-              {totalLoose > 0 && (
-                <>
-                  {" · "}
-                  <span className="font-medium text-amber-700 dark:text-amber-500">
-                    {totalLoose} planned and never covered
-                  </span>
-                </>
-              )}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            color={creating ? "secondary" : "primary"}
-            onClick={() => setCreating((v) => !v)}
-          >
-            New recurring meeting
-          </Button>
+        <div className="flex flex-col gap-1">
+          <h1 className="font-serif text-[34px] leading-10 font-medium tracking-[-0.01em]">Meetings</h1>
+          <p className="text-[13.5px] text-tertiary">
+            {rows.length} recurring
+            {short > 0 && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSortKey("runway");
+                    setAsc(true);
+                  }}
+                  className="cursor-pointer hover:text-primary"
+                  title="Sort by runway, shortest first"
+                >
+                  {short} planned less than a month out
+                </button>
+              </>
+            )}
+            {totalLoose > 0 && (
+              <>
+                {" · "}
+                <span className="text-cond-watch-ink">{totalLoose} planned and never covered</span>
+              </>
+            )}
+          </p>
         </div>
 
-        {creating && <NewMeetingRow onDone={() => setCreating(false)} />}
-
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Input
             size="sm"
             className="w-full sm:w-64"
             icon={SearchLg}
             ref={searchRef}
-          placeholder="Find a meeting…"
+            placeholder="Find a meeting…"
             aria-label="Find a meeting"
             value={query}
             onChange={setQuery}
@@ -208,7 +202,22 @@ export function MeetingsTable() {
             onChange={(e) => setKind(e.target.value as "" | MeetingSubjectKind)}
             options={KIND_FILTERS}
           />
+          <button
+            type="button"
+            onClick={() => setCreating((v) => !v)}
+            aria-pressed={creating}
+            aria-label="New recurring meeting"
+            title="New recurring meeting"
+            className={cx(
+              "inline-flex size-9 items-center justify-center rounded-[9px] text-tertiary hover:bg-secondary hover:text-primary touch:size-11",
+              creating && "bg-secondary text-primary"
+            )}
+          >
+            <Plus aria-hidden className={cx("size-5 transition-transform duration-[var(--dur-base)]", creating && "rotate-45")} />
+          </button>
         </div>
+
+        {creating && <NewMeetingRow onDone={() => setCreating(false)} />}
 
         {rows.length === 0 ? (
           <Card className="p-6 text-center text-sm text-quaternary">
@@ -221,48 +230,23 @@ export function MeetingsTable() {
             {/* Below sm the table becomes cards: four columns can't hold a
                 date, a countdown and two counts on a phone. */}
             <ul className="flex flex-col gap-2 sm:hidden">
-              {rows.map((r) => (
-                <li key={r.meeting.id}>
-                  <button
-                    type="button"
-                    onClick={() => selectMeeting(r.meeting.id)}
-                    className="w-full rounded-xl border border-secondary bg-primary p-3 text-left touch:min-h-11"
-                  >
-                    <div className="flex items-center gap-2">
-                      <RhythmRing reading={r.readiness} size={18} />
-                      <span className="min-w-0 flex-1 truncate font-serif text-[17px] text-primary">
-                        {r.title}
-                      </span>
-                      <span
-                        className={cx("shrink-0 font-mono text-caption uppercase tabular-nums", STATE_TEXT[r.readiness.state])}
-                      >
-                        {formatCountdown(r.readiness)}
-                      </span>
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-[26px] text-caption text-quaternary">
-                      <span>{kindLabel(r)}</span>
-                      <span>·</span>
-                      <span>{RHYTHM_LABEL[r.meeting.rhythm]}</span>
-                      <span>·</span>
-                      <span>
-                        {r.open} topic{r.open === 1 ? "" : "s"}
-                      </span>
-                      {r.loose > 0 && <LooseBadge count={r.loose} />}
-                    </div>
-                    {r.runway.level !== "none" && (
-                      <div className="mt-2 flex items-center gap-2.5 pl-[26px]" title={runwayTitle(r.runway)}>
-                        <RunwayTrack runway={r.runway} className="min-w-0 flex-1" />
-                        <RunwayCover runway={r.runway} />
-                      </div>
-                    )}
-                  </button>
-                </li>
+              {active.map((r) => (
+                <MeetingCard key={r.meeting.id} row={r} onOpen={() => selectMeeting(r.meeting.id)} />
               ))}
+              {dormant.length > 0 && (
+                <li>
+                  <NotStartedToggle count={dormant.length} open={showDormant} onToggle={() => setShowDormant((v) => !v)} />
+                </li>
+              )}
+              {showDormant &&
+                dormant.map((r) => (
+                  <MeetingCard key={r.meeting.id} row={r} onOpen={() => selectMeeting(r.meeting.id)} />
+                ))}
             </ul>
 
             <div className="hidden overflow-hidden rounded-xl border border-secondary sm:block">
               <table className="w-full text-sm">
-                <thead className="bg-stone-50 text-left dark:bg-stone-950/60">
+                <thead className="text-left text-[12.5px] text-quaternary">
                   <tr>
                     <Th sorted={sortedAs("name")} onClick={() => sortBy("name")}>
                       Meeting
@@ -271,69 +255,29 @@ export function MeetingsTable() {
                     <Th sorted={sortedAs("next")} onClick={() => sortBy("next")}>
                       Next
                     </Th>
-                    <Th
-                      sorted={sortedAs("runway")}
-                      onClick={() => sortBy("runway")}
-                    >
-                      Runway
-                      <span className="ml-1.5 font-mono text-[10.5px] font-normal tracking-[0.03em] text-quaternary uppercase">
-                        next {Math.round(RUNWAY_DAYS / 7)} wks
-                      </span>
+                    <Th sorted={sortedAs("runway")} onClick={() => sortBy("runway")}>
+                      <span title={`Planned ahead over the next ${Math.round(RUNWAY_DAYS / 7)} weeks`}>Runway</span>
                     </Th>
                     <Th sorted={sortedAs("state")} onClick={() => sortBy("state")}>
                       Readiness
                     </Th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
-                  {rows.map((r) => (
-                    <tr
-                      key={r.meeting.id}
-                      {...tableRowActivationProps(
-                        () => selectMeeting(r.meeting.id),
-                        { label: `Open ${r.title}` }
-                      )}
-                      className="cursor-pointer hover:bg-stone-50 focus-visible:bg-stone-50 dark:hover:bg-stone-800/40 dark:focus-visible:bg-stone-800/40"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex min-w-0 flex-col">
-                          <span className="truncate font-serif text-[17px] leading-[22px] text-primary">
-                            {r.title}
-                          </span>
-                          <span className="truncate text-[12.5px] text-quaternary">{kindLabel(r)}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-xs text-quaternary">
-                        {RHYTHM_LABEL[r.meeting.rhythm]}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span
-                          className={cx("font-mono text-xs uppercase tabular-nums", STATE_TEXT[r.readiness.state])}
-                        >
-                          {formatCountdown(r.readiness)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2.5" title={runwayTitle(r.runway)}>
-                          {r.runway.level === "none" ? (
-                            <span className="text-xs text-quaternary">As needed</span>
-                          ) : (
-                            <>
-                              <RunwayTrack runway={r.runway} className="w-[168px] shrink-0" />
-                              <RunwayCover runway={r.runway} />
-                            </>
-                          )}
-                          {r.loose > 0 && <LooseBadge count={r.loose} />}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className={cx("inline-flex items-center gap-2 text-[13px] font-medium", STATE_TEXT[r.readiness.state])}>
-                          <RhythmRing reading={r.readiness} size={18} />
-                          {STATE_LABEL[r.readiness.state]}
-                        </span>
+                <tbody className="divide-y divide-secondary border-t border-secondary">
+                  {active.map((r) => (
+                    <MeetingRow key={r.meeting.id} row={r} onOpen={() => selectMeeting(r.meeting.id)} />
+                  ))}
+                  {dormant.length > 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-2 py-1.5">
+                        <NotStartedToggle count={dormant.length} open={showDormant} onToggle={() => setShowDormant((v) => !v)} />
                       </td>
                     </tr>
-                  ))}
+                  )}
+                  {showDormant &&
+                    dormant.map((r) => (
+                      <MeetingRow key={r.meeting.id} row={r} onOpen={() => selectMeeting(r.meeting.id)} />
+                    ))}
                 </tbody>
               </table>
             </div>
@@ -341,6 +285,96 @@ export function MeetingsTable() {
         )}
       </div>
     </div>
+  );
+}
+
+function MeetingCard({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full rounded-xl border border-secondary bg-primary p-3 text-left touch:min-h-11"
+      >
+        <div className="flex items-center gap-2">
+          <RhythmRing reading={r.readiness} size={18} />
+          <span className="min-w-0 flex-1 truncate font-serif text-[17px] text-primary">{r.title}</span>
+          <span className="shrink-0 font-mono text-caption text-secondary tabular-nums">{formatCountdown(r.readiness)}</span>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-[26px] text-caption text-quaternary">
+          <span>{kindLabel(r)}</span>
+          <span>·</span>
+          <span>{RHYTHM_LABEL[r.meeting.rhythm]}</span>
+          {r.runway.level !== "none" && (
+            <>
+              <span>·</span>
+              <RunwayCover runway={r.runway} />
+            </>
+          )}
+          {r.loose > 0 && <LooseBadge count={r.loose} />}
+        </div>
+      </button>
+    </li>
+  );
+}
+
+function MeetingRow({ row: r, onOpen }: { row: Row; onOpen: () => void }) {
+  return (
+    <tr
+      {...tableRowActivationProps(onOpen, { label: `Open ${r.title}` })}
+      className="group cursor-pointer transition-colors duration-[var(--dur-quick)] hover:bg-secondary focus-visible:bg-secondary"
+    >
+      <td className="px-4 py-3">
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate font-serif text-[17px] leading-[22px] text-primary">{r.title}</span>
+          <span className="truncate text-[12.5px] text-quaternary">{kindLabel(r)}</span>
+        </div>
+      </td>
+      <td className="px-4 py-2 text-xs text-quaternary">{RHYTHM_LABEL[r.meeting.rhythm]}</td>
+      <td className="px-4 py-2">
+        <span className="font-mono text-xs text-secondary tabular-nums">{formatCountdown(r.readiness)}</span>
+      </td>
+      <td className="px-4 py-2">
+        <div className="flex items-center gap-2.5" title={runwayTitle(r.runway)}>
+          {r.runway.level === "none" ? (
+            <span className="text-xs text-quaternary">As needed</span>
+          ) : (
+            <>
+              {/* The count is the answer; the twelve weeks behind it come up
+                  under the pointer. Fingers get it all the time. */}
+              <RunwayTrack
+                runway={r.runway}
+                className="w-[168px] shrink-0 transition-opacity duration-[var(--dur-base)] hoverable:opacity-0 hoverable:group-hover:opacity-100 hoverable:group-focus-visible:opacity-100"
+              />
+              <RunwayCover runway={r.runway} />
+            </>
+          )}
+          {r.loose > 0 && <LooseBadge count={r.loose} />}
+        </div>
+      </td>
+      <td className="px-4 py-2">
+        <span className={cx("inline-flex items-center gap-2 text-[13px] font-medium", STATE_TEXT[r.readiness.state])}>
+          <RhythmRing reading={r.readiness} size={18} />
+          {STATE_LABEL[r.readiness.state]}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
+/** The meetings that have never met, folded so the queue is only what's live. */
+function NotStartedToggle({ count, open, onToggle }: { count: number; open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium text-tertiary hover:bg-secondary hover:text-primary touch:min-h-11"
+    >
+      <ChevronDown aria-hidden className={cx("size-4 transition-transform duration-[var(--dur-base)]", !open && "-rotate-90")} />
+      Not started
+      <span className="text-quaternary tabular-nums">{count}</span>
+    </button>
   );
 }
 
@@ -362,10 +396,7 @@ function kindLabel(r: { meeting: { subjectKind: string; name?: string }; subject
 
 function LooseBadge({ count }: { count: number }) {
   return (
-    <span
-      className="rounded bg-amber-100 px-1.5 py-0.5 text-caption font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-500"
-      title="Planned into a meeting that's already been and gone"
-    >
+    <span className="text-caption font-medium text-cond-watch-ink" title="Planned into a meeting that's already been and gone">
       {count} loose
     </span>
   );
