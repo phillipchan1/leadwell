@@ -129,6 +129,19 @@ function strArray(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
+/**
+ * A jsonb array column. Some rows hold it double-encoded — a JSON string of the
+ * array — which arrives here as a string; `.map` on that crashed the meeting.
+ */
+function jsonArray(v: unknown): unknown[] {
+  const raw = typeof v === "string" ? safeJson(v) : v;
+  return Array.isArray(raw) ? raw : [];
+}
+
+function jsonStrArray(v: unknown): string[] {
+  return strArray(jsonArray(v));
+}
+
 function parseSteps(v: unknown): ArcStep[] {
   const raw = typeof v === "string" ? safeJson(v) : v;
   if (!Array.isArray(raw)) return [];
@@ -196,10 +209,10 @@ export function meFromRow(r: {
   how_to_lead?: string | null;
   custom_modalities?: CustomModality[] | null;
 }): Me {
-  const top5 = r.clifton_top5 ?? [];
+  const top5 = jsonStrArray(r.clifton_top5);
   const enneagram = opt(r.enneagram);
   const mbti = opt(r.mbti);
-  const customModalities = r.custom_modalities ?? [];
+  const customModalities = jsonArray(r.custom_modalities) as CustomModality[];
   return {
     name: r.name ?? "",
     title: opt(r.title),
@@ -209,8 +222,8 @@ export function meFromRow(r: {
       ...(enneagram ? { enneagram } : {}),
       ...(mbti ? { mbti } : {}),
     },
-    strengths: r.strengths ?? [],
-    watchOuts: r.watch_outs ?? [],
+    strengths: jsonStrArray(r.strengths),
+    watchOuts: jsonStrArray(r.watch_outs),
     howToLead: opt(r.how_to_lead),
     ...(customModalities.length ? { customModalities } : {}),
   };
@@ -370,11 +383,11 @@ const map = {
       lead_up: nn(p.leadUp ?? null),
     }),
     fromRow: (r: Row): Person => {
-      const top5 = (r.clifton_top5 as string[]) ?? [];
+      const top5 = jsonStrArray(r.clifton_top5);
       const enneagram = opt(r.enneagram as string | null);
       const mbti = opt(r.mbti as string | null);
       const leadUp = opt(r.lead_up as LeadUpProfile | null);
-      const customModalities = (r.custom_modalities as CustomModality[] | null) ?? [];
+      const customModalities = jsonArray(r.custom_modalities) as CustomModality[];
       return {
         id: r.id as string,
         teamId: opt(r.team_id as string | null),
@@ -392,8 +405,8 @@ const map = {
           ...(enneagram ? { enneagram } : {}),
           ...(mbti ? { mbti } : {}),
         },
-        strengths: (r.strengths as string[]) ?? [],
-        watchOuts: (r.watch_outs as string[]) ?? [],
+        strengths: jsonStrArray(r.strengths),
+        watchOuts: jsonStrArray(r.watch_outs),
         howToLead: opt(r.how_to_lead as string | null),
         ...(customModalities.length ? { customModalities } : {}),
         ...(leadUp ? { leadUp } : {}),
