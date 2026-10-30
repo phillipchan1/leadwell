@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Arc, ArcStep, TrackedMeeting } from "../../types";
 import { useStore } from "../../store/useStore";
 import { Modal } from "../ui";
-import { ARC_COVERS } from "../../lib/arcs";
+import { ARC_COVERS, aheadPreview, withSteps, type AheadPreview } from "../../lib/arcs";
 import { draftArc } from "../../lib/arcDraft";
 import { bookChapters, hasChapterSource, searchBooks, type BookHit } from "../../lib/books";
 import { DEMO } from "../../lib/demo";
@@ -14,6 +14,20 @@ import { Stars02 } from "@untitledui/icons";
 import { cx } from "@/utils/cx";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const md = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+const toStep = (s: DraftStep): ArcStep => ({
+  id: s.id,
+  label: s.label,
+  read: s.read?.trim() || undefined,
+  prompts: s.prompts.map((p) => p.trim()).filter(Boolean),
+  practice: s.practice?.trim() || undefined,
+  status: s.status ?? "upcoming",
+  coveredIn: s.coveredIn ?? [],
+  doneOn: s.doneOn,
+});
+/** Rows the sheet lists before it sums up the rest. */
+const AHEAD_ROWS = 6;
 
 const field =
   "h-10 w-full min-w-0 rounded-[10px] border border-primary bg-primary px-3 text-[14px] text-primary outline-none placeholder:text-placeholder focus:border-teal-400 dark:focus:border-teal-600";
@@ -199,18 +213,33 @@ export function ArcSheet({
     .filter((s) => s.label);
   const canSave = title.trim().length > 0 && clean.length > 0;
 
+  const full = clean.map(toStep);
+
+  // ── What the weeks ahead will hold ──
+  // Drawn by the same arcPlan as the board, for the arc as it stands and as
+  // edited, far enough out that every step left has a week to land on.
+  const left = full.filter((s) => s.status !== "done").length;
+  const horizon = Math.min(60, left * every + (arc?.passedIn?.length ?? 0) + 4);
+  const aheadSlots = useMemo(
+    () => plannedSlots(meeting, sessions, topics, todayISO(), horizon),
+    [meeting, sessions, topics, horizon]
+  );
+  const edited = withSteps(
+    {
+      ...(arc ?? { id: "new", meetingId: meeting.id, title, steps: full, status: "active" as const, createdOn: todayISO(), order: 0 }),
+      every,
+      startsOn,
+    },
+    full
+  );
+  const ahead = aheadPreview(edited, arc, aheadSlots);
+  // Until the steps or their timing are touched there's no edit to report on.
+  const touched =
+    Boolean(arc) &&
+    (every !== arc?.every || startsOn !== arc?.startsOn || JSON.stringify(full) !== JSON.stringify(arc?.steps.map(toStep)));
+
   const save = () => {
     if (!canSave) return;
-    const full: ArcStep[] = clean.map((s) => ({
-      id: s.id,
-      label: s.label,
-      read: s.read?.trim() || undefined,
-      prompts: s.prompts.map((p) => p.trim()).filter(Boolean),
-      practice: s.practice?.trim() || undefined,
-      status: s.status ?? "upcoming",
-      coveredIn: s.coveredIn ?? [],
-      doneOn: s.doneOn,
-    }));
     const common = {
       title: title.trim(),
       author: author.trim() || undefined,
@@ -221,7 +250,7 @@ export function ArcSheet({
       startsOn,
       steps: full,
     };
-    if (arc) updateArc(arc.id, common);
+    if (arc) updateArc(arc.id, { ...common, status: edited.status, closedOn: edited.closedOn });
     else addArc({ meetingId: meeting.id, ...common });
     onClose();
   };
@@ -403,6 +432,8 @@ export function ArcSheet({
               />
             </Row>
           </div>
+
+          {full.length > 0 && <AheadList arc={edited} touched={touched} preview={ahead} />}
         </div>
 
         <div className="flex min-w-0 flex-col gap-2.5">
@@ -499,6 +530,85 @@ export function ArcSheet({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * The weeks ahead as this edit leaves them. A changed week shows what it held
+ * before; an edit that moves nothing says so, because the board won't look
+ * any different either.
+ */
+function AheadList({ arc, touched, preview }: { arc: Arc; touched: boolean; preview: AheadPreview }) {
+  const { rows, ends, endedBefore } = preview;
+  const changed = rows.filter((r) => "was" in r).length;
+  const shown = rows.slice(0, AHEAD_ROWS);
+  const hidden = rows.slice(AHEAD_ROWS);
+  const hiddenChanged = hidden.filter((r) => "was" in r).length;
+
+  const summary =
+    arc.status === "paused"
+      ? "Paused: nothing is planned ahead until you resume it."
+      : arc.status === "done"
+        ? "Every step is done."
+        : !rows.length
+          ? "Nothing lands in the weeks planned so far."
+          : !touched
+            ? ends
+              ? `Last step on ${md(ends)}.`
+              : null
+            : changed
+              ? `${changed} ${changed === 1 ? "week changes" : "weeks change"}${
+                  ends && endedBefore ? `. Ends ${md(ends)}, was ${md(endedBefore)}.` : "."
+                }`
+              : "No week changes. Only what the steps say.";
+
+  return (
+    <section aria-label="Weeks ahead" className="flex flex-col gap-2 rounded-[12px] border border-secondary p-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="eyebrow">Ahead</span>
+        {summary && (
+          <span className="min-w-0 text-right text-[12px] text-tertiary" aria-live="polite">
+            {summary}
+          </span>
+        )}
+      </div>
+      {arc.status === "active" && shown.length > 0 && (
+        <ol className="flex flex-col">
+          {shown.map((r) => {
+            const moved = "was" in r;
+            return (
+              <li key={r.date} className="grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2 py-[3px] text-[12.5px]">
+                <span className="font-mono text-[11px] text-quaternary">{md(r.date)}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span
+                    className={cx(
+                      "truncate",
+                      r.label === null ? "italic text-quaternary" : moved ? "font-semibold text-primary" : "text-secondary"
+                    )}
+                    title={r.label ?? undefined}
+                  >
+                    {moved && <span aria-hidden className="mr-1.5 inline-block size-1.5 rounded-full bg-teal-500 align-middle" />}
+                    {r.label ?? "Free"}
+                  </span>
+                  {moved && (
+                    <span className="truncate text-[11.5px] text-quaternary">
+                      was {r.was === null ? "free" : <s>{r.was}</s>}
+                    </span>
+                  )}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+      {arc.status === "active" && hidden.length > 0 && (
+        <p className="text-[12px] text-quaternary">
+          {hidden.length} more {hidden.length === 1 ? "meeting" : "meetings"}
+          {hiddenChanged ? `, ${hiddenChanged} changed` : ""}
+          {ends ? `, to ${md(ends)}` : ""}
+        </p>
+      )}
+    </section>
   );
 }
 

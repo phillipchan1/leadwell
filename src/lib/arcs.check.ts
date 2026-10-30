@@ -1,5 +1,6 @@
 import type { Arc, Session, Topic, TrackedMeeting } from "../types";
 import {
+  aheadPreview,
   arcSuggestion,
   arcPlan,
   currentStep,
@@ -9,6 +10,7 @@ import {
   tookLonger,
   unmarkStep,
   unmarkedSession,
+  withSteps,
 } from "./arcs";
 import { plannedSlots } from "./topics";
 import { pushBackPlan } from "./pushBack";
@@ -123,6 +125,40 @@ let all = base;
 base.steps.forEach((s, i) => (all = markStep(all, s.id, `x${i}`, "done", "2026-12-01")));
 ok(all.status === "done" && all.closedOn === "2026-12-01", "last step done closes the arc");
 ok(unmarkStep(all, "c7", "x6").status === "active", "undoing the last step reopens it");
+
+// Seeing an edit land. `arc` is on Ch. 4: the 29th, then the 12th, 19th, 26th (the 5th is skipped).
+const longSlots = plannedSlots(meeting, sessions, [], today, 10);
+const relabel = (a: Arc, id: string, label: string) => a.steps.map((s) => (s.id === id ? { ...s, label } : s));
+
+const reworded = aheadPreview(
+  { ...arc, steps: arc.steps.map((s) => (s.id === "c5" ? { ...s, prompts: ["What do you want?"] } : s)) },
+  arc,
+  longSlots
+);
+ok(reworded.rows.every((r) => !("was" in r)), "a step's questions change no week");
+ok(reworded.rows[0]?.date === "2026-10-29" && reworded.rows[0]?.label === "Ch. 4", "the preview starts at the next meeting");
+ok(reworded.ends === "2026-11-26" && !reworded.endedBefore, `and ends where it did (${reworded.ends})`);
+
+// Ch. 4–5 in one meeting: the weeks after move up a step, and the arc ends a week sooner.
+const merged = { ...arc, steps: relabel(arc, "c4", "Ch. 4–5").filter((s) => s.id !== "c5") };
+const mergedView = aheadPreview(merged, arc, longSlots);
+const row = (d: string) => mergedView.rows.find((r) => r.date === d);
+ok(row("2026-10-29")?.label === "Ch. 4–5" && row("2026-10-29")?.was === "Ch. 4", "the merged week shows what it was");
+ok(row("2026-11-12")?.label === "Ch. 6" && row("2026-11-12")?.was === "Ch. 5", "the week after moves up");
+ok(row("2026-11-26")?.label === null && row("2026-11-26")?.was === "Ch. 7", "the old last week is freed");
+ok(!mergedView.rows.some((r) => r.date === "2026-11-05"), "the skipped week isn't a row");
+ok(mergedView.ends === "2026-11-19" && mergedView.endedBefore === "2026-11-26", "says it ends a week sooner");
+
+// A new arc has nothing to compare with.
+const fresh = aheadPreview({ ...base, startsOn: "2026-10-28" }, undefined, longSlots);
+ok(fresh.rows.length === 7 && fresh.rows.every((r) => !("was" in r)), `a new arc lists its weeks (${fresh.rows.length})`);
+
+// Adding a step to a finished arc opens it again; leaving nothing to do closes it.
+const reopened = withSteps(all, [...all.steps, { ...step(8), id: "c8" }], "2026-12-02");
+ok(reopened.status === "active" && reopened.closedOn === undefined, "a new step reopens a finished arc");
+const closed = withSteps(arc, arc.steps.filter((s) => s.status === "done"), "2026-10-27");
+ok(closed.status === "done" && closed.closedOn === "2026-10-27", "removing what's left closes it");
+ok(withSteps({ ...arc, status: "paused" }, arc.steps).status === "paused", "a paused arc stays paused");
 
 // Spotting an arc already being run by hand.
 const tp = (id: string, text: string, sessionId?: string, meetingId = "m1"): Topic =>

@@ -288,6 +288,80 @@ export function nextArcSteps(
   );
 }
 
+// ── Seeing an edit land ────────────────────────────────────────────────────
+
+/**
+ * An arc with new steps, its status settled the way marking settles it: a
+ * finished arc given a step it hasn't done opens again, and one left with
+ * nothing to do closes.
+ */
+export function withSteps(arc: Arc, steps: ArcStep[], today: string = todayISO()): Arc {
+  const finished = steps.length > 0 && steps.every((s) => s.status === "done");
+  return {
+    ...arc,
+    steps,
+    status: finished ? "done" : arc.status === "done" ? "active" : arc.status,
+    closedOn: finished ? (arc.closedOn ?? today) : undefined,
+  };
+}
+
+export type AheadRow = {
+  date: string;
+  /** What this meeting holds once saved, or null for a week the arc leaves free. */
+  label: string | null;
+  /** What it holds now, when that's different. Absent = unchanged. */
+  was?: string | null;
+};
+
+export type AheadPreview = {
+  rows: AheadRow[];
+  /** The meeting the last step lands on, once every step has a week. */
+  ends?: string;
+  /** Where it ended before the edit, when that moved. */
+  endedBefore?: string;
+};
+
+/**
+ * The meetings ahead as an edit would leave them, beside how they stand now.
+ * An edit that moves steps says which weeks it moves; one that doesn't (a
+ * step's wording, its questions) shows nothing changed rather than leaving
+ * you to wonder why the board looks the same. Rows run to the later of the
+ * two last steps.
+ */
+export function aheadPreview(next: Arc, before: Arc | undefined, slots: Slot[]): AheadPreview {
+  const ahead = slots.filter((s) => !s.past).sort((a, b) => a.date.localeCompare(b.date));
+  const labelsOn = (arc: Arc) => {
+    const plan = arcPlan(arc, ahead);
+    return (date: string) => {
+      const here = plan.get(date);
+      return here?.length ? here.map((p) => p.step.label).join(" + ") : null;
+    };
+  };
+  const lastOf = (arc: Arc): string | undefined => {
+    const plan = arcPlan(arc, ahead);
+    const last = arc.steps.length - 1;
+    if (last < 0 || arc.status !== "active") return undefined;
+    return ahead.find((s) => plan.get(s.date)?.some((p) => p.index === last && p.state !== "done"))?.date;
+  };
+  const now = labelsOn(next);
+  const then = before ? labelsOn(before) : null;
+  const ends = lastOf(next);
+  const endedBefore = before ? lastOf(before) : undefined;
+  const until = [ends, endedBefore].filter(Boolean).sort().pop();
+
+  const rows: AheadRow[] = [];
+  for (const s of ahead) {
+    if (until && s.date > until) break;
+    const label = now(s.date);
+    const was = then ? then(s.date) : undefined;
+    if (label === null && (was === null || was === undefined) && rows.length === 0) continue;
+    rows.push(was === undefined || was === label ? { date: s.date, label } : { date: s.date, label, was });
+  }
+  // A plan that runs past the weeks in view ends nowhere we can name.
+  while (rows.length && rows[rows.length - 1].label === null && rows[rows.length - 1].was == null) rows.pop();
+  return { rows, ends, endedBefore: before && endedBefore !== ends ? endedBefore : undefined };
+}
+
 // ── Spotting an arc you're already running by hand ─────────────────────────
 
 /** Words that say "this is part of a series" rather than what the series is. */
